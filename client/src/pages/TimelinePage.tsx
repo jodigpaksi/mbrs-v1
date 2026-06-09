@@ -16,6 +16,15 @@ const ROOM_W = 164
 const CELL_H = 60
 const WEEK_CELL_H = 80
 
+function fmtTime(iso: string) {
+  const d = new Date(iso.replace('Z', ''))
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+
+function toLocalDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const LOCATIONS = ['Head Office – Jakarta', 'Creative Tower – Bandung', 'South Hub – Surabaya']
 const DEPTS = ['GAA', 'HRD', 'MTC']
 
@@ -167,7 +176,7 @@ export default function TimelinePage() {
         })
       }
 
-      const dStr = currentDate.toISOString().split('T')[0]
+      const dStr = toLocalDateStr(currentDate)
       const allBkgs: Booking[] = (queryClient.getQueryData(['bookings', dStr]) as Booking[]) ?? []
 
       const bd = barDragRef.current
@@ -229,7 +238,7 @@ export default function TimelinePage() {
     }
   }, [getSlotFromClientX, currentDate, slots])
 
-  const dateStr = currentDate.toISOString().split('T')[0]
+  const dateStr = toLocalDateStr(currentDate)
 
   const { data: rooms = [], isLoading: roomsLoading } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
@@ -253,8 +262,8 @@ export default function TimelinePage() {
 
   const weekResults = useQueries({
     queries: weekDates.map(d => ({
-      queryKey: ['bookings', d.toISOString().split('T')[0]],
-      queryFn: () => getBookings({ date: d.toISOString().split('T')[0] }),
+      queryKey: ['bookings', toLocalDateStr(d)],
+      queryFn: () => getBookings({ date: toLocalDateStr(d) }),
       enabled: viewMode === 'week',
     }))
   })
@@ -457,52 +466,17 @@ export default function TimelinePage() {
           )}
         </div>
 
-        {/* Dept filter + New Booking */}
+        {/* Filter group + New Booking */}
         <div className="flex justify-end items-center gap-3">
-          <div ref={deptRef} className="relative">
-            <button onClick={() => { setDeptOpen(!deptOpen); if (!deptOpen) setDeptSearch('') }}
-              className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all min-w-[130px]">
-              <span className="material-symbols-outlined text-slate-400 text-sm">filter_list</span>
-              <span className="text-[10px] font-black uppercase text-slate-700 flex-1 text-left">{deptFilter || 'All Depts'}</span>
-              <span className="material-symbols-outlined text-slate-300 text-sm">expand_more</span>
-            </button>
-            {deptOpen && (
-              <div className="absolute top-full right-0 mt-2 w-[164px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[300] overflow-hidden">
-                <div className="px-2.5 pt-2.5 pb-1.5">
-                  <input type="text" placeholder="Search dept..." value={deptSearch}
-                    onChange={e => setDeptSearch(e.target.value)} autoFocus
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold outline-none focus:border-[#adee2b] focus:bg-white transition-all" />
-                </div>
-                <div className="pb-1.5">
-                  {(!deptSearch || 'all depts'.includes(deptSearch.toLowerCase())) && (
-                    <button onClick={() => { setDeptFilter(''); setDeptOpen(false); setDeptSearch('') }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
-                      <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 11 }}>layers</span>
-                      </span>
-                      <span className="text-[10px] font-black uppercase text-slate-700">All Depts</span>
-                    </button>
-                  )}
-                  {filteredDepts.map(d => (
-                    <button key={d} onClick={() => { setDeptFilter(d); setDeptOpen(false); setDeptSearch('') }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
-                      <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0 text-[8px] font-black text-slate-600">{d.slice(0, 2)}</span>
-                      <span className="text-[10px] font-black uppercase text-slate-700">{d}</span>
-                    </button>
-                  ))}
-                  {filteredDepts.length === 0 && deptSearch && (
-                    <p className="px-3 py-3 text-[10px] text-slate-300 font-bold">No results</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          {/* Day / Week toggle */}
-          <div className="flex gap-0.5 bg-slate-100 rounded-xl p-1 shrink-0">
+
+          {/* Unified filter pill */}
+          <div className="flex items-center bg-slate-100 rounded-2xl p-1 gap-0.5">
+
+            {/* View toggle */}
             <button
               onClick={() => setViewMode('day')}
               title="Day view"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all
                 ${viewMode === 'day' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_today</span>
@@ -511,12 +485,65 @@ export default function TimelinePage() {
             <button
               onClick={() => setViewMode('week')}
               title="Week view"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all
                 ${viewMode === 'week' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_view_week</span>
               Week
             </button>
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-slate-300/60 mx-0.5 shrink-0" />
+
+            {/* Dept filter */}
+            <div ref={deptRef} className="relative">
+              <button
+                onClick={() => { setDeptOpen(!deptOpen); if (!deptOpen) setDeptSearch('') }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all
+                  ${deptFilter ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>filter_list</span>
+                {deptFilter || 'Dept'}
+                {deptFilter && (
+                  <span
+                    onClick={e => { e.stopPropagation(); setDeptFilter('') }}
+                    className="material-symbols-outlined text-slate-400 hover:text-slate-700 transition-colors"
+                    style={{ fontSize: 13 }}
+                  >close</span>
+                )}
+              </button>
+              {deptOpen && (
+                <div className="absolute top-full right-0 mt-2 w-[164px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[300] overflow-hidden">
+                  <div className="px-2.5 pt-2.5 pb-1.5">
+                    <input type="text" placeholder="Search dept..." value={deptSearch}
+                      onChange={e => setDeptSearch(e.target.value)} autoFocus
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold outline-none focus:border-[#adee2b] focus:bg-white transition-all" />
+                  </div>
+                  <div className="pb-1.5">
+                    {(!deptSearch || 'all depts'.includes(deptSearch.toLowerCase())) && (
+                      <button onClick={() => { setDeptFilter(''); setDeptOpen(false); setDeptSearch('') }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
+                        <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 11 }}>layers</span>
+                        </span>
+                        <span className="text-[10px] font-black uppercase text-slate-700">All Depts</span>
+                      </button>
+                    )}
+                    {filteredDepts.map(d => (
+                      <button key={d} onClick={() => { setDeptFilter(d); setDeptOpen(false); setDeptSearch('') }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
+                        <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0 text-[8px] font-black text-slate-600">{d.slice(0, 2)}</span>
+                        <span className="text-[10px] font-black uppercase text-slate-700">{d}</span>
+                      </button>
+                    ))}
+                    {filteredDepts.length === 0 && deptSearch && (
+                      <p className="px-3 py-3 text-[10px] text-slate-300 font-bold">No results</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>
 
           <button onClick={() => { setSelectedRoom(null); setEditBooking(null); setPrefillStart(''); setPrefillEnd(''); setBookingPanelOpen(true) }}
@@ -1025,7 +1052,7 @@ export default function TimelinePage() {
         editBooking={editBooking}
         prefillStart={prefillStart}
         prefillEnd={prefillEnd}
-        prefillDate={currentDate.toISOString().split('T')[0]}
+        prefillDate={toLocalDateStr(currentDate)}
         onSubmit={() => {
           setBookingPanelOpen(false)
           queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
@@ -1308,8 +1335,8 @@ export default function TimelinePage() {
 
       {/* Toast */}
       <div
-        className="fixed bottom-6 right-6 z-[9999] transition-all duration-300"
-        style={{ transform: toastMsg ? 'translateY(0)' : 'translateY(80px)', opacity: toastMsg ? 1 : 0, pointerEvents: toastMsg ? 'auto' : 'none' }}
+        className="fixed z-[9999] transition-all duration-300"
+        style={{ bottom: 28, right: 96, transform: toastMsg ? 'translateY(0)' : 'translateY(80px)', opacity: toastMsg ? 1 : 0, pointerEvents: toastMsg ? 'auto' : 'none' }}
       >
         <div style={{
           background: 'rgba(15,20,45,0.55)',

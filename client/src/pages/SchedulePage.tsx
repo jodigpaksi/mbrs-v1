@@ -520,24 +520,22 @@ export default function SchedulePage() {
           </div>
 
           {/* View toggle */}
-          {activeTab !== 'all' && (
-            <div className="ml-auto mb-2.5 flex gap-0.5 bg-slate-100 rounded-xl p-1 shrink-0">
-              <button
-                onClick={() => setViewMode('card')}
-                title="Card view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 17 }}>grid_view</span>
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                title="List view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 17 }}>view_list</span>
-              </button>
-            </div>
-          )}
+          <div className={`ml-auto mb-2.5 flex gap-0.5 bg-slate-100 rounded-xl p-1 shrink-0 ${activeTab === 'all' ? 'opacity-35' : ''}`}>
+            <button
+              onClick={() => activeTab !== 'all' && setViewMode('card')}
+              title="Card view"
+              className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 17 }}>grid_view</span>
+            </button>
+            <button
+              onClick={() => activeTab !== 'all' && setViewMode('list')}
+              title="List view"
+              className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 17 }}>view_list</span>
+            </button>
+          </div>
 
           {/* Animated indicator */}
           <div
@@ -606,12 +604,12 @@ export default function SchedulePage() {
                               className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest transition-colors"
                               style={{ color: allSortKey === h.key ? '#adee2b' : '#94a3b8' }}>
                               {h.label}
-                              <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 11, color: allSortKey === h.key ? '#adee2b' : '#64748b' }}>
                                 {allSortKey === h.key ? (allSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}
                               </span>
                             </button>
                           ) : (
-                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">{h.label}</span>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{h.label}</span>
                           )}
                         </th>
                       ))}
@@ -812,8 +810,8 @@ export default function SchedulePage() {
 
       {/* Toast */}
       <div
-        className="fixed bottom-6 right-6 z-[9999] transition-all duration-300"
-        style={{ transform: toastMsg ? 'translateY(0)' : 'translateY(80px)', opacity: toastMsg ? 1 : 0, pointerEvents: toastMsg ? 'auto' : 'none' }}
+        className="fixed z-[9999] transition-all duration-300"
+        style={{ bottom: 28, right: 96, transform: toastMsg ? 'translateY(0)' : 'translateY(80px)', opacity: toastMsg ? 1 : 0, pointerEvents: toastMsg ? 'auto' : 'none' }}
       >
         <div style={{
           background: 'rgba(15,20,45,0.55)',
