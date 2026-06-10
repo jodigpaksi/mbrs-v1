@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Room;
+use App\Models\RoomView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RoomController extends Controller
 {
@@ -114,6 +116,24 @@ class RoomController extends Controller
             'exclude_booking_id' => 'nullable|integer',
         ]);
 
+        $userId = auth()->id();
+
+        // Track this user as viewing this slot (upsert, TTL via updated_at)
+        DB::table('room_views')->upsert(
+            [['room_id' => $room->id, 'user_id' => $userId, 'start_at' => $request->start_at, 'end_at' => $request->end_at, 'updated_at' => now()]],
+            ['room_id', 'user_id'],
+            ['start_at', 'end_at', 'updated_at'],
+        );
+
+        // Count other users actively viewing overlapping slot (active = seen within last 60s)
+        $otherViewers = DB::table('room_views')
+            ->where('room_id', $room->id)
+            ->where('user_id', '!=', $userId)
+            ->where('updated_at', '>=', now()->subSeconds(60))
+            ->where('start_at', '<', $request->end_at)
+            ->where('end_at', '>', $request->start_at)
+            ->count();
+
         $query = Booking::where('room_id', $room->id)
             ->where('status', '!=', 'cancelled')
             ->where('start_at', '<', $request->end_at)
@@ -126,8 +146,19 @@ class RoomController extends Controller
         $conflicts = $query->with('user')->get();
 
         return response()->json([
-            'available' => $conflicts->isEmpty(),
-            'conflicts' => $conflicts,
+            'available'      => $conflicts->isEmpty(),
+            'conflicts'      => $conflicts,
+            'other_viewers'  => $otherViewers,
         ]);
+    }
+
+    public function clearView(Room $room): JsonResponse
+    {
+        DB::table('room_views')
+            ->where('room_id', $room->id)
+            ->where('user_id', auth()->id())
+            ->delete();
+
+        return response()->json(['ok' => true]);
     }
 }

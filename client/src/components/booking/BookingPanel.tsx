@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Booking, Room } from '../../types/index'
-import { getRooms, checkAvailability } from '../../api/rooms'
+import { getRooms, checkAvailability, clearRoomView } from '../../api/rooms'
 import { createBooking, updateBooking } from '../../api/bookings'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
@@ -48,7 +48,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const isEdit = !!editBooking
-  const [availResult, setAvailResult] = useState<{ available: boolean } | null>(null)
+  const [availResult, setAvailResult] = useState<{ available: boolean; other_viewers: number } | null>(null)
   const [availChecking, setAvailChecking] = useState(false)
   const availTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -84,6 +84,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     }
   }, [open, editBooking, initialRoom])
 
+  // Cleanup view record when panel closes
+  useEffect(() => {
+    if (!open && selectedRoom) clearRoomView(selectedRoom.id)
+  }, [open])
+
   // Real-time availability check via API (debounced)
   useEffect(() => {
     if (!open) { setAvailResult(null); setAvailChecking(false); return }
@@ -102,7 +107,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           `${endDate || date} ${endTime}:00`,
           isEdit && editBooking ? editBooking.id : undefined,
         )
-        setAvailResult({ available: !!res.available })
+        setAvailResult({ available: !!res.available, other_viewers: res.other_viewers ?? 0 })
       } catch {
         setAvailResult(null)
       } finally {
@@ -453,13 +458,17 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               </div>
             )}
             {isTimeValid() === true && !availChecking && isAvailable() === true && (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-[#adee2b] bg-[#f7fee7]">
-                <div className="size-8 rounded-xl bg-[#adee2b] flex items-center justify-center text-black shrink-0">
-                  <span className="material-symbols-outlined text-base">verified</span>
+              <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 ${(availResult?.other_viewers ?? 0) > 0 ? 'border-amber-300 bg-amber-50' : 'border-[#adee2b] bg-[#f7fee7]'}`}>
+                <div className={`size-8 rounded-xl flex items-center justify-center shrink-0 ${(availResult?.other_viewers ?? 0) > 0 ? 'bg-amber-400 text-white' : 'bg-[#adee2b] text-black'}`}>
+                  <span className="material-symbols-outlined text-base">{(availResult?.other_viewers ?? 0) > 0 ? 'group' : 'verified'}</span>
                 </div>
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-green-800">Room Available</p>
-                  <p className="text-[9px] text-green-700 mt-0.5">No conflicts for this slot.</p>
+                  <p className={`text-[9px] font-black uppercase tracking-widest ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-800' : 'text-green-800'}`}>
+                    {(availResult?.other_viewers ?? 0) > 0 ? `${availResult!.other_viewers} other user${availResult!.other_viewers > 1 ? 's' : ''} viewing this slot` : 'Room Available'}
+                  </p>
+                  <p className={`text-[9px] mt-0.5 ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                    {(availResult?.other_viewers ?? 0) > 0 ? 'Submit quickly — someone else may book first.' : 'No conflicts for this slot.'}
+                  </p>
                 </div>
               </div>
             )}

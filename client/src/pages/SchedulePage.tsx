@@ -340,7 +340,7 @@ export default function SchedulePage() {
     setCancelTarget(null)
     setPendingCancelId(booking.id)
 
-    let count = 10
+    let count = 5
     setToastMsg(`"${booking.title}" cancelled`)
     setToastCountdown(count)
     if (cancelIntervalRef.current) clearInterval(cancelIntervalRef.current)
@@ -366,7 +366,7 @@ export default function SchedulePage() {
         queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
         queryClient.invalidateQueries({ queryKey: ['bookings'] })
       }, 380)
-    }, 10000)
+    }, 5000)
   }
 
   function undoCancel() {

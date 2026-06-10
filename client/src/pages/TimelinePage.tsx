@@ -369,7 +369,7 @@ export default function TimelinePage() {
     const booking = cancelTarget
     setCancelTarget(null)
 
-    let count = 10
+    let count = 5
     setToastMsg(`"${booking.title}" cancelled`)
     setToastCountdown(count)
     if (cancelIntervalRef.current) clearInterval(cancelIntervalRef.current)
@@ -386,7 +386,7 @@ export default function TimelinePage() {
       setToastMsg(null)
       await cancelBooking(booking.id)
       queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
-    }, 10000)
+    }, 5000)
   }
 
   function undoCancel() {

@@ -19,5 +19,9 @@ export async function checkAvailability(roomId: number, startAt: string, endAt: 
   const res = await api.get(`/rooms/${roomId}/availability`, {
     params: { start_at: startAt, end_at: endAt, exclude_booking_id: excludeId },
   })
-  return res.data
+  return res.data as { available: boolean; other_viewers: number; conflicts: unknown[] }
+}
+
+export async function clearRoomView(roomId: number) {
+  await api.delete(`/rooms/${roomId}/view`).catch(() => {})
 }
