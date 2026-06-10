@@ -22,9 +22,10 @@ interface BookingPanelProps {
   prefillEnd?: string
   prefillDate?: string
   onSubmit?: () => void
+  onCancel?: (booking: Booking) => void
 }
 
-export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, onSubmit }: BookingPanelProps) {
+export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, onSubmit, onCancel }: BookingPanelProps) {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -363,30 +364,30 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Type</label>
-                  <div className="flex bg-slate-200/60 p-1 rounded-full gap-1 border border-black/5">
+                  <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
+                    <div className="absolute top-1 bottom-1 w-[calc(50%-2px)] rounded-full shadow-sm pointer-events-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                      style={{ left: 4, transform: type === 'external' ? 'translateX(100%)' : 'translateX(0)', background: type === 'internal' ? '#334155' : '#f97316' }} />
                     <button onClick={() => setType('internal')}
-                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
-                        ${type === 'internal' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400'}`}>
+                      className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'internal' ? 'text-white' : 'text-slate-400'}`}>
                       Internal
                     </button>
                     <button onClick={() => setType('external')}
-                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
-                        ${type === 'external' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400'}`}>
+                      className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'external' ? 'text-white' : 'text-slate-400'}`}>
                       External
                     </button>
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Status</label>
-                  <div className="flex bg-slate-200/60 p-1 rounded-full gap-1 border border-black/5">
+                  <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
+                    <div className="absolute top-1 bottom-1 w-[calc(50%-2px)] rounded-full shadow-sm pointer-events-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                      style={{ left: 4, transform: status === 'tentative' ? 'translateX(100%)' : 'translateX(0)', background: status === 'confirmed' ? '#adee2b' : '#fcd34d' }} />
                     <button onClick={() => setStatus('confirmed')}
-                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
-                        ${status === 'confirmed' ? 'bg-[#adee2b] text-black shadow-sm' : 'text-slate-400'}`}>
+                      className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'confirmed' ? 'text-black' : 'text-slate-400'}`}>
                       Confirmed
                     </button>
                     <button onClick={() => setStatus('tentative')}
-                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
-                        ${status === 'tentative' ? 'bg-amber-300 text-amber-900 shadow-sm' : 'text-slate-400'}`}>
+                      className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'tentative' ? 'text-amber-900' : 'text-slate-400'}`}>
                       Tentative
                     </button>
                   </div>
@@ -395,10 +396,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {!isEdit && (
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat</label>
-                  <div className="flex bg-slate-200/60 p-1 rounded-full gap-1 border border-black/5">
+                  <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
+                    <div className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                      style={{ left: 4, width: 'calc((100% - 8px) / 3)', transform: `translateX(${repeat === 'none' ? 0 : repeat === 'daily' ? 100 : 200}%)` }} />
                     {(['none', 'daily', 'weekly'] as const).map(r => (
                       <button key={r} onClick={() => setRepeat(r)}
-                        className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all ${repeat === r ? 'bg-white text-black shadow-sm' : 'text-slate-400'}`}>
+                        className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${repeat === r ? 'text-black' : 'text-slate-400'}`}>
                         {r}
                       </button>
                     ))}
@@ -561,6 +564,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           >
             {submitting ? 'Saving...' : isEdit ? 'Save Changes' : 'Confirm Booking'}
           </button>
+          {isEdit && editBooking && onCancel && (
+            <button
+              type="button"
+              onClick={() => { onClose(); setTimeout(() => onCancel(editBooking), 150) }}
+              className="w-full py-3 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-200 border-2 border-red-100 text-red-400 hover:border-red-400 hover:bg-red-50 hover:text-red-600"
+            >
+              Cancel Booking
+            </button>
+          )}
         </div>
       </div>
     </>

@@ -388,8 +388,13 @@ export default function SchedulePage() {
     toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
   }
 
+  const upcomingInAll = allList.filter((b: Booking) => !isActuallyPast(b))
+  const pastInAll     = allList.filter((b: Booking) => isActuallyPast(b))
+  const pastPreview   = pastInAll.slice(0, 5)
+  const allListForDisplay = [...upcomingInAll, ...pastPreview]
+
   function exportExcel() {
-    const rows = allList.map((b: Booking) => ({
+    const rows = upcomingInAll.map((b: Booking) => ({
       Date: fmtTableDate(b.start_at), Day: fmtTableDay(b.start_at),
       'Start Time': fmtTime(b.start_at), 'End Time': fmtTime(b.end_at),
       Duration: dur(b.start_at, b.end_at), Room: b.room?.name ?? '',
@@ -410,7 +415,7 @@ export default function SchedulePage() {
     autoTable(doc, {
       startY: 28,
       head: [['Date', 'Day', 'Time', 'Room', 'Title', 'Status']],
-      body: allList.map((b: Booking) => [
+      body: upcomingInAll.map((b: Booking) => [
         fmtTableDate(b.start_at), fmtTableDay(b.start_at),
         `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
         b.room?.name ?? '', b.title, b.status,
@@ -571,7 +576,9 @@ export default function SchedulePage() {
           ) : activeTab === 'all' ? (
             <>
               <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{allList.length} total bookings</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {upcomingInAll.length} upcoming{pastInAll.length > 0 ? ` · ${pastInAll.length} past` : ''}
+                </p>
                 <div className="flex gap-2">
                   <button onClick={exportExcel}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:border-green-400 hover:text-green-600 hover:bg-green-50 transition-all">
@@ -616,9 +623,9 @@ export default function SchedulePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {allList.map((b: Booking, i: number) => {
+                    {allListForDisplay.map((b: Booking, i: number) => {
                       const isPast = isActuallyPast(b)
-                      const prevIsActive = i > 0 && !isActuallyPast(allList[i - 1])
+                      const prevIsActive = i > 0 && !isActuallyPast(allListForDisplay[i - 1])
                       const isFirstPast = isPast && prevIsActive
                       const isConf = b.status === 'confirmed'
                       const tStyle = typeStyle[b.type] || typeStyle.internal
@@ -694,6 +701,19 @@ export default function SchedulePage() {
                         </>
                       )
                     })}
+                    {pastInAll.length > 5 && (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-3 bg-slate-50/70">
+                          <button
+                            onClick={() => setActiveTab('past')}
+                            className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 transition-colors group/more"
+                          >
+                            <span className="material-symbols-outlined group-hover/more:text-black transition-colors" style={{ fontSize: 14 }}>history</span>
+                            Show {pastInAll.length - 5} more past booking{pastInAll.length - 5 !== 1 ? 's' : ''} →
+                          </button>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -793,6 +813,7 @@ export default function SchedulePage() {
           queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
           queryClient.invalidateQueries({ queryKey: ['bookings'] })
         }}
+        onCancel={(b) => { setPanelOpen(false); handleCancel(b) }}
       />
 
       {/* Fixed description tooltip (avoids table overflow-hidden clipping) */}

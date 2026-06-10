@@ -1090,6 +1090,7 @@ export default function TimelinePage() {
           if (toastTimer.current) clearTimeout(toastTimer.current)
           toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
         }}
+        onCancel={(b) => { setBookingPanelOpen(false); setCancelTarget(b) }}
       />
 
       {/* Room Detail */}
