@@ -8,6 +8,7 @@ import BookingBar from '../components/booking/BookingBar'
 import BookingTooltip from '../components/booking/BookingTooltip'
 import BookingPanel from '../components/booking/BookingPanel'
 import RoomDetailModal from '../components/room/RoomDetailModal'
+import GlassDatePicker from '../components/ui/GlassDatePicker'
 
 const HOUR_START = 7
 const HOUR_END = 19
@@ -67,8 +68,6 @@ export default function TimelinePage() {
     booking: null, pos: { x: 0, y: 0 }, visible: false,
   })
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [dpOpen, setDpOpen] = useState(false)
-  const [dpMonth, setDpMonth] = useState(new Date())
 
   // Drag state via refs (avoids stale closures in document listeners)
   const cellDragRef = useRef<CellDrag | null>(null)
@@ -80,16 +79,19 @@ export default function TimelinePage() {
   // Dropdown click-outside refs
   const locationRef = useRef<HTMLDivElement>(null)
   const deptRef = useRef<HTMLDivElement>(null)
-  const dpRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
       if (locationRef.current && !locationRef.current.contains(e.target as Node)) setLocationOpen(false)
       if (deptRef.current && !deptRef.current.contains(e.target as Node)) { setDeptOpen(false); setDeptSearch('') }
-      if (dpRef.current && !dpRef.current.contains(e.target as Node)) setDpOpen(false)
     }
+    function handleSearch(e: Event) { setSearch((e as CustomEvent<string>).detail) }
     document.addEventListener('mousedown', handleMouseDown)
-    return () => document.removeEventListener('mousedown', handleMouseDown)
+    document.addEventListener('timeline-search', handleSearch)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('timeline-search', handleSearch)
+    }
   }, [])
 
   const slots = (HOUR_END - HOUR_START) * 2
@@ -197,7 +199,12 @@ export default function TimelinePage() {
             setToastMsg('Booking moved successfully')
             if (toastTimer.current) clearTimeout(toastTimer.current)
             toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
-          } catch { /* revert */ }
+          } catch (err: unknown) {
+            const status = (err as { response?: { status?: number } })?.response?.status
+            setToastMsg(status === 422 ? 'Slot occupied — move cancelled' : 'Failed to move booking')
+            if (toastTimer.current) clearTimeout(toastTimer.current)
+            toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
+          }
         }
       }
       if (bd) { barDragRef.current = null; setDragTick(t => t + 1) }
@@ -223,7 +230,12 @@ export default function TimelinePage() {
               setToastMsg('Booking resized successfully')
               if (toastTimer.current) clearTimeout(toastTimer.current)
               toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
-            } catch { /* revert */ }
+            } catch (err: unknown) {
+              const status = (err as { response?: { status?: number } })?.response?.status
+              setToastMsg(status === 422 ? 'Slot occupied — resize cancelled' : 'Failed to resize booking')
+              if (toastTimer.current) clearTimeout(toastTimer.current)
+              toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
+            }
           }
         }
       }
@@ -297,10 +309,32 @@ export default function TimelinePage() {
 
   const filteredDepts = DEPTS.filter(d => d.toLowerCase().includes(deptSearch.toLowerCase()))
 
-  const filteredRooms = rooms.filter((r: Room) => {
-    if (search && !r.name.toLowerCase().includes(search.toLowerCase()) && !r.type.toLowerCase().includes(search.toLowerCase())) return false
+  const allVisibleBookings: Booking[] = viewMode === 'week'
+    ? weekResults.flatMap(r => (r.data || []) as Booking[])
+    : bookings as Booking[]
+
+  function bookingMatchesSearch(b: Booking, q: string): boolean {
+    const s = q.toLowerCase()
+    const fmt = (iso: string) => {
+      const d = new Date(iso.replace('Z', ''))
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    }
+    return [
+      b.title, b.description, b.user?.name, b.user?.department,
+      b.user?.email, b.user?.ext, b.type, b.status,
+      fmt(b.start_at), fmt(b.end_at),
+    ].some(v => v && v.toLowerCase().includes(s))
+  }
+
+  const filteredRooms = (rooms as Room[]).filter((r: Room) => {
+    if (search) {
+      const roomMatch = r.name.toLowerCase().includes(search.toLowerCase()) || r.type.toLowerCase().includes(search.toLowerCase())
+      const bookingMatch = allVisibleBookings.filter((b: Booking) => b.room_id === r.id && b.status !== 'cancelled')
+        .some(b => bookingMatchesSearch(b, search))
+      if (!roomMatch && !bookingMatch) return false
+    }
     if (deptFilter) {
-      const has = bookings.some((b: Booking) => b.room_id === r.id && b.user?.department === deptFilter)
+      const has = allVisibleBookings.some((b: Booking) => b.room_id === r.id && b.user?.department === deptFilter)
       if (!has) return false
     }
     return true
@@ -362,78 +396,41 @@ export default function TimelinePage() {
     setToastCountdown(null)
   }
 
-  // Date picker
-  function renderDpDays() {
-    const y = dpMonth.getFullYear(), m = dpMonth.getMonth()
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
-    const firstDay = new Date(y, m, 1).getDay()
-    const daysInMonth = new Date(y, m + 1, 0).getDate()
-    const days = []
-    for (let i = 0; i < firstDay; i++) days.push(<div key={`e${i}`} />)
-    for (let d = 1; d <= daysInMonth; d++) {
-      const isT   = d === today.getDate() && m === today.getMonth() && y === today.getFullYear()
-      const isSel = d === currentDate.getDate() && m === currentDate.getMonth() && y === currentDate.getFullYear()
-      days.push(
-        <button key={d} onClick={() => { setCurrentDate(new Date(y, m, d)); setDpOpen(false) }}
-          className={`w-[34px] h-[34px] rounded-[9px] flex items-center justify-center text-[11px] font-black transition-all
-            ${isT ? 'bg-black text-[#adee2b]' : isSel ? 'bg-[#adee2b] text-black' : 'text-slate-500 hover:bg-slate-100'}`}>
-          {d}
-        </button>
-      )
-    }
-    return { days, label: `${months[m]} ${y}` }
-  }
-  const { days: dpDays, label: dpLabel } = renderDpDays()
-
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
 
       {/* Toolbar */}
-      <div className="bg-white border-b border-slate-100 px-8 py-2.5 grid grid-cols-3 items-center shrink-0">
+      <div className="bg-white border-b border-slate-100 px-8 py-2.5 grid grid-cols-3 items-center shrink-0 select-none">
 
         {/* Date nav */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => setCurrentDate(new Date())}
             className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-black transition-colors">
             Today
           </button>
-          <div ref={dpRef} className="relative">
-            <button onClick={() => setDpOpen(!dpOpen)}
-              className="flex items-center gap-2 border-2 border-slate-100 rounded-xl px-3 py-2 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group">
-              <span className="material-symbols-outlined text-base text-slate-400 group-hover:text-black">calendar_today</span>
-              <span className="text-[12px] font-black text-slate-800 uppercase">{fmtDate(currentDate)}</span>
-              <span className="material-symbols-outlined text-sm text-slate-300">expand_more</span>
-            </button>
-            {dpOpen && (
-              <div className="absolute top-full left-0 mt-2 w-[300px] bg-white border border-slate-100 rounded-3xl shadow-2xl z-[300] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <button onClick={() => setDpMonth(new Date(dpMonth.getFullYear(), dpMonth.getMonth() - 1))}
-                    className="size-8 rounded-xl hover:bg-slate-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm">chevron_left</span>
-                  </button>
-                  <span className="text-[12px] font-black uppercase tracking-widest text-slate-700">{dpLabel}</span>
-                  <button onClick={() => setDpMonth(new Date(dpMonth.getFullYear(), dpMonth.getMonth() + 1))}
-                    className="size-8 rounded-xl hover:bg-slate-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-7 mb-2">
-                  {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
-                    <div key={d} className="text-center text-[9px] font-black text-slate-300 uppercase py-1">{d}</div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7 gap-0.5">{dpDays}</div>
-                <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
-                  <button onClick={() => { setCurrentDate(new Date()); setDpOpen(false) }}
-                    className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
-                  <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); setCurrentDate(d); setDpOpen(false) }}
-                    className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[9px] font-black uppercase">- 1 Week</button>
-                  <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); setCurrentDate(d); setDpOpen(false) }}
-                    className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[9px] font-black uppercase">+ 1 Week</button>
-                </div>
-              </div>
+          <GlassDatePicker
+            value={dateStr}
+            onChange={(iso) => { const [yy, mm, dd] = iso.split('-').map(Number); setCurrentDate(new Date(yy, mm - 1, dd)) }}
+            footer={(close) => (
+              <>
+                <button onClick={() => { setCurrentDate(new Date()); close() }}
+                  className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
+                <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); setCurrentDate(d); close() }}
+                  className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">- 1 Week</button>
+                <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); setCurrentDate(d); close() }}
+                  className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">+ 1 Week</button>
+              </>
             )}
-          </div>
+          >
+            {({ open }) => (
+              <button
+                className="flex items-center gap-2 border-2 border-slate-100 rounded-xl px-3 py-2 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group">
+                <span className="material-symbols-outlined text-base text-slate-400 group-hover:text-black">calendar_today</span>
+                <span className="text-[12px] font-black text-slate-800 uppercase">{fmtDate(currentDate)}</span>
+                <span className={`material-symbols-outlined text-sm text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+              </button>
+            )}
+          </GlassDatePicker>
           <div className="flex items-center">
             <button onClick={() => { const d=new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(d) }}
               className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors">
@@ -444,6 +441,18 @@ export default function TimelinePage() {
               <span className="material-symbols-outlined text-lg">chevron_right</span>
             </button>
           </div>
+          {search && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#adee2b] rounded-xl text-[9px] font-black uppercase">
+              <span className="material-symbols-outlined text-black" style={{ fontSize: 13 }}>search</span>
+              <span className="text-black">{filteredRooms.length} room{filteredRooms.length !== 1 ? 's' : ''} matched</span>
+              <button
+                onClick={() => { setSearch(''); document.dispatchEvent(new CustomEvent('timeline-search', { detail: '' })) }}
+                className="ml-0.5 hover:opacity-60 transition-opacity"
+              >
+                <span className="material-symbols-outlined text-black" style={{ fontSize: 12 }}>close</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Location */}
@@ -455,7 +464,7 @@ export default function TimelinePage() {
             <span className="material-symbols-outlined text-slate-400 text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
           </button>
           {locationOpen && (
-            <div className="absolute top-full mt-2 w-[240px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[200] p-1.5">
+            <div className="dropdown-enter absolute top-full mt-2 w-[240px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[200] p-1.5">
               {LOCATIONS.map(l => (
                 <div key={l} onClick={() => { setLocation(l); setLocationOpen(false) }}
                   className="px-4 py-2.5 hover:bg-[#adee2b] hover:text-black rounded-xl cursor-pointer text-[10px] font-black uppercase transition-colors">
@@ -472,25 +481,27 @@ export default function TimelinePage() {
           {/* Unified filter pill */}
           <div className="flex items-center bg-slate-100 rounded-2xl p-1 gap-0.5">
 
-            {/* View toggle */}
-            <button
-              onClick={() => setViewMode('day')}
-              title="Day view"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all
-                ${viewMode === 'day' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_today</span>
-              Day
-            </button>
-            <button
-              onClick={() => setViewMode('week')}
-              title="Week view"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all
-                ${viewMode === 'week' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_view_week</span>
-              Week
-            </button>
+            {/* View toggle — animated sliding pill */}
+            <div className="relative flex">
+              <div
+                className="absolute inset-y-0 w-1/2 bg-white rounded-xl shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                style={{ transform: viewMode === 'week' ? 'translateX(100%)' : 'translateX(0)' }}
+              />
+              <button
+                onClick={() => setViewMode('day')}
+                className={`relative z-10 w-[76px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === 'day' ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_today</span>
+                Day
+              </button>
+              <button
+                onClick={() => setViewMode('week')}
+                className={`relative z-10 w-[76px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === 'week' ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_view_week</span>
+                Week
+              </button>
+            </div>
 
             {/* Divider */}
             <div className="w-px h-5 bg-slate-300/60 mx-0.5 shrink-0" />
@@ -513,7 +524,7 @@ export default function TimelinePage() {
                 )}
               </button>
               {deptOpen && (
-                <div className="absolute top-full right-0 mt-2 w-[164px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[300] overflow-hidden">
+                <div className="dropdown-enter-right absolute top-full right-0 mt-2 w-[164px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[300] overflow-hidden">
                   <div className="px-2.5 pt-2.5 pb-1.5">
                     <input type="text" placeholder="Search dept..." value={deptSearch}
                       onChange={e => setDeptSearch(e.target.value)} autoFocus
@@ -599,6 +610,14 @@ export default function TimelinePage() {
               })}
             </div>
 
+            {/* Empty search state — week view */}
+            {search && filteredRooms.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 gap-3">
+                <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 48 }}>search_off</span>
+                <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">No rooms match "{search}"</p>
+              </div>
+            )}
+
             {/* Room rows */}
             {filteredRooms.map((room: Room) => {
               const dotColor = room.type === 'Ballroom' ? 'bg-purple-400' : room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'
@@ -644,10 +663,11 @@ export default function TimelinePage() {
                           const isTentative = b.status === 'tentative'
                           const bg = isTentative ? '#fef3c7' : isMe ? '#adee2b' : '#dbeafe'
                           const clr = isTentative ? '#92400e' : isMe ? '#000' : '#1d4ed8'
+                          const matchesSearch = !search || bookingMatchesSearch(b, search)
                           return (
                             <div key={b.id}
-                              className="mb-0.5 px-2 py-1 rounded-lg text-[9px] font-black truncate hover:opacity-75 transition-opacity"
-                              style={{ background: bg, color: clr }}
+                              className="mb-0.5 px-2 py-1 rounded-lg text-[9px] font-black truncate hover:opacity-75 transition-all"
+                              style={{ background: bg, color: clr, opacity: search && !matchesSearch ? 0.18 : 1 }}
                               onClick={e => { e.stopPropagation(); openEdit(b) }}
                               title={`${fmtTime(b.start_at)}–${fmtTime(b.end_at)} · ${b.title}`}
                             >
@@ -699,6 +719,15 @@ export default function TimelinePage() {
               )
             })}
           </div>
+
+          {/* Empty search state — day view */}
+          {search && filteredRooms.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-32 gap-3">
+              <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 52 }}>search_off</span>
+              <p className="text-[13px] font-black text-slate-300 uppercase tracking-widest">No results for "{search}"</p>
+              <p className="text-[10px] font-bold text-slate-200">Try searching by title, user, dept, room, or time</p>
+            </div>
+          )}
 
           {/* Room rows */}
           {filteredRooms.map((room: Room) => {
@@ -775,6 +804,7 @@ export default function TimelinePage() {
                   {/* Booking bars — absolutely positioned, no layout impact */}
                   {roomBookings.map((b: Booking) => {
                     const isMe = b.user_id === user?.id
+                    const matchesSearch = !search || bookingMatchesSearch(b, search)
                     const bd = barDragRef.current
                     const br = barResizeRef.current
                     const isDragging = bd?.booking.id === b.id || br?.booking.id === b.id
@@ -821,7 +851,7 @@ export default function TimelinePage() {
 
                     return (
                       <div key={b.id} className="absolute top-0 z-10"
-                        style={{ left, width, height: CELL_H, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1)', willChange: isDragging ? 'left,width' : undefined }}
+                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined }}
                         onContextMenu={e => {
                           e.preventDefault()
                           e.stopPropagation()

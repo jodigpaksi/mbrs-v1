@@ -37,6 +37,7 @@ export interface Booking {
   end_at: string
   status: 'confirmed' | 'tentative' | 'cancelled'
   type: 'internal' | 'external'
+  cancelled_at?: string
 }
 
 export interface PantryItem {

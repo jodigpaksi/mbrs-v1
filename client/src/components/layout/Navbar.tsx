@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
@@ -15,6 +16,14 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
+  const [q, setQ] = useState('')
+
+  function dispatch(val: string) {
+    onSearch?.(val)
+    document.dispatchEvent(new CustomEvent('timeline-search', { detail: val }))
+  }
+
+  function clear() { setQ(''); dispatch('') }
 
   const isActive = (path: string) => location.pathname === path
 
@@ -70,15 +79,29 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
       {/* Right actions */}
       <div className="flex items-center gap-3">
-        <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-base">search</span>
+        <form onSubmit={e => { e.preventDefault(); dispatch(q) }} className="relative flex items-center">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-base pointer-events-none">search</span>
           <input
             type="text"
-            placeholder="Search rooms..."
-            onChange={e => onSearch?.(e.target.value)}
-            className="w-36 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:w-52 focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all"
+            placeholder="Search bookings..."
+            value={q}
+            onChange={e => { setQ(e.target.value); dispatch(e.target.value) }}
+            className={`w-48 bg-slate-50 border rounded-xl pl-9 ${q ? 'pr-16' : 'pr-3'} py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all
+              ${q ? 'border-[#adee2b] bg-[#f7fee7]' : 'border-slate-200'}`}
           />
-        </div>
+          {q && (
+            <div className="absolute right-1 flex items-center gap-0.5">
+              <button type="button" onClick={clear}
+                className="size-6 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-white transition-colors">
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+              <button type="submit"
+                className="size-6 rounded-lg flex items-center justify-center bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-colors">
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </button>
+            </div>
+          )}
+        </form>
 
         <button
           onClick={onTodayClick}

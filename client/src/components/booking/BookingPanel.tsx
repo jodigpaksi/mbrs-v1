@@ -3,6 +3,15 @@ import { useQuery } from '@tanstack/react-query'
 import type { Booking, Room } from '../../types/index'
 import { getRooms, checkAvailability } from '../../api/rooms'
 import { createBooking, updateBooking } from '../../api/bookings'
+import GlassDatePicker from '../ui/GlassDatePicker'
+import GlassTimePicker from '../ui/GlassTimePicker'
+
+function fmtFieldDate(iso: string): string {
+  if (!iso) return 'Select date'
+  const [y, m, d] = iso.split('T')[0].split('-').map(Number)
+  if (!y || !m || !d) return 'Select date'
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
 
 interface BookingPanelProps {
   open: boolean
@@ -26,6 +35,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [status, setStatus] = useState<'confirmed' | 'tentative'>('confirmed')
   const [type, setType] = useState<'internal' | 'external'>('internal')
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly'>('none')
+  const [repeatCount, setRepeatCount] = useState(5)
   const [pantryOpen, setPantryOpen] = useState(false)
   const [coffeeQty, setCoffeeQty] = useState(2)
   const [teaQty, setTeaQty] = useState(0)
@@ -67,6 +77,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       setStatus('confirmed')
       setType('internal')
       setRepeat('none')
+      setRepeatCount(5)
       setSelectedRoom(initialRoom || null)
       setPantrySaved(false)
     }
@@ -108,11 +119,27 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     return diff > 0 ? `${diff.toFixed(1)} HOURS` : 'INVALID TIME'
   }
 
+  function toISO(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
+  function getRepeatEndLabel(): string {
+    if (!date || repeat === 'none') return ''
+    const [yy, mm, dd] = date.split('-').map(Number)
+    const d = new Date(yy, mm - 1, dd)
+    d.setDate(d.getDate() + (repeatCount - 1) * (repeat === 'daily' ? 1 : 7))
+    return `ends ${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+  }
+
   function isTimeValid() {
     if (!startTime || !endTime) return null
     const [h1, m1] = startTime.split(':').map(Number)
     const [h2, m2] = endTime.split(':').map(Number)
-    return (h2 * 60 + m2) > (h1 * 60 + m1)
+    const s = h1 * 60 + m1
+    const e = h2 * 60 + m2
+    if (s < 420 || s > 1110) return false
+    if (e < 450 || e > 1140) return false
+    return e > s
   }
 
   function isAvailable(): boolean | null {
@@ -130,22 +157,33 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     if (!isValid() || !selectedRoom) return
     setSubmitting(true)
     setError('')
+    const base = { room_id: selectedRoom.id, title, description: desc, status, type }
     try {
-      const payload = {
-        room_id: selectedRoom.id,
-        title,
-        description: desc,
-        start_at: `${date} ${startTime}:00`,
-        end_at: `${endDate} ${endTime}:00`,
-        status,
-        type,
-      }
       if (isEdit && editBooking) {
-        await updateBooking(editBooking.id, payload)
+        await updateBooking(editBooking.id, { ...base, start_at: `${date} ${startTime}:00`, end_at: `${endDate} ${endTime}:00` })
+        onSubmit?.()
+      } else if (repeat === 'none') {
+        await createBooking({ ...base, start_at: `${date} ${startTime}:00`, end_at: `${endDate} ${endTime}:00` })
+        onSubmit?.()
       } else {
-        await createBooking(payload)
+        const [yy, mm, dd] = date.split('-').map(Number)
+        const [ey, em, ed] = endDate.split('-').map(Number)
+        const baseS = new Date(yy, mm - 1, dd)
+        const baseE = new Date(ey, em - 1, ed)
+        const step = repeat === 'daily' ? 1 : 7
+        let created = 0, skipped = 0
+        for (let i = 0; i < repeatCount; i++) {
+          const s = new Date(baseS); s.setDate(s.getDate() + i * step)
+          const e = new Date(baseE); e.setDate(e.getDate() + i * step)
+          try {
+            await createBooking({ ...base, start_at: `${toISO(s)} ${startTime}:00`, end_at: `${toISO(e)} ${endTime}:00` })
+            created++
+          } catch { skipped++ }
+        }
+        if (created === 0) { setError(`All ${repeatCount} slots had conflicts.`); return }
+        if (skipped > 0) setError(`${created}/${repeatCount} booked — ${skipped} skipped (conflicts).`)
+        onSubmit?.()
       }
-      onSubmit?.()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       setError(msg || 'Failed to save booking.')
@@ -246,25 +284,49 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Start Date</label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+                  <GlassDatePicker value={date} onChange={setDate} min={today} panelWidth={280}>
+                    {() => (
+                      <button type="button" className="w-full flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 hover:border-[#adee2b] transition-all">
+                        <span className={date ? 'text-slate-800' : 'text-slate-400'}>{fmtFieldDate(date)}</span>
+                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 17 }}>calendar_today</span>
+                      </button>
+                    )}
+                  </GlassDatePicker>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">End Date</label>
-                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+                  <GlassDatePicker value={endDate} onChange={setEndDate} min={date || today} align="right" panelWidth={280}>
+                    {() => (
+                      <button type="button" className="w-full flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 hover:border-[#adee2b] transition-all">
+                        <span className={endDate ? 'text-slate-800' : 'text-slate-400'}>{fmtFieldDate(endDate)}</span>
+                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 17 }}>calendar_today</span>
+                      </button>
+                    )}
+                  </GlassDatePicker>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Start Time</label>
-                  <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+                  <GlassTimePicker value={startTime} onChange={setStartTime} min="07:00" max="18:30">
+                    {() => (
+                      <button type="button" className="w-full flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 hover:border-[#adee2b] transition-all">
+                        <span className={startTime ? 'text-slate-800 tabular-nums' : 'text-slate-400'}>{startTime || 'Select'}</span>
+                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 17 }}>schedule</span>
+                      </button>
+                    )}
+                  </GlassTimePicker>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">End Time</label>
-                  <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+                  <GlassTimePicker value={endTime} onChange={setEndTime} min="07:30" max="19:00" align="right">
+                    {() => (
+                      <button type="button" className="w-full flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl text-xs font-bold p-2.5 hover:border-[#adee2b] transition-all">
+                        <span className={endTime ? 'text-slate-800 tabular-nums' : 'text-slate-400'}>{endTime || 'Select'}</span>
+                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 17 }}>schedule</span>
+                      </button>
+                    )}
+                  </GlassTimePicker>
                 </div>
               </div>
               <div className="flex justify-center">
@@ -302,37 +364,69 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Type</label>
                   <div className="flex bg-slate-200/60 p-1 rounded-full gap-1 border border-black/5">
-                    {(['internal', 'external'] as const).map(t => (
-                      <button key={t} onClick={() => setType(t)}
-                        className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all ${type === t ? 'bg-white text-black shadow-sm' : 'text-slate-400'}`}>
-                        {t}
-                      </button>
-                    ))}
+                    <button onClick={() => setType('internal')}
+                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
+                        ${type === 'internal' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400'}`}>
+                      Internal
+                    </button>
+                    <button onClick={() => setType('external')}
+                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
+                        ${type === 'external' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400'}`}>
+                      External
+                    </button>
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Status</label>
                   <div className="flex bg-slate-200/60 p-1 rounded-full gap-1 border border-black/5">
-                    {(['confirmed', 'tentative'] as const).map(s => (
-                      <button key={s} onClick={() => setStatus(s)}
-                        className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all ${status === s ? 'bg-black text-[#adee2b] shadow-sm' : 'text-slate-400'}`}>
-                        {s}
-                      </button>
-                    ))}
+                    <button onClick={() => setStatus('confirmed')}
+                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
+                        ${status === 'confirmed' ? 'bg-[#adee2b] text-black shadow-sm' : 'text-slate-400'}`}>
+                      Confirmed
+                    </button>
+                    <button onClick={() => setStatus('tentative')}
+                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all
+                        ${status === 'tentative' ? 'bg-amber-300 text-amber-900 shadow-sm' : 'text-slate-400'}`}>
+                      Tentative
+                    </button>
                   </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat</label>
-                <div className="flex bg-slate-200/60 p-1 rounded-full gap-1 border border-black/5">
-                  {(['none', 'daily', 'weekly'] as const).map(r => (
-                    <button key={r} onClick={() => setRepeat(r)}
-                      className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all ${repeat === r ? 'bg-white text-black shadow-sm' : 'text-slate-400'}`}>
-                      {r}
-                    </button>
-                  ))}
+              {!isEdit && (
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat</label>
+                  <div className="flex bg-slate-200/60 p-1 rounded-full gap-1 border border-black/5">
+                    {(['none', 'daily', 'weekly'] as const).map(r => (
+                      <button key={r} onClick={() => setRepeat(r)}
+                        className={`flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-all ${repeat === r ? 'bg-white text-black shadow-sm' : 'text-slate-400'}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                  {repeat !== 'none' && (
+                    <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-4 py-3">
+                      <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 15 }}>repeat</span>
+                      <span className="text-[10px] font-black uppercase text-slate-500">
+                        {repeat === 'daily' ? 'Daily for' : 'Weekly for'}
+                      </span>
+                      <div className="flex items-center gap-2 ml-auto">
+                        <button type="button"
+                          onClick={() => setRepeatCount(c => Math.max(2, c - 1))}
+                          className="size-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-black text-slate-600 transition-colors">
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>remove</span>
+                        </button>
+                        <span className="text-[15px] font-black text-slate-900 w-5 text-center tabular-nums">{repeatCount}</span>
+                        <button type="button"
+                          onClick={() => setRepeatCount(c => Math.min(repeat === 'daily' ? 90 : 52, c + 1))}
+                          className="size-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-black text-slate-600 transition-colors">
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
+                        </button>
+                      </div>
+                      <span className="text-[9px] text-slate-400 font-bold shrink-0">{getRepeatEndLabel()}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Availability */}

@@ -17,13 +17,15 @@ class Booking extends Model
         'end_at',
         'status',
         'type',
+        'cancelled_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'start_at' => 'datetime',
-            'end_at' => 'datetime',
+            'start_at'     => 'datetime',
+            'end_at'       => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 

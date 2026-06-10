@@ -297,7 +297,7 @@ export default function SchedulePage() {
     return [...upcoming.sort(sortFn), ...past.sort(sortFn)]
   }, [myBookings, allSortKey, allSortDir])
   const pastList: Booking[]      = myBookings.filter((b: Booking) => isActuallyPast(b) && parseLocal(b.start_at) >= past30).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
-  const cancelledList: Booking[] = (allMyBookings as Booking[]).filter((b: Booking) => b.status === 'cancelled' && parseLocal(b.start_at) >= minus7 && parseLocal(b.start_at) <= plus7).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+  const cancelledList: Booking[] = (allMyBookings as Booking[]).filter((b: Booking) => b.status === 'cancelled' && b.cancelled_at && parseLocal(b.cancelled_at) >= minus7).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
   const tentativeList: Booking[] = myBookings.filter((b: Booking) => b.status === 'tentative').sort((a: Booking, b: Booking) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
 
   const thisMonthCount = myBookings.filter((b: Booking) => {

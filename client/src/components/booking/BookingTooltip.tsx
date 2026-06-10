@@ -50,6 +50,20 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
     return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`
   }
 
+  function formatDate(iso: string) {
+    return parseLocal(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+  }
+
+  function copyBookingInfo() {
+    const text = [
+      `${booking.room?.name} (${booking.room?.capacity})`,
+      formatDate(booking.start_at),
+      `${formatTime(booking.start_at)} – ${formatTime(booking.end_at)} | ${getDuration()}`,
+      booking.title,
+    ].join('\n')
+    copyToClip(text, 'tt-copy-booking')
+  }
+
   function copyToClip(text: string, btnId: string) {
     navigator.clipboard.writeText(text).then(() => {
       const btn = document.getElementById(btnId)
@@ -99,66 +113,81 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
           </span>
         </div>
 
-        {/* User */}
-        <div className="flex items-center gap-3.5">
-          <img
-            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${booking.user?.avatar || booking.user?.name}`}
-            className="size-12 rounded-xl object-cover border border-slate-200"
-          />
-          <div>
-            <p className="text-base font-black text-slate-900 leading-tight">{booking.user?.name}</p>
-            <p className="text-[11px] font-bold uppercase mt-0.5 text-slate-500">{booking.user?.department}</p>
-          </div>
-        </div>
-
-        {/* Contact */}
-        <div className="border-y border-slate-200/70 py-3 space-y-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 15 }}>phone_in_talk</span>
-              <span className="text-[11px] font-bold text-slate-500">Ext</span>
-              <span className="text-[11px] font-black text-slate-800">{booking.user?.ext}</span>
-            </div>
-            <button
-              id="tt-copy-ext"
-              onClick={() => copyToClip(booking.user?.ext || '', 'tt-copy-ext')}
-              className="shrink-0 flex items-center gap-1 bg-slate-100 hover:bg-[#adee2b] hover:text-black text-slate-500 px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
-            </button>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 15 }}>mail</span>
-              <span className="text-[11px] font-black text-slate-800 truncate">{booking.user?.email}</span>
-            </div>
-            <button
-              id="tt-copy-email"
-              onClick={() => copyToClip(booking.user?.email || '', 'tt-copy-email')}
-              className="shrink-0 flex items-center gap-1 bg-slate-100 hover:bg-[#adee2b] hover:text-black text-slate-500 px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
-            </button>
-          </div>
-        </div>
-
         {/* Title & desc */}
         <div className="space-y-1.5">
           <p className="text-[15px] font-black text-slate-900 leading-tight">{booking.title}</p>
           {booking.description && (
             <p className="text-[12px] text-slate-500 font-medium leading-relaxed">{booking.description}</p>
           )}
+          <span className={`inline-block text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide mt-0.5
+            ${booking.type === 'external' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
+            {booking.type === 'external' ? 'External' : 'Internal'}
+          </span>
         </div>
 
         {/* Time */}
         <div className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center gap-3">
-          <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>schedule</span>
-          <div>
+          <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 16 }}>schedule</span>
+          <div className="flex-1 min-w-0">
             <p className="text-[13px] font-black tabular-nums text-slate-900">
               {formatTime(booking.start_at)} &ndash; {formatTime(booking.end_at)}
               <span className="text-slate-400 font-bold ml-1.5">&middot; {getDuration()}</span>
             </p>
             <p className="text-[11px] font-bold text-slate-500 mt-0.5">{booking.room?.name}</p>
+          </div>
+          <button
+            id="tt-copy-booking"
+            onClick={copyBookingInfo}
+            className="shrink-0 flex items-center gap-1 bg-white border border-slate-200 hover:bg-[#adee2b] hover:border-[#adee2b] hover:text-black text-slate-400 px-2.5 py-1.5 rounded-xl transition-all text-[9px] font-black uppercase"
+            title="Copy booking info"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>content_copy</span>
+            Copy
+          </button>
+        </div>
+
+        {/* User */}
+        <div className="border-t border-slate-200/70 pt-4 space-y-3">
+          <div className="flex items-center gap-3.5">
+            <img
+              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${booking.user?.avatar || booking.user?.name}`}
+              className="size-12 rounded-xl object-cover border border-slate-200"
+            />
+            <div>
+              <p className="text-base font-black text-slate-900 leading-tight">{booking.user?.name}</p>
+              <p className="text-[11px] font-bold uppercase mt-0.5 text-slate-500">{booking.user?.department}</p>
+            </div>
+          </div>
+
+          {/* Contact */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 15 }}>phone_in_talk</span>
+                <span className="text-[11px] font-bold text-slate-500">Ext</span>
+                <span className="text-[11px] font-black text-slate-800">{booking.user?.ext}</span>
+              </div>
+              <button
+                id="tt-copy-ext"
+                onClick={() => copyToClip(booking.user?.ext || '', 'tt-copy-ext')}
+                className="shrink-0 flex items-center gap-1 bg-slate-100 hover:bg-[#adee2b] hover:text-black text-slate-500 px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 15 }}>mail</span>
+                <span className="text-[11px] font-black text-slate-800 truncate">{booking.user?.email}</span>
+              </div>
+              <button
+                id="tt-copy-email"
+                onClick={() => copyToClip(booking.user?.email || '', 'tt-copy-email')}
+                className="shrink-0 flex items-center gap-1 bg-slate-100 hover:bg-[#adee2b] hover:text-black text-slate-500 px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
+              </button>
+            </div>
           </div>
         </div>
 

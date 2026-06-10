@@ -10,3 +10,17 @@
   line-height: 1;
   vertical-align: middle;
 }
+
+/* ── Global dropdown animation ── */
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+.dropdown-enter       { animation: dropdown-in 0.17s cubic-bezier(0.4,0,0.2,1) both; transform-origin: top left;  }
+.dropdown-enter-right { animation: dropdown-in 0.17s cubic-bezier(0.4,0,0.2,1) both; transform-origin: top right; }
+
+/* ── Time picker scrollbar ── */
+.tp-scroll::-webkit-scrollbar        { width: 6px; }
+.tp-scroll::-webkit-scrollbar-track  { background: transparent; }
+.tp-scroll::-webkit-scrollbar-thumb  { background: rgba(148,163,184,0.35); border-radius: 99px; }
+.tp-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.65); }
