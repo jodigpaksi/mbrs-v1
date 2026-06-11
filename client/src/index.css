@@ -1,5 +1,42 @@
 @import "tailwindcss";
 
+/* Dark mode via .dark class on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design System Tokens ── */
+:root {
+  --ds-bg-base:      #f7f8f6;
+  --ds-bg-surface:   #ffffff;
+  --ds-bg-surface-2: #f8fafc;
+  --ds-bg-raised:    #f1f5f9;
+  --ds-border:       #e2e8f0;
+  --ds-border-sub:   #f1f5f9;
+  --ds-text-1:       #1e293b;
+  --ds-text-2:       #64748b;
+  --ds-text-3:       #94a3b8;
+  --ds-text-4:       #cbd5e1;
+  --ds-pill-bg:      #ffffff;
+  --ds-glass-bg:     rgba(255,255,255,0.82);
+  --ds-glass-border: rgba(255,255,255,0.80);
+  --ds-glass-shadow: 0 24px 64px rgba(0,0,0,0.12), 0 2px 0 rgba(255,255,255,0.9) inset;
+}
+.dark {
+  --ds-bg-base:      #0d0f17;
+  --ds-bg-surface:   #15182a;
+  --ds-bg-surface-2: #1d2035;
+  --ds-bg-raised:    #242740;
+  --ds-border:       #2a2d45;
+  --ds-border-sub:   #1f2238;
+  --ds-text-1:       #f1f5f9;
+  --ds-text-2:       #8892aa;
+  --ds-text-3:       #555e7a;
+  --ds-text-4:       #353855;
+  --ds-pill-bg:      #2a2d45;
+  --ds-glass-bg:     rgba(16,18,30,0.90);
+  --ds-glass-border: rgba(255,255,255,0.07);
+  --ds-glass-shadow: 0 24px 64px rgba(0,0,0,0.50), 0 1px 0 rgba(255,255,255,0.04) inset;
+}
+
 * {
   font-family: 'Manrope', sans-serif;
 }

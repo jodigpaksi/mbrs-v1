@@ -4,6 +4,7 @@ import type { Booking, Room } from '../types/index'
 import { getRooms } from '../api/rooms'
 import { getBookings, updateBooking as updateBookingApi, cancelBooking } from '../api/bookings'
 import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import BookingBar from '../components/booking/BookingBar'
 import BookingTooltip from '../components/booking/BookingTooltip'
 import BookingPanel from '../components/booking/BookingPanel'
@@ -35,6 +36,7 @@ type BarResize = { booking: Booking; edge: 'left' | 'right'; origStartSlot: numb
 
 export default function TimelinePage() {
   const { user } = useAuth()
+  const { defaultView, startDay, t } = useSettings()
   const queryClient = useQueryClient()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [location, setLocation] = useState(LOCATIONS[0])
@@ -62,7 +64,7 @@ export default function TimelinePage() {
   const [otherCtxMenu, setOtherCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [cellCtxMenu, setCellCtxMenu] = useState<{ room: Room; slot: number; x: number; y: number } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
-  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day')
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => defaultView)
 
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
@@ -504,10 +506,12 @@ export default function TimelinePage() {
                 )
               })()}
               {([
-                { mode: 'day', icon: 'calendar_today', label: 'Day' },
-                { mode: 'week', icon: 'calendar_view_week', label: 'Week' },
-                { mode: 'month', icon: 'calendar_month', label: 'Month' },
-              ] as const).map(({ mode, icon, label }) => (
+                { mode: 'day',   icon: 'calendar_today',     labelKey: 'view_day' },
+                { mode: 'week',  icon: 'calendar_view_week', labelKey: 'view_week' },
+                { mode: 'month', icon: 'calendar_month',     labelKey: 'view_month' },
+              ] as const).map(({ mode, icon, labelKey }) => {
+                const label = t(labelKey as Parameters<typeof t>[0])
+                return (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
@@ -516,7 +520,7 @@ export default function TimelinePage() {
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>{icon}</span>
                   {label}
                 </button>
-              ))}
+              )})}
             </div>
 
             {/* Divider */}
@@ -717,8 +721,10 @@ export default function TimelinePage() {
         const month = currentDate.getMonth()
         const firstDay = new Date(year, month, 1)
         const lastDay  = new Date(year, month + 1, 0)
-        // Start from Monday before the 1st
-        const startOffset = (firstDay.getDay() + 6) % 7
+        // startDay setting: 'mon' = Monday first (offset +6 mod 7), 'sun' = Sunday first (raw .getDay())
+        const startOffset = startDay === 'sun'
+          ? firstDay.getDay()
+          : (firstDay.getDay() + 6) % 7
         const gridStart = new Date(firstDay)
         gridStart.setDate(1 - startOffset)
         const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7
@@ -728,7 +734,9 @@ export default function TimelinePage() {
           return d
         })
         const bkgs = monthBookings as Booking[]
-        const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        const DOW_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
         return (
           <main className="flex-1 overflow-auto bg-white p-6">
             {/* Month header */}
@@ -838,7 +846,7 @@ export default function TimelinePage() {
 
       {/* Day view grid */}
       {viewMode === 'day' && (
-      <main ref={mainRef} className="flex-1 overflow-auto bg-white relative select-none" style={{ scrollbarWidth: 'thin' }}>
+      <main ref={mainRef} className="flex-1 overflow-auto relative select-none" style={{ background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
         {(roomsLoading || bookingsLoading) && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-50">
             <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>
@@ -847,7 +855,7 @@ export default function TimelinePage() {
         <div style={{ width: ROOM_W + slots * SLOT_W, minWidth: '100%' }}>
 
           {/* Header row */}
-          <div className="sticky top-0 z-40 bg-white border-b shadow-sm flex">
+          <div className="sticky top-0 z-40 border-b shadow-sm flex" style={{ background: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border)' }}>
             <div className="shrink-0 flex items-center px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest border-r-2 border-slate-200"
               style={{ width: ROOM_W, height: CELL_H }}>Room</div>
             {Array.from({ length: HOUR_END - HOUR_START }, (_, i) => {

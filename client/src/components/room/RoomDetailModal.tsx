@@ -121,10 +121,9 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                   <h2 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', color: 'white', textTransform: 'uppercase', lineHeight: 1, margin: 0 }}>{room.name}</h2>
                 </div>
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                  <div style={{ background: isAvailableNow ? '#adee2b' : '#ef4444', color: isAvailableNow ? '#000' : '#fff', fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 14px', borderRadius: 99 }}>
-                    {isAvailableNow ? 'Available' : 'Occupied'}
+                  <div style={{ background: room.status === 'maintenance' ? '#fb923c' : isAvailableNow ? '#adee2b' : '#ef4444', color: room.status === 'maintenance' ? '#fff' : isAvailableNow ? '#000' : '#fff', fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 14px', borderRadius: 99 }}>
+                    {room.status === 'maintenance' ? 'Maintenance' : isAvailableNow ? 'Available' : 'Occupied'}
                   </div>
-                  {nextFreeAt && <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginTop: 5, marginBottom: 0 }}>Free at {nextFreeAt}</p>}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8, marginBottom: 12 }}>
@@ -195,7 +194,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
             <div>
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(0,0,0,0.4)', margin: '0 0 6px' }}>Quick Action</p>
               <p style={{ fontSize: 13, fontWeight: 800, color: '#000', margin: 0, lineHeight: 1.3 }}>
-                {isAvailableNow ? 'Ready to book this room?' : `Occupied until ${nextFreeAt ?? '–'}`}
+                {room.status === 'maintenance' ? 'Room is under maintenance' : isAvailableNow ? 'Ready to book this room?' : `Occupied until ${nextFreeAt ?? '–'}`}
               </p>
               {!isAvailableNow && nextFreeAt && (
                 <p style={{ fontSize: 10, fontWeight: 600, color: 'rgba(0,0,0,0.45)', margin: '4px 0 0' }}>You can book from {nextFreeAt}</p>
@@ -213,8 +212,8 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
           <div style={{ gridColumn: '1/3', gridRow: '3/4', background: 'white', borderRadius: 20, padding: '18px 20px', border: '0.5px solid #e2e8f0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', margin: 0 }}>Today&rsquo;s Occupancy</p>
-              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', padding: '3px 10px', borderRadius: 99, background: isAvailableNow ? '#dcfce7' : '#fee2e2', color: isAvailableNow ? '#16a34a' : '#ef4444' }}>
-                {isAvailableNow ? 'Free Now' : 'Currently Occupied'}
+              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', padding: '3px 10px', borderRadius: 99, background: room.status === 'maintenance' ? '#ffedd5' : isAvailableNow ? '#dcfce7' : '#fee2e2', color: room.status === 'maintenance' ? '#c2410c' : isAvailableNow ? '#16a34a' : '#ef4444' }}>
+                {room.status === 'maintenance' ? 'Under Maintenance' : isAvailableNow ? 'Free Now' : 'Currently Occupied'}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -226,10 +225,11 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                   const endH   = parseLocal(b.end_at).getHours()   + parseLocal(b.end_at).getMinutes() / 60
                   const left   = Math.max(0, ((startH - 7) / 12) * 100)
                   const width  = Math.min(100 - left, ((endH - startH) / 12) * 100)
-                  const colors = deptColors[b.user?.department || 'GAA'] || deptColors['GAA']
+                  const isMaintType = b.type === 'maintenance' || b.type === 'repairment'
+                  const colors = isMaintType ? { bg: '#fb923c', text: '#fff' } : (deptColors[b.user?.department || 'GAA'] || deptColors['GAA'])
                   return (
                     <div key={b.id} title={`${b.title} · ${b.user?.name}`} style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, height: '100%', background: colors.bg, borderRadius: 6, display: 'flex', alignItems: 'center', paddingLeft: 6, overflow: 'hidden', boxSizing: 'border-box' }}>
-                      <span style={{ fontSize: 8, fontWeight: 800, color: colors.text, whiteSpace: 'nowrap' }}>{b.user?.department}</span>
+                      <span style={{ fontSize: 8, fontWeight: 800, color: colors.text, whiteSpace: 'nowrap' }}>{isMaintType ? (b.type === 'maintenance' ? 'MAINT' : 'REPAIR') : b.user?.department}</span>
                     </div>
                   )
                 })}

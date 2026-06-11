@@ -4,6 +4,7 @@ import type { Booking, Room } from '../../types/index'
 import { getRooms, checkAvailability, clearRoomView } from '../../api/rooms'
 import { createBooking, updateBooking } from '../../api/bookings'
 import { useAuth } from '../../context/AuthContext'
+import { useSettings } from '../../context/SettingsContext'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 
@@ -28,6 +29,7 @@ interface BookingPanelProps {
 
 export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, onSubmit, onCancel }: BookingPanelProps) {
   const { user } = useAuth()
+  const { defaultType } = useSettings()
   const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [title, setTitle] = useState('')
@@ -37,7 +39,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [status, setStatus] = useState<'confirmed' | 'tentative'>('confirmed')
-  const [type, setType] = useState<'internal' | 'external' | 'maintenance' | 'repairment'>('internal')
+  const [type, setType] = useState<'internal' | 'external' | 'maintenance' | 'repairment'>(() => defaultType)
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly'>('none')
   const [repeatCount, setRepeatCount] = useState(5)
   const [pantryOpen, setPantryOpen] = useState(false)
@@ -223,7 +225,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-[440px] bg-white text-slate-900 z-[110] flex flex-col shadow-[-20px_0_80px_rgba(0,0,0,0.08)] border-l border-slate-100 transition-transform duration-[450ms] cubic-bezier(0.32,0.72,0,1) ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full w-[440px] z-[110] flex flex-col transition-transform duration-[450ms] cubic-bezier(0.32,0.72,0,1) ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{ background: 'var(--ds-bg-surface)', color: 'var(--ds-text-1)', boxShadow: '-20px 0 80px rgba(0,0,0,0.12)', borderLeft: '1px solid var(--ds-border)' }}
       >
         {/* Header */}
         <div className="p-7 pb-4 flex items-start justify-between shrink-0">

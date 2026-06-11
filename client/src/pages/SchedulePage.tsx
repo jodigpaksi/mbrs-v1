@@ -4,8 +4,9 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Booking } from '../types/index'
-import { getMyBookings, cancelBooking, clearCancelledBookings, getBookings } from '../api/bookings'
+import { getMyBookings, cancelBooking, clearCancelledBookings, getBookings, updateBooking } from '../api/bookings'
 import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import BookingPanel from '../components/booking/BookingPanel'
 
 function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
@@ -77,9 +78,10 @@ interface CardSharedProps {
   cancelling: number | null
   onEdit: (b: Booking) => void
   onCancel: (b: Booking) => void
+  onTentativeAction?: (b: Booking) => void
 }
 
-function BookingCard({ b, index = 0, activeTab, pendingCancelId, exitingCancelId, cancelling, onEdit, onCancel }: { b: Booking; index?: number } & CardSharedProps) {
+function BookingCard({ b, index = 0, activeTab, pendingCancelId, exitingCancelId, cancelling, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -90,10 +92,9 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelId, exitingCancelId
   const canEdit = !isPast && !isCancelled
   const tStyle = typeStyle[b.type] || typeStyle.internal
 
-  const cardBg = isPastTab ? 'bg-white border border-slate-200'
-    : isCancelled ? 'bg-red-50 border border-red-100'
+  const cardBg = isCancelled ? 'bg-red-50 border border-red-100'
     : isTentative ? 'bg-amber-50 border border-amber-100'
-    : isConf ? 'bg-[#adee2b]' : 'bg-white border border-slate-200'
+    : isConf ? 'bg-[#adee2b]' : ''
   const titleClr = isPastTab ? 'text-slate-500' : isCancelled ? 'text-red-700' : isTentative ? 'text-amber-700' : isConf ? 'text-black' : 'text-slate-700'
   const loc  = isPastTab ? 'text-slate-300' : isCancelled ? 'text-red-400' : isTentative ? 'text-amber-500' : isConf ? 'text-black/50' : 'text-slate-400'
   const desc = isPastTab ? 'text-slate-300' : isCancelled ? 'text-red-300' : isTentative ? 'text-amber-400/70' : isConf ? 'text-black/40' : 'text-slate-400'
@@ -104,11 +105,16 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelId, exitingCancelId
     : isCancelled ? 'bg-red-200 text-red-600' : isTentative ? 'bg-amber-200 text-amber-700'
     : isPast ? 'bg-slate-200 text-slate-400' : isConf ? 'bg-black text-[#adee2b]' : 'bg-slate-100 text-slate-500'
 
+  const baseCardStyle = (!isCancelled && !isTentative && !isConf)
+    ? { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }
+    : {}
+
   return (
     <div
-      onClick={() => { if (canEdit) onEdit(b) }}
+      onClick={() => { if (canEdit) { if (isTentative && onTentativeAction) onTentativeAction(b); else onEdit(b) } }}
       className={`rounded-2xl p-5 group ${cardBg} ${canEdit ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
       style={{
+        ...baseCardStyle,
         animation: `card-in 0.25s cubic-bezier(0.4,0,0.2,1) ${index * 45}ms both`,
         opacity: isExiting ? 0 : isPending ? 0.3 : 1,
         transform: isExiting ? 'scale(0.95)' : isPending ? 'scale(0.98)' : undefined,
@@ -139,7 +145,7 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelId, exitingCancelId
       {canEdit && (
         <div className={`flex items-center justify-between mt-4 pt-3 border-t ${isConf ? 'border-black/10' : 'border-slate-100'}`}>
           <span className="text-[9px] font-black uppercase tracking-wider flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-black/40">
-            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>edit</span>Click to edit
+            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{isTentative ? 'tune' : 'edit'}</span>{isTentative ? 'Click to manage' : 'Click to edit'}
           </span>
           <button onClick={e => { e.stopPropagation(); onCancel(b) }} disabled={cancelling === b.id}
             className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all disabled:opacity-40
@@ -152,7 +158,7 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelId, exitingCancelId
   )
 }
 
-function BookingListItem({ b, index = 0, activeTab, pendingCancelId, exitingCancelId, cancelling, onEdit, onCancel }: { b: Booking; index?: number } & CardSharedProps) {
+function BookingListItem({ b, index = 0, activeTab, pendingCancelId, exitingCancelId, cancelling, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -163,10 +169,9 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelId, exitingCanc
   const canEdit = !isPast && !isCancelled
   const tStyle = typeStyle[b.type] || typeStyle.internal
 
-  const rowBg = isPastTab ? 'bg-white border-slate-200'
-    : isCancelled ? 'bg-red-50 border-red-100'
+  const rowBg = isCancelled ? 'bg-red-50 border-red-100'
     : isTentative ? 'bg-amber-50 border-amber-100'
-    : isConf ? 'bg-[#adee2b] border-transparent' : 'bg-white border-slate-200'
+    : isConf ? 'bg-[#adee2b] border-transparent' : ''
   const dot     = isPastTab ? 'bg-slate-300' : isCancelled ? 'bg-red-400' : isTentative ? 'bg-amber-400' : isConf ? 'bg-black' : 'bg-slate-400'
   const titleClr = isPastTab ? 'text-slate-500' : isCancelled ? 'text-red-700' : isTentative ? 'text-amber-700' : isConf ? 'text-black' : 'text-slate-700'
   const subClr  = isPastTab ? 'text-slate-300' : isCancelled ? 'text-red-400' : isTentative ? 'text-amber-500' : isConf ? 'text-black/50' : 'text-slate-400'
@@ -174,9 +179,10 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelId, exitingCanc
 
   return (
     <div
-      onClick={() => { if (canEdit) onEdit(b) }}
+      onClick={() => { if (canEdit) { if (isTentative && onTentativeAction) onTentativeAction(b); else onEdit(b) } }}
       className={`flex items-center gap-4 px-4 py-3 rounded-2xl border ${rowBg} ${canEdit ? 'cursor-pointer hover:shadow-sm' : ''}`}
       style={{
+        ...(!isCancelled && !isTentative && !isConf ? { background: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border-sub)' } : {}),
         animation: `card-in 0.22s cubic-bezier(0.4,0,0.2,1) ${index * 35}ms both`,
         opacity: isExiting ? 0 : isPending ? 0.3 : 1,
         transform: isExiting ? 'scale(0.97) translateY(4px)' : undefined,
@@ -204,9 +210,9 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelId, exitingCanc
       </div>
       {canEdit ? (
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-          <button onClick={() => onEdit(b)}
+          <button onClick={() => { if (isTentative && onTentativeAction) onTentativeAction(b); else onEdit(b) }}
             className={`size-7 flex items-center justify-center rounded-lg transition-all ${isConf ? 'bg-black/10 text-black/60 hover:bg-black hover:text-[#adee2b]' : 'bg-slate-100 text-slate-400 hover:bg-black hover:text-[#adee2b]'}`}>
-            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{isTentative ? 'tune' : 'edit'}</span>
           </button>
           <button onClick={() => onCancel(b)}
             className="size-7 flex items-center justify-center rounded-lg bg-slate-100/60 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
@@ -235,6 +241,7 @@ function SlideWrapper({ exiting, children }: { exiting: boolean; children: React
 
 export default function SchedulePage() {
   const { user } = useAuth()
+  const { t } = useSettings()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('today')
   const [editBooking, setEditBooking] = useState<Booking | null>(null)
@@ -253,6 +260,9 @@ export default function SchedulePage() {
   const cancelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [allSortKey, setAllSortKey] = useState<AllSortKey>('start_at')
   const [allSortDir, setAllSortDir] = useState<AllSortDir>('asc')
+  const [allSearch, setAllSearch] = useState('')
+  const [tentativeTarget, setTentativeTarget] = useState<Booking | null>(null)
+  const [tentativeConfirming, setTentativeConfirming] = useState(false)
 
   function toggleAllSort(key: AllSortKey) {
     if (allSortKey === key) setAllSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -318,8 +328,8 @@ export default function SchedulePage() {
   }
 
   const tabLabels: Record<Tab, string> = {
-    today: 'Today', upcoming: 'Upcoming', all: 'All Bookings',
-    past: 'Past', cancelled: 'Cancelled', tentative: 'Tentative',
+    today: t('tab_today'), upcoming: t('tab_upcoming'), all: t('tab_all'),
+    past: t('tab_past'), cancelled: t('tab_cancelled'), tentative: t('tab_tentative'),
   }
 
   const allTabsOrdered: Tab[] = [...PRIMARY_TABS, ...SECONDARY_TABS]
@@ -378,6 +388,19 @@ export default function SchedulePage() {
     setExitingCancelId(null)
   }
 
+  async function handleTentativeAction(action: 'confirm' | 'cancel') {
+    if (!tentativeTarget) return
+    const booking = tentativeTarget
+    setTentativeTarget(null)
+    setTentativeConfirming(true)
+    try {
+      if (action === 'confirm') await updateBooking(booking.id, { status: 'confirmed' })
+      else if (action === 'cancel') await cancelBooking(booking.id)
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
+      queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
+    } finally { setTentativeConfirming(false) }
+  }
+
   async function doClearCancelled() {
     setClearConfirm(false)
     await clearCancelledBookings()
@@ -392,6 +415,17 @@ export default function SchedulePage() {
   const pastInAll     = allList.filter((b: Booking) => isActuallyPast(b))
   const pastPreview   = pastInAll.slice(0, 5)
   const allListForDisplay = [...upcomingInAll, ...pastPreview]
+  const allListFiltered = useMemo(() => {
+    if (!allSearch.trim()) return allListForDisplay
+    const q = allSearch.toLowerCase()
+    return allListForDisplay.filter((b: Booking) =>
+      b.title.toLowerCase().includes(q) ||
+      b.room?.name?.toLowerCase().includes(q) ||
+      b.description?.toLowerCase().includes(q) ||
+      b.type.toLowerCase().includes(q) ||
+      b.status.toLowerCase().includes(q)
+    )
+  }, [allListForDisplay, allSearch])
 
   function exportExcel() {
     const rows = upcomingInAll.map((b: Booking) => ({
@@ -448,18 +482,19 @@ export default function SchedulePage() {
     cancelling,
     onEdit: (b) => { setEditBooking(b); setPanelOpen(true) },
     onCancel: handleCancel,
+    onTentativeAction: (b) => setTentativeTarget(b),
   }
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden bg-white">
+    <div className="flex flex-col flex-1 overflow-hidden" style={{ background: 'var(--ds-bg-surface)' }}>
       <style>{`@keyframes card-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
       {/* Top header */}
-      <div className="bg-white border-b border-slate-100 px-8 pt-6 shrink-0">
+      <div className="px-8 pt-6 shrink-0" style={{ background: 'var(--ds-bg-surface)', borderBottom: '1px solid var(--ds-border-sub)' }}>
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">{user?.name}</h2>
-            <p className="text-sm font-bold text-slate-400 mt-1.5">{user?.department} &middot; Ext. {user?.ext}</p>
+            <h2 className="text-3xl font-black tracking-tighter uppercase leading-none" style={{ color: 'var(--ds-text-1)' }}>{user?.name}</h2>
+            <p className="text-sm font-bold mt-1.5" style={{ color: 'var(--ds-text-3)' }}>{user?.department} &middot; Ext. {user?.ext}</p>
           </div>
           <button
             onClick={() => { setEditBooking(null); setPanelOpen(true) }}
@@ -477,12 +512,12 @@ export default function SchedulePage() {
             {PRIMARY_TABS.map((key, i) => (
               <button key={key} ref={el => { tabRefs.current[i] = el }}
                 onClick={() => setActiveTab(key)}
-                className={`flex items-center gap-2 pb-3 text-[13px] font-black uppercase tracking-wide transition-colors duration-200
-                  ${activeTab === key ? 'text-black' : 'text-slate-400 hover:text-slate-600'}`}>
+                className="flex items-center gap-2 pb-3 text-[13px] font-black uppercase tracking-wide transition-colors duration-200"
+                style={{ color: activeTab === key ? 'var(--ds-text-1)' : 'var(--ds-text-3)' }}>
                 {tabLabels[key]}
                 {tabCounts[key] > 0 && (
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full transition-colors
-                    ${activeTab === key ? 'bg-black text-[#adee2b]' : 'bg-slate-100 text-slate-400'}`}>
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full transition-colors"
+                    style={{ background: activeTab === key ? 'var(--ds-text-1)' : 'var(--ds-bg-raised)', color: activeTab === key ? 'var(--ds-bg-surface)' : 'var(--ds-text-3)' }}>
                     {tabCounts[key]}
                   </span>
                 )}
@@ -575,9 +610,26 @@ export default function SchedulePage() {
             </div>
           ) : activeTab === 'all' ? (
             <>
+              {/* Search */}
+              <div className="relative mb-3">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" style={{ fontSize: 18 }}>search</span>
+                <input
+                  type="text"
+                  placeholder="Search by title, room, type, status..."
+                  value={allSearch}
+                  onChange={e => setAllSearch(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-[12px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all
+                    ${allSearch ? 'border-[#adee2b] bg-[#f7fee7]' : 'border-slate-200'}`}
+                />
+                {allSearch && (
+                  <button onClick={() => setAllSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 size-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white transition-colors">
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                )}
+              </div>
               <div className="flex items-center justify-between mb-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {upcomingInAll.length} upcoming{pastInAll.length > 0 ? ` · ${pastInAll.length} past` : ''}
+                  {allSearch ? `${allListFiltered.length} result${allListFiltered.length !== 1 ? 's' : ''}` : `${upcomingInAll.length} upcoming${pastInAll.length > 0 ? ` · ${pastInAll.length} past` : ''}`}
                 </p>
                 <div className="flex gap-2">
                   <button onClick={exportExcel}
@@ -608,24 +660,24 @@ export default function SchedulePage() {
                         <th key={i} className="px-4 py-3.5 text-left whitespace-nowrap">
                           {h.key ? (
                             <button onClick={() => toggleAllSort(h.key!)}
-                              className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest transition-colors"
+                              className="flex items-center gap-1 text-[11px] font-black uppercase tracking-widest transition-colors"
                               style={{ color: allSortKey === h.key ? '#adee2b' : '#94a3b8' }}>
                               {h.label}
-                              <span className="material-symbols-outlined" style={{ fontSize: 11, color: allSortKey === h.key ? '#adee2b' : '#64748b' }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 12, color: allSortKey === h.key ? '#adee2b' : '#64748b' }}>
                                 {allSortKey === h.key ? (allSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}
                               </span>
                             </button>
                           ) : (
-                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{h.label}</span>
+                            <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{h.label}</span>
                           )}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {allListForDisplay.map((b: Booking, i: number) => {
+                    {allListFiltered.map((b: Booking, i: number) => {
                       const isPast = isActuallyPast(b)
-                      const prevIsActive = i > 0 && !isActuallyPast(allListForDisplay[i - 1])
+                      const prevIsActive = i > 0 && !isActuallyPast(allListFiltered[i - 1])
                       const isFirstPast = isPast && prevIsActive
                       const isConf = b.status === 'confirmed'
                       const tStyle = typeStyle[b.type] || typeStyle.internal
@@ -783,21 +835,22 @@ export default function SchedulePage() {
         </div>
 
         {/* Right sidebar */}
-        <div className="w-44 border-l border-slate-100 bg-white flex flex-col shrink-0 p-4 gap-2.5 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-          <p className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-1">Overview</p>
+        <div className="w-44 flex flex-col shrink-0 p-4 gap-2.5 overflow-y-auto" style={{ borderLeft: '1px solid var(--ds-border-sub)', background: 'var(--ds-bg-surface)', scrollbarWidth: 'none' }}>
+          <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: 'var(--ds-text-4)' }}>Overview</p>
           {([
-            { label: 'This Month', value: String(thisMonthCount).padStart(2, '0'), sub: 'bookings', icon: 'calendar_month', dark: true },
-            { label: 'Hours Used', value: `${totalHours.toFixed(0)}h`, sub: 'this month', icon: 'schedule', dark: false },
-            { label: 'Today', value: String(todayList.length).padStart(2, '0'), sub: 'bookings', icon: 'today', dark: false },
-            { label: 'Upcoming', value: String(upcomingList.length).padStart(2, '0'), sub: 'scheduled', icon: 'upcoming', dark: false },
+            { label: 'This Month', value: String(thisMonthCount).padStart(2, '0'), sub: 'bookings', icon: 'calendar_month', accent: true },
+            { label: 'Hours Used', value: `${totalHours.toFixed(0)}h`, sub: 'this month', icon: 'schedule', accent: false },
+            { label: 'Today', value: String(todayList.length).padStart(2, '0'), sub: 'bookings', icon: 'today', accent: false },
+            { label: 'Upcoming', value: String(upcomingList.length).padStart(2, '0'), sub: 'scheduled', icon: 'upcoming', accent: false },
           ] as const).map(card => (
-            <div key={card.label} className={`p-3 rounded-xl ${card.dark ? 'bg-black' : 'bg-slate-50 border border-slate-100'}`}>
+            <div key={card.label} className="p-3 rounded-xl"
+              style={{ background: card.accent ? '#0f0f0f' : 'var(--ds-bg-raised)', border: card.accent ? 'none' : '1px solid var(--ds-border-sub)' }}>
               <div className="flex items-center justify-between mb-1.5">
-                <p className={`text-[7px] font-black uppercase tracking-widest leading-none ${card.dark ? 'text-slate-500' : 'text-slate-400'}`}>{card.label}</p>
-                <span className={`material-symbols-outlined ${card.dark ? 'text-slate-600' : 'text-slate-300'}`} style={{ fontSize: 12 }}>{card.icon}</span>
+                <p className="text-[7px] font-black uppercase tracking-widest leading-none" style={{ color: card.accent ? '#555' : 'var(--ds-text-3)' }}>{card.label}</p>
+                <span className="material-symbols-outlined" style={{ fontSize: 12, color: card.accent ? '#444' : 'var(--ds-text-4)' }}>{card.icon}</span>
               </div>
-              <p className={`text-2xl font-black leading-none ${card.dark ? 'text-[#adee2b]' : 'text-slate-800'}`}>{card.value}</p>
-              <p className={`text-[8px] font-bold mt-1 ${card.dark ? 'text-slate-500' : 'text-slate-400'}`}>{card.sub}</p>
+              <p className="text-2xl font-black leading-none" style={{ color: card.accent ? '#adee2b' : 'var(--ds-text-1)' }}>{card.value}</p>
+              <p className="text-[8px] font-bold mt-1" style={{ color: card.accent ? '#555' : 'var(--ds-text-3)' }}>{card.sub}</p>
             </div>
           ))}
         </div>
@@ -941,6 +994,84 @@ export default function SchedulePage() {
                 className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase bg-red-500 text-white hover:bg-red-600 transition-colors"
               >
                 Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tentative action popup */}
+      {tentativeTarget && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
+          onClick={() => setTentativeTarget(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: 400,
+              background: 'rgba(255,255,255,0.88)',
+              backdropFilter: 'blur(48px) saturate(200%)',
+              WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+              border: '1px solid rgba(255,255,255,0.95)',
+              borderRadius: 22,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
+              padding: 28,
+              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
+            }}
+          >
+            <div className="flex items-center gap-3.5 mb-5">
+              <div className="size-11 rounded-2xl flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(245,158,11,0.12)' }}>
+                <span className="material-symbols-outlined text-xl" style={{ color: '#d97706' }}>pending_actions</span>
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Manage Tentative Booking</h3>
+                <p className="text-xs text-slate-400 font-medium mt-0.5">What would you like to do with this booking?</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-4 mb-5 space-y-2"
+              style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
+              <p className="text-sm font-black text-slate-800 leading-snug">{tentativeTarget.title}</p>
+              <div className="w-full h-px" style={{ background: 'rgba(0,0,0,0.07)' }} />
+              <p className="text-xs font-bold text-slate-500 flex items-center gap-2">
+                <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 14 }}>location_on</span>
+                {tentativeTarget.room?.name}
+              </p>
+              <p className="text-xs font-bold text-slate-500 flex items-center gap-2">
+                <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 14 }}>schedule</span>
+                {fmtTableDate(tentativeTarget.start_at)} &middot; {fmtTime(tentativeTarget.start_at)} &ndash; {fmtTime(tentativeTarget.end_at)}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => handleTentativeAction('confirm')}
+                disabled={tentativeConfirming}
+                className="w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-wide bg-[#adee2b] text-black hover:bg-[#9fe020] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">check_circle</span>
+                Ubah ke Confirmed
+              </button>
+              <button
+                onClick={() => setTentativeTarget(null)}
+                className="w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+                style={{ background: 'rgba(0,0,0,0.06)', color: '#475569' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.10)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.06)')}
+              >
+                <span className="material-symbols-outlined text-base">hourglass_empty</span>
+                Biarkan (Keep Tentative)
+              </button>
+              <button
+                onClick={() => handleTentativeAction('cancel')}
+                disabled={tentativeConfirming}
+                className="w-full py-3 rounded-2xl text-[12px] font-black uppercase tracking-wide bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">cancel</span>
+                Cancel Booking
               </button>
             </div>
           </div>

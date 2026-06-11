@@ -8,7 +8,7 @@ interface MainLayoutProps {
 
 export default function MainLayout({ children }: MainLayoutProps) {
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#f7f8f6] text-slate-900 antialiased">
+    <div className="flex flex-col h-screen overflow-hidden antialiased" style={{ background: 'var(--ds-bg-base)', color: 'var(--ds-text-1)' }}>
       <Navbar />
       <main className="flex-1 overflow-hidden flex flex-col">
         {children}
