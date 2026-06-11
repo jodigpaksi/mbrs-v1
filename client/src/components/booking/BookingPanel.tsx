@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Booking, Room } from '../../types/index'
 import { getRooms, checkAvailability, clearRoomView } from '../../api/rooms'
 import { createBooking, updateBooking } from '../../api/bookings'
+import { useAuth } from '../../context/AuthContext'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 
@@ -26,6 +27,8 @@ interface BookingPanelProps {
 }
 
 export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, onSubmit, onCancel }: BookingPanelProps) {
+  const { user } = useAuth()
+  const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -34,7 +37,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [status, setStatus] = useState<'confirmed' | 'tentative'>('confirmed')
-  const [type, setType] = useState<'internal' | 'external'>('internal')
+  const [type, setType] = useState<'internal' | 'external' | 'maintenance' | 'repairment'>('internal')
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly'>('none')
   const [repeatCount, setRepeatCount] = useState(5)
   const [pantryOpen, setPantryOpen] = useState(false)
@@ -155,7 +158,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     return availResult?.available ?? null
   }
 
+  const roomIsMaintenance = selectedRoom?.status === 'maintenance'
+  const maintenanceBlocked = roomIsMaintenance && !isPrivileged
+
   function isValid() {
+    if (maintenanceBlocked) return false
     return !!(title.trim() && startTime && endTime && selectedRoom && isAvailable() === true)
   }
 
@@ -246,19 +253,28 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     />
                   </div>
                   <div className="max-h-56 overflow-y-auto">
-                    {filteredRooms.map(r => (
-                      <button
-                        key={r.id}
-                        onClick={() => { setSelectedRoom(r); setShowRoomDrop(false); setRoomSearch('') }}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f7fee7] transition-colors text-left"
-                      >
-                        <div className={`size-2 rounded-full shrink-0 ${roomTypeColor(r.type)}`} />
-                        <div>
-                          <p className="text-xs font-black">{r.name}</p>
-                          <p className="text-[9px] text-slate-400 font-bold">{r.capacity} pax &middot; {r.floor}</p>
-                        </div>
-                      </button>
-                    ))}
+                    {filteredRooms.map(r => {
+                      const isMaint = r.status === 'maintenance'
+                      return (
+                        <button
+                          key={r.id}
+                          onClick={() => { setSelectedRoom(r); setShowRoomDrop(false); setRoomSearch('') }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${isMaint ? 'hover:bg-orange-50' : 'hover:bg-[#f7fee7]'}`}
+                        >
+                          <div className={`size-2 rounded-full shrink-0 ${isMaint ? 'bg-orange-400' : roomTypeColor(r.type)}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-black ${isMaint ? 'text-orange-700' : ''}`}>{r.name}</p>
+                            <p className={`text-[9px] font-bold ${isMaint ? 'text-orange-400' : 'text-slate-400'}`}>{r.capacity} pax · {r.floor}</p>
+                          </div>
+                          {isMaint && (
+                            <span className="shrink-0 flex items-center gap-0.5 px-2 py-0.5 bg-orange-100 text-orange-600 rounded-lg text-[8px] font-black uppercase">
+                              <span className="material-symbols-outlined" style={{ fontSize: 10 }}>construction</span>
+                              Maint.
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -284,6 +300,23 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
           {/* Main form */}
           <div className="flex-1 overflow-y-auto px-7 space-y-4 pb-4" style={{ scrollbarWidth: 'thin' }}>
+
+            {/* Maintenance warning banner */}
+            {roomIsMaintenance && (
+              <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isPrivileged ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
+                <span className={`material-symbols-outlined shrink-0 mt-0.5 ${isPrivileged ? 'text-orange-500' : 'text-red-500'}`} style={{ fontSize: 18 }}>construction</span>
+                <div>
+                  <p className={`text-[11px] font-black uppercase tracking-wide ${isPrivileged ? 'text-orange-700' : 'text-red-700'}`}>
+                    Room Under Maintenance
+                  </p>
+                  <p className={`text-[10px] font-medium mt-0.5 leading-relaxed ${isPrivileged ? 'text-orange-600' : 'text-red-500'}`}>
+                    {isPrivileged
+                      ? 'This room is under maintenance. As admin/receptionist you may still book — use description to add details.'
+                      : 'This room is currently under maintenance and cannot be booked. Please contact Receptionist or GAA for assistance.'}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Date & Time */}
             <div className="bg-slate-50 p-5 rounded-[1.8rem] border border-slate-100 space-y-4">
@@ -369,18 +402,42 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Type</label>
-                  <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
-                    <div className="absolute top-1 bottom-1 w-[calc(50%-2px)] rounded-full shadow-sm pointer-events-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                      style={{ left: 4, transform: type === 'external' ? 'translateX(100%)' : 'translateX(0)', background: type === 'internal' ? '#334155' : '#f97316' }} />
-                    <button onClick={() => setType('internal')}
-                      className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'internal' ? 'text-white' : 'text-slate-400'}`}>
-                      Internal
-                    </button>
-                    <button onClick={() => setType('external')}
-                      className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'external' ? 'text-white' : 'text-slate-400'}`}>
-                      External
-                    </button>
-                  </div>
+                  {isPrivileged ? (
+                    <div className="grid grid-cols-2 gap-1">
+                      {([
+                        { value: 'internal', label: 'Internal', bg: '#334155', text: 'white' },
+                        { value: 'external', label: 'External', bg: '#f97316', text: 'white' },
+                        { value: 'maintenance', label: 'Maint.', bg: '#fb923c', text: '#7c2d12' },
+                        { value: 'repairment', label: 'Repair', bg: '#ef4444', text: 'white' },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setType(opt.value)}
+                          className={`py-1.5 text-[8px] font-black uppercase rounded-full border transition-all duration-150`}
+                          style={{
+                            background: type === opt.value ? opt.bg : 'transparent',
+                            color: type === opt.value ? opt.text : '#94a3b8',
+                            borderColor: type === opt.value ? opt.bg : '#e2e8f0',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
+                      <div className="absolute top-1 bottom-1 w-[calc(50%-2px)] rounded-full shadow-sm pointer-events-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                        style={{ left: 4, transform: type === 'external' ? 'translateX(100%)' : 'translateX(0)', background: type === 'internal' ? '#334155' : '#f97316' }} />
+                      <button onClick={() => setType('internal')}
+                        className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'internal' ? 'text-white' : 'text-slate-400'}`}>
+                        Internal
+                      </button>
+                      <button onClick={() => setType('external')}
+                        className={`relative z-10 flex-1 py-1.5 text-[8px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'external' ? 'text-white' : 'text-slate-400'}`}>
+                        External
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Status</label>

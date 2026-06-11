@@ -11,6 +11,8 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::post('/me/avatar', [AuthController::class, 'updateAvatar']);
+    Route::patch('/me/password', [AuthController::class, 'updatePassword']);
 
     // Rooms
     Route::get('/rooms', [RoomController::class, 'index']);
@@ -18,6 +20,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/rooms/{room}/availability', [RoomController::class, 'availability']);
     Route::delete('/rooms/{room}/view', [RoomController::class, 'clearView']);
     Route::get('/rooms/{room}/stats', [RoomController::class, 'stats']);
+    Route::patch('/rooms/{room}/status', [RoomController::class, 'updateStatus']);
+
+    // Users (receptionists list for contact popup)
+    Route::get('/users/receptionists', function () {
+        return response()->json(\App\Models\User::where('role', 'receptionist')->get(['id', 'name', 'department', 'ext', 'avatar']));
+    });
 
     // Bookings
     Route::get('/bookings', [BookingController::class, 'index']);

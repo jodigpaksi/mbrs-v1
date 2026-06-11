@@ -32,7 +32,10 @@ class BookingController extends Controller
         $query = Booking::with(['user', 'room', 'pantryOrder'])
             ->orderBy('start_at');
 
-        if ($request->date) {
+        if ($request->date_from && $request->date_to) {
+            $query->whereDate('start_at', '>=', $request->date_from)
+                  ->whereDate('start_at', '<=', $request->date_to);
+        } elseif ($request->date) {
             $query->whereDate('start_at', $request->date);
         }
 
@@ -60,6 +63,9 @@ class BookingController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $role = $request->user()->role;
+        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+
         $data = $request->validate([
             'room_id'     => 'required|exists:rooms,id',
             'title'       => 'required|string|max:255',
@@ -67,8 +73,15 @@ class BookingController extends Controller
             'start_at'    => 'required|date',
             'end_at'      => 'required|date|after:start_at',
             'status'      => 'in:confirmed,tentative',
-            'type'        => 'in:internal,external',
+            'type'        => $isPrivileged
+                ? 'in:internal,external,maintenance,repairment'
+                : 'in:internal,external',
         ]);
+
+        $room = \App\Models\Room::findOrFail($data['room_id']);
+        if ($room->status === 'maintenance' && !$isPrivileged) {
+            return response()->json(['message' => 'This room is currently under maintenance.'], 422);
+        }
 
         if ($err = $this->validateTimeBounds($data['start_at'], $data['end_at'])) {
             return $err;
@@ -101,7 +114,10 @@ class BookingController extends Controller
 
     public function update(Request $request, Booking $booking): JsonResponse
     {
-        if ($booking->user_id !== $request->user()->id && $request->user()->role !== 'admin') {
+        $role = $request->user()->role;
+        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+
+        if ($booking->user_id !== $request->user()->id && !$isPrivileged) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -111,7 +127,9 @@ class BookingController extends Controller
             'start_at'    => 'sometimes|date',
             'end_at'      => 'sometimes|date|after:start_at',
             'status'      => 'sometimes|in:confirmed,tentative,cancelled',
-            'type'        => 'sometimes|in:internal,external',
+            'type'        => $isPrivileged
+                ? 'sometimes|in:internal,external,maintenance,repairment'
+                : 'sometimes|in:internal,external',
         ]);
 
         $roomId  = $data['room_id']  ?? $booking->room_id;

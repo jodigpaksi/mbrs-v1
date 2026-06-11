@@ -3,6 +3,7 @@ import MainLayout from './components/layout/MainLayout'
 import TimelinePage from './pages/TimelinePage'
 import SchedulePage from './pages/SchedulePage'
 import AdminPage from './pages/AdminPage'
+import RoomsPage from './pages/RoomsPage'
 import LoginPage from './pages/LoginPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 
@@ -26,6 +27,16 @@ function App() {
           <ProtectedRoute>
             <MainLayout>
               <SchedulePage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/rooms"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <RoomsPage />
             </MainLayout>
           </ProtectedRoute>
         }

@@ -15,3 +15,21 @@ export async function getMe() {
   const res = await api.get('/me')
   return res.data
 }
+
+export async function updatePassword(currentPassword: string, password: string, passwordConfirmation: string) {
+  const res = await api.patch('/me/password', {
+    current_password: currentPassword,
+    password,
+    password_confirmation: passwordConfirmation,
+  })
+  return res.data
+}
+
+export async function updateAvatar(file: File) {
+  const form = new FormData()
+  form.append('avatar', file)
+  const res = await api.post('/me/avatar', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data
+}

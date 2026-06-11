@@ -50,6 +50,23 @@ class RoomController extends Controller
             'photos' => 'nullable|array',
             'notes' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
+            'status' => 'sometimes|in:active,maintenance',
+            'requires_contact' => 'sometimes|boolean',
+        ]);
+
+        $room->update($data);
+        return response()->json($room);
+    }
+
+    public function updateStatus(Request $request, Room $room): JsonResponse
+    {
+        $role = $request->user()->role;
+        if (!in_array($role, ['admin', 'receptionist'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $data = $request->validate([
+            'status' => 'required|in:active,maintenance',
         ]);
 
         $room->update($data);

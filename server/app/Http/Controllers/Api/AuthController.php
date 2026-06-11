@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -43,5 +44,30 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json($request->user());
+    }
+
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'password'         => 'required|min:8|confirmed',
+        ]);
+
+        $user = $request->user();
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json(['message' => 'Current password is incorrect.'], 422);
+        }
+
+        $user->update(['password' => $request->password]);
+        return response()->json(['message' => 'Password updated.']);
+    }
+
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $request->validate(['avatar' => 'required|image|max:2048']);
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $user = $request->user();
+        $user->update(['avatar' => Storage::url($path)]);
+        return response()->json($user);
     }
 }

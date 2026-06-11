@@ -3,7 +3,7 @@
   name: string
   email: string
   department: string
-  role: 'user' | 'admin'
+  role: 'user' | 'admin' | 'receptionist'
   avatar?: string
   ext?: string
 }
@@ -23,6 +23,8 @@ export interface Room {
   photos: string[]
   notes?: string
   is_active: boolean
+  status: 'active' | 'maintenance'
+  requires_contact: boolean
 }
 
 export interface Booking {
@@ -36,7 +38,7 @@ export interface Booking {
   start_at: string
   end_at: string
   status: 'confirmed' | 'tentative' | 'cancelled'
-  type: 'internal' | 'external'
+  type: 'internal' | 'external' | 'maintenance' | 'repairment'
   cancelled_at?: string
 }
 

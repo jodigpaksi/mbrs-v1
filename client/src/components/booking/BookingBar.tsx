@@ -1,11 +1,6 @@
 import type { Booking } from '../../types/index'
 import { deptColors } from '../../data/mockData'
 
-const typeColors: Record<string, { bg: string; text: string }> = {
-  internal: { bg: '#dbeafe', text: '#1d4ed8' },
-  external: { bg: '#ffedd5', text: '#c2410c' },
-}
-
 interface BookingBarProps {
   booking: Booking
   onMouseEnter: (e: React.MouseEvent, booking: Booking) => void
@@ -23,8 +18,17 @@ export default function BookingBar({
   const dept = booking.user?.department || 'GAA'
   const colors = deptColors[dept] || deptColors['GAA']
   const isTentative = booking.status === 'tentative'
-  const isMaintenance = booking.user?.department === 'MTC'
-  const typeColor = typeColors[booking.type] || typeColors.internal
+  const isMaint = booking.type === 'maintenance' || booking.type === 'repairment'
+
+  const bgColor = isMaint ? '#fb923c' : colors.bg
+  const textColor = isMaint ? '#7c2d12' : 'black'
+
+  const typeLabel = isMaint
+    ? (booking.type === 'repairment' ? 'REPAIR' : 'MAINT')
+    : booking.type === 'external' ? 'EXT' : 'INT'
+
+  const typeBadgeBg = isMaint ? 'rgba(0,0,0,0.12)' : booking.type === 'external' ? '#ffedd5' : '#dbeafe'
+  const typeBadgeText = isMaint ? '#7c2d12' : booking.type === 'external' ? '#c2410c' : '#1d4ed8'
 
   return (
     <div
@@ -32,12 +36,14 @@ export default function BookingBar({
         hover:brightness-105 hover:z-30 group/bar
         ${isMe ? 'outline outline-2 outline-blue-500 outline-offset-[-2px]' : ''}
         ${isDragging ? 'opacity-60 scale-[0.98] cursor-grabbing z-50' : isMe ? 'cursor-grab' : 'cursor-pointer'}
-        ${isMe ? 'hover:scale-[1.02]' : 'hover:scale-[1.02]'}`}
+        hover:scale-[1.02]`}
       style={{
-        backgroundColor: colors.bg,
+        backgroundColor: bgColor,
         opacity: isTentative ? (isDragging ? 0.5 : 0.75) : isDragging ? 0.6 : 1,
         backgroundImage: isTentative
           ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.06) 4px, rgba(0,0,0,0.06) 8px)'
+          : isMaint
+          ? 'repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(0,0,0,0.06) 6px, rgba(0,0,0,0.06) 12px)'
           : undefined,
       }}
       onMouseDown={isMe ? onBarMouseDown : undefined}
@@ -55,16 +61,17 @@ export default function BookingBar({
         </div>
       )}
 
-      <span className={`text-[10px] font-black truncate shrink-0 ${isMaintenance ? 'text-white' : 'text-black'}`}>
-        {dept}
-      </span>
+      {isMaint
+        ? <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13, color: textColor }}>construction</span>
+        : <span className="text-[10px] font-black truncate shrink-0" style={{ color: textColor }}>{dept}</span>
+      }
       <span
         className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shrink-0 leading-none"
-        style={{ backgroundColor: typeColor.bg, color: typeColor.text }}
+        style={{ backgroundColor: typeBadgeBg, color: typeBadgeText }}
       >
-        {booking.type === 'external' ? 'EXT' : 'INT'}
+        {typeLabel}
       </span>
-      {isMe && (
+      {isMe && !isMaint && (
         <span className="material-symbols-outlined text-blue-700 ml-auto shrink-0" style={{ fontSize: 12 }}>
           person
         </span>

@@ -1,6 +1,6 @@
 import api from './axios'
 
-export async function getBookings(params?: { date?: string; room_id?: number }) {
+export async function getBookings(params?: { date?: string; date_from?: string; date_to?: string; room_id?: number }) {
   const res = await api.get('/bookings', { params })
   return res.data
 }

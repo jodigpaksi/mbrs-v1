@@ -62,7 +62,7 @@ export default function TimelinePage() {
   const [otherCtxMenu, setOtherCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [cellCtxMenu, setCellCtxMenu] = useState<{ room: Room; slot: number; x: number; y: number } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day')
 
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
@@ -281,6 +281,15 @@ export default function TimelinePage() {
   })
   const weekData: Booking[][] = weekResults.map(r => (r.data as Booking[]) ?? [])
 
+  // Month view data
+  const monthFrom = toLocalDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1))
+  const monthTo   = toLocalDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0))
+  const { data: monthBookings = [] } = useQuery({
+    queryKey: ['bookings-month', monthFrom, monthTo],
+    queryFn: () => getBookings({ date_from: monthFrom, date_to: monthTo }),
+    enabled: viewMode === 'month',
+  })
+
   const today = new Date()
   const isToday = currentDate.toDateString() === today.toDateString()
   const nowSlot = ((today.getHours() - HOUR_START) * 60 + today.getMinutes()) / 30
@@ -311,6 +320,8 @@ export default function TimelinePage() {
 
   const allVisibleBookings: Booking[] = viewMode === 'week'
     ? weekResults.flatMap(r => (r.data || []) as Booking[])
+    : viewMode === 'month'
+    ? monthBookings as Booking[]
     : bookings as Booking[]
 
   function bookingMatchesSearch(b: Booking, q: string): boolean {
@@ -481,26 +492,31 @@ export default function TimelinePage() {
           {/* Unified filter pill */}
           <div className="flex items-center bg-slate-100 rounded-2xl p-1 gap-0.5">
 
-            {/* View toggle — animated sliding pill */}
+            {/* View toggle — animated sliding pill (Day | Week | Month) */}
             <div className="relative flex">
-              <div
-                className="absolute inset-y-0 w-1/2 bg-white rounded-xl shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                style={{ transform: viewMode === 'week' ? 'translateX(100%)' : 'translateX(0)' }}
-              />
-              <button
-                onClick={() => setViewMode('day')}
-                className={`relative z-10 w-[76px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === 'day' ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_today</span>
-                Day
-              </button>
-              <button
-                onClick={() => setViewMode('week')}
-                className={`relative z-10 w-[76px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === 'week' ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>calendar_view_week</span>
-                Week
-              </button>
+              {(() => {
+                const idx = viewMode === 'day' ? 0 : viewMode === 'week' ? 1 : 2
+                return (
+                  <div
+                    className="absolute inset-y-0 w-1/3 bg-white rounded-xl shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                    style={{ transform: `translateX(${idx * 100}%)` }}
+                  />
+                )
+              })()}
+              {([
+                { mode: 'day', icon: 'calendar_today', label: 'Day' },
+                { mode: 'week', icon: 'calendar_view_week', label: 'Week' },
+                { mode: 'month', icon: 'calendar_month', label: 'Month' },
+              ] as const).map(({ mode, icon, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`relative z-10 w-[72px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === mode ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>{icon}</span>
+                  {label}
+                </button>
+              ))}
             </div>
 
             {/* Divider */}
@@ -620,23 +636,27 @@ export default function TimelinePage() {
 
             {/* Room rows */}
             {filteredRooms.map((room: Room) => {
-              const dotColor = room.type === 'Ballroom' ? 'bg-purple-400' : room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'
+              const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : room.type === 'Ballroom' ? 'bg-purple-400' : room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'
               const occupied = isRoomOccupied(room)
+              const isMaintRoom = room.status === 'maintenance'
               return (
-                <div key={room.id} className="flex border-b border-slate-100 group/row hover:bg-slate-50/50">
+                <div key={room.id} className={`flex border-b border-slate-100 group/row ${isMaintRoom ? 'hover:bg-orange-50/40' : 'hover:bg-slate-50/50'}`}>
                   {/* Room label — same style as day view, sticky */}
                   <div
-                    className="shrink-0 flex items-center justify-between px-3 border-r-2 border-slate-200 sticky left-0 z-20 bg-white group-hover/row:bg-slate-50/50 transition-colors cursor-pointer"
+                    className={`shrink-0 flex items-center justify-between px-3 border-r-2 sticky left-0 z-20 transition-colors cursor-pointer
+                      ${isMaintRoom ? 'bg-orange-50 border-orange-200 group-hover/row:bg-orange-100/50' : 'bg-white border-slate-200 group-hover/row:bg-slate-50/50'}`}
                     style={{ width: ROOM_W, height: WEEK_CELL_H }}
                     onClick={() => { setDetailRoom(room); setDetailOpen(true) }}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className={`size-2 rounded-full shrink-0 ${dotColor} ${occupied ? 'ring-2 ring-offset-1 ring-red-400' : ''}`} />
+                      <div className={`size-2 rounded-full shrink-0 ${dotColor} ${occupied ? 'ring-2 ring-offset-1 ring-red-400' : ''} ${isMaintRoom ? 'animate-pulse' : ''}`} />
                       <div className="min-w-0">
-                        <span className="text-[12px] font-black text-slate-800 leading-tight block truncate">{room.name}</span>
-                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 mt-0.5">
-                          <span className="material-symbols-outlined" style={{ fontSize: 10 }}>groups</span>
-                          {room.capacity} · {room.floor}
+                        <span className={`text-[12px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-700' : 'text-slate-800'}`}>{room.name}</span>
+                        <span className={`text-[10px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400' : 'text-slate-400'}`}>
+                          {isMaintRoom
+                            ? <><span className="material-symbols-outlined" style={{ fontSize: 10 }}>construction</span>Maintenance</>
+                            : <><span className="material-symbols-outlined" style={{ fontSize: 10 }}>groups</span>{room.capacity} · {room.floor}</>
+                          }
                         </span>
                       </div>
                     </div>
@@ -648,37 +668,37 @@ export default function TimelinePage() {
                     const dayBookings = (weekData[dayIdx] ?? []).filter(
                       (b: Booking) => b.room_id === room.id && b.status !== 'cancelled'
                     )
-                    const visibleBookings = dayBookings.slice(0, 2)
-                    const overflow = dayBookings.length - 2
                     return (
                       <div key={dayIdx}
-                        className={`flex-1 border-r border-slate-100 p-1.5 overflow-hidden cursor-pointer transition-colors relative
+                        className={`flex-1 border-r border-slate-100 px-1.5 py-2 overflow-hidden cursor-pointer transition-colors relative flex flex-col gap-0.5 justify-start
                           ${isTd ? 'bg-[#f7fee7]/40' : 'hover:bg-[#f7fee7]/60'}`}
                         style={{ height: WEEK_CELL_H }}
                         onClick={() => { setCurrentDate(d); setViewMode('day') }}
                       >
                         {isTd && <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#adee2b]/60 pointer-events-none" />}
-                        {visibleBookings.map((b: Booking) => {
+                        {dayBookings.map((b: Booking) => {
                           const isMe = b.user_id === user?.id
                           const isTentative = b.status === 'tentative'
-                          const bg = isTentative ? '#fef3c7' : isMe ? '#adee2b' : '#dbeafe'
-                          const clr = isTentative ? '#92400e' : isMe ? '#000' : '#1d4ed8'
+                          const isMaint = b.type === 'maintenance' || b.type === 'repairment'
+                          const bg = isMaint ? '#fb923c' : isTentative ? '#fde68a' : isMe ? '#adee2b' : '#bfdbfe'
                           const matchesSearch = !search || bookingMatchesSearch(b, search)
                           return (
                             <div key={b.id}
-                              className="mb-0.5 px-2 py-1 rounded-lg text-[9px] font-black truncate hover:opacity-75 transition-all"
-                              style={{ background: bg, color: clr, opacity: search && !matchesSearch ? 0.18 : 1 }}
+                              className="w-full rounded-sm shrink-0 hover:brightness-90 transition-all"
+                              style={{ height: 8, background: bg, opacity: search && !matchesSearch ? 0.15 : 1 }}
                               onClick={e => { e.stopPropagation(); openEdit(b) }}
                               title={`${fmtTime(b.start_at)}–${fmtTime(b.end_at)} · ${b.title}`}
-                            >
-                              <span className="opacity-70 mr-1">{fmtTime(b.start_at)}</span>
-                              {b.title}
-                            </div>
+                            />
                           )
                         })}
-                        {overflow > 0 && (
-                          <div className="px-1.5 text-[8px] font-black text-slate-400 leading-tight">
-                            +{overflow} more
+                        {dayBookings.length === 0 && (
+                          <div className="flex-1 flex items-center justify-center">
+                            <div className="w-4 h-0.5 bg-slate-100 rounded-full" />
+                          </div>
+                        )}
+                        {dayBookings.length > 0 && (
+                          <div className="mt-auto text-[7px] font-black text-slate-400 text-center leading-none pt-0.5">
+                            {dayBookings.length}
                           </div>
                         )}
                       </div>
@@ -690,6 +710,131 @@ export default function TimelinePage() {
           </div>
         </main>
       )}
+
+      {/* Month view */}
+      {viewMode === 'month' && (() => {
+        const year  = currentDate.getFullYear()
+        const month = currentDate.getMonth()
+        const firstDay = new Date(year, month, 1)
+        const lastDay  = new Date(year, month + 1, 0)
+        // Start from Monday before the 1st
+        const startOffset = (firstDay.getDay() + 6) % 7
+        const gridStart = new Date(firstDay)
+        gridStart.setDate(1 - startOffset)
+        const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7
+        const cells = Array.from({ length: totalCells }, (_, i) => {
+          const d = new Date(gridStart)
+          d.setDate(gridStart.getDate() + i)
+          return d
+        })
+        const bkgs = monthBookings as Booking[]
+        const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        return (
+          <main className="flex-1 overflow-auto bg-white p-6">
+            {/* Month header */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[18px] font-black text-slate-900 uppercase tracking-tight">
+                {currentDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase()}
+              </h2>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => { const d = new Date(currentDate); d.setMonth(d.getMonth() - 1); setCurrentDate(d) }}
+                  className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">chevron_left</span>
+                </button>
+                <button
+                  onClick={() => setCurrentDate(new Date())}
+                  className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase border border-slate-200 hover:bg-black transition-colors"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => { const d = new Date(currentDate); d.setMonth(d.getMonth() + 1); setCurrentDate(d) }}
+                  className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">chevron_right</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Day-of-week header */}
+            <div className="grid grid-cols-7 mb-1">
+              {DOW.map(d => (
+                <div key={d} className="text-center py-2 text-[9px] font-black uppercase tracking-widest text-slate-400">{d}</div>
+              ))}
+            </div>
+
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 border-l border-t border-slate-100">
+              {cells.map((cellDate, idx) => {
+                const isCurrentMonth = cellDate.getMonth() === month
+                const isTodayCell = cellDate.toDateString() === today.toDateString()
+                const cellStr = toLocalDateStr(cellDate)
+                const dayBkgs = bkgs.filter(b => {
+                  const s = new Date(b.start_at.replace('Z', ''))
+                  return toLocalDateStr(s) === cellStr && b.status !== 'cancelled'
+                })
+                const myBkgs = dayBkgs.filter(b => b.user_id === user?.id)
+                const otherBkgs = dayBkgs.filter(b => b.user_id !== user?.id)
+                const visibleBkgs = dayBkgs.slice(0, 3)
+                const overflow = dayBkgs.length - 3
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => { setCurrentDate(cellDate); setViewMode('day') }}
+                    className={`min-h-[110px] border-r border-b border-slate-100 p-2 cursor-pointer transition-colors group
+                      ${isCurrentMonth ? 'bg-white hover:bg-[#f7fee7]/60' : 'bg-slate-50/50 hover:bg-slate-50'}
+                      ${isTodayCell ? 'bg-[#f7fee7]/70 ring-2 ring-inset ring-[#adee2b]' : ''}`}
+                  >
+                    {/* Date number */}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span
+                        className={`flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black transition-colors
+                          ${isTodayCell ? 'bg-black text-[#adee2b]' : isCurrentMonth ? 'text-slate-700 group-hover:bg-slate-200' : 'text-slate-300'}`}
+                      >
+                        {cellDate.getDate()}
+                      </span>
+                      {(myBkgs.length > 0 || otherBkgs.length > 0) && (
+                        <div className="flex items-center gap-0.5">
+                          {myBkgs.length > 0 && <span className="size-1.5 rounded-full bg-[#adee2b]" />}
+                          {otherBkgs.length > 0 && <span className="size-1.5 rounded-full bg-blue-400" />}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Booking bars — color only, no text */}
+                    <div className="flex flex-col gap-0.5 mt-0.5">
+                      {visibleBkgs.map(b => {
+                        const isMe = b.user_id === user?.id
+                        const isTentative = b.status === 'tentative'
+                        const isMaint = b.type === 'maintenance' || b.type === 'repairment'
+                        const bg = isMaint ? '#fb923c' : isTentative ? '#fde68a' : isMe ? '#adee2b' : '#bfdbfe'
+                        const start = new Date(b.start_at.replace('Z', ''))
+                        const hh = String(start.getHours()).padStart(2, '0')
+                        const mm = String(start.getMinutes()).padStart(2, '0')
+                        return (
+                          <div
+                            key={b.id}
+                            onClick={e => { e.stopPropagation(); openEdit(b) }}
+                            className="w-full rounded-sm hover:brightness-90 transition-all cursor-pointer"
+                            style={{ height: 6, background: bg }}
+                            title={`${hh}:${mm} · ${b.title}`}
+                          />
+                        )
+                      })}
+                      {overflow > 0 && (
+                        <p className="text-[7px] font-black text-slate-400">+{overflow}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </main>
+        )
+      })()}
 
       {/* Day view grid */}
       {viewMode === 'day' && (
@@ -732,18 +877,22 @@ export default function TimelinePage() {
           {/* Room rows */}
           {filteredRooms.map((room: Room) => {
             const roomBookings = getBookingsForRoom(room.id)
-            const dotColor = room.type === 'Ballroom' ? 'bg-purple-400' : room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'
+            const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : room.type === 'Ballroom' ? 'bg-purple-400' : room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'
             const occupied  = isRoomOccupied(room)
+            const isMaintRoom = room.status === 'maintenance'
 
             const isCellDragRow = cellDragRef.current?.roomId === room.id
             const cellDragMinSlot = cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
             const cellDragMaxSlot = cellDragRef.current ? Math.max(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
 
             return (
-              <div key={room.id} className="flex group/row hover:bg-[#f1f7ff] relative border-b border-slate-100">
+              <div key={room.id} className={`flex group/row relative border-b border-slate-100 ${isMaintRoom ? 'hover:bg-orange-50/60' : 'hover:bg-[#f1f7ff]'}`}>
                 {/* Room label */}
                 <div
-                  className="shrink-0 flex items-center justify-between px-3 border-r-2 border-slate-200 group/room cursor-pointer sticky left-0 z-20 bg-white group-hover/row:bg-[#eef3ff] transition-colors"
+                  className={`shrink-0 flex items-center justify-between px-3 border-r-2 group/room cursor-pointer sticky left-0 z-20 transition-colors
+                    ${isMaintRoom
+                      ? 'bg-orange-50 border-orange-200 group-hover/row:bg-orange-100/60'
+                      : 'bg-white border-slate-200 group-hover/row:bg-[#eef3ff]'}`}
                   style={{ width: ROOM_W, height: CELL_H }}
                   onMouseEnter={e => {
                     if (roomHoverTimer.current) clearTimeout(roomHoverTimer.current)
@@ -755,18 +904,20 @@ export default function TimelinePage() {
                   }}
                 >
                   <div className="flex items-center gap-2 min-w-0" onClick={() => { setDetailRoom(room); setDetailOpen(true) }}>
-                    <div className={`size-2 rounded-full shrink-0 ${dotColor} ${occupied ? 'ring-2 ring-offset-1 ring-red-400' : ''}`} />
+                    <div className={`size-2 rounded-full shrink-0 ${dotColor} ${occupied ? 'ring-2 ring-offset-1 ring-red-400' : ''} ${isMaintRoom ? 'animate-pulse' : ''}`} />
                     <div className="min-w-0">
-                      <span className="text-[13px] font-black text-slate-800 leading-tight block truncate">{room.name}</span>
-                      <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1 mt-0.5">
-                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>
-                        {room.capacity} &middot; {room.floor}
+                      <span className={`text-[13px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-700' : 'text-slate-800'}`}>{room.name}</span>
+                      <span className={`text-[11px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400' : 'text-slate-400'}`}>
+                        {isMaintRoom
+                          ? <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>construction</span>Maintenance</>
+                          : <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{room.capacity} &middot; {room.floor}</>
+                        }
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => { setDetailRoom(room); setDetailOpen(true) }}
-                    className="size-6 rounded-lg bg-slate-100 items-center justify-center hidden group-hover/room:flex hover:bg-[#adee2b] shrink-0"
+                    className={`size-6 rounded-lg items-center justify-center hidden group-hover/room:flex shrink-0 ${isMaintRoom ? 'bg-orange-100 hover:bg-orange-400 text-orange-600 hover:text-white' : 'bg-slate-100 hover:bg-[#adee2b]'}`}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span>
                   </button>

@@ -16,6 +16,8 @@ class Room extends Model
         'photos',
         'notes',
         'is_active',
+        'status',
+        'requires_contact',
     ];
 
     protected function casts(): array
@@ -24,6 +26,7 @@ class Room extends Model
             'facilities' => 'array',
             'photos' => 'array',
             'is_active' => 'boolean',
+            'requires_contact' => 'boolean',
         ];
     }
 
