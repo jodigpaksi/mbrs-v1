@@ -1,5 +1,4 @@
 import type { Booking } from '../../types/index'
-import { deptColors } from '../../data/mockData'
 
 interface BookingBarProps {
   booking: Booking
@@ -16,12 +15,11 @@ export default function BookingBar({
   onBarMouseDown, onResizeMouseDown,
 }: BookingBarProps) {
   const dept = booking.user?.department || 'GAA'
-  const colors = deptColors[dept] || deptColors['GAA']
   const isTentative = booking.status === 'tentative'
   const isMaint = booking.type === 'maintenance' || booking.type === 'repairment'
 
-  const bgColor = isMaint ? '#fb923c' : colors.bg
-  const textColor = isMaint ? '#7c2d12' : 'black'
+  const bgColor = isMaint ? '#fb923c' : isTentative ? '#d1d5db' : '#adee2b'
+  const textColor = isMaint ? '#7c2d12' : isTentative ? '#475569' : 'black'
 
   const typeLabel = isMaint
     ? (booking.type === 'repairment' ? 'REPAIR' : 'MAINT')
@@ -39,7 +37,7 @@ export default function BookingBar({
         hover:scale-[1.02]`}
       style={{
         backgroundColor: bgColor,
-        opacity: isTentative ? (isDragging ? 0.5 : 0.75) : isDragging ? 0.6 : 1,
+        opacity: isDragging ? (isTentative ? 0.5 : 0.6) : 1,
         backgroundImage: isTentative
           ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.06) 4px, rgba(0,0,0,0.06) 8px)'
           : isMaint

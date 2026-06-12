@@ -684,7 +684,7 @@ export default function TimelinePage() {
                           const isMe = b.user_id === user?.id
                           const isTentative = b.status === 'tentative'
                           const isMaint = b.type === 'maintenance' || b.type === 'repairment'
-                          const bg = isMaint ? '#fb923c' : isTentative ? '#fde68a' : isMe ? '#adee2b' : '#bfdbfe'
+                          const bg = isMaint ? '#fb923c' : isTentative ? '#d1d5db' : '#adee2b'
                           const matchesSearch = !search || bookingMatchesSearch(b, search)
                           return (
                             <div key={b.id}
@@ -1108,13 +1108,13 @@ export default function TimelinePage() {
       <footer className="bg-white border-t border-slate-100 px-8 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-5">
           {[
-            { color: 'bg-blue-500', label: 'My Booking' },
-            { color: 'bg-[#adee2b]', label: 'Confirmed' },
-            { color: 'bg-slate-300', label: 'Tentative' },
-            { color: 'bg-orange-400', label: 'Maintenance' },
+            { label: 'My Booking', style: { backgroundColor: '#adee2b', outline: '2px solid #3b82f6', outlineOffset: '-2px' } },
+            { label: 'Confirmed', style: { backgroundColor: '#adee2b' } },
+            { label: 'Tentative', style: { backgroundColor: '#d1d5db', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
+            { label: 'Maintenance', style: { backgroundColor: '#fb923c' } },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1.5">
-              <div className={`size-2.5 rounded-md ${l.color}`} />
+              <div className="size-2.5 rounded-md" style={l.style} />
               <span className="text-[8px] font-bold text-slate-400 uppercase">{l.label}</span>
             </div>
           ))}
