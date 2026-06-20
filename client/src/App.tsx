@@ -6,7 +6,6 @@ import AdminPage from './pages/AdminPage'
 import RoomsPage from './pages/RoomsPage'
 import LoginPage from './pages/LoginPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
-
 function App() {
   return (
     <Routes>

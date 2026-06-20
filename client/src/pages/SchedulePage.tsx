@@ -4,9 +4,10 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Booking } from '../types/index'
-import { getMyBookings, cancelBooking, clearCancelledBookings, getBookings, updateBooking, cancelSeries } from '../api/bookings'
+import { getMyBookings, clearCancelledBookings, getBookings, updateBooking } from '../api/bookings'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
+import { useCancelToast } from '../context/CancelToastContext'
 import BookingPanel from '../components/booking/BookingPanel'
 import { useBookingHours } from '../hooks/useBookingHours'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
@@ -83,13 +84,6 @@ const TAB_TOOLTIP: Partial<Record<Tab, string>> = {
   special: 'Special rooms · ±90 days',
 }
 
-interface ToastItem {
-  id: string
-  bookingId: number
-  msg: string
-  countdown: number
-  isUndo: boolean
-}
 
 interface CardSharedProps {
   activeTab: Tab
@@ -565,11 +559,8 @@ export default function SchedulePage() {
   const [viewAnimKey, setViewAnimKey] = useState(0)
   const [overviewOpen, setOverviewOpen] = useState(false)
   const overviewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [pendingCancelIds, setPendingCancelIds] = useState<Set<number>>(new Set())
-  const [exitingCancelIds, setExitingCancelIds] = useState<Set<number>>(new Set())
-  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const { pendingCancelIds, exitingCancelIds, addCancelToast, addInfoToast, undoCancel, confirmSeriesCancel, undoSeriesCancel } = useCancelToast()
   const [descTooltip, setDescTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
-  const cancelTimersRef = useRef<Map<number, { timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> }>>(new Map())
   const [allSortKey, setAllSortKey] = useState<AllSortKey>('start_at')
   const [allSortDir, setAllSortDir] = useState<AllSortDir>('asc')
   const [allSearch, setAllSearch] = useState('')
@@ -577,8 +568,6 @@ export default function SchedulePage() {
   const [tentativeConfirming, setTentativeConfirming] = useState(false)
   const [buildingFilter, setBuildingFilter] = useState<number | null>(defaultBuilding)
   const [seriesCancelTarget, setSeriesCancelTarget] = useState<SeriesGroup | null>(null)
-  const [seriesUndoToast, setSeriesUndoToast] = useState<{ id: string; seriesId: string; msg: string; countdown: number } | null>(null)
-  const seriesCancelTimerRef = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
   const [hCalDate, setHCalDate] = useState<string>(() => toDateKey(new Date()))
   const [hCalMonth, setHCalMonth] = useState<{ yr: number; mo: number }>(() => {
     const d = new Date()
@@ -664,8 +653,21 @@ export default function SchedulePage() {
     queryKey: ['special-bookings'],
     queryFn: () => getBookings({ special_rooms: true, date_from: toDateStr(past90), date_to: toDateStr(future90) }),
     enabled: isReceptionist,
-    staleTime: 2 * 60_000,
   })
+  const [spShowPast, setSpShowPast]           = useState(true)
+  const [spShowCancelled, setSpShowCancelled] = useState(false)
+  const [spExportOpen, setSpExportOpen]       = useState<'excel' | 'pdf' | null>(null)
+  const [spExportGroups, setSpExportGroups]   = useState({ active: true, past: true, cancelled: false })
+  const [spSortCol, setSpSortCol]             = useState<string | null>(null)
+  const [spSortDir, setSpSortDir]             = useState<'asc' | 'desc'>('asc')
+  const spExportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!spExportOpen) return
+    const fn = (e: MouseEvent) => { if (spExportRef.current && !spExportRef.current.contains(e.target as Node)) setSpExportOpen(null) }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [spExportOpen])
 
   const today = new Date()
   const minus7 = new Date(today); minus7.setDate(today.getDate() - 7)
@@ -855,47 +857,7 @@ export default function SchedulePage() {
     if (!cancelTarget) return
     const booking = cancelTarget
     setCancelTarget(null)
-
-    const bid = booking.id
-    const toastId = `cancel-${bid}-${Date.now()}`
-    let count = 5
-
-    setPendingCancelIds(prev => new Set([...prev, bid]))
-    setToasts(prev => [...prev, { id: toastId, bookingId: bid, msg: `"${booking.title}" will be cancelled`, countdown: count, isUndo: true }])
-
-    const interval = setInterval(() => {
-      count -= 1
-      setToasts(prev => prev.map(t => t.id === toastId ? { ...t, countdown: count } : t))
-    }, 1000)
-
-    const timer = setTimeout(async () => {
-      clearInterval(interval)
-      cancelTimersRef.current.delete(bid)
-      setToasts(prev => prev.filter(t => t.id !== toastId))
-      setExitingCancelIds(prev => new Set([...prev, bid]))
-      setTimeout(async () => {
-        setExitingCancelIds(prev => { const s = new Set(prev); s.delete(bid); return s })
-        setPendingCancelIds(prev => { const s = new Set(prev); s.delete(bid); return s })
-        await cancelBooking(bid)
-        queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
-        queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
-        queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      }, 380)
-    }, 5000)
-
-    cancelTimersRef.current.set(bid, { timer, interval })
-  }
-
-  function undoCancel(toastId: string, bookingId: number) {
-    const timers = cancelTimersRef.current.get(bookingId)
-    if (timers) {
-      clearTimeout(timers.timer)
-      clearInterval(timers.interval)
-      cancelTimersRef.current.delete(bookingId)
-    }
-    setToasts(prev => prev.filter(t => t.id !== toastId))
-    setPendingCancelIds(prev => { const s = new Set(prev); s.delete(bookingId); return s })
-    setExitingCancelIds(prev => { const s = new Set(prev); s.delete(bookingId); return s })
+    addCancelToast(booking)
   }
 
   async function handleTentativeAction(action: 'confirm' | 'cancel') {
@@ -905,48 +867,18 @@ export default function SchedulePage() {
     setTentativeConfirming(true)
     try {
       if (action === 'confirm') await updateBooking(booking.id, { status: 'confirmed' })
-      else if (action === 'cancel') await cancelBooking(booking.id)
+      else if (action === 'cancel') addCancelToast(booking)
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
       queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
+      queryClient.refetchQueries({ queryKey: ['special-bookings'] })
     } finally { setTentativeConfirming(false) }
   }
 
-  function confirmSeriesCancel() {
+  function doConfirmSeriesCancel() {
     if (!seriesCancelTarget) return
     const target = seriesCancelTarget
     setSeriesCancelTarget(null)
-
-    const toastId = `series-${target.series_id}-${Date.now()}`
-    let count = 5
-    const activeCount = target.bookings.filter(b => b.status !== 'cancelled').length
-
-    setSeriesUndoToast({ id: toastId, seriesId: target.series_id, msg: `"${target.bookings[0].title}" series (${activeCount} bookings) will be cancelled`, countdown: count })
-
-    const interval = setInterval(() => {
-      count -= 1
-      setSeriesUndoToast(prev => prev?.id === toastId ? { ...prev, countdown: count } : prev)
-    }, 1000)
-
-    const timer = setTimeout(async () => {
-      clearInterval(interval)
-      seriesCancelTimerRef.current = null
-      setSeriesUndoToast(null)
-      await cancelSeries(target.series_id)
-      queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-    }, 5000)
-
-    seriesCancelTimerRef.current = { timer, interval }
-  }
-
-  function undoSeriesCancel() {
-    if (seriesCancelTimerRef.current) {
-      clearTimeout(seriesCancelTimerRef.current.timer)
-      clearInterval(seriesCancelTimerRef.current.interval)
-      seriesCancelTimerRef.current = null
-    }
-    setSeriesUndoToast(null)
+    confirmSeriesCancel(target)
   }
 
   async function doClearCancelled() {
@@ -954,11 +886,7 @@ export default function SchedulePage() {
     await clearCancelledBookings()
     queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
     queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
-    setToasts(prev => {
-      const id = `clear-${Date.now()}`
-      setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500)
-      return [...prev, { id, bookingId: 0, msg: 'Cancelled bookings cleared', countdown: 0, isUndo: false }]
-    })
+    addInfoToast('Cancelled bookings cleared')
   }
 
   const upcomingInAll = allList.filter((b: Booking) => !isActuallyPast(b))
@@ -1013,36 +941,36 @@ export default function SchedulePage() {
     doc.save(`bookings-${user?.name?.replace(' ', '-').toLowerCase()}.pdf`)
   }
 
-  function exportSpecialExcel() {
-    const rows = (specialBookings as Booking[]).map((b: Booking) => ({
+  function exportSpecialExcel(rows: Booking[]) {
+    const data = rows.map((b: Booking) => ({
       Date: fmtTableDate(b.start_at), Day: fmtTableDay(b.start_at),
       'Start Time': fmtTime(b.start_at), 'End Time': fmtTime(b.end_at),
       Duration: dur(b.start_at, b.end_at), Room: b.room?.name ?? '',
       Building: b.room?.building?.code || b.room?.building?.name || '',
-      Booker: b.user?.name ?? '', Department: b.user?.department_name ?? '',
+      Booker: b.user?.name ?? '', Role: b.user?.role ?? '', Department: b.user?.department_name ?? '',
       Title: b.title, Description: b.description ?? '',
       'Booked For': b.booked_for ?? '', Status: b.status, Type: b.type,
     }))
-    const ws = XLSX.utils.json_to_sheet(rows)
+    const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Special Room Bookings')
     XLSX.writeFile(wb, `special-room-bookings-${toDateStr(today)}.xlsx`)
   }
 
-  function exportSpecialPDF() {
+  function exportSpecialPDF(rows: Booking[]) {
     const doc = new jsPDF()
     doc.setFontSize(14); doc.text('Special Room Bookings', 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
     doc.text(`±90 days · Exported ${today.toLocaleDateString('en-GB')}`, 14, 22)
     autoTable(doc, {
       startY: 28,
-      head: [['Date', 'Time', 'Room', 'Building', 'Booker', 'Dept', 'Title', 'Status']],
-      body: (specialBookings as Booking[]).map((b: Booking) => [
+      head: [['Date', 'Time', 'Room', 'Building', 'Booker', 'Role', 'Dept', 'Title', 'Status']],
+      body: rows.map((b: Booking) => [
         fmtTableDate(b.start_at),
         `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
         b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
-        b.user?.name ?? '', b.user?.department_name ?? '', b.title, b.status,
+        b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '', b.title, b.status,
       ]),
       styles: { fontSize: 7.5, cellPadding: 2.5 },
       headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -1317,122 +1245,252 @@ export default function SchedulePage() {
               {activeTab === 'special' && (
                 <div>
                   {/* Header row */}
-                  <div className="flex items-center justify-between mb-5">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-widest text-amber-500 mb-0.5">Special Room Bookings</p>
-                      <p className="text-[10px] text-slate-400 font-bold">±90 days · {(specialBookings as Booking[]).length} bookings</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={exportSpecialExcel}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase hover:bg-emerald-100 transition-colors border border-emerald-200">
-                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>table_view</span>Excel
-                      </button>
-                      <button onClick={exportSpecialPDF}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase hover:bg-red-100 transition-colors border border-red-200">
-                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>picture_as_pdf</span>PDF
-                      </button>
-                    </div>
-                  </div>
-
                   {(() => {
                     const spNow = new Date()
-                    const spActive = (specialBookings as Booking[]).filter(b => parseLocal(b.end_at) >= spNow).sort((a,b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
-                    const spPast   = (specialBookings as Booking[]).filter(b => parseLocal(b.end_at) < spNow).sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+                    const allSp = specialBookings as Booking[]
+                    const spActive    = allSp.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) >= spNow).sort((a,b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
+                    const spPast      = allSp.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) < spNow).sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+                    const spCancelled = allSp.filter(b => b.status === 'cancelled').sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
 
-                    if (loadingSpecial) return (
-                      <div className="flex items-center justify-center py-16">
-                        <span className="material-symbols-outlined animate-spin text-3xl text-slate-300">progress_activity</span>
-                      </div>
-                    )
-                    if ((specialBookings as Booking[]).length === 0) return (
-                      <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
-                        <span className="material-symbols-outlined text-5xl">star</span>
-                        <p className="text-sm font-black uppercase">No special room bookings</p>
-                      </div>
-                    )
+                    const spExportRows = [
+                      ...(spExportGroups.active ? spActive : []),
+                      ...(spExportGroups.past ? spPast : []),
+                      ...(spExportGroups.cancelled ? spCancelled : []),
+                    ]
 
-                    const renderTable = (rows: Booking[], dimmed = false) => (
-                      <div className={`overflow-x-auto rounded-2xl border border-slate-100 ${dimmed ? 'opacity-60' : ''}`}>
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className={`border-b ${dimmed ? 'bg-slate-50 border-slate-100' : 'bg-amber-50 border-amber-100'}`}>
-                              {['Date', 'Time', 'Room', 'Booker', 'Dept', 'Title', 'For', 'Status', ''].map(h => (
-                                <th key={h} className={`px-4 py-3 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${dimmed ? 'text-slate-400' : 'text-amber-700'}`}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rows.map((b: Booking, idx: number) => (
-                              <tr key={b.id} className={`border-b border-slate-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-amber-50/40 transition-colors`}>
-                                <td className="px-4 py-3 text-[10px] font-bold text-slate-600 whitespace-nowrap">{fmtTableDate(b.start_at)}<span className="text-slate-300 ml-1">{fmtTableDay(b.start_at)}</span></td>
-                                <td className="px-4 py-3 text-[10px] font-bold text-slate-500 whitespace-nowrap tabular-nums">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</td>
-                                <td className="px-4 py-3">
-                                  <p className="text-[11px] font-black text-slate-700">{b.room?.name ?? '—'}</p>
-                                  <p className="text-[9px] text-slate-400 font-bold">{b.room?.building?.code || b.room?.building?.name || ''}</p>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <p className="text-[10px] font-bold text-slate-600 whitespace-nowrap">{b.user?.name ?? '—'}</p>
-                                  <p className="text-[8px] font-black uppercase text-slate-300">{b.user?.role ?? ''}</p>
-                                </td>
-                                <td className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase">{b.user?.department_name ?? ''}</td>
-                                <td className="px-4 py-3 text-[11px] font-black text-slate-700 max-w-[160px] truncate">{b.title}</td>
-                                <td className="px-4 py-3 text-[9px] font-bold text-slate-400">{b.booked_for || '—'}</td>
-                                <td className="px-4 py-3">
-                                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${b.status === 'confirmed' ? 'bg-lime-100 text-lime-700' : b.status === 'tentative' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
-                                    {b.status}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-3">
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => { setEditBooking(b); setPanelOpen(true) }}
-                                      className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                      title="Edit booking"
-                                    >
-                                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleCancel(b)}
-                                      disabled={pendingCancelIds.has(b.id)}
-                                      className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                      title="Cancel booking"
-                                    >
-                                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-                                        {pendingCancelIds.has(b.id) ? 'progress_activity' : 'cancel'}
-                                      </span>
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )
+                    // sort helper — when spSortCol is set, override default; otherwise keep group-native order
+                    const applySort = (rows: Booking[], defaultDir: 'asc'|'desc') => {
+                      const col = spSortCol
+                      const dir = col ? spSortDir : defaultDir
+                      const sign = dir === 'asc' ? 1 : -1
+                      const key = (b: Booking): string | number => {
+                        if (!col || col === 'date' || col === 'time') return parseLocal(b.start_at).getTime()
+                        if (col === 'room')   return (b.room?.name ?? '').toLowerCase()
+                        if (col === 'booker') return (b.user?.name ?? '').toLowerCase()
+                        if (col === 'dept')   return (b.user?.department_name ?? '').toLowerCase()
+                        if (col === 'title')  return (b.title ?? '').toLowerCase()
+                        if (col === 'for')    return (b.booked_for ?? '').toLowerCase()
+                        if (col === 'status') return b.status ?? ''
+                        return parseLocal(b.start_at).getTime()
+                      }
+                      return [...rows].sort((a, b) => {
+                        const ka = key(a), kb = key(b)
+                        return ka < kb ? -sign : ka > kb ? sign : 0
+                      })
+                    }
 
                     return (
-                      <div className="space-y-8">
-                        {spActive.length > 0 && (
+                      <>
+                        <div className="flex items-center justify-between mb-5">
                           <div>
-                            <div className="flex items-center gap-3 mb-3">
-                              <p className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap text-amber-500">Upcoming & Today</p>
-                              <div className="flex-1 h-px bg-amber-100" />
-                              <span className="text-[9px] font-black text-amber-300">{spActive.length}</span>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-amber-500 mb-0.5">Special Room Bookings</p>
+                            <p className="text-[10px] text-slate-400 font-bold">±90 days · {allSp.length} bookings</p>
+                          </div>
+                          <div className="flex items-center gap-2" ref={spExportRef}>
+                            <div className="relative">
+                              <button
+                                onClick={() => setSpExportOpen(o => o ? null : 'excel')}
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-colors border ${spExportOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>download</span>Export
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{spExportOpen ? 'expand_less' : 'expand_more'}</span>
+                              </button>
+                              {spExportOpen && (
+                                <div className="absolute right-0 top-full mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/60 p-4 w-72">
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Select groups to export</p>
+                                  <div className="space-y-2.5 mb-4">
+                                    <label className="flex items-center gap-2.5 cursor-pointer">
+                                      <input type="checkbox" checked={spExportGroups.active} onChange={e => setSpExportGroups(g => ({ ...g, active: e.target.checked }))} className="accent-amber-500 w-4 h-4" />
+                                      <span className="text-[12px] font-bold text-slate-600 flex-1">Upcoming &amp; Today</span>
+                                      <span className="text-[11px] font-black text-amber-400">{spActive.length}</span>
+                                    </label>
+                                    <label className="flex items-center gap-2.5 cursor-pointer">
+                                      <input type="checkbox" checked={spExportGroups.past} onChange={e => setSpExportGroups(g => ({ ...g, past: e.target.checked }))} className="accent-slate-400 w-4 h-4" />
+                                      <span className="text-[12px] font-bold text-slate-600 flex-1">Past</span>
+                                      <span className="text-[11px] font-black text-slate-400">{spPast.length}</span>
+                                    </label>
+                                    <label className="flex items-center gap-2.5 cursor-pointer">
+                                      <input type="checkbox" checked={spExportGroups.cancelled} onChange={e => setSpExportGroups(g => ({ ...g, cancelled: e.target.checked }))} className="accent-red-400 w-4 h-4" />
+                                      <span className="text-[12px] font-bold text-slate-600 flex-1">Cancelled</span>
+                                      <span className="text-[11px] font-black text-red-400">{spCancelled.length}</span>
+                                    </label>
+                                  </div>
+                                  <div className="pt-3 border-t border-slate-100 flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => setSpExportGroups({ active: true, past: true, cancelled: true })}
+                                      className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-colors px-2 py-1 rounded-lg hover:bg-slate-50 flex-1"
+                                    >All</button>
+                                    <button
+                                      disabled={spExportRows.length === 0}
+                                      onClick={() => { exportSpecialExcel(spExportRows); setSpExportOpen(null) }}
+                                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-[11px] font-black uppercase hover:bg-emerald-100 transition-colors border border-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
+                                    </button>
+                                    <button
+                                      disabled={spExportRows.length === 0}
+                                      onClick={() => { exportSpecialPDF(spExportRows); setSpExportOpen(null) }}
+                                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 text-[11px] font-black uppercase hover:bg-red-100 transition-colors border border-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            {renderTable(spActive)}
+                          </div>
+                        </div>
+
+                        {loadingSpecial && (
+                          <div className="flex items-center justify-center py-16">
+                            <span className="material-symbols-outlined animate-spin text-3xl text-slate-300">progress_activity</span>
                           </div>
                         )}
-                        {spPast.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-3 mb-3">
-                              <p className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap text-slate-300">Past</p>
-                              <div className="flex-1 h-px bg-slate-200" />
-                              <span className="text-[9px] font-black text-slate-300">{spPast.length}</span>
-                            </div>
-                            {renderTable(spPast, true)}
+                        {!loadingSpecial && allSp.length === 0 && (
+                          <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
+                            <span className="material-symbols-outlined text-5xl">star</span>
+                            <p className="text-sm font-black uppercase">No special room bookings</p>
                           </div>
                         )}
-                      </div>
+                        {!loadingSpecial && allSp.length > 0 && (() => {
+                          const COLS: { key: string; label: string }[] = [
+                            { key: 'date', label: 'Date' }, { key: 'time', label: 'Time' },
+                            { key: 'room', label: 'Room' }, { key: 'booker', label: 'Booker' },
+                            { key: 'dept', label: 'Dept' }, { key: 'title', label: 'Title' },
+                            { key: 'for', label: 'For' }, { key: 'status', label: 'Status' },
+                            { key: '', label: '' },
+                          ]
+
+                          const handleSortCol = (key: string) => {
+                            if (!key) return
+                            if (spSortCol === key) setSpSortDir(d => d === 'asc' ? 'desc' : 'asc')
+                            else { setSpSortCol(key); setSpSortDir('asc') }
+                          }
+
+                          const renderTable = (rows: Booking[], variant: 'active'|'past'|'cancelled' = 'active') => {
+                            const isCancelled = variant === 'cancelled'
+                            const isActive = variant === 'active'
+                            const defaultDir = isActive ? 'asc' : 'desc'
+                            const sorted = applySort(rows, defaultDir)
+                            return (
+                              <div className={`overflow-x-auto rounded-2xl border ${isCancelled ? 'border-red-100 opacity-55' : isActive ? 'border-amber-100' : 'border-slate-100 opacity-60'}`}>
+                                <table className="w-full text-left border-collapse">
+                                  <thead>
+                                    <tr className={`border-b ${isCancelled ? 'bg-red-50 border-red-100' : isActive ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
+                                      {COLS.map(({ key, label }) => {
+                                        const active = spSortCol === key
+                                        const baseColor = isCancelled ? 'text-red-400' : isActive ? 'text-amber-700' : 'text-slate-400'
+                                        return (
+                                          <th key={key}
+                                            onClick={() => handleSortCol(key)}
+                                            className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest whitespace-nowrap select-none ${key ? 'cursor-pointer hover:opacity-70' : ''} ${active ? (isCancelled ? 'text-red-500' : isActive ? 'text-amber-900' : 'text-slate-600') : baseColor}`}
+                                          >
+                                            <span className="inline-flex items-center gap-1">
+                                              {label}
+                                              {key && (
+                                                <span className="material-symbols-outlined" style={{ fontSize: 11, opacity: active ? 1 : 0.3 }}>
+                                                  {active ? (spSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}
+                                                </span>
+                                              )}
+                                            </span>
+                                          </th>
+                                        )
+                                      })}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sorted.map((b: Booking, idx: number) => (
+                                      <tr key={b.id} className={`border-b border-slate-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} ${isCancelled ? 'hover:bg-red-50/30' : isActive ? 'hover:bg-amber-50/40' : 'hover:bg-slate-50'} transition-colors`}>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                          <span className="text-[12px] font-bold text-slate-600">{fmtTableDate(b.start_at)}</span>
+                                          <span className="text-slate-300 ml-1 text-[11px]">{fmtTableDay(b.start_at)}</span>
+                                        </td>
+                                        <td className="px-4 py-3 text-[11px] font-bold text-slate-500 whitespace-nowrap tabular-nums">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</td>
+                                        <td className="px-4 py-3">
+                                          <p className="text-[12px] font-black text-slate-700">{b.room?.name ?? '—'}</p>
+                                          <p className="text-[10px] text-slate-400 font-bold">{b.room?.building?.code || b.room?.building?.name || ''}</p>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <p className="text-[11px] font-bold text-slate-600 whitespace-nowrap">{b.user?.name ?? '—'}</p>
+                                          <p className="text-[9px] font-black uppercase text-slate-300">{b.user?.role ?? ''}</p>
+                                        </td>
+                                        <td className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase">{b.user?.department_name ?? ''}</td>
+                                        <td className="px-4 py-3 text-[12px] font-black text-slate-700 max-w-[160px] truncate">{b.title}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold text-slate-400">{b.booked_for || '—'}</td>
+                                        <td className="px-4 py-3">
+                                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${b.status === 'confirmed' ? 'bg-lime-100 text-lime-700' : b.status === 'tentative' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
+                                            {b.status}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                          {!isCancelled && (
+                                            <div className="flex items-center gap-1">
+                                              <button
+                                                onClick={() => { setEditBooking(b); setPanelOpen(true) }}
+                                                className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                title="Edit booking"
+                                              >
+                                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
+                                              </button>
+                                              <button
+                                                onClick={() => handleCancel(b)}
+                                                disabled={pendingCancelIds.has(b.id)}
+                                                className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                title="Cancel booking"
+                                              >
+                                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                                                  {pendingCancelIds.has(b.id) ? 'progress_activity' : 'cancel'}
+                                                </span>
+                                              </button>
+                                            </div>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )
+                          }
+
+                          const SectionHeader = ({ label, color, count, show, onToggle }: { label: string; color: string; count: number; show?: boolean; onToggle?: () => void }) => (
+                            <div className="flex items-center gap-3 mb-3">
+                              <p className={`text-[13px] font-black uppercase tracking-[0.15em] whitespace-nowrap ${color}`}>{label}</p>
+                              <div className={`flex-1 h-px ${color.includes('amber') ? 'bg-amber-100' : color.includes('red') ? 'bg-red-100' : 'bg-slate-200'}`} />
+                              <span className={`text-[11px] font-black ${color}`}>{count}</span>
+                              {onToggle !== undefined && (
+                                <button onClick={onToggle} className={`flex items-center gap-1 text-[10px] font-black uppercase px-2.5 py-1 rounded-full transition-colors ${show ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' : 'bg-slate-50 text-slate-300 hover:bg-slate-100 hover:text-slate-500'}`}>
+                                  <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{show ? 'expand_less' : 'expand_more'}</span>
+                                  {show ? 'Hide' : 'Show'}
+                                </button>
+                              )}
+                            </div>
+                          )
+
+                          return (
+                            <div className="space-y-8">
+                              {spActive.length > 0 && (
+                                <div>
+                                  <SectionHeader label="Upcoming & Today" color="text-amber-500" count={spActive.length} />
+                                  {renderTable(spActive, 'active')}
+                                </div>
+                              )}
+                              {spPast.length > 0 && (
+                                <div>
+                                  <SectionHeader label="Past" color="text-slate-400" count={spPast.length} show={spShowPast} onToggle={() => setSpShowPast(v => !v)} />
+                                  {spShowPast && renderTable(spPast, 'past')}
+                                </div>
+                              )}
+                              {spCancelled.length > 0 && (
+                                <div>
+                                  <SectionHeader label="Cancelled" color="text-red-400" count={spCancelled.length} show={spShowCancelled} onToggle={() => setSpShowCancelled(v => !v)} />
+                                  {spShowCancelled && renderTable(spCancelled, 'cancelled')}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </>
                     )
                   })()}
                 </div>
@@ -2181,6 +2239,7 @@ export default function SchedulePage() {
           queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
           queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
           queryClient.invalidateQueries({ queryKey: ['bookings'] })
+          queryClient.refetchQueries({ queryKey: ['special-bookings'] })
         }}
         onCancel={(b) => { setPanelOpen(false); handleCancel(b) }}
       />
@@ -2233,81 +2292,7 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {/* Stacked toasts */}
-      <div className="fixed z-[9999] flex flex-col-reverse gap-2 items-end" style={{ bottom: 28, right: 96 }}>
-        {seriesUndoToast && (
-          <div
-            key={seriesUndoToast.id}
-            style={{
-              background: 'rgba(15,20,45,0.55)',
-              backdropFilter: 'blur(48px) saturate(200%)',
-              WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-              border: '1px solid rgba(255,255,255,0.14)',
-              borderRadius: '1.5rem',
-              padding: '14px 18px',
-              boxShadow: '0 24px 56px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
-              display: 'flex', alignItems: 'center', gap: 12,
-              minWidth: 300,
-              animation: 'toast-in 0.22s cubic-bezier(0.34,1.04,0.64,1)',
-            }}
-          >
-            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 22, color: '#f87171' }}>repeat</span>
-            <span className="text-white text-[12px] font-black flex-1">{seriesUndoToast.msg}</span>
-            <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 22, textAlign: 'right' }}>
-              {seriesUndoToast.countdown}s
-            </span>
-            <button
-              onClick={undoSeriesCancel}
-              style={{
-                background: '#adee2b', color: '#000', border: 'none',
-                borderRadius: 10, padding: '5px 12px',
-                fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
-                cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0,
-              }}
-            >
-              Undo
-            </button>
-          </div>
-        )}
-        {toasts.map(toast => (
-          <div
-            key={toast.id}
-            style={{
-              background: 'rgba(15,20,45,0.55)',
-              backdropFilter: 'blur(48px) saturate(200%)',
-              WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-              border: '1px solid rgba(255,255,255,0.14)',
-              borderRadius: '1.5rem',
-              padding: '14px 18px',
-              boxShadow: '0 24px 56px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              minWidth: 300,
-              animation: 'toast-in 0.22s cubic-bezier(0.34,1.04,0.64,1)',
-            }}
-          >
-            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 22, color: '#f87171' }}>cancel</span>
-            <span className="text-white text-[12px] font-black flex-1">{toast.msg}</span>
-            <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 22, textAlign: 'right' }}>
-              {toast.countdown}s
-            </span>
-            <button
-              onClick={() => undoCancel(toast.id, toast.bookingId)}
-              style={{
-                background: '#adee2b', color: '#000', border: 'none',
-                borderRadius: 10, padding: '5px 12px',
-                fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
-                cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0,
-              }}
-            >
-              Undo
-            </button>
-          </div>
-        ))}
-      </div>
       <style>{`
-        @keyframes toast-in{from{opacity:0;transform:translateY(12px) scale(0.95)}to{opacity:1;transform:translateY(0) scale(1)}}
         @keyframes overview-card-in{from{opacity:0;transform:translateY(-6px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
         @keyframes overview-dropdown-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
         @keyframes view-slide-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -2527,7 +2512,7 @@ export default function SchedulePage() {
                 Keep Series
               </button>
               <button
-                onClick={confirmSeriesCancel}
+                onClick={doConfirmSeriesCancel}
                 className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase bg-red-500 text-white hover:bg-red-600 transition-colors"
               >
                 Yes, Cancel Series

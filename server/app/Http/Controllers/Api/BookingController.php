@@ -114,7 +114,7 @@ class BookingController extends Controller
             ->exists();
 
         if ($conflict) {
-            return response()->json(['message' => 'Room is not available at this time.'], 422);
+            return response()->json(['message' => 'Room is not available at this time. Someone may have just booked it.'], 422);
         }
 
         $booking = Booking::create([
@@ -183,7 +183,7 @@ class BookingController extends Controller
             ->exists();
 
         if ($conflict) {
-            return response()->json(['message' => 'Room is not available at this time.'], 422);
+            return response()->json(['message' => 'Room is not available at this time. Someone may have just booked it.'], 422);
         }
 
         if (isset($data['status']) && $data['status'] === 'cancelled') {

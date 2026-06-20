@@ -106,6 +106,24 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [availChecking, setAvailChecking] = useState(false)
   const availTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  async function recheckAvailability() {
+    if (!selectedRoom || !date || !startTime || !endTime) return
+    setAvailChecking(true)
+    try {
+      const res = await checkAvailability(
+        selectedRoom.id,
+        `${date} ${startTime}:00`,
+        `${date} ${endTime}:00`,
+        isEdit && editBooking ? editBooking.id : undefined,
+      )
+      setAvailResult({ available: !!res.available, other_viewers: res.other_viewers ?? 0 })
+    } catch {
+      setAvailResult(null)
+    } finally {
+      setAvailChecking(false)
+    }
+  }
+
   const today = new Date().toISOString().split('T')[0]
 
   const { data: rooms = [] } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
@@ -408,8 +426,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         await doSubmitSeries()
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setError(msg || 'Failed to save booking.')
+      const e = err as { response?: { status?: number; data?: { message?: string } } }
+      const status = e?.response?.status
+      const msg = e?.response?.data?.message
+      if (status === 422 && msg?.toLowerCase().includes('not available')) {
+        setError('Someone just booked this room. Please choose another time or room.')
+        recheckAvailability()
+      } else {
+        setError(msg || 'Failed to save booking.')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -1331,8 +1356,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         try {
                           await doCreateBookings(info.available, info.seriesId)
                         } catch (err: unknown) {
-                          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-                          setError(msg || 'Failed to save booking.')
+                          const e = err as { response?: { status?: number; data?: { message?: string } } }
+                          const status = e?.response?.status
+                          const msg = e?.response?.data?.message
+                          if (status === 422 && msg?.toLowerCase().includes('not available')) {
+                            setError('Someone just booked this room. Please choose another time or room.')
+                            recheckAvailability()
+                          } else {
+                            setError(msg || 'Failed to save booking.')
+                          }
                         } finally {
                           setSubmitting(false)
                         }
@@ -1408,8 +1440,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     setSubmitting(true); setError('')
                     try { await doSubmitSingle() }
                     catch (err: unknown) {
-                      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-                      setError(msg || 'Failed to save.')
+                      const e = err as { response?: { status?: number; data?: { message?: string } } }
+                      const status = e?.response?.status
+                      const msg = e?.response?.data?.message
+                      if (status === 422 && msg?.toLowerCase().includes('not available')) {
+                        setError('Someone just booked this room. Please choose another time or room.')
+                        recheckAvailability()
+                      } else {
+                        setError(msg || 'Failed to save.')
+                      }
                     } finally { setSubmitting(false) }
                   }}
                   disabled={!isValid() || submitting}

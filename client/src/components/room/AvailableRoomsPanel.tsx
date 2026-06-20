@@ -186,7 +186,15 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
     if (next === mode) return
     setMode(next)
     setFormVisible(false)
-    setTimeout(() => { setDisplayMode(next); setFormVisible(true) }, 140)
+    setTimeout(() => {
+      setDisplayMode(next)
+      if (next === 'range') {
+        const nd = new Date(startDate + 'T12:00:00')
+        nd.setDate(nd.getDate() + 1)
+        setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`)
+      }
+      setFormVisible(true)
+    }, 140)
   }
 
   function handleSearch() {
@@ -388,7 +396,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Start Date</label>
-                  <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); if (d > endDate) setEndDate(d) }} compact>
+                  <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }} compact>
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>calendar_today</span>

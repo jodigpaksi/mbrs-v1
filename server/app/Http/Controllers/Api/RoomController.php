@@ -80,6 +80,21 @@ class RoomController extends Controller
         return response()->json($room);
     }
 
+    public function updateSpecial(Request $request, Room $room): JsonResponse
+    {
+        $role = $request->user()->role;
+        if (!in_array($role, ['admin', 'receptionist'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $data = $request->validate([
+            'requires_contact' => 'required|boolean',
+        ]);
+
+        $room->update($data);
+        return response()->json($room);
+    }
+
     public function reorder(Request $request): JsonResponse
     {
         $data = $request->validate([

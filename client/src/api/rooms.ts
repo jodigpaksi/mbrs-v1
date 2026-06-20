@@ -52,6 +52,11 @@ export async function getAvailableRooms(startAt: string, endAt: string, building
   return res.data as import('../types').Room[]
 }
 
+export async function updateRoomSpecial(roomId: number, requiresContact: boolean) {
+  const res = await api.patch(`/rooms/${roomId}/special`, { requires_contact: requiresContact })
+  return res.data
+}
+
 export async function updateRoomStatus(roomId: number, status: 'active' | 'maintenance') {
   const res = await api.patch(`/rooms/${roomId}/status`, { status })
   return res.data

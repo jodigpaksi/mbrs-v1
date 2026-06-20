@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Room, Building, Booking } from '../types/index'
-import { getRooms, updateRoomStatus, updateRoom } from '../api/rooms'
+import { getRooms, updateRoomStatus, updateRoom, updateRoomSpecial } from '../api/rooms'
 import { getBuildings } from '../api/buildings'
 import { getBookings } from '../api/bookings'
 import { useAuth } from '../context/AuthContext'
+import { useCancelToast } from '../context/CancelToastContext'
 import { useSettings } from '../context/SettingsContext'
 import RoomDetailModal from '../components/room/RoomDetailModal'
 import BookingPanel from '../components/booking/BookingPanel'
@@ -37,6 +38,7 @@ function GlassTip({ label }: { label: string }) {
 
 export default function RoomsPage() {
   const { user } = useAuth()
+  const { addInfoToast } = useCancelToast()
   const { defaultBuilding } = useSettings()
   const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
   const queryClient = useQueryClient()
@@ -158,8 +160,12 @@ export default function RoomsPage() {
   async function toggleSpecialRoom(room: Room, e: React.MouseEvent) {
     e.stopPropagation()
     setTogglingRoomId(room.id)
-    try { await updateRoom(room.id, { requires_contact: !room.requires_contact }); queryClient.invalidateQueries({ queryKey: ['rooms'] }) }
-    finally { setTogglingRoomId(null) }
+    try {
+      const next = !room.requires_contact
+      await updateRoomSpecial(room.id, next)
+      queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      addInfoToast(next ? `${room.name} set as Special Room` : `${room.name} removed from Special Rooms`)
+    } finally { setTogglingRoomId(null) }
   }
 
   const showFloorMaint = buildingFilter !== null

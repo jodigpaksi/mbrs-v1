@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/rooms/{room}/view', [RoomController::class, 'clearView']);
     Route::get('/rooms/{room}/stats', [RoomController::class, 'stats']);
     Route::patch('/rooms/{room}/status', [RoomController::class, 'updateStatus']);
+    Route::patch('/rooms/{room}/special', [RoomController::class, 'updateSpecial']);
 
     // Departments (read: all auth; write: admin only — see below)
     Route::get('/departments', [DepartmentController::class, 'index']);

@@ -11,7 +11,7 @@ interface MainLayoutProps {
   children: ReactNode
 }
 
-export default function MainLayout({ children }: MainLayoutProps) {
+function MainLayoutInner({ children }: MainLayoutProps) {
   const queryClient = useQueryClient()
   const [availableOpen, setAvailableOpen] = useState(false)
   const [selectedRoom, setSelectedRoom]   = useState<Room | null>(null)
@@ -76,7 +76,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
         onSubmit={handleBookingSubmit}
       />
 
-      {/* Toast — matches Timeline dark glass style */}
+      {/* Toast — booking saved / layout-level info */}
       <div
         className="fixed z-[9999] transition-all duration-300 pointer-events-none"
         style={{ bottom: 28, right: 96, transform: toast ? 'translateY(0)' : 'translateY(80px)', opacity: toast ? 1 : 0 }}
@@ -98,6 +98,11 @@ export default function MainLayout({ children }: MainLayoutProps) {
           <span className="text-white text-[13px] font-black flex-1">{toast}</span>
         </div>
       </div>
+
     </div>
   )
+}
+
+export default function MainLayout({ children }: MainLayoutProps) {
+  return <MainLayoutInner>{children}</MainLayoutInner>
 }
