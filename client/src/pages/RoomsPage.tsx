@@ -79,8 +79,12 @@ export default function RoomsPage() {
   }), [rooms, buildingFilter, search, floorFilter, statusFilter, quickAvailable, quickBig, todayBookings])
 
   const availableNowRooms = useMemo(() =>
-    (rooms as Room[]).filter(r => r.status !== 'maintenance' && !isOccupiedNow(r)),
-    [rooms, todayBookings]
+    (rooms as Room[]).filter(r =>
+      r.status !== 'maintenance' &&
+      !isOccupiedNow(r) &&
+      (buildingFilter === null || r.building_id === buildingFilter)
+    ),
+    [rooms, todayBookings, buildingFilter]
   )
 
   // For "All" view: group filtered rooms by building
@@ -207,9 +211,12 @@ export default function RoomsPage() {
               </div>
             </>
           ) : room.requires_contact ? (
-            <span className="size-8 rounded-full flex items-center justify-center bg-white/15 backdrop-blur-md border border-white/25">
-              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#fbbf24', fontVariationSettings: "'FILL' 1" }}>star</span>
-            </span>
+            <div className="relative group/tip">
+              <span className="size-8 rounded-full flex items-center justify-center bg-white/15 backdrop-blur-md border border-white/25">
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#fbbf24', fontVariationSettings: "'FILL' 1" }}>star</span>
+              </span>
+              <GlassTip label="Special — contact required to book" />
+            </div>
           ) : null}
         </div>
 

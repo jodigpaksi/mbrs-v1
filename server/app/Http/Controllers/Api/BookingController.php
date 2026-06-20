@@ -48,6 +48,10 @@ class BookingController extends Controller
             $query->where('user_id', $request->user_id);
         }
 
+        if ($request->special_rooms) {
+            $query->whereHas('room', fn($q) => $q->where('requires_contact', true));
+        }
+
         $results = $query->get();
         $results->each(fn($b) => $b->user?->makeHidden('department'));
         return response()->json($results);

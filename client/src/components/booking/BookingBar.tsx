@@ -100,6 +100,9 @@ export default function BookingBar({
           series
         </span>
       )}
+      {booking.room?.requires_contact && (
+        <span className="material-symbols-outlined shrink-0" style={{ fontSize: 11, color: textColor, opacity: 0.85 }} title="Special room">star</span>
+      )}
       {showTitle && !isMaint && (
         <span
           className="text-[11px] font-bold truncate flex-1 min-w-0"

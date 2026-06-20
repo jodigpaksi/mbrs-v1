@@ -138,6 +138,11 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
               <span className="material-symbols-outlined" style={{ fontSize: 11 }}>link</span>Series
             </span>
           )}
+          {booking.room?.requires_contact && (
+            <span className="flex items-center gap-1 bg-amber-50 text-amber-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide">
+              <span className="material-symbols-outlined" style={{ fontSize: 11 }}>star</span>Special
+            </span>
+          )}
           <span
             className="text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide ml-auto"
             style={isTentative

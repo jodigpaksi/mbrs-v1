@@ -328,7 +328,7 @@ export default function TimelinePage() {
   const nowSlot = ((today.getHours() - HOUR_START) * 60 + today.getMinutes()) / 30
 
   function fmtDate(d: Date) {
-    return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()
+    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()
   }
 
   function bookingToSlots(b: Booking) {
@@ -523,9 +523,9 @@ export default function TimelinePage() {
               >
                 {({ open }) => (
                   <button
-                    className="flex items-center gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group">
-                    <span className="material-symbols-outlined text-sm text-slate-400 group-hover:text-black">calendar_today</span>
-                    <span className="text-[11px] font-black text-slate-800 uppercase">
+                    className="flex items-center gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group" style={{ width: 190 }}>
+                    <span className="material-symbols-outlined text-sm text-slate-400 group-hover:text-black shrink-0">calendar_today</span>
+                    <span className="text-[11px] font-black text-slate-800 uppercase flex-1 text-left truncate">
                       {weekLabel ?? fmtDate(currentDate)}
                     </span>
                     <span className={`material-symbols-outlined text-xs text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>

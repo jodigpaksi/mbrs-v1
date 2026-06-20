@@ -55,7 +55,7 @@ const typeStyle: Record<string, { bg: string; text: string; label: string }> = {
   external: { bg: '#ffedd5', text: '#c2410c', label: 'External' },
 }
 
-type Tab = 'today' | 'upcoming' | 'all' | 'past' | 'cancelled' | 'tentative' | 'series' | 'hcal'
+type Tab = 'today' | 'upcoming' | 'all' | 'past' | 'cancelled' | 'tentative' | 'series' | 'hcal' | 'special'
 type AllSortKey = 'start_at' | 'title' | 'room' | 'status' | 'type'
 type AllSortDir = 'asc' | 'desc'
 
@@ -68,6 +68,7 @@ const TAB_META: Record<Tab, { color: string; indicatorColor: string }> = {
   tentative: { color: 'text-amber-500',    indicatorColor: '#f59e0b' },
   series:    { color: 'text-blue-500',     indicatorColor: '#3b82f6' },
   hcal:      { color: 'text-violet-500',   indicatorColor: '#7c3aed' },
+  special:   { color: 'text-amber-500',    indicatorColor: '#f59e0b' },
 }
 
 const PRIMARY_TABS: Tab[] = ['today', 'upcoming', 'all']
@@ -75,7 +76,11 @@ const SECONDARY_TABS: Tab[] = ['past', 'cancelled', 'tentative', 'series', 'hcal
 
 const TAB_TOOLTIP: Partial<Record<Tab, string>> = {
   past: 'Last 30 days only',
-  cancelled: 'Within ±7 days',
+  cancelled: 'Cancelled in the last 7 days',
+  series: 'Repeat booking groups',
+  tentative: 'Awaiting confirmation',
+  hcal: 'Booking timeline view',
+  special: 'Special rooms · ±90 days',
 }
 
 interface ToastItem {
@@ -152,6 +157,11 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
         {b.series_id && (
           <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-1 rounded-full bg-blue-50 text-blue-500">
             <span className="material-symbols-outlined" style={{ fontSize: 10 }}>link</span>Series
+          </span>
+        )}
+        {b.room?.requires_contact && (
+          <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-1 rounded-full bg-amber-50 text-amber-600">
+            <span className="material-symbols-outlined" style={{ fontSize: 10 }}>star</span>Special
           </span>
         )}
       </div>
@@ -255,6 +265,9 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
       {b.series_id && (
         <span className="material-symbols-outlined text-blue-400 shrink-0" style={{ fontSize: 13 }} title="Series booking">link</span>
       )}
+      {b.room?.requires_contact && (
+        <span className="material-symbols-outlined text-amber-400 shrink-0" style={{ fontSize: 13 }} title="Special room">star</span>
+      )}
       <div className={`text-[11px] font-bold text-right shrink-0 leading-tight ${subClr}`}>
         <p>{fmtTableDate(b.start_at)}</p>
         <p className="opacity-60">{fmtTableDay(b.start_at)}</p>
@@ -328,8 +341,8 @@ function SeriesGroupRow({
         <td className="px-3 py-3.5">
           <div>
             <p className="text-xs font-black text-slate-800">{first.room?.name ?? '—'}</p>
-            {first.room?.building?.name && (
-              <p className="text-[9px] font-bold text-slate-400 mt-0.5">{first.room.building.name}</p>
+            {first.room?.building && (
+              <p className="text-[9px] font-bold text-slate-400 mt-0.5">{first.room.building.code || first.room.building.name}</p>
             )}
           </div>
         </td>
@@ -421,13 +434,16 @@ function SeriesGroupRow({
 
 const MONTHS_LOWER = ['january','february','march','april','may','june','july','august','september','october','november','december']
 
-function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = true }: {
+function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = true, highlighted = false, onHover, onUnhover }: {
   b: Booking
   expanded: boolean
   onToggle: () => void
   onEdit: () => void
   onCancel: () => void
   clickable?: boolean
+  highlighted?: boolean
+  onHover?: () => void
+  onUnhover?: () => void
 }) {
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
@@ -437,11 +453,14 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
   const accentText = isConf ? 'rgba(0,0,0,0.75)' : isTentative ? '#78350f' : '#9f1239'
   const ACTION_H = 44
   return (
-    <div style={{
-      width: 210, flexShrink: 0, position: 'relative',
-      paddingBottom: expanded ? 26 + ACTION_H : 26,
-      transition: 'padding-bottom 0.3s cubic-bezier(0.34,1.04,0.64,1)',
-    }}>
+    <div
+      onMouseEnter={onHover}
+      onMouseLeave={onUnhover}
+      style={{
+        width: 210, flexShrink: 0, position: 'relative',
+        paddingBottom: expanded ? 26 + ACTION_H : 26,
+        transition: 'padding-bottom 0.3s cubic-bezier(0.34,1.04,0.64,1)',
+      }}>
       {/* Dark action layer — deepest, peeks below accent when expanded */}
       <div style={{
         position: 'absolute', top: 16, left: 0, right: 0,
@@ -488,13 +507,20 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
         WebkitBackdropFilter: 'blur(24px) saturate(160%)',
         border: expanded ? '1.5px solid rgba(173,238,43,0.6)' : '1px solid rgba(255,255,255,0.9)',
         borderRadius: 18, padding: '14px 14px 13px',
-        boxShadow: expanded
+        boxShadow: highlighted
+          ? `0 0 0 2px ${accentBg}, 0 0 18px 6px ${accentBg}66, 0 2px 16px rgba(0,0,0,0.11)`
+          : expanded
           ? '0 0 0 3px rgba(173,238,43,0.15), 0 2px 16px rgba(0,0,0,0.11)'
           : '0 2px 16px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,1)',
         transition: 'border 0.2s ease, box-shadow 0.2s ease',
       }}>
         <p style={{ fontSize: 15, fontWeight: 900, color: '#1e293b', lineHeight: 1.25, marginBottom: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</p>
-        <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', marginBottom: b.booked_for ? 3 : 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.room?.name ?? '—'}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: b.booked_for ? 3 : 5, overflow: 'hidden' }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{b.room?.name ?? '—'}</p>
+          {b.room?.requires_contact && (
+            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 11, color: '#d97706' }} title="Special room">star</span>
+          )}
+        </div>
         {b.booked_for && (
           <p style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
             <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>
@@ -559,6 +585,7 @@ export default function SchedulePage() {
     return { yr: d.getFullYear(), mo: d.getMonth() }
   })
   const [hCalTimelineHover, setHCalTimelineHover] = useState<{ bookingId: number; x: number; y: number } | null>(null)
+  const [hCalHoverId, setHCalHoverId] = useState<number | null>(null)
   const [hCalCardExpanded, setHCalCardExpanded] = useState<number | null>(null)
   const hCalTodayRef = useRef<HTMLButtonElement>(null)
   const hCalDatesRef = useRef<HTMLDivElement>(null)
@@ -632,12 +659,26 @@ export default function SchedulePage() {
     enabled: !!user?.id,
   })
 
+  const isReceptionist = user?.role === 'receptionist'
+  const { data: specialBookings = [], isLoading: loadingSpecial } = useQuery({
+    queryKey: ['special-bookings'],
+    queryFn: () => getBookings({ special_rooms: true, date_from: toDateStr(past90), date_to: toDateStr(future90) }),
+    enabled: isReceptionist,
+    staleTime: 2 * 60_000,
+  })
+
   const today = new Date()
   const minus7 = new Date(today); minus7.setDate(today.getDate() - 7)
   const plus7 = new Date(today); plus7.setDate(today.getDate() + 7)
   const past30 = new Date(today); past30.setDate(today.getDate() - 30)
+  const past90 = new Date(today); past90.setDate(today.getDate() - 90)
+  const future90 = new Date(today); future90.setDate(today.getDate() + 90)
+  const toDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 
   const todayList: Booking[]     = myBookings.filter((b: Booking) => parseLocal(b.start_at).toDateString() === today.toDateString())
+  const now = new Date()
+  const todayActiveList: Booking[] = todayList.filter((b: Booking) => parseLocal(b.end_at) >= now)
+  const todayPastList: Booking[]   = todayList.filter((b: Booking) => parseLocal(b.end_at) < now)
   const upcomingList: Booking[]  = myBookings.filter((b: Booking) => parseLocal(b.start_at) > today)
   const allList: Booking[] = useMemo(() => {
     const upcoming = myBookings.filter((b: Booking) => !isActuallyPast(b))
@@ -671,6 +712,10 @@ export default function SchedulePage() {
         series_id: sid,
         bookings: [...bookings].sort((a, b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime()),
       }))
+      .filter(g => {
+        const last = g.bookings[g.bookings.length - 1]
+        return parseLocal(last.start_at) >= past30
+      })
       .sort((a, b) => parseLocal(a.bookings[0].start_at).getTime() - parseLocal(b.bookings[0].start_at).getTime())
   }, [myBookings])
 
@@ -701,18 +746,19 @@ export default function SchedulePage() {
   )
 
   const tabCounts: Record<Tab, number> = {
-    today: todayList.length, upcoming: upcomingList.length, all: allList.length,
+    today: todayList.length, upcoming: upcomingList.length, all: todayList.length + upcomingList.length,
     past: pastList.length, cancelled: cancelledList.length, tentative: tentativeList.length,
-    series: seriesList.length, hcal: 0,
+    series: seriesList.length, hcal: 0, special: (specialBookings as Booking[]).length,
   }
 
   const tabLabels: Record<Tab, string> = {
     today: t('tab_today'), upcoming: t('tab_upcoming'), all: t('tab_all'),
     past: t('tab_past'), cancelled: t('tab_cancelled'), tentative: t('tab_tentative'),
-    series: 'Series', hcal: 'H-Calendar',
+    series: 'Series', hcal: 'H-Calendar', special: 'Special Rooms',
   }
 
-  const allTabsOrdered: Tab[] = [...PRIMARY_TABS, ...SECONDARY_TABS]
+  const visibleSecondaryTabs: Tab[] = [...SECONDARY_TABS, ...(isReceptionist ? ['special' as Tab] : [])]
+  const allTabsOrdered: Tab[] = [...PRIMARY_TABS, ...visibleSecondaryTabs]
 
   useEffect(() => {
     const idx = allTabsOrdered.indexOf(activeTab)
@@ -967,14 +1013,53 @@ export default function SchedulePage() {
     doc.save(`bookings-${user?.name?.replace(' ', '-').toLowerCase()}.pdf`)
   }
 
+  function exportSpecialExcel() {
+    const rows = (specialBookings as Booking[]).map((b: Booking) => ({
+      Date: fmtTableDate(b.start_at), Day: fmtTableDay(b.start_at),
+      'Start Time': fmtTime(b.start_at), 'End Time': fmtTime(b.end_at),
+      Duration: dur(b.start_at, b.end_at), Room: b.room?.name ?? '',
+      Building: b.room?.building?.code || b.room?.building?.name || '',
+      Booker: b.user?.name ?? '', Department: b.user?.department_name ?? '',
+      Title: b.title, Description: b.description ?? '',
+      'Booked For': b.booked_for ?? '', Status: b.status, Type: b.type,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Special Room Bookings')
+    XLSX.writeFile(wb, `special-room-bookings-${toDateStr(today)}.xlsx`)
+  }
+
+  function exportSpecialPDF() {
+    const doc = new jsPDF()
+    doc.setFontSize(14); doc.text('Special Room Bookings', 14, 16)
+    doc.setFontSize(9); doc.setTextColor(150)
+    doc.text(`±90 days · Exported ${today.toLocaleDateString('en-GB')}`, 14, 22)
+    autoTable(doc, {
+      startY: 28,
+      head: [['Date', 'Time', 'Room', 'Building', 'Booker', 'Dept', 'Title', 'Status']],
+      body: (specialBookings as Booking[]).map((b: Booking) => [
+        fmtTableDate(b.start_at),
+        `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
+        b.room?.name ?? '',
+        b.room?.building?.code || b.room?.building?.name || '',
+        b.user?.name ?? '', b.user?.department_name ?? '', b.title, b.status,
+      ]),
+      styles: { fontSize: 7.5, cellPadding: 2.5 },
+      headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [255, 251, 235] },
+    })
+    doc.save(`special-room-bookings-${toDateStr(today)}.pdf`)
+  }
+
   function getActiveList(): Booking[] {
-    if (activeTab === 'today') return todayList
+    if (activeTab === 'today') return todayActiveList
     if (activeTab === 'upcoming') return upcomingList
     if (activeTab === 'all') return allList
     if (activeTab === 'past') return pastList
     if (activeTab === 'cancelled') return cancelledList
     if (activeTab === 'series') return myBookings.filter((b: Booking) => !!b.series_id)
     if (activeTab === 'hcal') return []
+    if (activeTab === 'special') return specialBookings as Booking[]
     return tentativeList
   }
 
@@ -1011,7 +1096,7 @@ export default function SchedulePage() {
 
   const grouped = groupByDate(displayList)
   const meta = TAB_META[activeTab]
-  const isSecondary = SECONDARY_TABS.includes(activeTab)
+  const isSecondary = visibleSecondaryTabs.includes(activeTab)
 
   const cardSharedProps: CardSharedProps = {
     activeTab,
@@ -1069,7 +1154,7 @@ export default function SchedulePage() {
 
           {/* Secondary tabs */}
           <div className="flex items-end gap-5">
-            {SECONDARY_TABS.map((key, i) => {
+            {visibleSecondaryTabs.map((key, i) => {
               const m = TAB_META[key]
               const tabTip = TAB_TOOLTIP[key]
               return (
@@ -1113,16 +1198,16 @@ export default function SchedulePage() {
             </button>
 
             {/* View toggle */}
-            <div className={`flex gap-0.5 bg-slate-100 rounded-xl p-1 ${(activeTab === 'all' || activeTab === 'series' || activeTab === 'hcal') ? 'opacity-35' : ''}`}>
+            <div className={`flex gap-0.5 bg-slate-100 rounded-xl p-1 ${(activeTab === 'all' || activeTab === 'series' || activeTab === 'hcal' || activeTab === 'special') ? 'opacity-35' : ''}`}>
               <button
-                onClick={() => { if (activeTab !== 'all' && activeTab !== 'series' && activeTab !== 'hcal' && viewMode !== 'card') { setViewMode('card'); setViewAnimKey(k => k + 1) } }}
+                onClick={() => { if (activeTab !== 'all' && activeTab !== 'series' && activeTab !== 'hcal' && activeTab !== 'special' && viewMode !== 'card') { setViewMode('card'); setViewAnimKey(k => k + 1) } }}
                 title="Card view"
                 className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>grid_view</span>
               </button>
               <button
-                onClick={() => { if (activeTab !== 'all' && activeTab !== 'series' && activeTab !== 'hcal' && viewMode !== 'list') { setViewMode('list'); setViewAnimKey(k => k + 1) } }}
+                onClick={() => { if (activeTab !== 'all' && activeTab !== 'series' && activeTab !== 'hcal' && activeTab !== 'special' && viewMode !== 'list') { setViewMode('list'); setViewAnimKey(k => k + 1) } }}
                 title="List view"
                 className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
               >
@@ -1188,7 +1273,7 @@ export default function SchedulePage() {
             <div className="flex items-center justify-center h-full">
               <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>
             </div>
-          ) : (activeList.length === 0 && activeTab !== 'hcal') ? (
+          ) : (activeList.length === 0 && activeTab !== 'hcal' && activeTab !== 'special' && !(activeTab === 'today' && todayPastList.length > 0)) ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-300">
               <span className="material-symbols-outlined text-5xl">
                 {activeTab === 'cancelled' ? 'cancel' : activeTab === 'tentative' ? 'pending' : activeTab === 'past' ? 'history' : activeTab === 'series' ? 'repeat' : 'calendar_month'}
@@ -1229,6 +1314,130 @@ export default function SchedulePage() {
                   })}
                 </div>
               )}
+              {activeTab === 'special' && (
+                <div>
+                  {/* Header row */}
+                  <div className="flex items-center justify-between mb-5">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-amber-500 mb-0.5">Special Room Bookings</p>
+                      <p className="text-[10px] text-slate-400 font-bold">±90 days · {(specialBookings as Booking[]).length} bookings</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={exportSpecialExcel}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase hover:bg-emerald-100 transition-colors border border-emerald-200">
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>table_view</span>Excel
+                      </button>
+                      <button onClick={exportSpecialPDF}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black uppercase hover:bg-red-100 transition-colors border border-red-200">
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>picture_as_pdf</span>PDF
+                      </button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const spNow = new Date()
+                    const spActive = (specialBookings as Booking[]).filter(b => parseLocal(b.end_at) >= spNow).sort((a,b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
+                    const spPast   = (specialBookings as Booking[]).filter(b => parseLocal(b.end_at) < spNow).sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+
+                    if (loadingSpecial) return (
+                      <div className="flex items-center justify-center py-16">
+                        <span className="material-symbols-outlined animate-spin text-3xl text-slate-300">progress_activity</span>
+                      </div>
+                    )
+                    if ((specialBookings as Booking[]).length === 0) return (
+                      <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
+                        <span className="material-symbols-outlined text-5xl">star</span>
+                        <p className="text-sm font-black uppercase">No special room bookings</p>
+                      </div>
+                    )
+
+                    const renderTable = (rows: Booking[], dimmed = false) => (
+                      <div className={`overflow-x-auto rounded-2xl border border-slate-100 ${dimmed ? 'opacity-60' : ''}`}>
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className={`border-b ${dimmed ? 'bg-slate-50 border-slate-100' : 'bg-amber-50 border-amber-100'}`}>
+                              {['Date', 'Time', 'Room', 'Booker', 'Dept', 'Title', 'For', 'Status', ''].map(h => (
+                                <th key={h} className={`px-4 py-3 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${dimmed ? 'text-slate-400' : 'text-amber-700'}`}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((b: Booking, idx: number) => (
+                              <tr key={b.id} className={`border-b border-slate-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-amber-50/40 transition-colors`}>
+                                <td className="px-4 py-3 text-[10px] font-bold text-slate-600 whitespace-nowrap">{fmtTableDate(b.start_at)}<span className="text-slate-300 ml-1">{fmtTableDay(b.start_at)}</span></td>
+                                <td className="px-4 py-3 text-[10px] font-bold text-slate-500 whitespace-nowrap tabular-nums">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</td>
+                                <td className="px-4 py-3">
+                                  <p className="text-[11px] font-black text-slate-700">{b.room?.name ?? '—'}</p>
+                                  <p className="text-[9px] text-slate-400 font-bold">{b.room?.building?.code || b.room?.building?.name || ''}</p>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <p className="text-[10px] font-bold text-slate-600 whitespace-nowrap">{b.user?.name ?? '—'}</p>
+                                  <p className="text-[8px] font-black uppercase text-slate-300">{b.user?.role ?? ''}</p>
+                                </td>
+                                <td className="px-4 py-3 text-[9px] font-bold text-slate-400 uppercase">{b.user?.department_name ?? ''}</td>
+                                <td className="px-4 py-3 text-[11px] font-black text-slate-700 max-w-[160px] truncate">{b.title}</td>
+                                <td className="px-4 py-3 text-[9px] font-bold text-slate-400">{b.booked_for || '—'}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${b.status === 'confirmed' ? 'bg-lime-100 text-lime-700' : b.status === 'tentative' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
+                                    {b.status}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => { setEditBooking(b); setPanelOpen(true) }}
+                                      className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                      title="Edit booking"
+                                    >
+                                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleCancel(b)}
+                                      disabled={pendingCancelIds.has(b.id)}
+                                      className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                      title="Cancel booking"
+                                    >
+                                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                                        {pendingCancelIds.has(b.id) ? 'progress_activity' : 'cancel'}
+                                      </span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+
+                    return (
+                      <div className="space-y-8">
+                        {spActive.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-3 mb-3">
+                              <p className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap text-amber-500">Upcoming & Today</p>
+                              <div className="flex-1 h-px bg-amber-100" />
+                              <span className="text-[9px] font-black text-amber-300">{spActive.length}</span>
+                            </div>
+                            {renderTable(spActive)}
+                          </div>
+                        )}
+                        {spPast.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-3 mb-3">
+                              <p className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap text-slate-300">Past</p>
+                              <div className="flex-1 h-px bg-slate-200" />
+                              <span className="text-[9px] font-black text-slate-300">{spPast.length}</span>
+                            </div>
+                            {renderTable(spPast, true)}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
               {activeTab === 'hcal' ? (() => {
                 const yr = hCalMonth.yr
                 const mo = hCalMonth.mo
@@ -1339,12 +1548,12 @@ export default function SchedulePage() {
                                 style={{
                                   fontSize: 16,
                                   background: isToday ? '#adee2b' : isSel ? 'rgba(173,238,43,0.22)' : 'transparent',
-                                  color: isToday ? '#000' : isSel ? '#3a6800' : isWeekend ? '#ef4444' : '#334155',
+                                  color: isToday ? (isWeekend ? '#ef4444' : '#000') : isSel ? '#3a6800' : isWeekend ? '#ef4444' : '#334155',
                                 }}
                               >
                                 {di + 1}
                               </div>
-                              <span className={`text-[10px] font-bold uppercase leading-none ${isWeekend && !isToday ? 'text-red-400' : 'text-slate-400'}`}>
+                              <span className={`text-[10px] font-bold uppercase leading-none ${isWeekend ? 'text-red-400' : 'text-slate-400'}`}>
                                 {d.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 2)}
                               </span>
                               <span className="size-1.5 rounded-full" style={{ background: '#72ddf7', opacity: hasBkg ? 1 : 0 }} />
@@ -1409,7 +1618,7 @@ export default function SchedulePage() {
                               const isConf = b.status === 'confirmed'
                               const isTent = b.status === 'tentative'
                               const color = isConf ? '#adee2b' : isTent ? '#fbbf24' : '#fca5a5'
-                              const isHov = hCalTimelineHover?.bookingId === b.id
+                              const isHov = hCalHoverId === b.id
                               return (
                                 <div
                                   key={b.id}
@@ -1425,8 +1634,8 @@ export default function SchedulePage() {
                                     zIndex: isHov ? 5 : 2,
                                     transition: 'top 0.15s ease, bottom 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease',
                                   }}
-                                  onMouseMove={e => setHCalTimelineHover({ bookingId: b.id, x: e.clientX, y: e.clientY })}
-                                  onMouseLeave={() => setHCalTimelineHover(null)}
+                                  onMouseMove={e => { setHCalTimelineHover({ bookingId: b.id, x: e.clientX, y: e.clientY }); setHCalHoverId(b.id) }}
+                                  onMouseLeave={() => { setHCalTimelineHover(null); setHCalHoverId(null) }}
                                 />
                               )
                             })}
@@ -1437,7 +1646,7 @@ export default function SchedulePage() {
                               const isConf = b.status === 'confirmed'
                               const isTent = b.status === 'tentative'
                               const color = isConf ? '#adee2b' : isTent ? '#fbbf24' : '#fca5a5'
-                              const isHov = hCalTimelineHover?.bookingId === b.id
+                              const isHov = hCalHoverId === b.id
                               return (
                                 <div key={b.id} style={{
                                   position: 'absolute', left: `${pos}%`, top: '50%',
@@ -1537,6 +1746,9 @@ export default function SchedulePage() {
                                     <HCalCompactCard
                                       b={b}
                                       expanded={hCalCardExpanded === b.id}
+                                      highlighted={hCalHoverId === b.id}
+                                      onHover={() => setHCalHoverId(b.id)}
+                                      onUnhover={() => setHCalHoverId(null)}
                                       onToggle={() => setHCalCardExpanded(prev => prev === b.id ? null : b.id)}
                                       onEdit={() => { setEditBooking(b); setPanelOpen(true); setHCalCardExpanded(null) }}
                                       onCancel={() => { handleCancel(b); setHCalCardExpanded(null) }}
@@ -1604,6 +1816,9 @@ export default function SchedulePage() {
                                       b={b}
                                       expanded={false}
                                       clickable={false}
+                                      highlighted={hCalHoverId === b.id}
+                                      onHover={() => setHCalHoverId(b.id)}
+                                      onUnhover={() => setHCalHoverId(null)}
                                       onToggle={() => {}}
                                       onEdit={() => {}}
                                       onCancel={() => {}}
@@ -1839,7 +2054,7 @@ export default function SchedulePage() {
                 </table>
               </div>
             </>
-              ) : (
+              ) : activeTab === 'special' ? null : (
               <div key={viewAnimKey} className="space-y-8" style={{ animation: 'view-slide-in 0.22s cubic-bezier(0.4,0,0.2,1)' }}>
               {isSecondary && activeTab === 'cancelled' && (
                 <div className="flex items-center justify-between">
@@ -1855,6 +2070,12 @@ export default function SchedulePage() {
                       Clear All
                     </button>
                   )}
+                </div>
+              )}
+              {activeTab === 'today' && activeList.length === 0 && todayPastList.length > 0 && (
+                <div className="flex flex-col items-center justify-center py-12 gap-2 text-slate-300">
+                  <span className="material-symbols-outlined text-4xl">wb_sunny</span>
+                  <p className="text-sm font-black uppercase">All done for today</p>
                 </div>
               )}
               {grouped.map(([dateKey, bookings]) => (
@@ -1899,6 +2120,44 @@ export default function SchedulePage() {
                   )}
                 </div>
               ))}
+
+              {/* Today — past group */}
+              {activeTab === 'today' && todayPastList.length > 0 && (
+                <div className={activeList.length > 0 ? 'mt-8' : ''}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap text-slate-300">Earlier Today</p>
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <span className="text-[9px] font-black text-slate-300">{todayPastList.length}</span>
+                  </div>
+                  <div className="opacity-50">
+                    {viewMode === 'card' ? (
+                      <div className="flex gap-3">
+                        {([0, 1] as const).map(col => (
+                          <div key={col} className="flex-1 flex flex-col gap-3">
+                            {todayPastList
+                              .filter((_, i) => i % 2 === col)
+                              .map((b, colIdx) => (
+                                <SlideWrapper key={b.id} exiting={exitingCancelIds.has(b.id)}>
+                                  <BookingCard b={b} index={colIdx * 2 + col} {...cardSharedProps} />
+                                </SlideWrapper>
+                              ))}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div>
+                        {todayPastList.map((b, idx) => (
+                          <SlideWrapper key={b.id} exiting={exitingCancelIds.has(b.id)}>
+                            <div style={{ paddingBottom: idx < todayPastList.length - 1 ? 8 : 0 }}>
+                              <BookingListItem b={b} index={idx} {...cardSharedProps} />
+                            </div>
+                          </SlideWrapper>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
               )}
             </>
