@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { getMe, logout as apiLogout } from '../api/auth'
+import { queryClient } from '../main'
 
 interface User {
   id: number
@@ -9,6 +10,7 @@ interface User {
   role: string
   ext: string
   avatar: string
+  on_duty?: boolean
 }
 
 interface AuthContextType {
@@ -27,7 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) { setLoading(false); return }
-    getMe()
+    const timeoutRace = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 7000)
+    )
+    Promise.race([getMe(), timeoutRace])
       .then(setUser)
       .catch(() => localStorage.removeItem('token'))
       .finally(() => setLoading(false))
@@ -35,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     try { await apiLogout() } catch {}
+    queryClient.clear()
     setUser(null)
   }
 

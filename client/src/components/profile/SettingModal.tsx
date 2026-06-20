@@ -1,4 +1,10 @@
+import { useState, useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useSettings, type ViewPref, type TypePref, type LangPref, type StartDayPref } from '../../context/SettingsContext'
+import { useAuth } from '../../context/AuthContext'
+import { updateOnDutyStatus } from '../../api/auth'
+import { getBuildings } from '../../api/buildings'
+import type { Building } from '../../types/index'
 
 interface Props {
   open: boolean
@@ -43,6 +49,99 @@ function SegmentedPill<T extends string>({
   )
 }
 
+function BuildingDropdown({ buildings, value, onChange, autoLabel }: {
+  buildings: Building[]
+  value: number | null
+  onChange: (v: number | null) => void
+  autoLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const selected = value != null ? buildings.find(b => b.id === value) : null
+  const label = selected ? selected.name : autoLabel
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-2.5 rounded-[14px] text-[12px] font-black transition-all"
+        style={{ background: 'rgba(0,0,0,0.06)', color: 'var(--ds-text-1)', border: 'none', cursor: 'pointer' }}
+      >
+        <span className="truncate">{label}</span>
+        <span className="material-symbols-outlined shrink-0 ml-2 transition-transform" style={{ fontSize: 16, color: 'var(--ds-text-3)', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 right-0 rounded-2xl overflow-hidden z-50"
+          style={{
+            top: 'calc(100% + 6px)',
+            background: 'rgba(255,255,255,0.97)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(0,0,0,0.08)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          }}
+        >
+          {/* Auto option */}
+          <button
+            type="button"
+            onClick={() => { onChange(null); setOpen(false) }}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-[12px] font-black text-left transition-colors hover:bg-slate-50"
+            style={{ color: value == null ? '#6b8f00' : 'var(--ds-text-2)', background: value == null ? 'rgba(173,238,43,0.08)' : undefined }}
+          >
+            <span>{autoLabel}</span>
+            {value == null && <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#6b8f00' }}>check</span>}
+          </button>
+
+          {buildings.map(b => {
+            const active = b.id === value
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => { onChange(b.id); setOpen(false) }}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-slate-50 border-t border-slate-50"
+                style={{ background: active ? 'rgba(173,238,43,0.08)' : undefined }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[12px] font-black truncate" style={{ color: active ? '#6b8f00' : 'var(--ds-text-1)' }}>{b.name}</span>
+                    {b.code && (
+                      <>
+                        <span className="text-slate-300 text-[10px]">|</span>
+                        <span className="text-[10px] font-black text-slate-400 shrink-0">{b.code}</span>
+                      </>
+                    )}
+                  </div>
+                  {b.location && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className="material-symbols-outlined text-slate-300" style={{ fontSize: 10 }}>location_on</span>
+                      <span className="text-[9px] font-bold text-slate-400 truncate">{b.location.name}</span>
+                    </div>
+                  )}
+                </div>
+                {active && <span className="material-symbols-outlined shrink-0 ml-2" style={{ fontSize: 14, color: '#6b8f00' }}>check</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -61,8 +160,33 @@ export default function SettingModal({ open, onClose }: Props) {
     startDay,    setStartDay,
     language,    setLanguage,
     darkMode,    setDarkMode,
+    defaultBuilding, setDefaultBuilding,
+    showBarTitle, setShowBarTitle,
     t,
   } = useSettings()
+
+  const { user, setUser } = useAuth()
+  const [onDutySaving, setOnDutySaving] = useState(false)
+  const isReceptionist = user?.role === 'receptionist'
+  const onDuty = user?.on_duty ?? true
+
+  async function toggleOnDuty() {
+    if (!user || onDutySaving) return
+    setOnDutySaving(true)
+    try {
+      const res = await updateOnDutyStatus(!onDuty)
+      setUser({ ...user, on_duty: res.on_duty })
+    } finally {
+      setOnDutySaving(false)
+    }
+  }
+
+  const { data: buildings = [] } = useQuery<Building[]>({
+    queryKey: ['buildings'],
+    queryFn: getBuildings,
+    staleTime: 5 * 60 * 1000,
+    enabled: open,
+  })
 
   if (!open) return null
 
@@ -179,6 +303,60 @@ export default function SettingModal({ open, onClose }: Props) {
             </SettingRow>
           </div>
 
+          {/* Default Building */}
+          {buildings.length > 0 && (
+            <SettingRow label={t('settings_default_building')}>
+              <BuildingDropdown
+                buildings={buildings}
+                value={defaultBuilding}
+                onChange={setDefaultBuilding}
+                autoLabel={t('settings_default_building_auto')}
+              />
+            </SettingRow>
+          )}
+
+          {/* Show title on booking bar */}
+          <SettingRow label={t('settings_show_bar_title')}>
+            <button
+              onClick={() => setShowBarTitle(!showBarTitle)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-[14px] transition-all active:scale-[0.99]"
+              style={{ background: 'rgba(0,0,0,0.05)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="size-8 rounded-xl flex items-center justify-center transition-all duration-300"
+                  style={{ background: showBarTitle ? '#adee2b' : 'rgba(0,0,0,0.08)' }}
+                >
+                  <span
+                    className="material-symbols-outlined transition-all duration-300"
+                    style={{ fontSize: 17, color: showBarTitle ? '#000' : 'var(--ds-text-2)' }}
+                  >
+                    title
+                  </span>
+                </div>
+                <p className="text-[12px] font-black" style={{ color: 'var(--ds-text-1)' }}>
+                  {showBarTitle ? 'Title visible' : 'Title hidden'}
+                </p>
+              </div>
+              <div
+                className="relative shrink-0"
+                style={{
+                  width: 42, height: 23, borderRadius: 12,
+                  background: showBarTitle ? '#adee2b' : 'rgba(0,0,0,0.18)',
+                  transition: 'background 0.25s ease',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 2.5, width: 18, height: 18,
+                  borderRadius: '50%', background: showBarTitle ? '#000' : 'white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                  left: showBarTitle ? 21 : 2.5,
+                  transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                }} />
+              </div>
+            </button>
+          </SettingRow>
+
           {/* Language */}
           <SettingRow label={t('settings_language')}>
             <SegmentedPill<LangPref>
@@ -190,6 +368,56 @@ export default function SettingModal({ open, onClose }: Props) {
               ]}
             />
           </SettingRow>
+
+          {/* On Duty Status — receptionist only */}
+          {isReceptionist && (
+            <SettingRow label="On Duty Status">
+              <button
+                onClick={toggleOnDuty}
+                disabled={onDutySaving}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-[14px] transition-all active:scale-[0.99] disabled:opacity-60"
+                style={{ background: 'rgba(0,0,0,0.05)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="size-8 rounded-xl flex items-center justify-center transition-all duration-300"
+                    style={{ background: onDuty ? '#adee2b' : 'rgba(0,0,0,0.08)' }}
+                  >
+                    {onDutySaving
+                      ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 17, color: 'var(--ds-text-2)' }}>progress_activity</span>
+                      : <span className="material-symbols-outlined transition-all duration-300" style={{ fontSize: 17, color: onDuty ? '#000' : 'var(--ds-text-2)' }}>
+                          {onDuty ? 'badge' : 'no_accounts'}
+                        </span>
+                    }
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[12px] font-black" style={{ color: 'var(--ds-text-1)' }}>
+                      {onDuty ? 'On Duty' : 'Off Duty'}
+                    </p>
+                    <p className="text-[9px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
+                      {onDuty ? 'Visible in Contact Receptionist' : 'Hidden from Contact Receptionist'}
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className="relative shrink-0"
+                  style={{
+                    width: 42, height: 23, borderRadius: 12,
+                    background: onDuty ? '#adee2b' : 'rgba(0,0,0,0.18)',
+                    transition: 'background 0.25s ease',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 2.5, width: 18, height: 18,
+                    borderRadius: '50%', background: onDuty ? '#000' : 'white',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                    left: onDuty ? 21 : 2.5,
+                    transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                  }} />
+                </div>
+              </button>
+            </SettingRow>
+          )}
 
           {/* Dark mode row */}
           <SettingRow label={t('settings_appearance')}>

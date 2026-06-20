@@ -1,15 +1,21 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient, useQueries } from '@tanstack/react-query'
-import type { Booking, Room } from '../types/index'
+import type { Booking, Building, Room } from '../types/index'
 import { getRooms } from '../api/rooms'
-import { getBookings, updateBooking as updateBookingApi, cancelBooking } from '../api/bookings'
+import { getBookings, updateBooking as updateBookingApi, cancelBooking, cancelSeries } from '../api/bookings'
+import { getBuildings } from '../api/buildings'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import BookingBar from '../components/booking/BookingBar'
 import BookingTooltip from '../components/booking/BookingTooltip'
 import BookingPanel from '../components/booking/BookingPanel'
 import RoomDetailModal from '../components/room/RoomDetailModal'
+import ContactReceptionistModal from '../components/room/ContactReceptionistModal'
 import GlassDatePicker from '../components/ui/GlassDatePicker'
+import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
+import { useWeekendSettings } from '../hooks/useWeekendSettings'
+import { getDepartments } from '../api/departments'
+import type { Department } from '../types'
 
 const HOUR_START = 7
 const HOUR_END = 19
@@ -27,8 +33,6 @@ function toLocalDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const LOCATIONS = ['Head Office – Jakarta', 'Creative Tower – Bandung', 'South Hub – Surabaya']
-const DEPTS = ['GAA', 'HRD', 'MTC']
 
 type CellDrag = { roomId: number; room: Room; startSlot: number; endSlot: number }
 type BarDrag  = { booking: Booking; origStartSlot: number; origSpan: number; offsetSlot: number; deltaSlot: number; origClientX: number; deltaPixels: number }
@@ -36,10 +40,11 @@ type BarResize = { booking: Booking; edge: 'left' | 'right'; origStartSlot: numb
 
 export default function TimelinePage() {
   const { user } = useAuth()
-  const { defaultView, startDay, t } = useSettings()
+  const { defaultView, startDay, defaultBuilding, showBarTitle, t } = useSettings()
+  const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [location, setLocation] = useState(LOCATIONS[0])
+  const [location, setLocation] = useState<Building | null>(null)
   const [deptFilter, setDeptFilter] = useState('')
   const [deptSearch, setDeptSearch] = useState('')
   const [search, setSearch] = useState('')
@@ -52,6 +57,8 @@ export default function TimelinePage() {
   const [prefillEnd, setPrefillEnd] = useState('')
   const [detailRoom, setDetailRoom] = useState<Room | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [contactRoom, setContactRoom] = useState<Room | null>(null)
+  const [contactOpen, setContactOpen] = useState(false)
   const [roomHover, setRoomHover] = useState<{ room: Room; x: number; y: number } | null>(null)
   const roomHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [roomHoverPhotoIdx, setRoomHoverPhotoIdx] = useState(0)
@@ -62,14 +69,18 @@ export default function TimelinePage() {
   const cancelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [otherCtxMenu, setOtherCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
-  const [cellCtxMenu, setCellCtxMenu] = useState<{ room: Room; slot: number; x: number; y: number } | null>(null)
+  const [cellCtxMenu, setCellCtxMenu] = useState<{ room: Room | null; slot: number; date: Date; x: number; y: number } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
+  const [seriesCancelTarget, setSeriesCancelTarget] = useState<Booking | null>(null)
+  const [pendingSeriesId, setPendingSeriesId] = useState<{ seriesId: string; title: string; count: number } | null>(null)
+  const seriesCancelTimerRef = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => defaultView)
 
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
   })
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [weekBarTooltip, setWeekBarTooltip] = useState<{ booking: Booking; x: number; y: number } | null>(null)
 
   // Drag state via refs (avoids stale closures in document listeners)
   const cellDragRef = useRef<CellDrag | null>(null)
@@ -160,13 +171,17 @@ export default function TimelinePage() {
       if (cd) {
         const minSlot = Math.min(cd.startSlot, cd.endSlot)
         const maxSlot = Math.max(cd.startSlot, cd.endSlot)
-        setPrefillStart(slotToTimeStr(minSlot))
-        setPrefillEnd(slotToTimeStr(maxSlot + 1))
-        setSelectedRoom(cd.room)
-        setEditBooking(null)
-        setBookingPanelOpen(true)
         cellDragRef.current = null
         setDragTick(t => t + 1)
+        if (!canBookDirectly(cd.room)) {
+          setContactRoom(cd.room); setContactOpen(true)
+        } else {
+          setPrefillStart(slotToTimeStr(minSlot))
+          setPrefillEnd(slotToTimeStr(maxSlot + 1))
+          setSelectedRoom(cd.room)
+          setEditBooking(null)
+          setBookingPanelOpen(true)
+        }
       }
 
       function slotOverlaps(ns: number, ne: number, roomId: number, excludeId: number, all: Booking[]) {
@@ -254,7 +269,22 @@ export default function TimelinePage() {
 
   const dateStr = toLocalDateStr(currentDate)
 
+  const { data: buildings = [] } = useQuery<Building[]>({ queryKey: ['buildings'], queryFn: getBuildings })
+
+  useEffect(() => {
+    if (buildings.length > 0 && !location) {
+      const preferred = defaultBuilding ? buildings.find(b => b.id === defaultBuilding) : null
+      setLocation(preferred ?? buildings[0])
+    }
+  }, [buildings])
+
   const { data: rooms = [], isLoading: roomsLoading } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ['departments'],
+    queryFn: getDepartments,
+    staleTime: 5 * 60_000,
+  })
+
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ['bookings', dateStr],
     queryFn: () => getBookings({ date: dateStr }),
@@ -264,15 +294,16 @@ export default function TimelinePage() {
   const weekDates = useMemo(() => {
     const d = new Date(currentDate)
     const day = d.getDay() // 0=Sun
-    const offset = day === 0 ? -6 : 1 - day
-    const monday = new Date(d)
-    monday.setDate(d.getDate() + offset)
+    // offset = how many days back to reach the week start
+    const offset = startDay === 'sun' ? day : (day + 6) % 7
+    const start = new Date(d)
+    start.setDate(d.getDate() - offset)
     return Array.from({ length: 7 }, (_, i) => {
-      const dd = new Date(monday)
-      dd.setDate(monday.getDate() + i)
+      const dd = new Date(start)
+      dd.setDate(start.getDate() + i)
       return dd
     })
-  }, [currentDate])
+  }, [currentDate, startDay])
 
   const weekResults = useQueries({
     queries: weekDates.map(d => ({
@@ -318,7 +349,9 @@ export default function TimelinePage() {
     })
   }
 
-  const filteredDepts = DEPTS.filter(d => d.toLowerCase().includes(deptSearch.toLowerCase()))
+  const filteredDepts = departments
+    .map(d => d.name)
+    .filter(n => n.toLowerCase().includes(deptSearch.toLowerCase()))
 
   const allVisibleBookings: Booking[] = viewMode === 'week'
     ? weekResults.flatMap(r => (r.data || []) as Booking[])
@@ -333,21 +366,22 @@ export default function TimelinePage() {
       return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
     }
     return [
-      b.title, b.description, b.user?.name, b.user?.department,
+      b.title, b.description, b.user?.name, b.user?.department_name,
       b.user?.email, b.user?.ext, b.type, b.status,
       fmt(b.start_at), fmt(b.end_at),
     ].some(v => v && v.toLowerCase().includes(s))
   }
 
   const filteredRooms = (rooms as Room[]).filter((r: Room) => {
+    if (location && r.building_id !== location.id) return false
     if (search) {
-      const roomMatch = r.name.toLowerCase().includes(search.toLowerCase()) || r.type.toLowerCase().includes(search.toLowerCase())
+      const roomMatch = r.name.toLowerCase().includes(search.toLowerCase()) || (r.type?.toLowerCase() ?? '').includes(search.toLowerCase())
       const bookingMatch = allVisibleBookings.filter((b: Booking) => b.room_id === r.id && b.status !== 'cancelled')
         .some(b => bookingMatchesSearch(b, search))
       if (!roomMatch && !bookingMatch) return false
     }
     if (deptFilter) {
-      const has = allVisibleBookings.some((b: Booking) => b.room_id === r.id && b.user?.department === deptFilter)
+      const has = allVisibleBookings.some((b: Booking) => b.room_id === r.id && b.user?.department_name === deptFilter)
       if (!has) return false
     }
     return true
@@ -366,7 +400,13 @@ export default function TimelinePage() {
     hideTimeoutRef.current = setTimeout(() => setTooltip(prev => ({ ...prev, visible: false })), 180)
   }, [])
 
+  const canBookDirectly = (room: Room) => {
+    if (!room.requires_contact) return true
+    return user?.role === 'admin' || user?.role === 'receptionist' || user?.department === 'GAA'
+  }
+
   function openBookingForRoom(room: Room) {
+    if (!canBookDirectly(room)) { setContactRoom(room); setContactOpen(true); return }
     setSelectedRoom(room); setEditBooking(null)
     setPrefillStart(''); setPrefillEnd('')
     setBookingPanelOpen(true)
@@ -409,6 +449,47 @@ export default function TimelinePage() {
     setToastCountdown(null)
   }
 
+  function confirmSeriesCancel(target: Booking) {
+    setSeriesCancelTarget(null)
+    if (!target.series_id) return
+    const allBookings = queryClient.getQueryData<Booking[]>(['bookings', dateStr]) ?? []
+    const seriesBookings = allBookings.filter(b => b.series_id === target.series_id && b.status !== 'cancelled')
+    const count = seriesBookings.length || 1
+    setPendingSeriesId({ seriesId: target.series_id, title: target.title, count })
+    if (seriesCancelTimerRef.current) {
+      clearTimeout(seriesCancelTimerRef.current.timer)
+      clearInterval(seriesCancelTimerRef.current.interval)
+    }
+    let c = 5
+    setToastMsg(`"${target.title}" series (${count} bookings) will be cancelled`)
+    setToastCountdown(c)
+    const interval = setInterval(() => {
+      c -= 1
+      setToastCountdown(c)
+    }, 1000)
+    const timer = setTimeout(async () => {
+      clearInterval(interval)
+      seriesCancelTimerRef.current = null
+      setPendingSeriesId(null)
+      setToastMsg(null)
+      setToastCountdown(null)
+      await cancelSeries(target.series_id!)
+      queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
+    }, 5000)
+    seriesCancelTimerRef.current = { timer, interval }
+  }
+
+  function undoSeriesCancel() {
+    if (seriesCancelTimerRef.current) {
+      clearTimeout(seriesCancelTimerRef.current.timer)
+      clearInterval(seriesCancelTimerRef.current.interval)
+      seriesCancelTimerRef.current = null
+    }
+    setPendingSeriesId(null)
+    setToastMsg(null)
+    setToastCountdown(null)
+  }
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
 
@@ -418,40 +499,59 @@ export default function TimelinePage() {
         {/* Date nav */}
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => setCurrentDate(new Date())}
-            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-black transition-colors">
+            className="px-5 py-2.5 bg-black text-[#adee2b] rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-80 transition-opacity">
             Today
           </button>
-          <GlassDatePicker
-            value={dateStr}
-            onChange={(iso) => { const [yy, mm, dd] = iso.split('-').map(Number); setCurrentDate(new Date(yy, mm - 1, dd)) }}
-            footer={(close) => (
-              <>
-                <button onClick={() => { setCurrentDate(new Date()); close() }}
-                  className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
-                <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); setCurrentDate(d); close() }}
-                  className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">- 1 Week</button>
-                <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); setCurrentDate(d); close() }}
-                  className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">+ 1 Week</button>
-              </>
-            )}
-          >
-            {({ open }) => (
-              <button
-                className="flex items-center gap-2 border-2 border-slate-100 rounded-xl px-3 py-2 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group">
-                <span className="material-symbols-outlined text-base text-slate-400 group-hover:text-black">calendar_today</span>
-                <span className="text-[12px] font-black text-slate-800 uppercase">{fmtDate(currentDate)}</span>
-                <span className={`material-symbols-outlined text-sm text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
-              </button>
-            )}
-          </GlassDatePicker>
+          {(() => {
+            const fmtShort = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(2)}`
+            const weekLabel = viewMode === 'week' ? `${fmtShort(weekDates[0])} – ${fmtShort(weekDates[6])}` : null
+            return (
+              <GlassDatePicker
+                value={dateStr}
+                onChange={(iso) => { const [yy, mm, dd] = iso.split('-').map(Number); setCurrentDate(new Date(yy, mm - 1, dd)) }}
+                highlightWeek={viewMode === 'week' ? { start: toLocalDateStr(weekDates[0]), end: toLocalDateStr(weekDates[6]) } : undefined}
+                footer={(close) => (
+                  <>
+                    <button onClick={() => { setCurrentDate(new Date()); close() }}
+                      className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
+                    <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); setCurrentDate(d); close() }}
+                      className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">- 1 Week</button>
+                    <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); setCurrentDate(d); close() }}
+                      className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">+ 1 Week</button>
+                  </>
+                )}
+              >
+                {({ open }) => (
+                  <button
+                    className="flex items-center gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group">
+                    <span className="material-symbols-outlined text-sm text-slate-400 group-hover:text-black">calendar_today</span>
+                    <span className="text-[11px] font-black text-slate-800 uppercase">
+                      {weekLabel ?? fmtDate(currentDate)}
+                    </span>
+                    <span className={`material-symbols-outlined text-xs text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+                  </button>
+                )}
+              </GlassDatePicker>
+            )
+          })()}
           <div className="flex items-center">
-            <button onClick={() => { const d=new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(d) }}
-              className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors">
-              <span className="material-symbols-outlined text-lg">chevron_left</span>
+            <button onClick={() => {
+              const d = new Date(currentDate)
+              if (viewMode === 'week') d.setDate(d.getDate() - 7)
+              else if (viewMode === 'month') d.setMonth(d.getMonth() - 1)
+              else d.setDate(d.getDate() - 1)
+              setCurrentDate(d)
+            }} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors">
+              <span className="material-symbols-outlined text-sm">chevron_left</span>
             </button>
-            <button onClick={() => { const d=new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(d) }}
-              className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors">
-              <span className="material-symbols-outlined text-lg">chevron_right</span>
+            <button onClick={() => {
+              const d = new Date(currentDate)
+              if (viewMode === 'week') d.setDate(d.getDate() + 7)
+              else if (viewMode === 'month') d.setMonth(d.getMonth() + 1)
+              else d.setDate(d.getDate() + 1)
+              setCurrentDate(d)
+            }} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors">
+              <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>
           </div>
           {search && (
@@ -473,17 +573,61 @@ export default function TimelinePage() {
           <button onClick={() => setLocationOpen(!locationOpen)}
             className="flex items-center min-w-[240px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
             <span className="material-symbols-outlined text-slate-400 text-base mr-2">apartment</span>
-            <span className="text-[10px] font-black uppercase text-slate-700 flex-1 text-left">{location}</span>
+            <span className="text-[10px] font-black uppercase text-slate-700 flex-1 text-left flex items-center gap-1">
+              {location ? (
+                <>
+                  {location.code || location.name}
+                  {location.address && (
+                    <> - <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}>location_on</span>{location.address}</>
+                  )}
+                </>
+              ) : 'Select Building'}
+            </span>
             <span className="material-symbols-outlined text-slate-400 text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
           </button>
           {locationOpen && (
-            <div className="dropdown-enter absolute top-full mt-2 w-[240px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[200] p-1.5">
-              {LOCATIONS.map(l => (
-                <div key={l} onClick={() => { setLocation(l); setLocationOpen(false) }}
-                  className="px-4 py-2.5 hover:bg-[#adee2b] hover:text-black rounded-xl cursor-pointer text-[10px] font-black uppercase transition-colors">
-                  {l}
-                </div>
-              ))}
+            <div className="dropdown-enter absolute top-full mt-2 w-[260px] rounded-2xl z-[200] p-1.5"
+              style={{ background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid rgba(255,255,255,0.65)', boxShadow: '0 8px 32px rgba(0,0,0,0.10)' }}>
+              {(buildings as Building[]).map(b => {
+                const roomCount = (rooms as Room[]).filter(r => r.building_id === b.id && r.is_active).length
+                return (
+                  <div key={b.id}
+                    className={`group relative px-5 py-5 rounded-xl cursor-pointer transition-colors
+                      ${location?.id === b.id ? 'bg-[#adee2b] text-black' : 'text-slate-700 hover:bg-[#adee2b]/25 hover:text-black'}`}
+                    onClick={() => { setLocation(b); setLocationOpen(false) }}>
+                    <p className="flex items-center gap-1 text-[10px] font-black uppercase">
+                      {b.code || b.name}
+                      {b.address && (
+                        <> - <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}>location_on</span>{b.address}</>
+                      )}
+                    </p>
+
+                    {/* Dark glass tooltip */}
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-[300] w-[260px]">
+                      <div className="rounded-2xl p-5 space-y-3"
+                        style={{ background: 'rgba(15,15,15,0.87)', backdropFilter: 'blur(64px) saturate(2)', WebkitBackdropFilter: 'blur(64px) saturate(2)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
+                        <p className="text-[13px] font-black text-white leading-tight">{b.name}</p>
+                        {b.address && (
+                          <div className="flex items-start gap-2">
+                            <span className="material-symbols-outlined shrink-0 text-white/40" style={{ fontSize: 13, marginTop: 1 }}>location_on</span>
+                            <p className="text-[11px] text-white/60 font-medium leading-relaxed">{b.address}</p>
+                          </div>
+                        )}
+                        {b.notes && (
+                          <div className="flex items-start gap-2">
+                            <span className="material-symbols-outlined shrink-0 text-white/40" style={{ fontSize: 13, marginTop: 1 }}>notes</span>
+                            <p className="text-[11px] text-white/60 font-medium leading-relaxed">{b.notes}</p>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                          <span className="material-symbols-outlined text-white/40" style={{ fontSize: 13 }}>meeting_room</span>
+                          <p className="text-[11px] text-white/60 font-medium">{roomCount} room{roomCount !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -603,6 +747,12 @@ export default function TimelinePage() {
                 const isTd = d.toDateString() === today.toDateString()
                 const showMonth = i === 0 || d.getMonth() !== weekDates[i - 1].getMonth()
                 const isColLoading = weekResults[i]?.isLoading
+                const visibleRoomIds = new Set(filteredRooms.map((r: Room) => r.id))
+                const hasMyBooking = (weekData[i] ?? []).some((b: Booking) =>
+                  b.user_id === user?.id && b.status !== 'cancelled' && visibleRoomIds.has(b.room_id)
+                )
+                const dow = d.getDay()
+                const isWeekend = (dow === 6 && wkSat) || (dow === 0 && wkSun)
                 return (
                   <div key={i}
                     className={`flex-1 flex flex-col items-center justify-center border-r border-slate-200 cursor-pointer transition-colors group/wh
@@ -610,11 +760,11 @@ export default function TimelinePage() {
                     style={{ height: CELL_H }}
                     onClick={() => { setCurrentDate(d); setViewMode('day') }}
                   >
-                    <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-700' : 'text-slate-400 group-hover/wh:text-slate-600'}`}>
+                    <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-700' : isWeekend ? 'text-red-400 group-hover/wh:text-red-500' : 'text-slate-400 group-hover/wh:text-slate-600'}`}>
                       {d.toLocaleDateString('en-GB', { weekday: 'short' })}
                     </span>
                     <div className={`mt-0.5 flex items-center justify-center rounded-full text-[15px] font-black transition-colors`}
-                      style={{ width: 30, height: 30, background: isTd ? '#000' : 'transparent', color: isTd ? '#adee2b' : '#334155' }}>
+                      style={{ width: 30, height: 30, background: isTd ? '#000' : 'transparent', color: isTd ? '#adee2b' : isWeekend ? '#ef4444' : '#334155' }}>
                       {d.getDate()}
                     </div>
                     {showMonth && !isColLoading && (
@@ -624,6 +774,9 @@ export default function TimelinePage() {
                     )}
                     {isColLoading && (
                       <span className="material-symbols-outlined animate-spin text-slate-300 mt-0.5" style={{ fontSize: 10 }}>progress_activity</span>
+                    )}
+                    {!isColLoading && hasMyBooking && (
+                      <span className="size-1.5 rounded-full mt-0.5 shrink-0" style={{ background: '#72ddf7' }} />
                     )}
                   </div>
                 )
@@ -640,7 +793,7 @@ export default function TimelinePage() {
 
             {/* Room rows */}
             {filteredRooms.map((room: Room) => {
-              const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : room.type === 'Ballroom' ? 'bg-purple-400' : room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'
+              const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : 'bg-slate-300'
               const occupied = isRoomOccupied(room)
               const isMaintRoom = room.status === 'maintenance'
               return (
@@ -653,13 +806,14 @@ export default function TimelinePage() {
                     onClick={() => { setDetailRoom(room); setDetailOpen(true) }}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className={`size-2 rounded-full shrink-0 ${dotColor} ${occupied ? 'ring-2 ring-offset-1 ring-red-400' : ''} ${isMaintRoom ? 'animate-pulse' : ''}`} />
                       <div className="min-w-0">
                         <span className={`text-[12px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-700' : 'text-slate-800'}`}>{room.name}</span>
                         <span className={`text-[10px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400' : 'text-slate-400'}`}>
                           {isMaintRoom
                             ? <><span className="material-symbols-outlined" style={{ fontSize: 10 }}>construction</span>Maintenance</>
-                            : <><span className="material-symbols-outlined" style={{ fontSize: 10 }}>groups</span>{room.capacity} · {room.floor}</>
+                            : room.requires_contact
+                              ? <SpecialRoomBadge size="xs" />
+                              : <><span className="material-symbols-outlined" style={{ fontSize: 10 }}>groups</span>{room.capacity} · {room.floor}</>
                           }
                         </span>
                       </div>
@@ -674,36 +828,55 @@ export default function TimelinePage() {
                     )
                     return (
                       <div key={dayIdx}
-                        className={`flex-1 border-r border-slate-100 px-1.5 py-2 overflow-hidden cursor-pointer transition-colors relative flex flex-col gap-0.5 justify-start
+                        className={`flex-1 border-r border-slate-100 px-1.5 py-2 overflow-hidden cursor-pointer transition-colors relative flex flex-col
                           ${isTd ? 'bg-[#f7fee7]/40' : 'hover:bg-[#f7fee7]/60'}`}
                         style={{ height: WEEK_CELL_H }}
                         onClick={() => { setCurrentDate(d); setViewMode('day') }}
+                        onContextMenu={e => {
+                          if (e.ctrlKey) return
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setCellCtxMenu({ room, slot: 4, date: d, x: e.clientX, y: e.clientY })
+                        }}
                       >
                         {isTd && <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#adee2b]/60 pointer-events-none" />}
-                        {dayBookings.map((b: Booking) => {
-                          const isMe = b.user_id === user?.id
-                          const isTentative = b.status === 'tentative'
-                          const isMaint = b.type === 'maintenance' || b.type === 'repairment'
-                          const bg = isMaint ? '#fb923c' : isTentative ? '#d1d5db' : '#adee2b'
-                          const matchesSearch = !search || bookingMatchesSearch(b, search)
-                          return (
-                            <div key={b.id}
-                              className="w-full rounded-sm shrink-0 hover:brightness-90 transition-all"
-                              style={{ height: 8, background: bg, opacity: search && !matchesSearch ? 0.15 : 1 }}
-                              onClick={e => { e.stopPropagation(); openEdit(b) }}
-                              title={`${fmtTime(b.start_at)}–${fmtTime(b.end_at)} · ${b.title}`}
-                            />
-                          )
-                        })}
-                        {dayBookings.length === 0 && (
+                        {dayBookings.length === 0 ? (
                           <div className="flex-1 flex items-center justify-center">
                             <div className="w-4 h-0.5 bg-slate-100 rounded-full" />
                           </div>
-                        )}
-                        {dayBookings.length > 0 && (
-                          <div className="mt-auto text-[7px] font-black text-slate-400 text-center leading-none pt-0.5">
-                            {dayBookings.length}
-                          </div>
+                        ) : (
+                          <>
+                            <div className="flex flex-row flex-wrap gap-0.5">
+                              {dayBookings.map((b: Booking) => {
+                                const isMe = b.user_id === user?.id
+                                const isTentative = b.status === 'tentative'
+                                const isMaint = b.type === 'maintenance' || b.type === 'repairment'
+                                const bg = isMaint ? '#fb923c' : isMe ? (isTentative ? '#b0e8f8' : '#72ddf7') : (isTentative ? '#d1d5db' : '#adee2b')
+                                const matchesSearch = !search || bookingMatchesSearch(b, search)
+                                return (
+                                  <div key={b.id}
+                                    className={`rounded-sm shrink-0 hover:brightness-90 transition-all ${isMe ? 'cursor-pointer' : 'cursor-default'}`}
+                                    style={{ height: 8, flex: '1 1 0', minWidth: 8, background: bg, opacity: search && !matchesSearch ? 0.15 : 1 }}
+                                    onClick={e => { e.stopPropagation(); if (isMe) openEdit(b) }}
+                                    onContextMenu={e => {
+                                      if (e.ctrlKey) return
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      setWeekBarTooltip(null)
+                                      if (isMe) setCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                                      else setOtherCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                                    }}
+                                    onMouseEnter={e => setWeekBarTooltip({ booking: b, x: e.clientX, y: e.clientY })}
+                                    onMouseMove={e => setWeekBarTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
+                                    onMouseLeave={() => setWeekBarTooltip(null)}
+                                  />
+                                )
+                              })}
+                            </div>
+                            <div className="mt-auto text-[7px] font-black text-slate-400 text-center leading-none pt-0.5">
+                              {dayBookings.length}
+                            </div>
+                          </>
                         )}
                       </div>
                     )
@@ -712,6 +885,7 @@ export default function TimelinePage() {
               )
             })}
           </div>
+
         </main>
       )}
 
@@ -741,7 +915,7 @@ export default function TimelinePage() {
           <main className="flex-1 overflow-auto bg-white p-6">
             {/* Month header */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[18px] font-black text-slate-900 uppercase tracking-tight">
+              <h2 className="text-[28px] font-black text-slate-900 uppercase tracking-tight leading-none">
                 {currentDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase()}
               </h2>
               <div className="flex items-center gap-1">
@@ -750,12 +924,6 @@ export default function TimelinePage() {
                   className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_left</span>
-                </button>
-                <button
-                  onClick={() => setCurrentDate(new Date())}
-                  className="px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase border border-slate-200 hover:bg-black transition-colors"
-                >
-                  Today
                 </button>
                 <button
                   onClick={() => { const d = new Date(currentDate); d.setMonth(d.getMonth() + 1); setCurrentDate(d) }}
@@ -768,9 +936,12 @@ export default function TimelinePage() {
 
             {/* Day-of-week header */}
             <div className="grid grid-cols-7 mb-1">
-              {DOW.map(d => (
-                <div key={d} className="text-center py-2 text-[9px] font-black uppercase tracking-widest text-slate-400">{d}</div>
-              ))}
+              {DOW.map(d => {
+                const isWkHeader = (d === 'Sat' && wkSat) || (d === 'Sun' && wkSun)
+                return (
+                  <div key={d} className={`text-center py-2 text-[9px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-slate-400'}`}>{d}</div>
+                )
+              })}
             </div>
 
             {/* Calendar grid */}
@@ -785,13 +956,21 @@ export default function TimelinePage() {
                 })
                 const myBkgs = dayBkgs.filter(b => b.user_id === user?.id)
                 const otherBkgs = dayBkgs.filter(b => b.user_id !== user?.id)
-                const visibleBkgs = dayBkgs.slice(0, 3)
-                const overflow = dayBkgs.length - 3
+                const visibleBkgs = dayBkgs.slice(0, 6)
+                const overflow = dayBkgs.length - 6
+                const cellDow = cellDate.getDay()
+                const isCellWeekend = (cellDow === 6 && wkSat) || (cellDow === 0 && wkSun)
 
                 return (
                   <div
                     key={idx}
                     onClick={() => { setCurrentDate(cellDate); setViewMode('day') }}
+                    onContextMenu={e => {
+                      if (e.ctrlKey) return
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setCellCtxMenu({ room: null, slot: 4, date: cellDate, x: e.clientX, y: e.clientY })
+                    }}
                     className={`min-h-[110px] border-r border-b border-slate-100 p-2 cursor-pointer transition-colors group
                       ${isCurrentMonth ? 'bg-white hover:bg-[#f7fee7]/60' : 'bg-slate-50/50 hover:bg-slate-50'}
                       ${isTodayCell ? 'bg-[#f7fee7]/70 ring-2 ring-inset ring-[#adee2b]' : ''}`}
@@ -800,40 +979,50 @@ export default function TimelinePage() {
                     <div className="flex items-center justify-between mb-1.5">
                       <span
                         className={`flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black transition-colors
-                          ${isTodayCell ? 'bg-black text-[#adee2b]' : isCurrentMonth ? 'text-slate-700 group-hover:bg-slate-200' : 'text-slate-300'}`}
+                          ${isTodayCell ? 'bg-black text-[#adee2b]' : isCurrentMonth ? (isCellWeekend ? 'text-red-500 group-hover:bg-red-50' : 'text-slate-700 group-hover:bg-slate-200') : (isCellWeekend ? 'text-red-200' : 'text-slate-300')}`}
                       >
                         {cellDate.getDate()}
                       </span>
                       {(myBkgs.length > 0 || otherBkgs.length > 0) && (
                         <div className="flex items-center gap-0.5">
-                          {myBkgs.length > 0 && <span className="size-1.5 rounded-full bg-[#adee2b]" />}
-                          {otherBkgs.length > 0 && <span className="size-1.5 rounded-full bg-blue-400" />}
+                          {myBkgs.length > 0 && <span className="size-1.5 rounded-full" style={{ background: '#72ddf7' }} />}
+                          {otherBkgs.length > 0 && <span className="size-1.5 rounded-full" style={{ background: '#adee2b' }} />}
                         </div>
                       )}
                     </div>
 
-                    {/* Booking bars — color only, no text */}
-                    <div className="flex flex-col gap-0.5 mt-0.5">
+                    {/* Booking bars — horizontal stack */}
+                    <div className="flex flex-row flex-wrap gap-0.5 mt-0.5">
                       {visibleBkgs.map(b => {
                         const isMe = b.user_id === user?.id
                         const isTentative = b.status === 'tentative'
                         const isMaint = b.type === 'maintenance' || b.type === 'repairment'
-                        const bg = isMaint ? '#fb923c' : isTentative ? '#fde68a' : isMe ? '#adee2b' : '#bfdbfe'
+                        const bg = isMaint ? '#fb923c' : isMe ? (isTentative ? '#b0e8f8' : '#72ddf7') : (isTentative ? '#d1d5db' : '#adee2b')
                         const start = new Date(b.start_at.replace('Z', ''))
                         const hh = String(start.getHours()).padStart(2, '0')
                         const mm = String(start.getMinutes()).padStart(2, '0')
                         return (
                           <div
                             key={b.id}
-                            onClick={e => { e.stopPropagation(); openEdit(b) }}
-                            className="w-full rounded-sm hover:brightness-90 transition-all cursor-pointer"
-                            style={{ height: 6, background: bg }}
-                            title={`${hh}:${mm} · ${b.title}`}
+                            onClick={e => { e.stopPropagation(); if (isMe) openEdit(b) }}
+                            onContextMenu={e => {
+                              if (e.ctrlKey) return
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setWeekBarTooltip(null)
+                              if (isMe) setCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                              else setOtherCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                            }}
+                            className={`rounded-sm shrink-0 hover:brightness-90 transition-all ${isMe ? 'cursor-pointer' : 'cursor-default'}`}
+                            style={{ height: 5, width: 18, background: bg }}
+                            onMouseEnter={e => setWeekBarTooltip({ booking: b, x: e.clientX, y: e.clientY })}
+                            onMouseMove={e => setWeekBarTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
+                            onMouseLeave={() => setWeekBarTooltip(null)}
                           />
                         )
                       })}
                       {overflow > 0 && (
-                        <p className="text-[7px] font-black text-slate-400">+{overflow}</p>
+                        <p className="text-[7px] font-black text-slate-400 leading-none self-end">+{overflow}</p>
                       )}
                     </div>
                   </div>
@@ -912,13 +1101,14 @@ export default function TimelinePage() {
                   }}
                 >
                   <div className="flex items-center gap-2 min-w-0" onClick={() => { setDetailRoom(room); setDetailOpen(true) }}>
-                    <div className={`size-2 rounded-full shrink-0 ${dotColor} ${occupied ? 'ring-2 ring-offset-1 ring-red-400' : ''} ${isMaintRoom ? 'animate-pulse' : ''}`} />
                     <div className="min-w-0">
                       <span className={`text-[13px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-700' : 'text-slate-800'}`}>{room.name}</span>
                       <span className={`text-[11px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400' : 'text-slate-400'}`}>
                         {isMaintRoom
                           ? <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>construction</span>Maintenance</>
-                          : <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{room.capacity} &middot; {room.floor}</>
+                          : room.requires_contact
+                            ? <SpecialRoomBadge size="xs" />
+                            : <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{room.capacity} &middot; {room.floor}</>
                         }
                       </span>
                     </div>
@@ -951,9 +1141,10 @@ export default function TimelinePage() {
                             setDragTick(t => t + 1)
                           }}
                           onContextMenu={e => {
+                            if (e.ctrlKey) return
                             e.preventDefault()
                             const slot = getSlotFromClientX(e.clientX)
-                            setCellCtxMenu({ room, slot, x: e.clientX, y: e.clientY })
+                            setCellCtxMenu({ room, slot, date: currentDate, x: e.clientX, y: e.clientY })
                           }}
                         />
                       )
@@ -1023,6 +1214,7 @@ export default function TimelinePage() {
                           onMouseLeave={hideTooltip}
                           isMe={isMe}
                           isDragging={isDragging}
+                          showTitle={showBarTitle}
                           onBarMouseDown={isMe ? (e) => {
                             e.preventDefault()
                             e.stopPropagation()
@@ -1108,7 +1300,8 @@ export default function TimelinePage() {
       <footer className="bg-white border-t border-slate-100 px-8 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-5">
           {[
-            { label: 'My Booking', style: { backgroundColor: '#adee2b', outline: '2px solid #3b82f6', outlineOffset: '-2px' } },
+            { label: 'My Booking', style: { backgroundColor: '#72ddf7' } },
+            { label: 'My Tentative', style: { backgroundColor: '#b0e8f8', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
             { label: 'Confirmed', style: { backgroundColor: '#adee2b' } },
             { label: 'Tentative', style: { backgroundColor: '#d1d5db', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
             { label: 'Maintenance', style: { backgroundColor: '#fb923c' } },
@@ -1138,7 +1331,48 @@ export default function TimelinePage() {
         currentUserId={user?.id ?? 0}
         onEdit={openEdit}
         onCancel={b => { setCancelTarget(b); setTooltip(prev => ({ ...prev, visible: false })) }}
+        onCancelSeries={b => {
+          setTooltip(prev => ({ ...prev, visible: false }))
+          if (b.series_id) setSeriesCancelTarget(b)
+        }}
       />}
+
+      {/* Week/Month bar glass tooltip */}
+      {weekBarTooltip && (() => {
+        const b = weekBarTooltip.booking
+        const isMe = b.user_id === user?.id
+        const tStyle: Record<string, { bg: string; text: string; label: string }> = {
+          internal: { bg: '#dbeafe', text: '#1d4ed8', label: 'Internal' },
+          external: { bg: '#ffedd5', text: '#c2410c', label: 'External' },
+        }
+        const ts = tStyle[b.type] ?? tStyle.internal
+        const tx = Math.min(weekBarTooltip.x + 14, window.innerWidth - 240)
+        const ty = Math.max(8, weekBarTooltip.y - 100)
+        return (
+          <div className="fixed pointer-events-none z-[9999]" style={{ left: tx, top: ty }}>
+            <div style={{
+              background: 'rgba(255,255,255,0.92)',
+              backdropFilter: 'blur(32px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+              border: '1px solid rgba(255,255,255,0.95)',
+              boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,1)',
+              borderRadius: 14,
+              padding: '10px 14px',
+              minWidth: 200,
+            }}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full" style={{ background: isMe ? '#72ddf7' : '#adee2b', color: '#000' }}>
+                  {isMe ? 'My booking' : 'Other'}
+                </span>
+                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full" style={{ backgroundColor: ts.bg, color: ts.text }}>{ts.label}</span>
+              </div>
+              <p className="text-[12px] font-black text-slate-800 leading-tight">{b.title}</p>
+              {b.room && <p className="text-[10px] font-bold text-slate-400 mt-0.5">{b.room.name}</p>}
+              <p className="text-[11px] font-black text-slate-600 tabular-nums mt-1">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Room hover mini-card */}
       {roomHover && (
@@ -1220,7 +1454,7 @@ export default function TimelinePage() {
                   <span className="text-[11px] font-bold text-slate-400">Floor {roomHover.room.floor}</span>
                 </div>
                 <div className="flex flex-wrap gap-1 mt-3">
-                  {roomHover.room.facilities.slice(0, 5).map(f => (
+                  {(roomHover.room.facilities ?? []).slice(0, 5).map(f => (
                     <span key={f.name} className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-full text-[8px] font-bold text-slate-500">
                       <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 9 }}>{f.icon}</span>
                       {f.name}
@@ -1242,6 +1476,7 @@ export default function TimelinePage() {
         prefillStart={prefillStart}
         prefillEnd={prefillEnd}
         prefillDate={toLocalDateStr(currentDate)}
+        buildingId={editBooking ? (editBooking.room?.building_id ?? null) : (location?.id ?? null)}
         onSubmit={() => {
           setBookingPanelOpen(false)
           queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
@@ -1250,6 +1485,13 @@ export default function TimelinePage() {
           toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
         }}
         onCancel={(b) => { setBookingPanelOpen(false); setCancelTarget(b) }}
+      />
+
+      {/* Contact Receptionist modal (requires_contact rooms) */}
+      <ContactReceptionistModal
+        open={contactOpen}
+        onClose={() => { setContactOpen(false); setContactRoom(null) }}
+        roomName={contactRoom?.name}
       />
 
       {/* Room Detail */}
@@ -1370,16 +1612,19 @@ export default function TimelinePage() {
             >
               {/* Header — room + time */}
               <div className="px-3.5 pt-2.5 pb-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 truncate">{cellCtxMenu.room.name}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 truncate">
+                  {cellCtxMenu.room ? cellCtxMenu.room.name : cellCtxMenu.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </p>
               </div>
               <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 4 }} />
 
               {/* New Booking */}
               <button
                 onClick={() => {
+                  setCurrentDate(cellCtxMenu.date)
                   setPrefillStart(slotToTimeStr(cellCtxMenu.slot))
                   setPrefillEnd(slotToTimeStr(Math.min(slots, cellCtxMenu.slot + 2)))
-                  setSelectedRoom(cellCtxMenu.room)
+                  if (cellCtxMenu.room) setSelectedRoom(cellCtxMenu.room)
                   setEditBooking(null)
                   setBookingPanelOpen(true)
                   setCellCtxMenu(null)
@@ -1391,13 +1636,15 @@ export default function TimelinePage() {
               </button>
 
               {/* View Room */}
-              <button
-                onClick={() => { setDetailRoom(cellCtxMenu.room); setDetailOpen(true); setCellCtxMenu(null) }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
-              >
-                <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>open_in_new</span>
-                <span className="text-[11px] font-black uppercase text-slate-700">View Room</span>
-              </button>
+              {cellCtxMenu.room && (
+                <button
+                  onClick={() => { setDetailRoom(cellCtxMenu.room); setDetailOpen(true); setCellCtxMenu(null) }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
+                >
+                  <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>open_in_new</span>
+                  <span className="text-[11px] font-black uppercase text-slate-700">View Room</span>
+                </button>
+              )}
             </div>
           </div>
         </>
@@ -1523,6 +1770,72 @@ export default function TimelinePage() {
         </>
       )}
 
+      {/* Cancel Series confirm modal */}
+      {seriesCancelTarget && (
+        <>
+          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
+            onClick={() => setSeriesCancelTarget(null)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: 400,
+                background: 'rgba(255,255,255,0.82)',
+                backdropFilter: 'blur(48px) saturate(200%)',
+                WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+                border: '1px solid rgba(255,255,255,0.95)',
+                borderRadius: 22,
+                boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
+                padding: 28,
+                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
+              }}
+            >
+              <div className="flex items-center gap-3.5 mb-6">
+                <div className="size-11 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(239,68,68,0.1)' }}>
+                  <span className="material-symbols-outlined text-red-500 text-xl">link_off</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Cancel Entire Series?</h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">All bookings in this series will be cancelled.</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl p-4 mb-6 space-y-2.5"
+                style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <p className="text-sm font-black text-slate-800">{seriesCancelTarget.title}</p>
+                <div className="w-full h-px" style={{ background: 'rgba(0,0,0,0.07)' }} />
+                <p className="text-xs font-bold text-slate-500 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 14 }}>link</span>
+                  Series booking — all occurrences
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setSeriesCancelTarget(null)}
+                  className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase transition-colors"
+                  style={{ background: 'rgba(0,0,0,0.06)', color: '#475569' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.10)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.06)')}
+                >
+                  Keep Bookings
+                </button>
+                <button
+                  onClick={() => confirmSeriesCancel(seriesCancelTarget!)}
+                  className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase bg-red-500 text-white hover:bg-red-600 transition-colors"
+                >
+                  Yes, Cancel Series
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Toast */}
       <div
         className="fixed z-[9999] transition-all duration-300"
@@ -1545,7 +1858,7 @@ export default function TimelinePage() {
             className="material-symbols-outlined shrink-0"
             style={{ fontSize: 24, color: toastCountdown !== null ? '#f87171' : '#adee2b' }}
           >
-            {toastCountdown !== null ? 'cancel' : 'check_circle'}
+            {toastCountdown !== null ? (pendingSeriesId ? 'repeat' : 'cancel') : 'check_circle'}
           </span>
           <span className="text-white text-[13px] font-black flex-1">{toastMsg}</span>
           {toastCountdown !== null && (
@@ -1554,7 +1867,7 @@ export default function TimelinePage() {
                 {toastCountdown}s
               </span>
               <button
-                onClick={undoCancel}
+                onClick={pendingSeriesId ? undoSeriesCancel : undoCancel}
                 style={{
                   background: '#adee2b', color: '#000', border: 'none',
                   borderRadius: 10, padding: '6px 14px',

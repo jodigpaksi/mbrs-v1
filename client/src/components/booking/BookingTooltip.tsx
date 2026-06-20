@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { Booking } from '../../types/index'
 import { deptColors } from '../../data/mockData'
+import { getDirectory } from '../../api/users'
 
 interface TooltipPos { x: number; y: number }
 
@@ -13,13 +15,35 @@ interface BookingTooltipProps {
   currentUserId: number
   onEdit?: (booking: Booking) => void
   onCancel?: (booking: Booking) => void
+  onCancelSeries?: (booking: Booking) => void
 }
 
 function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
 
-export default function BookingTooltip({ booking, pos, visible, onMouseEnter, onMouseLeave, currentUserId, onEdit, onCancel }: BookingTooltipProps) {
+export default function BookingTooltip({ booking, pos, visible, onMouseEnter, onMouseLeave, currentUserId, onEdit, onCancel, onCancelSeries }: BookingTooltipProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [adjustedPos, setAdjustedPos] = useState(pos)
+  const [forInfoPos, setForInfoPos] = useState<{ x: number; y: number } | null>(null)
+  const forPopupRef = useRef<HTMLDivElement>(null)
+  const { data: directory = [] } = useQuery({ queryKey: ['user-directory'], queryFn: getDirectory, staleTime: 60_000 })
+  const forUser = booking?.booked_for_user_id ? directory.find(u => u.id === booking.booked_for_user_id) : null
+
+  function openForInfo(e: React.MouseEvent<HTMLButtonElement>) {
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    setForInfoPos(p => p ? null : { x: rect.left, y: rect.bottom + 6 })
+  }
+
+  useEffect(() => {
+    if (!forInfoPos) return
+    function handleClickOutside(e: MouseEvent) {
+      if (forPopupRef.current && !forPopupRef.current.contains(e.target as Node)) {
+        setForInfoPos(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [forInfoPos])
 
   useEffect(() => {
     if (!visible || !ref.current) return
@@ -34,7 +58,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
 
   if (!booking) return null
 
-  const dept = booking.user?.department || ''
+  const dept = booking.user?.department_name || (typeof booking.user?.department === 'string' ? booking.user.department : '') || ''
   const colors = deptColors[dept] || deptColors['GAA']
   const isMe = booking.user_id === currentUserId
   const isTentative = booking.status === 'tentative'
@@ -77,10 +101,14 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
   }
 
   return (
+    <>
     <div
       ref={ref}
       onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onMouseLeave={(e) => {
+        if (forPopupRef.current?.contains(e.relatedTarget as Node)) return
+        onMouseLeave()
+      }}
       className="fixed z-[999] w-[360px] pointer-events-auto"
       style={{
         left: adjustedPos.x,
@@ -99,15 +127,22 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
     >
       <div className="p-6 space-y-4">
         {/* Header badges */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isMe && (
-            <span className="bg-blue-500 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide">
+            <span className="text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide" style={{ backgroundColor: '#72ddf7', color: 'black' }}>
               Your Booking
+            </span>
+          )}
+          {booking.series_id && (
+            <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide">
+              <span className="material-symbols-outlined" style={{ fontSize: 11 }}>link</span>Series
             </span>
           )}
           <span
             className="text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide ml-auto"
-            style={{ background: colors.bg, color: colors.text }}
+            style={isTentative
+              ? { backgroundColor: '#e4e6ea', backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.03) 3px,rgba(0,0,0,0.03) 6px)', color: '#4b5563' }
+              : { background: colors.bg, color: colors.text }}
           >
             {isTentative ? 'Tentative' : booking.status === 'confirmed' ? 'Confirmed' : booking.status}
           </span>
@@ -119,8 +154,12 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
           {booking.description && (
             <p className="text-[12px] text-slate-500 font-medium leading-relaxed">{booking.description}</p>
           )}
-          <span className={`inline-block text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide mt-0.5
-            ${booking.type === 'external' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
+          <span
+            className="inline-block text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide mt-0.5"
+            style={booking.type === 'external'
+              ? { backgroundColor: '#ffedd5', color: '#c2410c' }
+              : { backgroundColor: '#dbeafe', color: '#1d4ed8' }}
+          >
             {booking.type === 'external' ? 'External' : 'Internal'}
           </span>
         </div>
@@ -155,7 +194,17 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
             />
             <div>
               <p className="text-base font-black text-slate-900 leading-tight">{booking.user?.name}</p>
-              <p className="text-[11px] font-bold uppercase mt-0.5 text-slate-500">{booking.user?.department}</p>
+              <p className="text-[11px] font-bold uppercase mt-0.5 text-slate-500">{dept}</p>
+              {booking.booked_for && (
+                <button
+                  onClick={openForInfo}
+                  className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-500 transition-colors mt-1"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 12 }}>person_pin</span>
+                  Booking for <span style={{ color: '#72ddf7' }}>{booking.booked_for}</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: 11 }}>open_in_new</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -191,24 +240,128 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
           </div>
         </div>
 
-        {/* Edit actions (only for own bookings) */}
+        {/* Edit / Cancel actions (own bookings only) */}
         {isMe && (
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => onEdit?.(booking)}
-              className="flex-1 bg-[#adee2b] text-black text-[10px] font-black uppercase rounded-xl py-2.5 hover:opacity-90 transition-opacity"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => onCancel?.(booking)}
-              className="flex-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase rounded-xl py-2.5 hover:bg-red-50 hover:text-red-500 transition-colors"
-            >
-              Cancel
-            </button>
+          <div className="space-y-2 pt-1">
+            {booking.series_id ? (
+              <>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onEdit?.(booking)}
+                    className="flex-1 bg-[#adee2b] text-black text-[9px] font-black uppercase rounded-xl py-2.5 hover:opacity-90 transition-opacity"
+                  >
+                    Edit this
+                  </button>
+                  <button
+                    onClick={() => onEdit?.(booking)}
+                    className="flex-1 bg-black text-[#adee2b] text-[9px] font-black uppercase rounded-xl py-2.5 hover:bg-slate-800 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 11 }}>link</span>
+                    Edit series
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onCancel?.(booking)}
+                    className="flex-1 bg-slate-100 text-slate-600 text-[9px] font-black uppercase rounded-xl py-2 hover:bg-red-50 hover:text-red-500 transition-colors"
+                  >
+                    Cancel this
+                  </button>
+                  <button
+                    onClick={() => onCancelSeries?.(booking)}
+                    className="flex-1 bg-red-50 text-red-500 text-[9px] font-black uppercase rounded-xl py-2 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-1"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 11 }}>link</span>
+                    Cancel series
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onEdit?.(booking)}
+                  className="flex-1 bg-[#adee2b] text-black text-[10px] font-black uppercase rounded-xl py-2.5 hover:opacity-90 transition-opacity"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => onCancel?.(booking)}
+                  className="flex-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase rounded-xl py-2.5 hover:bg-red-50 hover:text-red-500 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
+
+    {/* Booking-for dark glass mini popup */}
+    {forInfoPos && (
+      <>
+        <div
+          ref={forPopupRef}
+          onMouseLeave={(e) => {
+            if (ref.current?.contains(e.relatedTarget as Node)) return
+            onMouseLeave()
+          }}
+          className="fixed z-[1001] w-56 rounded-2xl overflow-hidden"
+          style={{
+            left: forInfoPos.x,
+            top: forInfoPos.y,
+            background: 'rgba(255,255,255,0.55)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            border: '1px solid rgba(255,255,255,0.75)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 1.5px 6px rgba(0,0,0,0.06)',
+          }}
+        >
+          <div className="px-4 pt-4 pb-3">
+            {/* Avatar + name */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-10 rounded-xl bg-slate-200/60 flex items-center justify-center text-base font-black text-slate-600 shrink-0">
+                {(forUser?.name ?? booking.booked_for ?? '?').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-black leading-tight truncate" style={{ color: '#72ddf7' }}>
+                  {forUser?.name ?? booking.booked_for}
+                </p>
+                {forUser?.department && (
+                  <p className="text-[9px] font-black uppercase tracking-wider mt-0.5 text-slate-400">
+                    {forUser.department}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {forUser ? (
+              <div className="space-y-2 border-t border-slate-200/60 pt-3">
+                {forUser.ext && (
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>phone_in_talk</span>
+                    <span className="text-[11px] font-bold text-slate-400">Ext</span>
+                    <span className="text-[11px] font-black text-slate-700">{forUser.ext}</span>
+                  </div>
+                )}
+                {forUser.email && (
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>mail</span>
+                    <span className="text-[10px] font-bold text-slate-600 truncate flex-1">{forUser.email}</span>
+                    <button onClick={() => navigator.clipboard.writeText(forUser!.email)}
+                      className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors">
+                      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-[10px] italic text-slate-400">No account info available</p>
+            )}
+          </div>
+        </div>
+      </>
+    )}
+    </>
   )
 }

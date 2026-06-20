@@ -26,6 +26,32 @@ export async function clearRoomView(roomId: number) {
   await api.delete(`/rooms/${roomId}/view`).catch(() => {})
 }
 
+export async function createRoom(data: Record<string, unknown>) {
+  const res = await api.post('/rooms', data)
+  return res.data
+}
+
+export async function updateRoom(id: number, data: Record<string, unknown>) {
+  const res = await api.patch(`/rooms/${id}`, data)
+  return res.data
+}
+
+export async function reorderRooms(rooms: { id: number; sort_order: number }[]) {
+  const res = await api.post('/rooms/reorder', { rooms })
+  return res.data
+}
+
+export async function deleteRoom(id: number) {
+  await api.delete(`/rooms/${id}`)
+}
+
+export async function getAvailableRooms(startAt: string, endAt: string, buildingId?: number | null) {
+  const res = await api.get('/rooms/available', {
+    params: { start_at: startAt, end_at: endAt, ...(buildingId ? { building_id: buildingId } : {}) },
+  })
+  return res.data as import('../types').Room[]
+}
+
 export async function updateRoomStatus(roomId: number, status: 'active' | 'maintenance') {
   const res = await api.patch(`/rooms/${roomId}/status`, { status })
   return res.data
@@ -33,5 +59,5 @@ export async function updateRoomStatus(roomId: number, status: 'active' | 'maint
 
 export async function getReceptionists() {
   const res = await api.get('/users/receptionists')
-  return res.data as { id: number; name: string; department: string; ext: string; avatar?: string }[]
+  return res.data as { id: number; name: string; department: string; ext: string; email: string; avatar?: string }[]
 }

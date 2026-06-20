@@ -1,9 +1,14 @@
+import { useBookingHours } from '../../hooks/useBookingHours'
+
+function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
+function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
+
 interface Props {
   open: boolean
   onClose: () => void
 }
 
-const FAQ = [
+const STATIC_FAQ = [
   {
     q: 'How do I book a room?',
     a: 'Click "New Booking" on the Schedule page, or click any empty slot in the timeline to pre-fill the time.',
@@ -20,13 +25,19 @@ const FAQ = [
     q: 'How do I drag-and-resize bookings?',
     a: 'On the Day view, drag a booking bar to move it, or drag its left/right edge to resize. Changes save automatically.',
   },
-  {
-    q: 'What are the booking time limits?',
-    a: 'Bookings must start between 07:00–18:30 and end by 19:00, in 30-minute increments.',
-  },
 ]
 
 export default function HelpModal({ open, onClose }: Props) {
+  const { start, end } = useBookingHours()
+  const latestStart = fromMin(toMin(end) - 30)
+  const faq = [
+    ...STATIC_FAQ,
+    {
+      q: 'What are the booking time limits?',
+      a: `Bookings must start between ${start}–${latestStart} and end by ${end}, in 30-minute increments.`,
+    },
+  ]
+
   if (!open) return null
 
   return (
@@ -51,7 +62,7 @@ export default function HelpModal({ open, onClose }: Props) {
         </div>
 
         <div className="px-8 py-6 space-y-4">
-          {FAQ.map(({ q, a }) => (
+          {faq.map(({ q, a }) => (
             <div key={q} className="p-4 bg-slate-50 rounded-2xl">
               <p className="text-[11px] font-black text-slate-800 mb-1.5">{q}</p>
               <p className="text-[11px] font-medium text-slate-500 leading-relaxed">{a}</p>

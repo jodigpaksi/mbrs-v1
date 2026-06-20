@@ -27,10 +27,11 @@ class AuthController extends Controller
             ]);
         }
 
+        $user->load('department');
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
+            'user'  => $this->userPayload($user),
             'token' => $token,
         ]);
     }
@@ -43,7 +44,23 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user());
+        $user = $request->user()->load('department');
+        return response()->json($this->userPayload($user));
+    }
+
+    private function userPayload(User $user): array
+    {
+        return [
+            'id'            => $user->id,
+            'name'          => $user->name,
+            'email'         => $user->email,
+            'role'          => $user->role,
+            'department'    => $user->department?->name ?? '',
+            'department_id' => $user->department_id,
+            'ext'           => $user->ext ?? '',
+            'avatar'        => $user->avatar,
+            'on_duty'       => (bool) $user->on_duty,
+        ];
     }
 
     public function updatePassword(Request $request): JsonResponse
@@ -60,6 +77,14 @@ class AuthController extends Controller
 
         $user->update(['password' => $request->password]);
         return response()->json(['message' => 'Password updated.']);
+    }
+
+    public function updateOnDuty(Request $request): JsonResponse
+    {
+        $request->validate(['on_duty' => 'required|boolean']);
+        $user = $request->user();
+        $user->update(['on_duty' => $request->on_duty]);
+        return response()->json(['on_duty' => $user->on_duty]);
     }
 
     public function updateAvatar(Request $request): JsonResponse

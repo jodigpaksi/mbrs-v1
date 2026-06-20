@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Room extends Model
 {
     protected $fillable = [
+        'building_id',
+        'sort_order',
         'name',
         'type',
         'capacity',
@@ -28,6 +31,11 @@ class Room extends Model
             'is_active' => 'boolean',
             'requires_contact' => 'boolean',
         ];
+    }
+
+    public function building(): BelongsTo
+    {
+        return $this->belongsTo(Building::class);
     }
 
     public function bookings(): HasMany

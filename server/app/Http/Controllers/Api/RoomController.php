@@ -14,48 +14,55 @@ class RoomController extends Controller
 {
     public function index(): JsonResponse
     {
-        $rooms = Room::where('is_active', true)->get();
+        $rooms = Room::with('building')->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get();
         return response()->json($rooms);
     }
 
     public function show(Room $room): JsonResponse
     {
-        return response()->json($room);
+        return response()->json($room->load('building'));
     }
 
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name' => 'required|string',
-            'type' => 'required|in:Ballroom,Executive,Focus',
-            'capacity' => 'required|integer|min:1',
-            'floor' => 'required|string',
-            'facilities' => 'nullable|array',
-            'photos' => 'nullable|array',
-            'notes' => 'nullable|string',
+            'building_id'      => 'nullable|exists:buildings,id',
+            'name'             => 'required|string',
+            'type'             => 'nullable|string|max:20',
+            'capacity'         => 'required|integer|min:1',
+            'floor'            => 'required|string',
+            'facilities'       => 'nullable|array',
+            'photos'           => 'nullable|array',
+            'notes'            => 'nullable|string',
+            'requires_contact' => 'nullable|boolean',
         ]);
 
+        // Auto-set sort_order to max within the building + 1
+        $maxOrder = Room::where('building_id', $data['building_id'] ?? null)->max('sort_order') ?? 0;
+        $data['sort_order'] = $maxOrder + 1;
+
         $room = Room::create($data);
-        return response()->json($room, 201);
+        return response()->json($room->load('building'), 201);
     }
 
     public function update(Request $request, Room $room): JsonResponse
     {
         $data = $request->validate([
-            'name' => 'sometimes|string',
-            'type' => 'sometimes|in:Ballroom,Executive,Focus',
-            'capacity' => 'sometimes|integer|min:1',
-            'floor' => 'sometimes|string',
-            'facilities' => 'nullable|array',
-            'photos' => 'nullable|array',
-            'notes' => 'nullable|string',
-            'is_active' => 'sometimes|boolean',
-            'status' => 'sometimes|in:active,maintenance',
+            'building_id'      => 'nullable|exists:buildings,id',
+            'name'             => 'sometimes|string',
+            'type'             => 'nullable|string|max:20',
+            'capacity'         => 'sometimes|integer|min:1',
+            'floor'            => 'sometimes|string',
+            'facilities'       => 'nullable|array',
+            'photos'           => 'nullable|array',
+            'notes'            => 'nullable|string',
+            'is_active'        => 'sometimes|boolean',
+            'status'           => 'sometimes|in:active,maintenance',
             'requires_contact' => 'sometimes|boolean',
         ]);
 
         $room->update($data);
-        return response()->json($room);
+        return response()->json($room->fresh('building'));
     }
 
     public function updateStatus(Request $request, Room $room): JsonResponse
@@ -71,6 +78,21 @@ class RoomController extends Controller
 
         $room->update($data);
         return response()->json($room);
+    }
+
+    public function reorder(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'rooms'            => 'required|array',
+            'rooms.*.id'       => 'required|integer|exists:rooms,id',
+            'rooms.*.sort_order' => 'required|integer|min:1',
+        ]);
+
+        foreach ($data['rooms'] as $item) {
+            Room::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     public function destroy(Room $room): JsonResponse
@@ -167,6 +189,77 @@ class RoomController extends Controller
             'conflicts'      => $conflicts,
             'other_viewers'  => $otherViewers,
         ]);
+    }
+
+    public function available(Request $request): JsonResponse
+    {
+        $request->validate([
+            'start_at'    => 'required|date',
+            'end_at'      => 'required|date|after:start_at',
+            'building_id' => 'nullable|exists:buildings,id',
+        ]);
+
+        $searchStart = \Carbon\Carbon::parse($request->start_at);
+        $searchEnd   = \Carbon\Carbon::parse($request->end_at);
+        $minMinutes  = 30;
+
+        $query = Room::with('building')
+            ->where('is_active', true)
+            ->where('status', 'active')
+            ->orderBy('sort_order');
+
+        if ($request->filled('building_id')) {
+            $query->where('building_id', $request->building_id);
+        }
+
+        $result = $query->get()->map(function (Room $room) use ($searchStart, $searchEnd, $minMinutes) {
+            $bookings = Booking::where('room_id', $room->id)
+                ->where('status', '!=', 'cancelled')
+                ->where('start_at', '<', $searchEnd)
+                ->where('end_at',   '>', $searchStart)
+                ->orderBy('start_at')
+                ->get(['start_at', 'end_at']);
+
+            $slots  = [];
+            $cursor = $searchStart->copy();
+
+            foreach ($bookings as $booking) {
+                $bStart = \Carbon\Carbon::parse($booking->start_at)->max($searchStart);
+                $bEnd   = \Carbon\Carbon::parse($booking->end_at)->min($searchEnd);
+
+                if ($cursor->lt($bStart) && $cursor->diffInMinutes($bStart) >= $minMinutes) {
+                    $slots[] = [
+                        'start' => $cursor->format('Y-m-d\TH:i:s'),
+                        'end'   => $bStart->format('Y-m-d\TH:i:s'),
+                    ];
+                }
+
+                if ($bEnd->gt($cursor)) {
+                    $cursor = $bEnd->copy();
+                }
+            }
+
+            if ($cursor->lt($searchEnd) && $cursor->diffInMinutes($searchEnd) >= $minMinutes) {
+                $slots[] = [
+                    'start' => $cursor->format('Y-m-d\TH:i:s'),
+                    'end'   => $searchEnd->format('Y-m-d\TH:i:s'),
+                ];
+            }
+
+            if (empty($slots)) {
+                return null; // fully booked, exclude
+            }
+
+            $data                   = $room->toArray();
+            $data['available_slots'] = $slots;
+            $data['is_fully_free']   = count($slots) === 1
+                && $slots[0]['start'] === $searchStart->format('Y-m-d\TH:i:s')
+                && $slots[0]['end']   === $searchEnd->format('Y-m-d\TH:i:s');
+
+            return $data;
+        })->filter()->values();
+
+        return response()->json($result);
     }
 
     public function clearView(Room $room): JsonResponse

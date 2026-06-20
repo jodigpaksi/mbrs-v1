@@ -18,6 +18,9 @@ class Booking extends Model
         'status',
         'type',
         'cancelled_at',
+        'series_id',
+        'booked_for',
+        'booked_for_user_id',
     ];
 
     protected function casts(): array
@@ -37,6 +40,11 @@ class Booking extends Model
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
+    }
+
+    public function bookedForUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'booked_for_user_id');
     }
 
     public function pantryOrder(): HasOne

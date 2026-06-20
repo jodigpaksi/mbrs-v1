@@ -25,6 +25,11 @@ export async function updatePassword(currentPassword: string, password: string, 
   return res.data
 }
 
+export async function updateOnDutyStatus(onDuty: boolean) {
+  const res = await api.patch('/me/on-duty', { on_duty: onDuty })
+  return res.data as { on_duty: boolean }
+}
+
 export async function updateAvatar(file: File) {
   const form = new FormData()
   form.append('avatar', file)

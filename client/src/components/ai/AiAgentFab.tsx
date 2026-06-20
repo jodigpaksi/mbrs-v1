@@ -87,16 +87,16 @@ export default function AiAgentFab() {
                   color: 'rgba(255,255,255,0.85)',
                   border: '1px solid rgba(255,255,255,0.07)',
                 }}>
-                Halo! Saya bisa bantu kamu cek ketersediaan ruangan, buat booking, atau cari jadwal. Mau tanya apa?
+                Hi! I can help you check room availability, make a booking, or find schedules. What do you need?
               </div>
             </div>
 
             {/* Suggestion chips */}
             <div className="flex flex-wrap gap-2 pl-9 mt-1">
               {[
-                'Ruangan tersedia hari ini',
-                'Booking tercepat',
-                'Jadwal minggu ini',
+                'Rooms available today',
+                'Quickest booking',
+                'Schedule this week',
               ].map(chip => (
                 <button key={chip}
                   className="text-[10px] font-black uppercase px-3 py-1.5 rounded-full transition-all"

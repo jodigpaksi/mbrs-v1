@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getReceptionists } from '../../api/rooms'
 
@@ -8,12 +9,21 @@ interface Props {
 }
 
 export default function ContactReceptionistModal({ open, onClose, roomName }: Props) {
+  const [copied, setCopied] = useState<string | null>(null)
+
   const { data: receptionists = [], isLoading } = useQuery({
     queryKey: ['receptionists'],
     queryFn: getReceptionists,
     enabled: open,
     staleTime: 60000,
   })
+
+  function copyEmail(email: string) {
+    navigator.clipboard.writeText(email).then(() => {
+      setCopied(email)
+      setTimeout(() => setCopied(null), 1800)
+    })
+  }
 
   if (!open) return null
 
@@ -52,7 +62,7 @@ export default function ContactReceptionistModal({ open, onClose, roomName }: Pr
           {!isLoading && receptionists.length === 0 && (
             <div className="text-center py-6">
               <span className="material-symbols-outlined text-slate-200 text-4xl block mb-2">person_off</span>
-              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No receptionists found</p>
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No receptionists on duty</p>
               <p className="text-[10px] text-slate-400 mt-1">Please contact GAA at ext. 100</p>
             </div>
           )}
@@ -62,20 +72,45 @@ export default function ContactReceptionistModal({ open, onClose, roomName }: Pr
               const avatarSrc = r.avatar?.startsWith('http') || r.avatar?.startsWith('/storage')
                 ? r.avatar
                 : `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.avatar || r.name}`
+              const isCopied = copied === r.email
               return (
-                <div key={r.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
-                  {r.avatar?.startsWith('http') || r.avatar?.startsWith('/storage')
-                    ? <img src={avatarSrc} className="size-10 rounded-full object-cover border-2 border-white shadow" />
-                    : <img src={avatarSrc} className="size-10 rounded-full bg-slate-200 p-0.5 border-2 border-white shadow" />
-                  }
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-black text-slate-800">{r.name}</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{r.department}</p>
+                <div key={r.id} className="p-3 bg-slate-50 rounded-2xl space-y-2.5">
+                  {/* Top row: avatar + name + ext */}
+                  <div className="flex items-center gap-3">
+                    {r.avatar?.startsWith('http') || r.avatar?.startsWith('/storage')
+                      ? <img src={avatarSrc} className="size-10 rounded-full object-cover border-2 border-white shadow shrink-0" />
+                      : <img src={avatarSrc} className="size-10 rounded-full bg-slate-200 p-0.5 border-2 border-white shadow shrink-0" />
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-black text-slate-800">{r.name}</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">{r.department}</p>
+                    </div>
+                    {r.ext && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 rounded-xl shrink-0">
+                        <span className="material-symbols-outlined text-[#adee2b]" style={{ fontSize: 13 }}>call</span>
+                        <span className="text-[11px] font-black text-white">ext. {r.ext}</span>
+                      </div>
+                    )}
                   </div>
-                  {r.ext && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 rounded-xl">
-                      <span className="material-symbols-outlined text-[#adee2b]" style={{ fontSize: 13 }}>call</span>
-                      <span className="text-[11px] font-black text-white">ext. {r.ext}</span>
+
+                  {/* Email row */}
+                  {r.email && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl">
+                      <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>mail</span>
+                      <span className="flex-1 text-[11px] font-bold text-slate-600 truncate">{r.email}</span>
+                      <button
+                        onClick={() => copyEmail(r.email)}
+                        className="shrink-0 size-6 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+                        style={{
+                          background: isCopied ? '#adee2b' : 'rgba(0,0,0,0.06)',
+                          color: isCopied ? '#000' : '#94a3b8',
+                        }}
+                        title="Copy email"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+                          {isCopied ? 'check' : 'content_copy'}
+                        </span>
+                      </button>
                     </div>
                   )}
                 </div>

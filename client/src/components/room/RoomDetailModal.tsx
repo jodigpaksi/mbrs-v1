@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Room, Booking } from '../../types/index'
 import { deptColors } from '../../data/mockData'
 import { getRoomStats } from '../../api/rooms'
+import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 
 interface RoomDetailModalProps {
   room: Room | null
@@ -30,7 +31,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
   if (!room) return null
 
   const dotColor = room.type === 'Ballroom' ? '#c084fc' : room.type === 'Executive' ? '#60a5fa' : '#4ade80'
-  const photos = room.photos.slice(0, 5)
+  const photos = (room.photos ?? []).slice(0, 5)
 
   const now = new Date()
   const todayBookings = bookings
@@ -80,13 +81,18 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: 10 }}>
 
           {/* ── Photo hero — spans rows 1+2 for columns 1-2 ── */}
-          <div style={{ gridColumn: '1/3', gridRow: '1/3', borderRadius: 20, overflow: 'hidden', position: 'relative', background: '#0f172a' }}>
+          <div style={{ gridColumn: '1/3', gridRow: '1/3', borderRadius: 20, overflow: 'hidden', position: 'relative', background: '#0f172a', ...(open ? ({ viewTransitionName: 'room-hero' } as unknown as React.CSSProperties) : {}) }}>
             {/* Slideshow */}
-            {photos.length > 0 && (
+            {photos.length > 0 ? (
               <div style={{ display: 'flex', height: '100%', transition: 'transform 0.4s', transform: `translateX(-${photoIdx * 100}%)` }}>
                 {photos.map((p, i) => (
                   <img key={i} src={p} style={{ minWidth: '100%', height: '100%', objectFit: 'cover', flexShrink: 0 }} alt="" />
                 ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, opacity: 0.25 }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 56, color: 'white' }}>meeting_room</span>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'white', margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em' }}>No photos yet</p>
               </div>
             )}
             {photos.length > 1 && (
@@ -121,8 +127,11 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                   <h2 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', color: 'white', textTransform: 'uppercase', lineHeight: 1, margin: 0 }}>{room.name}</h2>
                 </div>
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                  <div style={{ background: room.status === 'maintenance' ? '#fb923c' : isAvailableNow ? '#adee2b' : '#ef4444', color: room.status === 'maintenance' ? '#fff' : isAvailableNow ? '#000' : '#fff', fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 14px', borderRadius: 99 }}>
-                    {room.status === 'maintenance' ? 'Maintenance' : isAvailableNow ? 'Available' : 'Occupied'}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <div style={{ background: room.status === 'maintenance' ? '#fb923c' : isAvailableNow ? '#adee2b' : '#ef4444', color: room.status === 'maintenance' ? '#fff' : isAvailableNow ? '#000' : '#fff', fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 14px', borderRadius: 99 }}>
+                      {room.status === 'maintenance' ? 'Maintenance' : isAvailableNow ? 'Available' : 'Occupied'}
+                    </div>
+                    {room.requires_contact && <SpecialRoomBadge size="xs" variant="dark" />}
                   </div>
                 </div>
               </div>
@@ -131,7 +140,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                   <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#adee2b' }}>groups</span>
                   {room.capacity} seats
                 </p>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', margin: 0 }}>Floor {room.floor} &middot; Head Office Jakarta</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', margin: 0 }}>Floor {room.floor}{room.building?.name ? ` · ${room.building.name}` : ''}</p>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, marginLeft: 'auto' }} />
               </div>
 
@@ -142,7 +151,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                 <div style={glassCard}>
                   <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)', margin: '0 0 7px' }}>Facilities</p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {room.facilities.map(f => (
+                    {(room.facilities ?? []).map(f => (
                       <span key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.88)', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', padding: '3px 8px', borderRadius: 99 }}>
                         <span className="material-symbols-outlined" style={{ fontSize: 9 }}>{f.icon}</span>{f.name}
                       </span>
@@ -194,7 +203,10 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
             <div>
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(0,0,0,0.4)', margin: '0 0 6px' }}>Quick Action</p>
               <p style={{ fontSize: 13, fontWeight: 800, color: '#000', margin: 0, lineHeight: 1.3 }}>
-                {room.status === 'maintenance' ? 'Room is under maintenance' : isAvailableNow ? 'Ready to book this room?' : `Occupied until ${nextFreeAt ?? '–'}`}
+                {room.status === 'maintenance' ? 'Room is under maintenance'
+                  : room.requires_contact ? 'Special Room — Contact Receptionist / GAA to book'
+                  : isAvailableNow ? 'Ready to book this room?'
+                  : `Occupied until ${nextFreeAt ?? '–'}`}
               </p>
               {!isAvailableNow && nextFreeAt && (
                 <p style={{ fontSize: 10, fontWeight: 600, color: 'rgba(0,0,0,0.45)', margin: '4px 0 0' }}>You can book from {nextFreeAt}</p>
@@ -202,9 +214,10 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
             </div>
             <button
               onClick={() => { onClose(); onBook(room) }}
-              style={{ width: '100%', padding: 11, background: '#000', color: '#adee2b', border: 'none', borderRadius: 14, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'Manrope, sans-serif' }}
+              style={{ width: '100%', padding: 11, background: room.requires_contact ? '#fef3c7' : '#000', color: room.requires_contact ? '#92400e' : '#adee2b', border: room.requires_contact ? '1.5px solid #fbbf24' : 'none', borderRadius: 14, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'Manrope, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
-              Book This Room &rarr;
+              {room.requires_contact && <span className="material-symbols-outlined" style={{ fontSize: 13 }}>support_agent</span>}
+              {room.requires_contact ? 'Contact Receptionist' : 'Book This Room →'}
             </button>
           </div>
 
@@ -212,9 +225,12 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
           <div style={{ gridColumn: '1/3', gridRow: '3/4', background: 'white', borderRadius: 20, padding: '18px 20px', border: '0.5px solid #e2e8f0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', margin: 0 }}>Today&rsquo;s Occupancy</p>
-              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', padding: '3px 10px', borderRadius: 99, background: room.status === 'maintenance' ? '#ffedd5' : isAvailableNow ? '#dcfce7' : '#fee2e2', color: room.status === 'maintenance' ? '#c2410c' : isAvailableNow ? '#16a34a' : '#ef4444' }}>
-                {room.status === 'maintenance' ? 'Under Maintenance' : isAvailableNow ? 'Free Now' : 'Currently Occupied'}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', padding: '3px 10px', borderRadius: 99, background: room.status === 'maintenance' ? '#ffedd5' : isAvailableNow ? '#dcfce7' : '#fee2e2', color: room.status === 'maintenance' ? '#c2410c' : isAvailableNow ? '#16a34a' : '#ef4444' }}>
+                  {room.status === 'maintenance' ? 'Under Maintenance' : isAvailableNow ? 'Free Now' : 'Currently Occupied'}
+                </span>
+                {room.requires_contact && <SpecialRoomBadge size="xs" />}
+              </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', width: 22, textAlign: 'right' }}>07</span>
@@ -226,10 +242,11 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                   const left   = Math.max(0, ((startH - 7) / 12) * 100)
                   const width  = Math.min(100 - left, ((endH - startH) / 12) * 100)
                   const isMaintType = b.type === 'maintenance' || b.type === 'repairment'
-                  const colors = isMaintType ? { bg: '#fb923c', text: '#fff' } : (deptColors[b.user?.department || 'GAA'] || deptColors['GAA'])
+                  const bDept = b.user?.department_name || (typeof b.user?.department === 'string' ? b.user.department : '') || 'GAA'
+                  const colors = isMaintType ? { bg: '#fb923c', text: '#fff' } : (deptColors[bDept] || deptColors['GAA'])
                   return (
                     <div key={b.id} title={`${b.title} · ${b.user?.name}`} style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, height: '100%', background: colors.bg, borderRadius: 6, display: 'flex', alignItems: 'center', paddingLeft: 6, overflow: 'hidden', boxSizing: 'border-box' }}>
-                      <span style={{ fontSize: 8, fontWeight: 800, color: colors.text, whiteSpace: 'nowrap' }}>{isMaintType ? (b.type === 'maintenance' ? 'MAINT' : 'REPAIR') : b.user?.department}</span>
+                      <span style={{ fontSize: 8, fontWeight: 800, color: colors.text, whiteSpace: 'nowrap' }}>{isMaintType ? (b.type === 'maintenance' ? 'MAINT' : 'REPAIR') : bDept}</span>
                     </div>
                   )
                 })}

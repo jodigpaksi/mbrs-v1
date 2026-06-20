@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
 import UserProfileModal from '../profile/UserProfileModal'
@@ -22,21 +23,34 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const location = useLocation()
   const { user, logout } = useAuth()
   const { t } = useSettings()
+  const queryClient = useQueryClient()
   const [q, setQ] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [settingOpen, setSettingOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setProfileOpen(false)
       }
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true)
+    setTimeout(() => searchInputRef.current?.focus(), 50)
   }, [])
 
   function dispatch(val: string) {
@@ -104,39 +118,88 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
         })()}
 
         {/* Right actions */}
-        <div className="flex items-center gap-3">
-          <form onSubmit={e => { e.preventDefault(); dispatch(q) }} className="relative flex items-center">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none" style={{ color: 'var(--ds-text-4)' }}>search</span>
-            <input
-              type="text"
-              placeholder={t('nav_search_placeholder')}
-              value={q}
-              onChange={e => { setQ(e.target.value); dispatch(e.target.value) }}
-              className={`w-48 rounded-xl pl-9 ${q ? 'pr-16' : 'pr-3'} py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all`}
-              style={{ background: q ? '#f7fee7' : 'var(--ds-bg-raised)', border: `1px solid ${q ? '#adee2b' : 'var(--ds-border)'}`, color: 'var(--ds-text-1)' }}
-            />
-            {q && (
-              <div className="absolute right-1 flex items-center gap-0.5">
-                <button type="button" onClick={clear}
-                  className="size-6 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-white transition-colors">
-                  <span className="material-symbols-outlined text-sm">close</span>
-                </button>
-                <button type="submit"
-                  className="size-6 rounded-lg flex items-center justify-center bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-colors">
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
+        <div className="flex items-center gap-2">
+          {/* Search icon → expandable dropdown */}
+          <div ref={searchRef} className="relative">
+            <div className="group relative">
+              <button
+                onClick={openSearch}
+                className="size-9 flex items-center justify-center transition-all hover:scale-110"
+                style={{ color: q ? '#adee2b' : 'var(--ds-text-3)' }}
+              >
+                <span className="material-symbols-outlined text-xl">search</span>
+              </button>
+              {/* Tooltip */}
+              <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-[51] transition-opacity duration-150 whitespace-nowrap ${searchOpen ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
+                <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-slate-500"
+                  style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+                  Search
+                </div>
               </div>
-            )}
-          </form>
+            </div>
 
-          <button
-            onClick={onTodayClick}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all text-[10px] font-black uppercase"
-            style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-1)' }}
-          >
-            <span className="material-symbols-outlined text-base">today</span>
-            {t('nav_today')}
-          </button>
+            {/* Search dropdown */}
+            <div
+              className="absolute right-0 top-full mt-2 z-50"
+              style={{
+                opacity: searchOpen ? 1 : 0,
+                transform: searchOpen ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.97)',
+                transition: 'opacity 150ms ease, transform 150ms cubic-bezier(0.4,0,0.2,1)',
+                pointerEvents: searchOpen ? 'auto' : 'none',
+              }}
+            >
+              <div className="rounded-2xl shadow-xl overflow-hidden"
+                style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)' }}>
+                <form onSubmit={e => { e.preventDefault(); dispatch(q); setSearchOpen(false) }}
+                  className="flex items-center gap-1 p-1.5">
+                  <span className="material-symbols-outlined text-base ml-2 shrink-0" style={{ color: 'var(--ds-text-4)' }}>search</span>
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder={t('nav_search_placeholder')}
+                    value={q}
+                    onChange={e => { setQ(e.target.value); dispatch(e.target.value) }}
+                    className="w-80 text-[13px] font-bold bg-transparent focus:outline-none"
+                    style={{ color: 'var(--ds-text-1)' }}
+                  />
+                  {q && (
+                    <button type="button" onClick={clear}
+                      className="size-6 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors shrink-0">
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  )}
+                </form>
+                <div className="border-t border-white/60 mx-2 mb-1.5">
+                  <button type="button"
+                    onClick={() => {
+                      document.dispatchEvent(new CustomEvent('available-rooms-toggle'))
+                      setSearchOpen(false)
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-black uppercase text-slate-500 hover:bg-slate-100 transition-colors mt-1">
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>meeting_room</span>
+                    Search Available Rooms
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Today icon button */}
+          <div className="group relative">
+            <button
+              onClick={() => { document.dispatchEvent(new CustomEvent('today-panel-toggle')); onTodayClick?.() }}
+              className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 17 }}>calendar_today</span>
+            </button>
+            {/* Tooltip */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap">
+              <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-slate-500"
+                style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+                Today's Bookings
+              </div>
+            </div>
+          </div>
 
           {/* Avatar + dropdown */}
           <div ref={dropdownRef} className="relative">
@@ -166,7 +229,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             >
               <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--ds-border-sub)' }}>
                 <p className="text-[12px] font-black" style={{ color: 'var(--ds-text-1)' }}>{user?.name}</p>
-                <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>{user?.department} · {user?.role}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>{user?.role}{user?.department ? ` · ${user.department}` : ''}</p>
               </div>
 
               <div className="py-1.5">
@@ -202,6 +265,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
       <UserProfileModal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
       <SettingModal open={settingOpen} onClose={() => setSettingOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+
     </>
   )
 }

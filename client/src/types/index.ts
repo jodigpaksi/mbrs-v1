@@ -1,11 +1,24 @@
-﻿export interface User {
+﻿export type UserRole = 'user' | 'admin' | 'receptionist' | 'building_admin'
+
+export interface Department {
+  id: number
+  name: string
+  code?: string
+  users_count?: number
+}
+
+export interface User {
   id: number
   name: string
   email: string
-  department: string
-  role: 'user' | 'admin' | 'receptionist'
+  department: string       // name string, returned from backend for display (auth context)
+  department_name?: string  // flat string from appended accessor on booking user relations
+  department_id?: number | null
+  role: UserRole
   avatar?: string
   ext?: string
+  on_duty?: boolean
+  admin_buildings?: { id: number; name: string; address?: string; location?: { id: number; name: string } }[]
 }
 
 export interface Facility {
@@ -13,10 +26,39 @@ export interface Facility {
   icon: string
 }
 
-export interface Room {
+export interface Location {
   id: number
   name: string
-  type: 'Ballroom' | 'Executive' | 'Focus'
+  code?: string
+  buildings_count?: number
+}
+
+export interface Building {
+  id: number
+  location_id?: number
+  location?: Location
+  name: string
+  code?: string
+  address?: string
+  floors: number
+  photo?: string
+  notes?: string
+  is_active: boolean
+  rooms?: Room[]
+}
+
+export interface AvailableSlot {
+  start: string   // ISO datetime e.g. "2026-06-16T09:00:00"
+  end: string
+}
+
+export interface Room {
+  id: number
+  building_id?: number
+  building?: Building
+  sort_order?: number
+  name: string
+  type?: string
   capacity: number
   floor: string
   facilities: Facility[]
@@ -25,6 +67,8 @@ export interface Room {
   is_active: boolean
   status: 'active' | 'maintenance'
   requires_contact: boolean
+  available_slots?: AvailableSlot[]
+  is_fully_free?: boolean
 }
 
 export interface Booking {
@@ -40,6 +84,41 @@ export interface Booking {
   status: 'confirmed' | 'tentative' | 'cancelled'
   type: 'internal' | 'external' | 'maintenance' | 'repairment'
   cancelled_at?: string
+  series_id?: string
+  booked_for?: string
+  booked_for_user_id?: number
+  is_recipient?: boolean
+}
+
+export interface AppNotification {
+  id: number
+  booking_id: number
+  type: string
+  message: string
+  read_at: string | null
+  created_at: string
+  booking?: Booking
+}
+
+export type AssetStatus = 'active' | 'rusak' | 'service' | 'hilang' | 'indent'
+
+export interface AssetUnit {
+  id: number
+  asset_id: number
+  room_id?: number
+  room?: Room
+  unit_code?: string
+  status: AssetStatus
+  notes?: string
+}
+
+export interface Asset {
+  id: number
+  name: string
+  category?: string
+  icon?: string
+  notes?: string
+  units?: AssetUnit[]
 }
 
 export interface PantryItem {
