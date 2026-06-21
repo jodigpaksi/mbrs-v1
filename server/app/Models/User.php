@@ -25,6 +25,7 @@ class User extends Authenticatable
         'ext',
         'avatar',
         'on_duty',
+        'can_book_special',
     ];
 
     protected $hidden = [
@@ -39,7 +40,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'on_duty' => 'boolean',
+            'on_duty'          => 'boolean',
+            'can_book_special' => 'boolean',
         ];
     }
 

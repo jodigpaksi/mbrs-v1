@@ -2,6 +2,14 @@ import api from './axios'
 
 export interface BookingHours { start: string; end: string }
 export interface WeekendSettings { saturday: boolean; sunday: boolean }
+export interface GeneralSettings {
+  max_advance_days: number
+  allow_book_for_others: boolean
+  restrict_after_hours: boolean
+  working_hours_end: string
+  feature_ai_chat: boolean
+  rooms_grid_cols: number
+}
 
 export async function getBookingHours(): Promise<BookingHours> {
   const res = await api.get('/settings/booking-hours')
@@ -20,5 +28,20 @@ export async function getWeekendSettings(): Promise<WeekendSettings> {
 
 export async function updateWeekendSettings(saturday: boolean, sunday: boolean): Promise<WeekendSettings> {
   const res = await api.patch('/settings/weekend', { saturday, sunday })
+  return res.data
+}
+
+export async function getGeneralSettings(): Promise<GeneralSettings> {
+  const res = await api.get('/settings/general')
+  return res.data
+}
+
+export async function updateGeneralSettings(patch: Partial<GeneralSettings>): Promise<GeneralSettings> {
+  const res = await api.patch('/settings/general', patch)
+  return res.data
+}
+
+export async function toggleUserSpecialAccess(userId: number): Promise<{ can_book_special: boolean }> {
+  const res = await api.patch(`/users/${userId}/special-access`)
   return res.data
 }

@@ -18,6 +18,7 @@ export interface User {
   avatar?: string
   ext?: string
   on_duty?: boolean
+  can_book_special?: boolean
   admin_buildings?: { id: number; name: string; address?: string; location?: { id: number; name: string } }[]
 }
 

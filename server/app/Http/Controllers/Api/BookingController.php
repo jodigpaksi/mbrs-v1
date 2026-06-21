@@ -28,6 +28,40 @@ class BookingController extends Controller
         ]);
     }
 
+    private function validateGeneralRules(array $data, Request $request, bool $isPrivileged, \App\Models\Room $room): ?JsonResponse
+    {
+        $get = fn(string $key, mixed $default) => \App\Models\Setting::where('key', $key)->value('value') ?? $default;
+
+        // Max advance days
+        $maxDays = (int) $get('max_advance_days', '30');
+        $daysAhead = (int) Carbon::now()->startOfDay()->diffInDays(Carbon::parse($data['start_at'])->startOfDay(), false);
+        if ($daysAhead > $maxDays) {
+            return response()->json(['message' => "Bookings cannot be made more than {$maxDays} days in advance."], 422);
+        }
+
+        // Allow book for others
+        if (!empty($data['booked_for_user_id']) && !$isPrivileged) {
+            if ($get('allow_book_for_others', 'true') === 'false') {
+                return response()->json(['message' => 'Booking on behalf of others is currently disabled.'], 422);
+            }
+        }
+
+        // After-hours restriction
+        if (!$isPrivileged && $get('restrict_after_hours', 'false') === 'true') {
+            $workEnd = $get('working_hours_end', '17:00');
+            if (Carbon::parse($data['start_at'])->format('H:i') >= $workEnd) {
+                return response()->json(['message' => "After-hours bookings (after {$workEnd}) must go through a receptionist."], 422);
+            }
+        }
+
+        // Special room access
+        if ($room->requires_contact && !$isPrivileged && !$request->user()->can_book_special) {
+            return response()->json(['message' => 'This room requires special access. Please contact a receptionist.'], 422);
+        }
+
+        return null;
+    }
+
     private function validateTimeBounds(string $startAt, string $endAt): ?JsonResponse
     {
         $s = Carbon::parse($startAt);
@@ -121,6 +155,10 @@ class BookingController extends Controller
         }
 
         if ($err = $this->validateTimeBounds($data['start_at'], $data['end_at'])) {
+            return $err;
+        }
+
+        if ($err = $this->validateGeneralRules($data, $request, $isPrivileged, $room)) {
             return $err;
         }
 

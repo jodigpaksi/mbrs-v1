@@ -5,6 +5,7 @@ import type { Room, Building, Booking } from '../types/index'
 import { getRooms, updateRoomStatus, updateRoom, updateRoomSpecial } from '../api/rooms'
 import { getBuildings } from '../api/buildings'
 import { getBookings } from '../api/bookings'
+import { getGeneralSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 import { useSettings } from '../context/SettingsContext'
@@ -61,6 +62,8 @@ export default function RoomsPage() {
 
   const today = toLocalDateStr(new Date())
 
+  const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60_000 })
+  const gridCols = generalSettings?.rooms_grid_cols ?? 3
   const { data: rooms = [], isLoading } = useQuery<Room[]>({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: buildings = [] } = useQuery<Building[]>({ queryKey: ['buildings'], queryFn: getBuildings })
   const { data: todayBookings = [] } = useQuery<Booking[]>({ queryKey: ['bookings', today], queryFn: () => getBookings({ date: today }) })
@@ -545,7 +548,7 @@ export default function RoomsPage() {
                       <span className="text-[8px] font-black uppercase tracking-widest text-slate-300">rooms</span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}>
                     {bRooms.map((room, idx) => renderRoomCard(room, idx))}
                   </div>
                 </div>
@@ -553,7 +556,7 @@ export default function RoomsPage() {
               })
             ) : (
               // Single building
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}>
                 {filtered.map((room, idx) => renderRoomCard(room, idx))}
               </div>
             )}

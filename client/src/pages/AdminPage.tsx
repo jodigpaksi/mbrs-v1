@@ -6,16 +6,17 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { mockBookings, mockRooms, mockUsers } from '../data/mockData'
 import type { Building, Room, Asset, AssetStatus, Location, User, Department } from '../types/index'
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '../api/buildings'
-import { getRooms, createRoom, updateRoom, deleteRoom, reorderRooms } from '../api/rooms'
+import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms } from '../api/rooms'
 import { getAssets, createAsset, updateAsset, deleteAsset, createAssetUnit, updateAssetUnit, deleteAssetUnit } from '../api/assets'
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
-import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings } from '../api/settings'
+import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess } from '../api/settings'
 import type { UserRole } from '../types/index'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import GlassTimePicker from '../components/ui/GlassTimePicker'
 import { useAuth } from '../context/AuthContext'
+import { useCancelToast } from '../context/CancelToastContext'
 
 type Tab = 'overview' | 'bookings' | 'users' | 'buildings' | 'assets' | 'settings'
 type SortKey = 'start_at' | 'title' | 'room' | 'user' | 'status'
@@ -490,16 +491,34 @@ function RoomModal({
 }
 
 // ── Drag & Drop Room List ─────────────────────────────────────────────────────
-function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered }: {
+function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusChange, onSpecialChange }: {
   rooms: Room[]
   buildingId: number
   onEdit: (r: Room) => void
   onDelete: (r: Room) => void
   onReordered: (rooms: Room[]) => void
+  onStatusChange: (roomId: number, status: 'active' | 'maintenance') => void
+  onSpecialChange: (roomId: number, special: boolean) => void
 }) {
   const dragIdx = useRef<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
+  const [togglingStatus, setTogglingStatus] = useState<number | null>(null)
+  const [togglingSpecial, setTogglingSpecial] = useState<number | null>(null)
+
+  async function handleToggleStatus(r: Room) {
+    const next = r.status === 'active' ? 'maintenance' : 'active'
+    setTogglingStatus(r.id)
+    try { await updateRoomStatus(r.id, next); onStatusChange(r.id, next) }
+    finally { setTogglingStatus(null) }
+  }
+
+  async function handleToggleSpecial(r: Room) {
+    const next = !r.requires_contact
+    setTogglingSpecial(r.id)
+    try { await updateRoomSpecial(r.id, next); onSpecialChange(r.id, next) }
+    finally { setTogglingSpecial(null) }
+  }
 
   function onDragStart(i: number) { dragIdx.current = i }
   function onDragOver(e: React.DragEvent, i: number) { e.preventDefault(); setOverIdx(i) }
@@ -550,12 +569,34 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered }: {
               {r.type ? ` · ${r.type}` : ''}
             </p>
           </div>
-          {/* Badges */}
+          {/* Status toggles */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${r.status === 'maintenance' ? 'bg-orange-100 text-orange-600' : 'bg-green-50 text-green-700'}`}>
-              {r.status === 'maintenance' ? 'Maint.' : 'Active'}
-            </span>
-            {r.requires_contact && <SpecialRoomBadge size="xs" />}
+            <button
+              onClick={() => handleToggleStatus(r)}
+              disabled={togglingStatus === r.id}
+              title={r.status === 'active' ? 'Set to Maintenance' : 'Set to Active'}
+              className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
+                ${r.status === 'maintenance'
+                  ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                  : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}>
+                {r.status === 'maintenance' ? 'build' : 'check_circle'}
+              </span>
+              {togglingStatus === r.id ? '...' : r.status === 'maintenance' ? 'Maint.' : 'Active'}
+            </button>
+            <button
+              onClick={() => handleToggleSpecial(r)}
+              disabled={togglingSpecial === r.id}
+              title={r.requires_contact ? 'Remove special access requirement' : 'Set as special room'}
+              className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
+                ${r.requires_contact
+                  ? 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200'
+                  : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: r.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+              {togglingSpecial === r.id ? '...' : r.requires_contact ? 'Special' : 'Regular'}
+            </button>
           </div>
           {/* Actions */}
           <button
@@ -975,6 +1016,8 @@ function BuildingsTab() {
                       onEdit={r => setRoomModal({ open: true, buildingId: b.id, initial: r })}
                       onDelete={r => { setDeleteRoomTarget(r); setDeleteRoomErr(''); setConfirmRoomInput('') }}
                       onReordered={reordered => handleRoomReorder(b.id, reordered)}
+                      onStatusChange={(roomId, status) => setLocalRooms(prev => (prev ?? allRooms as Room[]).map(r => r.id === roomId ? { ...r, status } : r))}
+                      onSpecialChange={(roomId, special) => setLocalRooms(prev => (prev ?? allRooms as Room[]).map(r => r.id === roomId ? { ...r, requires_contact: special } : r))}
                     />
                   )}
                 </div>
@@ -2660,6 +2703,7 @@ function UsersTab() {
                           <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider">Email</th>
                           <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider">Department</th>
                           <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider w-16">Ext</th>
+                          {role === 'user' && <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider">Special Access</th>}
                           <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider w-8"></th>
                           <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider w-8"></th>
                         </tr>
@@ -2678,6 +2722,31 @@ function UsersTab() {
                             <td className="px-4 py-2.5 text-[10px] text-slate-400 font-medium">{u.email}</td>
                             <td className="px-4 py-2.5 text-[10px] text-slate-500 font-bold uppercase">{u.department || '—'}</td>
                             <td className="px-4 py-2.5 text-[10px] text-slate-400 font-medium">{u.ext || '—'}</td>
+                            {role === 'user' && (
+                              <td className="px-4 py-2.5">
+                                <button
+                                  onClick={async () => { await toggleUserSpecialAccess(u.id); qc.invalidateQueries({ queryKey: ['users'] }) }}
+                                  className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-black uppercase tracking-wider whitespace-nowrap"
+                                  style={u.can_book_special
+                                    ? { background: 'rgba(173,238,43,0.1)', borderColor: 'rgba(173,238,43,0.4)', color: '#4d7c00' }
+                                    : { background: 'white', borderColor: '#e2e8f0', color: '#94a3b8' }
+                                  }
+                                  onMouseEnter={e => {
+                                    const b = e.currentTarget
+                                    if (u.can_book_special) { b.style.background = 'rgba(239,68,68,0.08)'; b.style.borderColor = 'rgba(239,68,68,0.35)'; b.style.color = '#dc2626' }
+                                    else { b.style.background = 'rgba(173,238,43,0.08)'; b.style.borderColor = 'rgba(173,238,43,0.4)'; b.style.color = '#4d7c00' }
+                                  }}
+                                  onMouseLeave={e => {
+                                    const b = e.currentTarget
+                                    if (u.can_book_special) { b.style.background = 'rgba(173,238,43,0.1)'; b.style.borderColor = 'rgba(173,238,43,0.4)'; b.style.color = '#4d7c00' }
+                                    else { b.style.background = 'white'; b.style.borderColor = '#e2e8f0'; b.style.color = '#94a3b8' }
+                                  }}
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: 11, fontVariationSettings: u.can_book_special ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                                  {u.can_book_special ? 'Special' : 'Grant Access'}
+                                </button>
+                              </td>
+                            )}
                             <td className="px-2 py-2.5">
                               <button onClick={() => openEdit(u)}
                                 className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors">
@@ -2716,6 +2785,21 @@ function UsersTab() {
                             ))
                           }
                         </div>
+                        {/* Special room access — only for regular users */}
+                        {u.role === 'user' && (
+                          <button
+                            title={u.can_book_special ? 'Revoke special room access' : 'Grant special room access'}
+                            onClick={async () => {
+                              await toggleUserSpecialAccess(u.id)
+                              qc.invalidateQueries({ queryKey: ['users'] })
+                            }}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors shrink-0 text-[9px] font-black uppercase tracking-wider"
+                            style={{ background: u.can_book_special ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)', color: u.can_book_special ? '#4d7c00' : '#94a3b8' }}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>star</span>
+                            {u.can_book_special ? 'Special' : 'Regular'}
+                          </button>
+                        )}
                         <button onClick={() => openEdit(u)}
                           className="size-8 flex items-center justify-center rounded-xl text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
@@ -3062,39 +3146,53 @@ function UsersTab() {
 }
 
 // ── Settings Tab ─────────────────────────────────────────────────────────────
+const SETTINGS_SECTIONS = [
+  { key: 'hours',    label: 'Booking Hours',  icon: 'schedule' },
+  { key: 'weekend',  label: 'Weekend',        icon: 'calendar_today' },
+  { key: 'rules',    label: 'Booking Rules',  icon: 'rule' },
+  { key: 'features', label: 'Features',       icon: 'tune' },
+] as const
+type SettingsSection = typeof SETTINGS_SECTIONS[number]['key']
+
 function SettingsTab() {
   const queryClient = useQueryClient()
+  const { addInfoToast } = useCancelToast()
+  const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
+
+  // Section refs + active tracking
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, features: null })
+  const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
+
+  useEffect(() => {
+    const observers: IntersectionObserver[] = []
+    const latest: Record<string, number> = {}
+    SETTINGS_SECTIONS.forEach(({ key }) => {
+      const el = secRefs.current[key]
+      if (!el) return
+      const obs = new IntersectionObserver(([entry]) => {
+        latest[key] = entry.intersectionRatio
+        const best = SETTINGS_SECTIONS.reduce((a, b) => (latest[b.key] ?? 0) > (latest[a.key] ?? 0) ? b : a)
+        setActiveSection(best.key)
+      }, { threshold: [0, 0.1, 0.5, 1] })
+      obs.observe(el)
+      observers.push(obs)
+    })
+    return () => observers.forEach(o => o.disconnect())
+  }, [])
+
+  function scrollTo(key: SettingsSection) {
+    secRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // Booking Hours (keep save button — destructive side effects)
   const { data: hours } = useQuery({ queryKey: ['booking-hours'], queryFn: getBookingHours })
   const [localStart, setLocalStart] = useState(hours?.start ?? '07:00')
   const [localEnd,   setLocalEnd]   = useState(hours?.end   ?? '19:00')
   const [saved, setSaved] = useState<{ trimmed: number; cancelled: number } | null>(null)
-
-  const { data: weekend } = useQuery({ queryKey: ['weekend-settings'], queryFn: getWeekendSettings })
-  const [wkSat, setWkSat] = useState(weekend?.saturday ?? true)
-  const [wkSun, setWkSun] = useState(weekend?.sunday   ?? true)
-  const [wkSaved, setWkSaved] = useState(false)
-
-  useEffect(() => {
-    if (weekend) { setWkSat(weekend.saturday); setWkSun(weekend.sunday) }
-  }, [weekend?.saturday, weekend?.sunday])
-
-  const { mutate: saveWeekend, isPending: wkPending } = useMutation({
-    mutationFn: () => updateWeekendSettings(wkSat, wkSun),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['weekend-settings'] })
-      setWkSaved(true)
-      setTimeout(() => setWkSaved(false), 3000)
-    },
-  })
-
-  useEffect(() => {
-    if (hours) { setLocalStart(hours.start); setLocalEnd(hours.end) }
-  }, [hours?.start, hours?.end])
-
+  useEffect(() => { if (hours) { setLocalStart(hours.start); setLocalEnd(hours.end) } }, [hours?.start, hours?.end])
   function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
   const isValid = toMin(localEnd) - toMin(localStart) >= 30
-
-  const { mutate, isPending, isError } = useMutation({
+  const { mutate: saveHours, isPending: hoursPending, isError: hoursError } = useMutation({
     mutationFn: () => updateBookingHours(localStart, localEnd),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['booking-hours'] })
@@ -3103,61 +3201,87 @@ function SettingsTab() {
     },
   })
 
+  // Weekend — auto-save on toggle
+  const { data: weekend } = useQuery({ queryKey: ['weekend-settings'], queryFn: getWeekendSettings })
+  const [wkSat, setWkSat] = useState(weekend?.saturday ?? true)
+  const [wkSun, setWkSun] = useState(weekend?.sunday   ?? true)
+  useEffect(() => { if (weekend) { setWkSat(weekend.saturday); setWkSun(weekend.sunday) } }, [weekend?.saturday, weekend?.sunday])
+  const { mutateAsync: doSaveWeekend } = useMutation({
+    mutationFn: (vals: { sat: boolean; sun: boolean }) => updateWeekendSettings(vals.sat, vals.sun),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['weekend-settings'] }); addInfoToast('Weekend settings saved') },
+  })
+  async function toggleSat() { const v = !wkSat; setWkSat(v); await doSaveWeekend({ sat: v, sun: wkSun }) }
+  async function toggleSun() { const v = !wkSun; setWkSun(v); await doSaveWeekend({ sat: wkSat, sun: v }) }
+
+  // General — auto-save each field
+  const { data: general } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings })
+  const [maxDays,      setMaxDays]      = useState(general?.max_advance_days ?? 30)
+  const [allowBookFor, setAllowBookFor] = useState(general?.allow_book_for_others ?? true)
+  const [restrictAH,   setRestrictAH]   = useState(general?.restrict_after_hours ?? false)
+  const [workEnd,      setWorkEnd]      = useState(general?.working_hours_end ?? '17:00')
+  const [aiChat,       setAiChat]       = useState(general?.feature_ai_chat ?? true)
+  const [roomsGrid,    setRoomsGrid]    = useState(general?.rooms_grid_cols ?? 3)
+  useEffect(() => {
+    if (general) { setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others); setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end); setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols) }
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols])
+
+  const { mutateAsync: doSaveGeneral } = useMutation({
+    mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings-general'] }),
+  })
+  async function saveGeneral(patch: Parameters<typeof updateGeneralSettings>[0], msg: string) {
+    await doSaveGeneral(patch)
+    addInfoToast(msg)
+  }
+  async function toggleAllowBookFor() { const v = !allowBookFor; setAllowBookFor(v); await saveGeneral({ allow_book_for_others: v }, v ? 'Book for others enabled' : 'Book for others disabled') }
+  async function toggleRestrictAH()  { const v = !restrictAH;   setRestrictAH(v);   await saveGeneral({ restrict_after_hours: v }, v ? 'After-hours restriction enabled' : 'After-hours restriction disabled') }
+  async function toggleAiChat()      { const v = !aiChat;       setAiChat(v);       await saveGeneral({ feature_ai_chat: v }, v ? 'AI Chat enabled' : 'AI Chat disabled') }
+  async function setRoomsGridCols(v: number) { setRoomsGrid(v); await saveGeneral({ rooms_grid_cols: v }, `Rooms grid set to ${v} columns`) }
+  async function onWorkEndChange(v: string) { setWorkEnd(v); await saveGeneral({ working_hours_end: v }, `Working hours end set to ${v}`) }
+  function onMaxDaysChange(v: number) {
+    setMaxDays(v)
+    clearTimeout(maxDaysDebounce.current)
+    maxDaysDebounce.current = setTimeout(() => saveGeneral({ max_advance_days: v }, `Max advance booking set to ${v} days`), 800)
+  }
+
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="space-y-6">
       <div>
         <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Admin Dashboard</p>
         <h1 className="text-3xl font-black italic tracking-tighter uppercase">Settings</h1>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      <div className="flex gap-8 items-start">
+
+      {/* ── Main sections ── */}
+      <div className="flex-1 min-w-0 max-w-lg space-y-6 pb-32">
+
+      {/* Booking Hours — keep save button (destructive) */}
+      <div ref={el => { secRefs.current.hours = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
         <div>
           <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Booking Hours</p>
           <p className="text-[10px] text-slate-400 mt-0.5">Set the global time window during which rooms can be booked.</p>
         </div>
-
         <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-700 font-semibold leading-relaxed">
           <span className="font-black">Warning:</span> Tightening these hours will automatically trim or cancel existing future bookings that fall outside the new window.
         </div>
-
         <div className="flex items-end gap-4">
           <div className="space-y-1.5">
             <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Start Time</label>
             <GlassTimePicker value={localStart} onChange={setLocalStart} min="00:00" max="23:00" step={30} panelWidth={140}>
-              {() => (
-                <button type="button"
-                  className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums">
-                  <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>schedule</span>
-                  {localStart}
-                </button>
-              )}
+              {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>schedule</span>{localStart}</button>)}
             </GlassTimePicker>
           </div>
-
           <span className="text-slate-300 text-lg font-black pb-2.5">→</span>
-
           <div className="space-y-1.5">
             <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">End Time</label>
             <GlassTimePicker value={localEnd} onChange={setLocalEnd} min="00:30" max="23:30" step={30} panelWidth={140}>
-              {() => (
-                <button type="button"
-                  className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums">
-                  <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>schedule</span>
-                  {localEnd}
-                </button>
-              )}
+              {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>schedule</span>{localEnd}</button>)}
             </GlassTimePicker>
           </div>
         </div>
-
-        {!isValid && (
-          <p className="text-[10px] text-red-500 font-semibold">End time must be at least 30 minutes after start time.</p>
-        )}
-
-        {isError && (
-          <p className="text-[10px] text-red-500 font-semibold">Failed to save. Please try again.</p>
-        )}
-
+        {!isValid && <p className="text-[10px] text-red-500 font-semibold">End time must be at least 30 minutes after start time.</p>}
+        {hoursError && <p className="text-[10px] text-red-500 font-semibold">Failed to save. Please try again.</p>}
         {saved && (
           <div className="p-3 bg-[#f0ffe0] border border-[#adee2b] rounded-xl text-[10px] font-semibold text-slate-700">
             Saved. {saved.trimmed > 0 && <span>{saved.trimmed} booking{saved.trimmed !== 1 ? 's' : ''} trimmed. </span>}
@@ -3165,85 +3289,207 @@ function SettingsTab() {
             {saved.trimmed === 0 && saved.cancelled === 0 && <span>No existing bookings were affected.</span>}
           </div>
         )}
-
-        <button
-          type="button"
-          onClick={() => mutate()}
-          disabled={!isValid || isPending}
+        <button type="button" onClick={() => saveHours()} disabled={!isValid || hoursPending}
           className="px-5 py-2.5 bg-black text-[#adee2b] text-[10px] font-black uppercase rounded-xl hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
-          {isPending ? 'Saving...' : 'Save Changes'}
+          {hoursPending ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
 
-      {/* Weekend / Red Date Settings */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      {/* Weekend — auto-save */}
+      <div ref={el => { secRefs.current.weekend = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
         <div>
           <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Weekend (Red Dates)</p>
           <p className="text-[10px] text-slate-400 mt-0.5">Mark Saturday and/or Sunday as weekend days — shown in red on all calendars.</p>
         </div>
-
         <div className="space-y-3">
-          {/* Saturday toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: wkSat ? 'rgba(239,68,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: wkSat ? '#ef4444' : '#94a3b8' }}>calendar_today</span>
-              </div>
-              <div>
-                <p className="text-[12px] font-black text-slate-700">Saturday</p>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{wkSat ? 'Shown as red / weekend' : 'Regular day'}</p>
+          {([{ label: 'Saturday', val: wkSat, toggle: toggleSat }, { label: 'Sunday', val: wkSun, toggle: toggleSun }] as const).map(({ label, val, toggle }, i) => (
+            <div key={label}>
+              {i > 0 && <div className="border-t border-slate-50 mb-3" />}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: val ? 'rgba(239,68,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: val ? '#ef4444' : '#94a3b8' }}>calendar_today</span>
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-black text-slate-700">{label}</p>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{val ? 'Shown as red / weekend' : 'Regular day'}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={toggle} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+                  <div className="absolute inset-0 rounded-full transition-colors" style={{ background: val ? '#ef4444' : '#e2e8f0' }} />
+                  <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: val ? 24 : 4 }} />
+                </button>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setWkSat(v => !v)}
-              className="relative shrink-0 transition-all"
-              style={{ width: 44, height: 24 }}
-            >
-              <div className="absolute inset-0 rounded-full transition-colors" style={{ background: wkSat ? '#ef4444' : '#e2e8f0' }} />
-              <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: wkSat ? 24 : 4 }} />
-            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Booking Rules — auto-save */}
+      <div ref={el => { secRefs.current.rules = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Booking Rules</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Control how users can create bookings across the system.</p>
+        </div>
+
+        {/* Max advance days */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>event_upcoming</span>
+            </div>
+            <div>
+              <p className="text-[12px] font-black text-slate-700">Max Advance Booking</p>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">How many days ahead users can book</p>
+            </div>
           </div>
-
-          <div className="border-t border-slate-50" />
-
-          {/* Sunday toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: wkSun ? 'rgba(239,68,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: wkSun ? '#ef4444' : '#94a3b8' }}>calendar_today</span>
-              </div>
-              <div>
-                <p className="text-[12px] font-black text-slate-700">Sunday</p>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{wkSun ? 'Shown as red / weekend' : 'Regular day'}</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setWkSun(v => !v)}
-              className="relative shrink-0 transition-all"
-              style={{ width: 44, height: 24 }}
-            >
-              <div className="absolute inset-0 rounded-full transition-colors" style={{ background: wkSun ? '#ef4444' : '#e2e8f0' }} />
-              <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: wkSun ? 24 : 4 }} />
-            </button>
+          <div className="flex items-center gap-2">
+            <input type="number" min={1} max={365} value={maxDays}
+              onChange={e => onMaxDaysChange(Math.max(1, Math.min(365, Number(e.target.value))))}
+              className="w-16 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+            <span className="text-[10px] font-bold text-slate-400">days</span>
           </div>
         </div>
 
-        {wkSaved && (
-          <div className="p-3 bg-[#f0ffe0] border border-[#adee2b] rounded-xl text-[10px] font-semibold text-slate-700">
-            Saved. Calendar weekend highlights updated.
-          </div>
-        )}
+        <div className="border-t border-slate-50" />
 
-        <button
-          type="button"
-          onClick={() => saveWeekend()}
-          disabled={wkPending}
-          className="px-5 py-2.5 bg-black text-[#adee2b] text-[10px] font-black uppercase rounded-xl hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed">
-          {wkPending ? 'Saving...' : 'Save Changes'}
-        </button>
+        {/* Allow book for others */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: allowBookFor ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: allowBookFor ? '#4d7c00' : '#94a3b8' }}>person_add</span>
+            </div>
+            <div>
+              <p className="text-[12px] font-black text-slate-700">Book on Behalf of Others</p>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{allowBookFor ? 'Users can book for others' : 'Disabled — own bookings only'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleAllowBookFor} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowBookFor ? '#adee2b' : '#e2e8f0' }} />
+            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: allowBookFor ? 24 : 4 }} />
+          </button>
+        </div>
+
+        <div className="border-t border-slate-50" />
+
+        {/* After-hours restriction */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: restrictAH ? 'rgba(99,102,241,0.1)' : 'rgba(0,0,0,0.04)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: restrictAH ? '#6366f1' : '#94a3b8' }}>schedule</span>
+              </div>
+              <div>
+                <p className="text-[12px] font-black text-slate-700">After-Hours Restriction</p>
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{restrictAH ? `Users cannot book after ${workEnd}` : 'No restriction — any booking hour'}</p>
+              </div>
+            </div>
+            <button type="button" onClick={toggleRestrictAH} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+              <div className="absolute inset-0 rounded-full transition-colors" style={{ background: restrictAH ? '#6366f1' : '#e2e8f0' }} />
+              <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: restrictAH ? 24 : 4 }} />
+            </button>
+          </div>
+          {restrictAH && (
+            <div className="flex items-center gap-3 pl-11">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Working hours end:</p>
+              <GlassTimePicker value={workEnd} onChange={onWorkEndChange} min="12:00" max="22:00" step={30} panelWidth={140}>
+                {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>schedule</span>{workEnd}</button>)}
+              </GlassTimePicker>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Features — auto-save */}
+      <div ref={el => { secRefs.current.features = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Features</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Enable or disable system-wide features.</p>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: aiChat ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: aiChat ? '#4d7c00' : '#94a3b8' }}>smart_toy</span>
+            </div>
+            <div>
+              <p className="text-[12px] font-black text-slate-700">AI Chat</p>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{aiChat ? 'AI FAB visible to all users' : 'Hidden — reduce server load'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleAiChat} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: aiChat ? '#adee2b' : '#e2e8f0' }} />
+            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: aiChat ? 24 : 4 }} />
+          </button>
+        </div>
+
+        <div className="border-t border-slate-50" />
+
+        {/* Rooms grid columns */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>grid_view</span>
+            </div>
+            <div>
+              <p className="text-[12px] font-black text-slate-700">Rooms Grid Columns</p>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Cards per row on Rooms page</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-slate-200">
+            {[2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setRoomsGridCols(n)}
+                className="w-8 h-7 rounded-lg text-[11px] font-black transition-all"
+                style={roomsGrid === n
+                  ? { background: '#000', color: '#adee2b' }
+                  : { background: 'transparent', color: '#94a3b8' }
+                }
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      </div>{/* end main sections */}
+
+      {/* ── Floating TOC sidebar ── */}
+      <div className="w-44 shrink-0 sticky top-4">
+        <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 px-4 pt-4 pb-2">On this page</p>
+          <div className="pb-2">
+            {SETTINGS_SECTIONS.map(s => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => scrollTo(s.key)}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors group"
+                style={{ background: activeSection === s.key ? 'rgba(173,238,43,0.08)' : 'transparent' }}
+              >
+                <span
+                  className="material-symbols-outlined shrink-0 transition-colors"
+                  style={{ fontSize: 14, color: activeSection === s.key ? '#4d7c00' : '#cbd5e1' }}
+                >
+                  {s.icon}
+                </span>
+                <span
+                  className="text-[11px] font-black transition-colors"
+                  style={{ color: activeSection === s.key ? '#1e293b' : '#94a3b8' }}
+                >
+                  {s.label}
+                </span>
+                {activeSection === s.key && (
+                  <span className="ml-auto w-1 h-1 rounded-full bg-[#adee2b] shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      </div>{/* end flex 2-col */}
     </div>
   )
 }

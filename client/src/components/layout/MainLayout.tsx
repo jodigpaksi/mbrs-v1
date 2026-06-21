@@ -1,10 +1,11 @@
 import { ReactNode, useState, useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Navbar from './Navbar'
 import AiAgentFab from '../ai/AiAgentFab'
 import TodayPanel from '../booking/TodayPanel'
 import AvailableRoomsPanel from '../room/AvailableRoomsPanel'
 import BookingPanel from '../booking/BookingPanel'
+import { getGeneralSettings } from '../../api/settings'
 import type { Room } from '../../types'
 
 interface MainLayoutProps {
@@ -13,6 +14,7 @@ interface MainLayoutProps {
 
 function MainLayoutInner({ children }: MainLayoutProps) {
   const queryClient = useQueryClient()
+  const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60_000 })
   const [availableOpen, setAvailableOpen] = useState(false)
   const [selectedRoom, setSelectedRoom]   = useState<Room | null>(null)
   const [prefillDate, setPrefillDate]     = useState('')
@@ -57,7 +59,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
       <main className="flex-1 overflow-hidden flex flex-col">
         {children}
       </main>
-      <AiAgentFab />
+      {generalSettings?.feature_ai_chat !== false && <AiAgentFab />}
       <TodayPanel />
       <AvailableRoomsPanel
         open={availableOpen}

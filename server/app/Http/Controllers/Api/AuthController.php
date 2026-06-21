@@ -59,7 +59,8 @@ class AuthController extends Controller
             'department_id' => $user->department_id,
             'ext'           => $user->ext ?? '',
             'avatar'        => $user->avatar,
-            'on_duty'       => (bool) $user->on_duty,
+            'on_duty'          => (bool) $user->on_duty,
+            'can_book_special' => (bool) $user->can_book_special,
         ];
     }
 

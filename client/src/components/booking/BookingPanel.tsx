@@ -5,6 +5,7 @@ import { getRooms, checkAvailability, clearRoomView, getAvailableRooms } from '.
 import { getBuildings } from '../../api/buildings'
 import { createBooking, updateBooking, cancelSeries, updateSeries } from '../../api/bookings'
 import { getDirectory } from '../../api/users'
+import { getGeneralSettings } from '../../api/settings'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
 import { useBookingHours } from '../../hooks/useBookingHours'
@@ -56,6 +57,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const bookingStartMin = toMin(bsStr)
   const bookingEndMin   = toMin(beStr)
   const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
+  const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60_000 })
+  const allowBookForOthers = isPrivileged || (generalSettings?.allow_book_for_others !== false)
+  const restrictAfterHours = !isPrivileged && (generalSettings?.restrict_after_hours === true)
+  const workingHoursEnd = generalSettings?.working_hours_end ?? '17:00'
+  const maxAdvanceDays = generalSettings?.max_advance_days ?? 30
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -341,14 +347,16 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
   const roomIsMaintenance = selectedRoom?.status === 'maintenance'
   const maintenanceBlocked = roomIsMaintenance && !isPrivileged
-  const canBookDirectly = isPrivileged || user?.department === 'GAA'
-  const showReceptionistNotice = !!(selectedRoom?.requires_contact && !canBookDirectly)
+  const canBookSpecial = isPrivileged || user?.can_book_special === true
+  const specialRoomBlocked = !!(selectedRoom?.requires_contact && !canBookSpecial)
+  const showReceptionistNotice = specialRoomBlocked
 
   function isValid() {
     if (maintenanceBlocked) return false
+    if (specialRoomBlocked) return false
     if (!title.trim() || !startTime || !endTime || !selectedRoom) return false
+    if (restrictAfterHours && startTime >= workingHoursEnd) return false
     if (repeat !== 'none') {
-      // For repeat: don't block on availability check (each slot checked individually on submit)
       return isTimeValid() === true
     }
     return isAvailable() === true
@@ -706,9 +714,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <span className="material-symbols-outlined" style={{ fontSize: 32, color: '#d97706', fontVariationSettings: "'FILL' 1" }}>support_agent</span>
               </div>
               <div>
-                <p className="text-[13px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-1)' }}>Booking via Receptionist / GAA Only</p>
+                <p className="text-[13px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-1)' }}>Booking via Receptionist Only</p>
                 <p className="text-[11px] font-medium mt-2 leading-relaxed max-w-[260px] mx-auto" style={{ color: 'var(--ds-text-3)' }}>
-                  This room can only be booked through the Receptionist or GAA team. Please contact them to make a reservation.
+                  This room requires special access. Please contact the receptionist to make a reservation.
                 </p>
               </div>
               <button
@@ -717,6 +725,29 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
                 Pilih ruangan lain
+              </button>
+            </div>
+          )}
+
+          {/* After-hours restriction notice */}
+          {restrictAfterHours && startTime >= workingHoursEnd && !showReceptionistNotice && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center gap-5 px-8"
+              style={{ background: 'var(--ds-bg-surface)' }}>
+              <div className="size-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 32, color: '#6366f1', fontVariationSettings: "'FILL' 1" }}>schedule</span>
+              </div>
+              <div>
+                <p className="text-[13px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-1)' }}>After Working Hours</p>
+                <p className="text-[11px] font-medium mt-2 leading-relaxed max-w-[260px] mx-auto" style={{ color: 'var(--ds-text-3)' }}>
+                  Bookings after {workingHoursEnd} must go through the receptionist. Please contact them to request an after-hours booking.
+                </p>
+              </div>
+              <button
+                onClick={() => setStartTime('')}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors text-[10px] font-black uppercase text-slate-600"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
+                Change time
               </button>
             </div>
           )}
@@ -852,8 +883,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   className="w-full bg-white border border-slate-200 rounded-xl text-sm font-medium p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none resize-none" />
               </div>
 
-              {/* Book for — accordion */}
-              <div ref={bookForRef}>
+              {/* Book for — accordion (hidden if disabled by admin) */}
+              {allowBookForOthers && <div ref={bookForRef}>
                 <button
                   type="button"
                   onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setShowBookForDrop(false) } }}
@@ -907,7 +938,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     })()}
                   </div>
                 )}
-              </div>
+              </div>}
 
               {pantrySaved && (
                 <div className="flex items-center gap-2 bg-slate-900 text-[#adee2b] px-4 py-3 rounded-2xl">

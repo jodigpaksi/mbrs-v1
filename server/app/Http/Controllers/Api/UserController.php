@@ -24,8 +24,9 @@ class UserController extends Controller
                 'department_id'   => $u->department_id,
                 'role'            => $u->role,
                 'ext'             => $u->ext,
-                'avatar'          => $u->avatar,
-                'admin_buildings' => $u->adminBuildings->map(fn ($b) => [
+                'avatar'           => $u->avatar,
+                'can_book_special' => (bool) $u->can_book_special,
+                'admin_buildings'  => $u->adminBuildings->map(fn ($b) => [
                     'id'       => $b->id,
                     'name'     => $b->name,
                     'address'  => $b->address,
@@ -71,6 +72,12 @@ class UserController extends Controller
 
         $user->update($data);
         return $user->load('adminBuildings.location');
+    }
+
+    public function toggleSpecialAccess(User $user)
+    {
+        $user->update(['can_book_special' => !$user->can_book_special]);
+        return response()->json(['can_book_special' => $user->can_book_special]);
     }
 
     public function assignBuildings(Request $request, User $user)

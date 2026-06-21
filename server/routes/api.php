@@ -25,6 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Settings (read: all auth)
     Route::get('/settings/booking-hours', [SettingController::class, 'bookingHours']);
     Route::get('/settings/weekend', [SettingController::class, 'weekendSettings']);
+    Route::get('/settings/general', [SettingController::class, 'generalSettings']);
 
     // Locations (read: all auth)
     Route::get('/locations', [LocationController::class, 'index']);
@@ -105,6 +106,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('can:admin')->group(function () {
         Route::patch('/settings/booking-hours', [SettingController::class, 'updateBookingHours']);
         Route::patch('/settings/weekend', [SettingController::class, 'updateWeekendSettings']);
+        Route::patch('/settings/general', [SettingController::class, 'updateGeneralSettings']);
+        Route::patch('/users/{user}/special-access', [UserController::class, 'toggleSpecialAccess']);
         Route::post('/departments', [DepartmentController::class, 'store']);
         Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);

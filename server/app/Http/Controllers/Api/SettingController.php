@@ -40,6 +40,39 @@ class SettingController extends Controller
         return response()->json(['saturday' => $data['saturday'], 'sunday' => $data['sunday']]);
     }
 
+    public function generalSettings(): JsonResponse
+    {
+        $get = fn(string $key, mixed $default) => Setting::where('key', $key)->value('value') ?? $default;
+
+        return response()->json([
+            'max_advance_days'      => (int) $get('max_advance_days', '30'),
+            'allow_book_for_others' => $get('allow_book_for_others', 'true') !== 'false',
+            'restrict_after_hours'  => $get('restrict_after_hours', 'false') === 'true',
+            'working_hours_end'     => $get('working_hours_end', '17:00'),
+            'feature_ai_chat'       => $get('feature_ai_chat', 'true') !== 'false',
+            'rooms_grid_cols'       => (int) $get('rooms_grid_cols', '3'),
+        ]);
+    }
+
+    public function updateGeneralSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'max_advance_days'      => 'sometimes|integer|min:1|max:365',
+            'allow_book_for_others' => 'sometimes|boolean',
+            'restrict_after_hours'  => 'sometimes|boolean',
+            'working_hours_end'     => 'sometimes|date_format:H:i',
+            'feature_ai_chat'       => 'sometimes|boolean',
+            'rooms_grid_cols'       => 'sometimes|integer|min:2|max:5',
+        ]);
+
+        foreach ($data as $key => $value) {
+            $stored = is_bool($value) ? ($value ? 'true' : 'false') : (string) $value;
+            Setting::updateOrCreate(['key' => $key], ['value' => $stored]);
+        }
+
+        return $this->generalSettings();
+    }
+
     public function updateBookingHours(Request $request): JsonResponse
     {
         $data = $request->validate([
