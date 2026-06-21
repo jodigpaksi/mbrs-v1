@@ -12,13 +12,15 @@ import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUs
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
 import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess } from '../api/settings'
+import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive, runExport, listExports, getExportDownloadUrl, deleteAllExports } from '../api/archive'
+import type { ArchiveParams } from '../api/archive'
 import type { UserRole } from '../types/index'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import GlassTimePicker from '../components/ui/GlassTimePicker'
 import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 
-type Tab = 'overview' | 'bookings' | 'users' | 'buildings' | 'assets' | 'settings'
+type Tab = 'overview' | 'bookings' | 'users' | 'buildings' | 'assets' | 'settings' | 'archive'
 type SortKey = 'start_at' | 'title' | 'room' | 'user' | 'status'
 type SortDir = 'asc' | 'desc'
 
@@ -3145,12 +3147,510 @@ function UsersTab() {
   )
 }
 
+// ── Archive Tab ──────────────────────────────────────────────────────────────
+function ArchiveTab() {
+  const qc = useQueryClient()
+  const { addInfoToast } = useCancelToast()
+  const [params, setParams] = useState<ArchiveParams>({ page: 1 })
+  const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo]   = useState('')
+  const [purgeConfirm, setPurgeConfirm] = useState(false)
+  const [activeSection, setActiveSection] = useState<'bookings' | 'exports'>('bookings')
+  const importRef = useRef<HTMLInputElement>(null)
+  const searchDebounce = useRef<ReturnType<typeof setTimeout>>()
+
+  const queryKey = ['archive', params]
+  const { data, isFetching } = useQuery({
+    queryKey,
+    queryFn: () => getArchive(params),
+    staleTime: 30_000,
+  })
+
+  function applyFilters(patch: Partial<ArchiveParams>) {
+    setParams(prev => ({ ...prev, ...patch, page: 1 }))
+  }
+
+  function onSearchChange(v: string) {
+    setSearch(v)
+    clearTimeout(searchDebounce.current)
+    searchDebounce.current = setTimeout(() => applyFilters({ search: v || undefined }), 400)
+  }
+
+  const { mutate: doRun, isPending: running } = useMutation({
+    mutationFn: runArchive,
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      addInfoToast(`Archived ${res.archived} booking${res.archived !== 1 ? 's' : ''}${res.purged ? `, purged ${res.purged}` : ''}`)
+    },
+  })
+
+  const { mutate: doPurge, isPending: purging } = useMutation({
+    mutationFn: purgeArchive,
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      setPurgeConfirm(false)
+      addInfoToast(`Purged ${res.deleted} booking${res.deleted !== 1 ? 's' : ''} from archive`)
+    },
+  })
+
+  const [restoringId,  setRestoringId]  = useState<number | null>(null)
+  const [restoringAll, setRestoringAll] = useState(false)
+  async function doRestoreAll() {
+    setRestoringAll(true)
+    try {
+      const res = await restoreAllBookings()
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      qc.invalidateQueries({ queryKey: ['bookings'] })
+      addInfoToast(`${res.restored} booking${res.restored !== 1 ? 's' : ''} restored`)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      addInfoToast('Restore all failed: ' + (msg ?? 'unknown error'))
+    } finally {
+      setRestoringAll(false)
+    }
+  }
+  async function doRestore(id: number) {
+    setRestoringId(id)
+    try {
+      await restoreBooking(id)
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      qc.invalidateQueries({ queryKey: ['bookings'] })
+      addInfoToast('Booking restored and active again')
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      addInfoToast('Restore failed: ' + (msg ?? 'unknown error'))
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
+  const { mutate: doImport, isPending: importing } = useMutation({
+    mutationFn: (file: File) => importArchive(file),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['archive'] })
+      addInfoToast(`Imported ${res.created} booking${res.created !== 1 ? 's' : ''}${res.errors.length ? ` (${res.errors.length} errors)` : ''}`)
+    },
+  })
+
+  const { mutate: doExportNow, isPending: exportingNow } = useMutation({
+    mutationFn: (formats: string[]) => runExport(formats),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['exports'] })
+      addInfoToast(`Export generated: ${res.files} file${res.files !== 1 ? 's' : ''} saved to server`)
+    },
+  })
+  const [deleteExportsConfirm, setDeleteExportsConfirm] = useState(false)
+  const [deleteExportsInput,   setDeleteExportsInput]   = useState('')
+  const [deletingExports,      setDeletingExports]      = useState(false)
+  async function doDeleteAllExports() {
+    setDeletingExports(true)
+    try {
+      const res = await deleteAllExports()
+      qc.invalidateQueries({ queryKey: ['exports'] })
+      addInfoToast(`${res.deleted} export batch${res.deleted !== 1 ? 'es' : ''} deleted`)
+      setDeleteExportsConfirm(false)
+      setDeleteExportsInput('')
+    } catch {
+      addInfoToast('Delete failed')
+    } finally {
+      setDeletingExports(false)
+    }
+  }
+
+  const { data: exports = [] } = useQuery({
+    queryKey: ['exports'],
+    queryFn: listExports,
+    staleTime: 30_000,
+  })
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+  function fmtTime(iso: string) {
+    return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function exportExcel() {
+    if (!data?.data.length) return
+    const rows = data.data.map(b => ({
+      Date: fmtDate(b.start_at as unknown as string),
+      'Start': fmtTime(b.start_at as unknown as string),
+      'End': fmtTime(b.end_at as unknown as string),
+      Title: b.title,
+      Room: b.room?.name ?? '',
+      Building: (b.room as unknown as { building?: { name: string } })?.building?.name ?? '',
+      User: b.user?.name ?? '',
+      Status: b.status,
+      'Archived At': b.archived_at ? fmtDate(b.archived_at as unknown as string) : '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Archive')
+    XLSX.writeFile(wb, `bookings-archive-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  function exportCsv() {
+    if (!data?.data.length) return
+    const rows = data.data
+    const cols = ['Date', 'Start', 'End', 'Title', 'Room', 'User', 'Status', 'Archived At']
+    const lines = [
+      cols.join(','),
+      ...rows.map(b => [
+        fmtDate(b.start_at as unknown as string),
+        fmtTime(b.start_at as unknown as string),
+        fmtTime(b.end_at as unknown as string),
+        `"${b.title}"`,
+        `"${b.room?.name ?? ''}"`,
+        `"${b.user?.name ?? ''}"`,
+        b.status,
+        b.archived_at ? fmtDate(b.archived_at as unknown as string) : '',
+      ].join(',')),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `bookings-archive-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const statusColor: Record<string, string> = {
+    confirmed: 'bg-green-50 text-green-700',
+    pending:   'bg-amber-50 text-amber-700',
+    cancelled: 'bg-red-50 text-red-500',
+    tentative: 'bg-blue-50 text-blue-600',
+  }
+
+  return (
+    <div className="max-w-5xl space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Admin Dashboard</p>
+          <h1 className="text-3xl font-black italic tracking-tighter uppercase">Archive</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* icon-only utility buttons */}
+          <button onClick={() => { qc.invalidateQueries({ queryKey: ['archive'] }); qc.invalidateQueries({ queryKey: ['exports'] }) }}
+            title="Refresh" className="size-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
+          </button>
+
+          <div className="w-px h-5 bg-slate-200" />
+
+          {/* archive actions */}
+          <button onClick={() => doRun()} disabled={running}
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-40">
+            <span className={`material-symbols-outlined ${running ? 'animate-spin' : ''}`} style={{ fontSize: 14 }}>sync</span>
+            {running ? 'Running…' : 'Run Now'}
+          </button>
+          <button onClick={doRestoreAll} disabled={restoringAll || !data?.total}
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-40">
+            <span className={`material-symbols-outlined ${restoringAll ? 'animate-spin' : ''}`} style={{ fontSize: 14 }}>restore</span>
+            {restoringAll ? 'Restoring…' : 'Restore All'}
+          </button>
+
+          <div className="w-px h-5 bg-slate-200" />
+
+          {/* import / export */}
+          <button onClick={() => importRef.current?.click()} disabled={importing}
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-40">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>upload_file</span>
+            {importing ? 'Importing…' : 'Import'}
+          </button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) { doImport(f); e.target.value = '' } }} />
+          <button onClick={exportExcel} disabled={!data?.data.length}
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-30">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>table_view</span>Excel
+          </button>
+          <button onClick={exportCsv} disabled={!data?.data.length}
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-30">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>csv</span>CSV
+          </button>
+
+          <div className="w-px h-5 bg-slate-200" />
+
+          {/* destructive */}
+          <button onClick={() => setPurgeConfirm(true)}
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-red-200 bg-red-50 text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete_sweep</span>Purge
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      {data && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Archived</p>
+            <p className="text-3xl font-black">{data.total.toLocaleString()}</p>
+            <p className="text-[12px] text-slate-400 mt-0.5">bookings in archive</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Oldest Entry</p>
+            <p className="text-xl font-black">{data.oldest ? fmtDate(data.oldest) : '—'}</p>
+            <p className="text-[12px] text-slate-400 mt-0.5">earliest archived booking</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Next Auto-Purge</p>
+            <p className="text-xl font-black text-red-500">{data.purge_date ? fmtDate(data.purge_date) : '—'}</p>
+            <p className="text-[12px] text-slate-400 mt-0.5">oldest entry eligible</p>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" style={{ fontSize: 16 }}>search</span>
+          <input
+            value={search} onChange={e => onSearchChange(e.target.value)}
+            placeholder="Search title, room, user…"
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none"
+          />
+        </div>
+        <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); applyFilters({ date_from: e.target.value || undefined }) }}
+          className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+        <span className="text-slate-300 font-black">→</span>
+        <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); applyFilters({ date_to: e.target.value || undefined }) }}
+          className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+        {(search || dateFrom || dateTo) && (
+          <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setParams({ page: 1 }) }}
+            className="text-[10px] font-black text-slate-400 hover:text-slate-700 uppercase tracking-wider px-2">
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+        {isFetching && <div className="h-1 bg-[#adee2b] animate-pulse" />}
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-slate-100">
+              {['Date', 'Time', 'Title', 'Room', 'User', 'Status', 'Archived', ''].map(h => (
+                <th key={h} className="px-5 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-widest">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {!data?.data.length && !isFetching && (
+              <tr><td colSpan={8} className="px-5 py-12 text-center text-slate-400 text-sm font-bold">No archived bookings found.</td></tr>
+            )}
+            {data?.data.map(b => (
+              <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                <td className="px-5 py-3 text-xs font-bold text-slate-700 whitespace-nowrap">
+                  {fmtDate(b.start_at as unknown as string)}
+                </td>
+                <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap tabular-nums">
+                  {fmtTime(b.start_at as unknown as string)} – {fmtTime(b.end_at as unknown as string)}
+                </td>
+                <td className="px-5 py-3 max-w-[160px]">
+                  <p className="text-xs font-bold truncate">{b.title}</p>
+                  {b.description && <p className="text-[10px] text-slate-400 truncate">{b.description}</p>}
+                </td>
+                <td className="px-5 py-3 text-xs text-slate-500">{b.room?.name ?? '—'}</td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${b.user?.name}`} className="size-6 rounded-full bg-slate-100 shrink-0" />
+                    <span className="text-xs text-slate-600 truncate">{b.user?.name ?? '—'}</span>
+                  </div>
+                </td>
+                <td className="px-5 py-3">
+                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColor[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                    {b.status}
+                  </span>
+                </td>
+                <td className="px-5 py-3 text-[10px] text-slate-400 whitespace-nowrap">
+                  {b.archived_at ? fmtDate(b.archived_at) : '—'}
+                </td>
+                <td className="px-3 py-3">
+                  <button
+                    onClick={() => doRestore(b.id)}
+                    disabled={restoringId === b.id}
+                    title="Restore to active"
+                    className="size-8 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-100 disabled:opacity-40 transition-all"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>restore</span>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Pagination */}
+        {data && data.last_page > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
+            <p className="text-[10px] text-slate-400 font-bold">Page {data.page} of {data.last_page}</p>
+            <div className="flex gap-2">
+              <button onClick={() => setParams(p => ({ ...p, page: (p.page ?? 1) - 1 }))} disabled={(params.page ?? 1) <= 1}
+                className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-black hover:text-[#adee2b] disabled:opacity-30 transition-all">
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_left</span>
+              </button>
+              <button onClick={() => setParams(p => ({ ...p, page: (p.page ?? 1) + 1 }))} disabled={(params.page ?? 1) >= data.last_page}
+                className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-black hover:text-[#adee2b] disabled:opacity-30 transition-all">
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Server Exports */}
+      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Server Exports</p>
+            <p className="text-[12px] text-slate-400 mt-0.5">Files generated by scheduler or manual export</p>
+          </div>
+          <button onClick={() => doExportNow(['excel', 'csv', 'pdf'])} disabled={exportingNow}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-40 transition-opacity">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>save</span>
+            {exportingNow ? 'Exporting…' : 'Export Now'}
+          </button>
+        </div>
+        {exports.length === 0 ? (
+          <p className="px-6 py-8 text-center text-slate-400 text-sm font-bold">No exports yet.</p>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {exports.map(e => (
+              <div key={e.label} className="px-6 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-[14px] font-black text-slate-700">{e.label}</p>
+                  <p className="text-[12px] text-slate-400 mt-0.5">{new Date(e.created_at * 1000).toLocaleString('en-GB')}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {e.files.map(f => (
+                    <a key={f.path} href={getExportDownloadUrl(f.path)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors">
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>
+                      {f.name.split('.').pop()?.toUpperCase()}
+                      <span className="text-slate-400 font-normal">({(f.size / 1024).toFixed(0)}kb)</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Danger zone */}
+        {exports.length > 0 && (
+          <div className="mx-6 mb-6 mt-2 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-black text-red-600 uppercase tracking-wider">Danger Zone</p>
+              <p className="text-[10px] text-red-400 mt-0.5">Delete all {exports.length} export batch{exports.length !== 1 ? 'es' : ''} and their files permanently.</p>
+            </div>
+            <button onClick={() => { setDeleteExportsConfirm(true); setDeleteExportsInput('') }}
+              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-300 bg-white text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete_forever</span>
+              Delete All
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Delete all exports confirm modal */}
+      {deleteExportsConfirm && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
+          onClick={() => setDeleteExportsConfirm(false)}>
+          <div className="w-[420px] rounded-[2rem] overflow-hidden shadow-2xl"
+            style={{ background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(48px)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
+              <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
+              </div>
+              <div>
+                <p className="text-base font-black text-slate-800">Delete All Export Records</p>
+                <p className="text-[11px] text-slate-500">This will permanently delete all files from the server.</p>
+              </div>
+            </div>
+            <div className="px-7 py-6 space-y-5">
+              <p className="text-[12px] text-slate-600 leading-relaxed">
+                All <span className="font-black text-slate-800">{exports.length} export batch{exports.length !== 1 ? 'es' : ''}</span> and their files will be permanently removed from the server. This action <span className="font-black text-red-500">cannot be undone</span>.
+              </p>
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Confirm action</p>
+                <p className="text-[11px] text-slate-500">Type <span className="font-black text-red-500 font-mono">Delete all records</span> to confirm</p>
+                <input
+                  type="text"
+                  value={deleteExportsInput}
+                  onChange={e => setDeleteExportsInput(e.target.value)}
+                  placeholder="Delete all records"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter' && deleteExportsInput === 'Delete all records') doDeleteAllExports() }}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-slate-300"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setDeleteExportsConfirm(false)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-[11px] font-black uppercase hover:bg-slate-50 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={doDeleteAllExports}
+                  disabled={deleteExportsInput !== 'Delete all records' || deletingExports}
+                  className="px-5 py-2.5 rounded-xl bg-red-500 text-white text-[11px] font-black uppercase hover:bg-red-600 disabled:opacity-40 transition-all">
+                  {deletingExports ? 'Deleting…' : 'Delete All Records'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Purge confirm modal */}
+      {purgeConfirm && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
+          onClick={() => setPurgeConfirm(false)}>
+          <div className="w-[400px] rounded-[2rem] overflow-hidden shadow-2xl"
+            style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
+              <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center">
+                <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
+              </div>
+              <div>
+                <p className="text-base font-black text-slate-800">Purge Archive</p>
+                <p className="text-[11px] text-slate-500">This will permanently delete eligible archived bookings.</p>
+              </div>
+            </div>
+            <div className="px-7 py-5 space-y-4">
+              <p className="text-[12px] text-slate-600 leading-relaxed">
+                All <span className="font-black">{data?.total} archived booking{(data?.total ?? 0) !== 1 ? 's' : ''}</span> will be permanently deleted. This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setPurgeConfirm(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={() => doPurge()} disabled={purging}
+                  className="px-4 py-2 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase hover:bg-red-600 transition-colors disabled:opacity-50">
+                  {purging ? 'Purging…' : 'Purge Now'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 // ── Settings Tab ─────────────────────────────────────────────────────────────
 const SETTINGS_SECTIONS = [
   { key: 'hours',    label: 'Booking Hours',  icon: 'schedule' },
   { key: 'weekend',  label: 'Weekend',        icon: 'calendar_today' },
   { key: 'rules',    label: 'Booking Rules',  icon: 'rule' },
   { key: 'features', label: 'Features',       icon: 'tune' },
+  { key: 'archive',  label: 'Archive',         icon: 'inventory_2' },
+  { key: 'export',   label: 'Export Schedule', icon: 'schedule_send' },
 ] as const
 type SettingsSection = typeof SETTINGS_SECTIONS[number]['key']
 
@@ -3160,24 +3660,28 @@ function SettingsTab() {
   const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, features: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, features: null, archive: null, export: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
-    const observers: IntersectionObserver[] = []
     const latest: Record<string, number> = {}
+    let rafId: number
+    const observers: IntersectionObserver[] = []
     SETTINGS_SECTIONS.forEach(({ key }) => {
       const el = secRefs.current[key]
       if (!el) return
       const obs = new IntersectionObserver(([entry]) => {
         latest[key] = entry.intersectionRatio
-        const best = SETTINGS_SECTIONS.reduce((a, b) => (latest[b.key] ?? 0) > (latest[a.key] ?? 0) ? b : a)
-        setActiveSection(best.key)
-      }, { threshold: [0, 0.1, 0.5, 1] })
+        cancelAnimationFrame(rafId)
+        rafId = requestAnimationFrame(() => {
+          const best = SETTINGS_SECTIONS.reduce((a, b) => (latest[b.key] ?? 0) > (latest[a.key] ?? 0) ? b : a)
+          setActiveSection(best.key)
+        })
+      }, { threshold: [0, 0.25, 0.5, 0.75, 1] })
       obs.observe(el)
       observers.push(obs)
     })
-    return () => observers.forEach(o => o.disconnect())
+    return () => { observers.forEach(o => o.disconnect()); cancelAnimationFrame(rafId) }
   }, [])
 
   function scrollTo(key: SettingsSection) {
@@ -3221,9 +3725,28 @@ function SettingsTab() {
   const [workEnd,      setWorkEnd]      = useState(general?.working_hours_end ?? '17:00')
   const [aiChat,       setAiChat]       = useState(general?.feature_ai_chat ?? true)
   const [roomsGrid,    setRoomsGrid]    = useState(general?.rooms_grid_cols ?? 3)
+  const [archiveDays,      setArchiveDays]      = useState(general?.archive_after_days ?? 30)
+  const [deleteDays,       setDeleteDays]       = useState(general?.archive_delete_after_days ?? 90)
+  const [exportEnabled,    setExportEnabled]    = useState(general?.export_enabled ?? false)
+  const [exportFrequency,  setExportFrequency]  = useState(general?.export_frequency ?? 'daily')
+  const [exportTime,       setExportTime]       = useState(general?.export_time ?? '06:00')
+  const [exportDow,        setExportDow]        = useState(general?.export_day_of_week ?? 1)
+  const [exportDom,        setExportDom]        = useState(general?.export_day_of_month ?? 1)
+  const [exportFormats,    setExportFormats]    = useState<string[]>((general?.export_formats ?? 'excel,csv').split(',').filter(Boolean))
+  const archiveDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const deleteDaysDebounce  = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
-    if (general) { setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others); setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end); setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols) }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols])
+    if (general) {
+      setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
+      setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
+      setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
+      setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
+      setExportEnabled(general.export_enabled); setExportFrequency(general.export_frequency)
+      setExportTime(general.export_time); setExportDow(general.export_day_of_week)
+      setExportDom(general.export_day_of_month)
+      setExportFormats((general.export_formats ?? 'excel,csv').split(',').filter(Boolean))
+    }
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -3237,7 +3760,28 @@ function SettingsTab() {
   async function toggleRestrictAH()  { const v = !restrictAH;   setRestrictAH(v);   await saveGeneral({ restrict_after_hours: v }, v ? 'After-hours restriction enabled' : 'After-hours restriction disabled') }
   async function toggleAiChat()      { const v = !aiChat;       setAiChat(v);       await saveGeneral({ feature_ai_chat: v }, v ? 'AI Chat enabled' : 'AI Chat disabled') }
   async function setRoomsGridCols(v: number) { setRoomsGrid(v); await saveGeneral({ rooms_grid_cols: v }, `Rooms grid set to ${v} columns`) }
+  function onArchiveDaysChange(v: number) {
+    setArchiveDays(v)
+    clearTimeout(archiveDaysDebounce.current)
+    archiveDaysDebounce.current = setTimeout(() => saveGeneral({ archive_after_days: v }, `Archive after ${v} days`), 800)
+  }
+  function onDeleteDaysChange(v: number) {
+    setDeleteDays(v)
+    clearTimeout(deleteDaysDebounce.current)
+    deleteDaysDebounce.current = setTimeout(() => saveGeneral({ archive_delete_after_days: v }, `Auto-delete archive after ${v} days`), 800)
+  }
   async function onWorkEndChange(v: string) { setWorkEnd(v); await saveGeneral({ working_hours_end: v }, `Working hours end set to ${v}`) }
+  async function toggleExportEnabled() { const v = !exportEnabled; setExportEnabled(v); await saveGeneral({ export_enabled: v }, v ? 'Auto export enabled' : 'Auto export disabled') }
+  async function onExportFrequencyChange(v: string) { setExportFrequency(v); await saveGeneral({ export_frequency: v }, `Export frequency: ${v}`) }
+  async function onExportTimeChange(v: string) { setExportTime(v); await saveGeneral({ export_time: v }, `Export time set to ${v}`) }
+  async function onExportDowChange(v: number) { setExportDow(v); await saveGeneral({ export_day_of_week: v }, 'Export day updated') }
+  async function onExportDomChange(v: number) { setExportDom(v); await saveGeneral({ export_day_of_month: v }, 'Export day updated') }
+  async function toggleExportFormat(fmt: string) {
+    const next = exportFormats.includes(fmt) ? exportFormats.filter(f => f !== fmt) : [...exportFormats, fmt]
+    if (!next.length) return
+    setExportFormats(next)
+    await saveGeneral({ export_formats: next.join(',') }, `Export formats: ${next.join(', ')}`)
+  }
   function onMaxDaysChange(v: number) {
     setMaxDays(v)
     clearTimeout(maxDaysDebounce.current)
@@ -3254,13 +3798,13 @@ function SettingsTab() {
       <div className="flex gap-8 items-start">
 
       {/* ── Main sections ── */}
-      <div className="flex-1 min-w-0 max-w-lg space-y-6 pb-32">
+      <div className="flex-1 min-w-0 max-w-2xl space-y-6 pb-32">
 
       {/* Booking Hours — keep save button (destructive) */}
       <div ref={el => { secRefs.current.hours = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Booking Hours</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Set the global time window during which rooms can be booked.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Booking Hours</p>
+          <p className="text-[12px] text-slate-400 mt-0.5">Set the global time window during which rooms can be booked.</p>
         </div>
         <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-700 font-semibold leading-relaxed">
           <span className="font-black">Warning:</span> Tightening these hours will automatically trim or cancel existing future bookings that fall outside the new window.
@@ -3298,8 +3842,8 @@ function SettingsTab() {
       {/* Weekend — auto-save */}
       <div ref={el => { secRefs.current.weekend = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Weekend (Red Dates)</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Mark Saturday and/or Sunday as weekend days — shown in red on all calendars.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Weekend (Red Dates)</p>
+          <p className="text-[12px] text-slate-400 mt-0.5">Mark Saturday and/or Sunday as weekend days — shown in red on all calendars.</p>
         </div>
         <div className="space-y-3">
           {([{ label: 'Saturday', val: wkSat, toggle: toggleSat }, { label: 'Sunday', val: wkSun, toggle: toggleSun }] as const).map(({ label, val, toggle }, i) => (
@@ -3307,12 +3851,12 @@ function SettingsTab() {
               {i > 0 && <div className="border-t border-slate-50 mb-3" />}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: val ? 'rgba(239,68,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: val ? '#ef4444' : '#94a3b8' }}>calendar_today</span>
+                  <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: val ? 'rgba(239,68,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 20, color: val ? '#ef4444' : '#94a3b8' }}>calendar_today</span>
                   </div>
                   <div>
-                    <p className="text-[12px] font-black text-slate-700">{label}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{val ? 'Shown as red / weekend' : 'Regular day'}</p>
+                    <p className="text-[14px] font-black text-slate-700">{label}</p>
+                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{val ? 'Shown as red / weekend' : 'Regular day'}</p>
                   </div>
                 </div>
                 <button type="button" onClick={toggle} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3328,26 +3872,26 @@ function SettingsTab() {
       {/* Booking Rules — auto-save */}
       <div ref={el => { secRefs.current.rules = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Booking Rules</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Control how users can create bookings across the system.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Booking Rules</p>
+          <p className="text-[12px] text-slate-400 mt-0.5">Control how users can create bookings across the system.</p>
         </div>
 
         {/* Max advance days */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>event_upcoming</span>
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>event_upcoming</span>
             </div>
             <div>
-              <p className="text-[12px] font-black text-slate-700">Max Advance Booking</p>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">How many days ahead users can book</p>
+              <p className="text-[14px] font-black text-slate-700">Max Advance Booking</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">How many days ahead users can book</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <input type="number" min={1} max={365} value={maxDays}
               onChange={e => onMaxDaysChange(Math.max(1, Math.min(365, Number(e.target.value))))}
               className="w-16 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
-            <span className="text-[10px] font-bold text-slate-400">days</span>
+            <span className="text-[12px] font-bold text-slate-400">days</span>
           </div>
         </div>
 
@@ -3356,12 +3900,12 @@ function SettingsTab() {
         {/* Allow book for others */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: allowBookFor ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16, color: allowBookFor ? '#4d7c00' : '#94a3b8' }}>person_add</span>
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: allowBookFor ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: allowBookFor ? '#4d7c00' : '#94a3b8' }}>person_add</span>
             </div>
             <div>
-              <p className="text-[12px] font-black text-slate-700">Book on Behalf of Others</p>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{allowBookFor ? 'Users can book for others' : 'Disabled — own bookings only'}</p>
+              <p className="text-[14px] font-black text-slate-700">Book on Behalf of Others</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{allowBookFor ? 'Users can book for others' : 'Disabled — own bookings only'}</p>
             </div>
           </div>
           <button type="button" onClick={toggleAllowBookFor} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3376,12 +3920,12 @@ function SettingsTab() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: restrictAH ? 'rgba(99,102,241,0.1)' : 'rgba(0,0,0,0.04)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: restrictAH ? '#6366f1' : '#94a3b8' }}>schedule</span>
+              <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: restrictAH ? 'rgba(99,102,241,0.1)' : 'rgba(0,0,0,0.04)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: restrictAH ? '#6366f1' : '#94a3b8' }}>schedule</span>
               </div>
               <div>
-                <p className="text-[12px] font-black text-slate-700">After-Hours Restriction</p>
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{restrictAH ? `Users cannot book after ${workEnd}` : 'No restriction — any booking hour'}</p>
+                <p className="text-[14px] font-black text-slate-700">After-Hours Restriction</p>
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{restrictAH ? `Users cannot book after ${workEnd}` : 'No restriction — any booking hour'}</p>
               </div>
             </div>
             <button type="button" onClick={toggleRestrictAH} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3403,17 +3947,17 @@ function SettingsTab() {
       {/* Features — auto-save */}
       <div ref={el => { secRefs.current.features = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-slate-700">Features</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Enable or disable system-wide features.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Features</p>
+          <p className="text-[12px] text-slate-400 mt-0.5">Enable or disable system-wide features.</p>
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: aiChat ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16, color: aiChat ? '#4d7c00' : '#94a3b8' }}>smart_toy</span>
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: aiChat ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: aiChat ? '#4d7c00' : '#94a3b8' }}>smart_toy</span>
             </div>
             <div>
-              <p className="text-[12px] font-black text-slate-700">AI Chat</p>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{aiChat ? 'AI FAB visible to all users' : 'Hidden — reduce server load'}</p>
+              <p className="text-[14px] font-black text-slate-700">AI Chat</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{aiChat ? 'AI FAB visible to all users' : 'Hidden — reduce server load'}</p>
             </div>
           </div>
           <button type="button" onClick={toggleAiChat} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3427,12 +3971,12 @@ function SettingsTab() {
         {/* Rooms grid columns */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>grid_view</span>
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>grid_view</span>
             </div>
             <div>
-              <p className="text-[12px] font-black text-slate-700">Rooms Grid Columns</p>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Cards per row on Rooms page</p>
+              <p className="text-[14px] font-black text-slate-700">Rooms Grid Columns</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Cards per row on Rooms page</p>
             </div>
           </div>
           <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-slate-200">
@@ -3453,6 +3997,184 @@ function SettingsTab() {
           </div>
         </div>
       </div>
+
+      {/* Archive settings */}
+      <div ref={el => { secRefs.current.archive = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Archive</p>
+          <p className="text-[12px] text-slate-400 mt-0.5">Control when bookings are archived and auto-deleted.</p>
+        </div>
+
+        {/* Archive after N days */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>inventory_2</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-slate-700">Archive After</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Past bookings hidden from all views</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min={1} max={365} value={archiveDays}
+              onChange={e => onArchiveDaysChange(Math.max(1, Math.min(365, Number(e.target.value))))}
+              className="w-16 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+            <span className="text-[12px] font-bold text-slate-400">days</span>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-50" />
+
+        {/* Auto-delete after N days */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#ef4444' }}>delete_sweep</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-slate-700">Auto-Delete Archive After</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Permanently delete from archive</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min={1} max={730} value={deleteDays}
+              onChange={e => onDeleteDaysChange(Math.max(1, Math.min(730, Number(e.target.value))))}
+              className="w-16 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+            <span className="text-[12px] font-bold text-slate-400">days</span>
+          </div>
+        </div>
+
+        <div className="p-3 bg-slate-50 rounded-xl text-[10px] text-slate-500 font-semibold leading-relaxed">
+          Bookings older than <span className="font-black text-slate-700">{archiveDays} days</span> move to archive.
+          Archive entries older than <span className="font-black text-slate-700">{deleteDays} days</span> are permanently deleted nightly at 02:00.
+        </div>
+      </div>
+
+      {/* Export Schedule */}
+      <div ref={el => { secRefs.current.export = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Export Schedule</p>
+          <p className="text-[12px] text-slate-400 mt-0.5">Auto-export archive to server storage on a schedule.</p>
+        </div>
+
+        {/* Enable toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: exportEnabled ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: exportEnabled ? '#4d7c00' : '#94a3b8' }}>schedule_send</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-slate-700">Auto Export</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{exportEnabled ? 'Enabled — runs on schedule' : 'Disabled'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleExportEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: exportEnabled ? '#adee2b' : '#e2e8f0' }} />
+            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: exportEnabled ? 24 : 4 }} />
+          </button>
+        </div>
+
+        {exportEnabled && (<>
+          <div className="border-t border-slate-50" />
+
+          {/* Frequency */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>repeat</span>
+              </div>
+              <p className="text-[14px] font-black text-slate-700">Frequency</p>
+            </div>
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-slate-200">
+              {(['daily', 'weekly', 'monthly'] as const).map(f => (
+                <button key={f} type="button" onClick={() => onExportFrequencyChange(f)}
+                  className="px-3 h-7 rounded-lg text-[10px] font-black uppercase transition-all"
+                  style={exportFrequency === f ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Time */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>schedule</span>
+              </div>
+              <p className="text-[14px] font-black text-slate-700">Time</p>
+            </div>
+            <GlassTimePicker value={exportTime} onChange={onExportTimeChange} min="00:00" max="23:30" step={30} panelWidth={140}>
+              {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>schedule</span>{exportTime}</button>)}
+            </GlassTimePicker>
+          </div>
+
+          {/* Day of week (weekly) */}
+          {exportFrequency === 'weekly' && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>today</span>
+                </div>
+                <p className="text-[14px] font-black text-slate-700">Day of Week</p>
+              </div>
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-slate-200">
+                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
+                  <button key={i} type="button" onClick={() => onExportDowChange(i)}
+                    className="w-8 h-7 rounded-lg text-[10px] font-black transition-all"
+                    style={exportDow === i ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Day of month (monthly) */}
+          {exportFrequency === 'monthly' && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>calendar_month</span>
+                </div>
+                <p className="text-[14px] font-black text-slate-700">Day of Month</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="number" min={1} max={28} value={exportDom}
+                  onChange={e => onExportDomChange(Math.max(1, Math.min(28, Number(e.target.value))))}
+                  className="w-14 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+                <span className="text-[12px] font-bold text-slate-400">of month</span>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-slate-50" />
+
+          {/* Formats */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>description</span>
+              </div>
+              <p className="text-[14px] font-black text-slate-700">Export Formats</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {(['excel', 'csv', 'pdf'] as const).map(fmt => (
+                <button key={fmt} type="button" onClick={() => toggleExportFormat(fmt)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase transition-all"
+                  style={exportFormats.includes(fmt)
+                    ? { background: 'rgba(173,238,43,0.1)', borderColor: 'rgba(173,238,43,0.5)', color: '#4d7c00' }
+                    : { background: '#f8fafc', borderColor: '#e2e8f0', color: '#94a3b8' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 11, fontVariationSettings: exportFormats.includes(fmt) ? "'FILL' 1" : "'FILL' 0" }}>check_circle</span>
+                  {fmt}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>)}
+      </div>
+
       </div>{/* end main sections */}
 
       {/* ── Floating TOC sidebar ── */}
@@ -3542,6 +4264,7 @@ export default function AdminPage() {
     { key: 'buildings', label: 'Buildings', icon: 'domain' },
     { key: 'assets',    label: 'Assets',    icon: 'inventory_2' },
     { key: 'users',     label: 'Users',     icon: 'group' },
+    { key: 'archive',   label: 'Archive',   icon: 'archive' },
   ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
@@ -3555,84 +4278,80 @@ export default function AdminPage() {
         }
         .admin-tab-in { animation: admin-tab-in 0.22s cubic-bezier(0.4,0,0.2,1) both }
       `}</style>
-      {/* Sidebar — floating dark panel */}
-      <div className={`shrink-0 p-3 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${sidebarCollapsed ? 'w-[76px]' : 'w-[200px]'}`}>
-        <div className="bg-white rounded-3xl h-full flex flex-col py-4 px-2 shadow-sm border border-slate-100">
+      {/* Sidebar */}
+      <div className={`shrink-0 p-3 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${sidebarCollapsed ? 'w-[68px]' : 'w-[196px]'}`}>
+        <div className="h-full flex flex-col rounded-3xl py-3 px-2 overflow-hidden"
+          style={{ background: 'rgba(15,20,45,0.92)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 8px 40px rgba(0,0,0,0.18)', transform: 'translateZ(0)', willChange: 'transform' }}>
 
-          {/* Label — expanded only */}
-          <div className={`px-2 mb-3 transition-all duration-200 overflow-hidden ${sidebarCollapsed ? 'h-0 opacity-0 mb-0' : 'h-7 opacity-100'}`}>
-            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-300 whitespace-nowrap">Admin Panel</p>
+          {/* Label */}
+          <div className={`px-2 mb-2 transition-all duration-200 overflow-hidden ${sidebarCollapsed ? 'h-0 opacity-0' : 'h-6 opacity-100'}`}>
+            <p className="text-[8px] font-black uppercase tracking-[0.35em] whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.2)' }}>Admin Panel</p>
           </div>
 
           {/* Nav items */}
           <div className="flex flex-col gap-0.5 flex-1">
-            {mainTabs.map(t => (
-              <div key={t.key} className="relative group">
-                <button onClick={() => setTab(t.key)}
-                  className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 text-[10px] font-black uppercase overflow-hidden
-                    ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}
-                    ${tab === t.key
-                      ? 'bg-[#adee2b]/20 text-black'
-                      : 'text-slate-400 hover:text-slate-800 hover:bg-slate-50'
-                    }`}>
-                  <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20 }}>{t.icon}</span>
-                  {!sidebarCollapsed && <span className="whitespace-nowrap tracking-wide">{t.label}</span>}
-                </button>
+            {mainTabs.map(t => {
+              const active = tab === t.key
+              return (
+                <div key={t.key} className="relative group">
+                  <button onClick={() => setTab(t.key)}
+                    className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 overflow-hidden relative
+                      ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}
+                    style={{ background: active ? 'rgba(173,238,43,0.13)' : 'transparent' }}>
+                    {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
+                    <span className="material-symbols-outlined shrink-0 transition-colors" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{t.icon}</span>
+                    {!sidebarCollapsed && (
+                      <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{t.label}</span>
+                    )}
+                  </button>
+                  {sidebarCollapsed && (
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
+                      <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
+                        style={{ background: 'rgba(15,20,45,0.92)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{t.label}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
 
-                {/* Fluid glass tooltip — collapsed only */}
+          {/* Settings — pinned at bottom */}
+          {settingsTabDef && (() => {
+            const active = tab === settingsTabDef.key
+            return (
+              <div className="relative group mt-1 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <button onClick={() => setTab(settingsTabDef.key)}
+                  className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 overflow-hidden relative
+                    ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}
+                  style={{ background: active ? 'rgba(173,238,43,0.13)' : 'transparent' }}>
+                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
+                  <span className="material-symbols-outlined shrink-0 transition-colors" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{settingsTabDef.icon}</span>
+                  {!sidebarCollapsed && (
+                    <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{settingsTabDef.label}</span>
+                  )}
+                </button>
                 {sidebarCollapsed && (
-                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none
-                    opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
-                    <div style={{
-                      background: 'rgba(255,255,255,0.75)',
-                      backdropFilter: 'blur(20px)',
-                      WebkitBackdropFilter: 'blur(20px)',
-                      border: '1px solid rgba(255,255,255,0.6)',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)',
-                    }} className="px-3.5 py-2 rounded-xl whitespace-nowrap">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">{t.label}</span>
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
+                    <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
+                      style={{ background: 'rgba(15,20,45,0.92)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+                      <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{settingsTabDef.label}</span>
                     </div>
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-
-          {/* Settings — pinned at bottom */}
-          {settingsTabDef && (
-            <div className="relative group border-t border-slate-100 pt-1 mt-1">
-              <button onClick={() => setTab(settingsTabDef.key)}
-                className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 text-[10px] font-black uppercase overflow-hidden
-                  ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}
-                  ${tab === settingsTabDef.key
-                    ? 'bg-[#adee2b]/20 text-black'
-                    : 'text-slate-400 hover:text-slate-800 hover:bg-slate-50'
-                  }`}>
-                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20 }}>{settingsTabDef.icon}</span>
-                {!sidebarCollapsed && <span className="whitespace-nowrap tracking-wide">{settingsTabDef.label}</span>}
-              </button>
-              {sidebarCollapsed && (
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none
-                  opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
-                  <div style={{
-                    background: 'rgba(255,255,255,0.75)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.6)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)',
-                  }} className="px-3.5 py-2 rounded-xl whitespace-nowrap">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">{settingsTabDef.label}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            )
+          })()}
 
           {/* Toggle */}
-          <div className="pt-2 mt-1 border-t border-slate-100">
+          <div className="pt-2 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
             <button onClick={() => setSidebarCollapsed(s => !s)}
-              className="w-full flex items-center justify-center py-2 rounded-xl text-slate-300 hover:text-slate-500 hover:bg-slate-50 transition-all">
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+              className="w-full flex items-center justify-center py-2 rounded-xl transition-all"
+              style={{ color: 'rgba(255,255,255,0.2)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}>
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
                 {sidebarCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'}
               </span>
             </button>
@@ -3642,7 +4361,7 @@ export default function AdminPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8" style={{ scrollbarWidth: 'thin' }}>
+      <div className="flex-1 overflow-y-auto p-8" style={{ scrollbarWidth: 'thin', willChange: 'scroll-position' }}>
 
         {tab === 'overview' && (
           <div className="max-w-4xl space-y-6 admin-tab-in">
@@ -3778,6 +4497,7 @@ export default function AdminPage() {
 
         {tab === 'users' && <div className="admin-tab-in"><UsersTab /></div>}
 
+        {tab === 'archive'  && <div className="admin-tab-in"><ArchiveTab /></div>}
         {tab === 'settings' && <div className="admin-tab-in"><SettingsTab /></div>}
       </div>
     </div>

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ArchiveController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\BookingController;
@@ -108,6 +109,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/settings/weekend', [SettingController::class, 'updateWeekendSettings']);
         Route::patch('/settings/general', [SettingController::class, 'updateGeneralSettings']);
         Route::patch('/users/{user}/special-access', [UserController::class, 'toggleSpecialAccess']);
+        Route::get('/archive', [ArchiveController::class, 'index']);
+        Route::post('/archive/run', [ArchiveController::class, 'run']);
+        Route::patch('/archive/{booking}/restore', [ArchiveController::class, 'restore']);
+        Route::post('/archive/restore-all', [ArchiveController::class, 'restoreAll']);
+        Route::delete('/archive/purge', [ArchiveController::class, 'purge']);
+        Route::post('/archive/import', [ArchiveController::class, 'import']);
+        Route::post('/archive/export', [ArchiveController::class, 'runExport']);
+        Route::get('/exports', [ArchiveController::class, 'listExports']);
+        Route::get('/exports/download', [ArchiveController::class, 'downloadExport']);
+        Route::delete('/exports/all', [ArchiveController::class, 'deleteAllExports']);
         Route::post('/departments', [DepartmentController::class, 'store']);
         Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);

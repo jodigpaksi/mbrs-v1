@@ -21,6 +21,7 @@ class Booking extends Model
         'series_id',
         'booked_for',
         'booked_for_user_id',
+        'archived_at',
     ];
 
     protected function casts(): array
@@ -29,6 +30,7 @@ class Booking extends Model
             'start_at'     => 'datetime',
             'end_at'       => 'datetime',
             'cancelled_at' => 'datetime',
+            'archived_at'  => 'datetime',
         ];
     }
 

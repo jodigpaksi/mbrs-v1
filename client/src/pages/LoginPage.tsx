@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
+import { prefetchAfterLogin } from '../api/prefetch'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -23,6 +24,7 @@ export default function LoginPage() {
     try {
       const data = await login(email, password)
       setUser(data.user)
+      await prefetchAfterLogin()
       navigate('/')
     } catch {
       setError('Invalid email or password.')

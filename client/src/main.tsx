@@ -12,8 +12,8 @@ import App from './App.tsx'
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime:            30_000,   // data dianggap fresh 30 detik — tidak refetch ulang
-      gcTime:          5 * 60_000,   // cache disimpan 5 menit setelah tidak dipakai
+      staleTime:       2 * 60_000,   // data fresh 2 menit — navigasi antar menu tidak refetch
+      gcTime:         10 * 60_000,   // cache disimpan 10 menit setelah tidak dipakai
       retry:                    1,   // gagal → coba 1x lagi (default 3x, lambat)
       refetchOnWindowFocus:  false,  // tidak refetch tiap kali tab di-focus
     },

@@ -50,7 +50,15 @@ class SettingController extends Controller
             'restrict_after_hours'  => $get('restrict_after_hours', 'false') === 'true',
             'working_hours_end'     => $get('working_hours_end', '17:00'),
             'feature_ai_chat'       => $get('feature_ai_chat', 'true') !== 'false',
-            'rooms_grid_cols'       => (int) $get('rooms_grid_cols', '3'),
+            'rooms_grid_cols'            => (int) $get('rooms_grid_cols', '3'),
+            'archive_after_days'         => (int) $get('archive_after_days', '30'),
+            'archive_delete_after_days'  => (int) $get('archive_delete_after_days', '90'),
+            'export_enabled'             => $get('export_enabled', 'false') === 'true',
+            'export_frequency'           => $get('export_frequency', 'daily'),
+            'export_time'                => $get('export_time', '06:00'),
+            'export_day_of_week'         => (int) $get('export_day_of_week', '1'),
+            'export_day_of_month'        => (int) $get('export_day_of_month', '1'),
+            'export_formats'             => $get('export_formats', 'excel,csv'),
         ]);
     }
 
@@ -62,7 +70,15 @@ class SettingController extends Controller
             'restrict_after_hours'  => 'sometimes|boolean',
             'working_hours_end'     => 'sometimes|date_format:H:i',
             'feature_ai_chat'       => 'sometimes|boolean',
-            'rooms_grid_cols'       => 'sometimes|integer|min:2|max:5',
+            'rooms_grid_cols'           => 'sometimes|integer|min:2|max:5',
+            'archive_after_days'        => 'sometimes|integer|min:1|max:365',
+            'archive_delete_after_days' => 'sometimes|integer|min:1|max:730',
+            'export_enabled'            => 'sometimes|boolean',
+            'export_frequency'          => 'sometimes|in:daily,weekly,monthly',
+            'export_time'               => 'sometimes|date_format:H:i',
+            'export_day_of_week'        => 'sometimes|integer|min:0|max:6',
+            'export_day_of_month'       => 'sometimes|integer|min:1|max:31',
+            'export_formats'            => 'sometimes|string',
         ]);
 
         foreach ($data as $key => $value) {

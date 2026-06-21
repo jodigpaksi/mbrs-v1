@@ -82,6 +82,7 @@ class BookingController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Booking::with(['user.department', 'room.building', 'pantryOrder'])
+            ->whereNull('archived_at')
             ->orderBy('start_at');
 
         if ($request->date_from && $request->date_to) {
@@ -113,6 +114,7 @@ class BookingController extends Controller
         $userId = $request->user()->id;
 
         $bookings = Booking::with(['room.building', 'user.department'])
+            ->whereNull('archived_at')
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                   ->orWhere('booked_for_user_id', $userId);

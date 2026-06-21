@@ -451,56 +451,56 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
       onMouseEnter={onHover}
       onMouseLeave={onUnhover}
       style={{
-        width: 210, flexShrink: 0, position: 'relative',
-        paddingBottom: expanded ? 26 + ACTION_H : 26,
+        width: 260, flexShrink: 0, position: 'relative',
+        paddingBottom: expanded ? 28 + ACTION_H : 28,
         transition: 'padding-bottom 0.3s cubic-bezier(0.34,1.04,0.64,1)',
       }}>
-      {/* Dark action layer — deepest, peeks below accent when expanded */}
+      {/* Dark action layer */}
       <div style={{
         position: 'absolute', top: 16, left: 0, right: 0,
         bottom: expanded ? 0 : 8,
-        background: '#0f172a', borderRadius: 18, zIndex: 0,
+        background: '#0f172a', borderRadius: 22, zIndex: 0,
         display: 'flex', alignItems: 'flex-end',
-        padding: '0 10px 10px', gap: 7,
+        padding: '0 12px 12px', gap: 8,
         transition: 'bottom 0.3s cubic-bezier(0.34,1.04,0.64,1)',
       }}>
         <div style={{
-          display: 'flex', width: '100%', gap: 7,
+          display: 'flex', width: '100%', gap: 8,
           opacity: expanded ? 1 : 0,
           transition: expanded ? 'opacity 0.18s ease 0.14s' : 'opacity 0.1s ease',
         }}>
           <button onClick={e => { e.stopPropagation(); onEdit() }} style={{
             flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.18)',
-            borderRadius: 9, padding: '7px 0', color: 'white',
-            fontSize: 9, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+            borderRadius: 10, padding: '8px 0', color: 'white',
+            fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
           }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); onCancel() }} style={{
             flex: 1, background: 'rgba(239,68,68,0.14)', border: '1px solid rgba(239,68,68,0.32)',
-            borderRadius: 9, padding: '7px 0', color: '#fca5a5',
-            fontSize: 9, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+            borderRadius: 10, padding: '8px 0', color: '#fca5a5',
+            fontSize: 10, fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
           }}>Cancel</button>
         </div>
       </div>
-      {/* Accent layer — zIndex 1, bottom lifts when expanded to reveal action */}
+      {/* Accent layer */}
       <div style={{
         position: 'absolute', top: 8, left: 0, right: 0,
         bottom: expanded ? ACTION_H : 0,
-        background: accentBg, borderRadius: 18, zIndex: 1,
+        background: accentBg, borderRadius: 22, zIndex: 1,
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        padding: '0 14px 8px',
+        padding: '0 16px 9px',
         transition: 'bottom 0.3s cubic-bezier(0.34,1.04,0.64,1)',
       }}>
-        <span style={{ fontSize: 8, fontWeight: 900, color: accentText, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{b.status}</span>
-        <span style={{ fontSize: 8, fontWeight: 900, color: accentText, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{tStyle.label}</span>
+        <span style={{ fontSize: 9, fontWeight: 900, color: accentText, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{b.status}</span>
+        <span style={{ fontSize: 9, fontWeight: 900, color: accentText, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{tStyle.label}</span>
       </div>
-      {/* Top card — zIndex 2 */}
+      {/* Top card */}
       <div onClick={clickable ? onToggle : undefined} style={{
         position: 'relative', zIndex: 2, cursor: clickable ? 'pointer' : 'default',
         background: 'rgba(255,255,255,0.97)',
         backdropFilter: 'blur(24px) saturate(160%)',
         WebkitBackdropFilter: 'blur(24px) saturate(160%)',
         border: expanded ? '1.5px solid rgba(173,238,43,0.6)' : '1px solid rgba(255,255,255,0.9)',
-        borderRadius: 18, padding: '14px 14px 13px',
+        borderRadius: 22, padding: '16px 16px 15px',
         boxShadow: highlighted
           ? `0 0 0 2px ${accentBg}, 0 0 18px 6px ${accentBg}66, 0 2px 16px rgba(0,0,0,0.11)`
           : expanded
@@ -508,20 +508,25 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
           : '0 2px 16px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,1)',
         transition: 'border 0.2s ease, box-shadow 0.2s ease',
       }}>
-        <p style={{ fontSize: 15, fontWeight: 900, color: '#1e293b', lineHeight: 1.25, marginBottom: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: b.booked_for ? 3 : 5, overflow: 'hidden' }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{b.room?.name ?? '—'}</p>
+        <p style={{ fontSize: 17, fontWeight: 900, color: '#1e293b', lineHeight: 1.25, marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, overflow: 'hidden' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{b.room?.name ?? '—'}</p>
           {b.room?.requires_contact && (
-            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 11, color: '#d97706' }} title="Special room">star</span>
+            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 12, color: '#d97706' }} title="Special room">star</span>
           )}
         </div>
-        {b.booked_for && (
-          <p style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>
+        {b.is_recipient ? (
+          <p style={{ fontSize: 11, fontWeight: 700, color: '#6b9900', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>person</span>
+            by {b.user?.name}
+          </p>
+        ) : b.booked_for ? (
+          <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>person_pin</span>
             for {b.booked_for}
           </p>
-        )}
-        <p style={{ fontSize: 11, fontWeight: 900, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
+        ) : null}
+        <p style={{ fontSize: 13, fontWeight: 900, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
       </div>
     </div>
   )

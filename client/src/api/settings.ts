@@ -9,6 +9,14 @@ export interface GeneralSettings {
   working_hours_end: string
   feature_ai_chat: boolean
   rooms_grid_cols: number
+  archive_after_days: number
+  archive_delete_after_days: number
+  export_enabled: boolean
+  export_frequency: string
+  export_time: string
+  export_day_of_week: number
+  export_day_of_month: number
+  export_formats: string
 }
 
 export async function getBookingHours(): Promise<BookingHours> {
