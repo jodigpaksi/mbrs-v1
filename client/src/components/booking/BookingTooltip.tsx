@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Booking } from '../../types/index'
 import { deptColors } from '../../data/mockData'
 import { getDirectory } from '../../api/users'
+import UserAvatar from '../ui/UserAvatar'
 
 interface TooltipPos { x: number; y: number }
 
@@ -217,10 +218,8 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
         {/* User */}
         <div className="border-t border-slate-200/70 pt-4 space-y-3">
           <div className="flex items-center gap-3.5">
-            <img
-              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${booking.user?.avatar || booking.user?.name}`}
-              className="size-12 rounded-xl object-cover border border-slate-200"
-            />
+            <UserAvatar name={booking.user?.name ?? '?'} avatar={booking.user?.avatar} size={48}
+              style={{ borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)' }} />
             <div>
               <p className="text-base font-black text-slate-900 leading-tight">{booking.user?.name}</p>
               <p className="text-[11px] font-bold uppercase mt-0.5 text-slate-500">{dept}</p>

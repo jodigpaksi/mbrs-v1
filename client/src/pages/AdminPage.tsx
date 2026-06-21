@@ -16,6 +16,7 @@ import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchiv
 import type { ArchiveParams } from '../api/archive'
 import type { UserRole } from '../types/index'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
+import UserAvatar from '../components/ui/UserAvatar'
 import GlassTimePicker from '../components/ui/GlassTimePicker'
 import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
@@ -2648,7 +2649,7 @@ function UsersTab() {
   }, [filtered])
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 max-w-5xl">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
           <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Management</p>
@@ -2656,20 +2657,20 @@ function UsersTab() {
         </div>
         {/* Search */}
         <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" style={{ fontSize: 15 }}>search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" style={{ fontSize: 16 }}>search</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users..."
-            className="w-44 bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+            className="w-56 bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
         </div>
         {/* Import / Export */}
         <button onClick={() => setIEModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-200 transition-colors">
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>import_export</span>
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[11px] font-black uppercase hover:bg-slate-200 transition-colors">
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>import_export</span>
           Import / Export
         </button>
         {/* Add User */}
         <button onClick={() => setAddModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 transition-colors">
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>person_add</span>
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black text-[#adee2b] text-[11px] font-black uppercase hover:bg-slate-800 transition-colors">
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_add</span>
           Add User
         </button>
       </div>
@@ -2689,9 +2690,9 @@ function UsersTab() {
             return (
               <div key={role} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
                 {/* Group header */}
-                <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-50">
-                  <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${m.bg} ${m.text}`}>{m.label}</span>
-                  <span className="text-[9px] font-black text-slate-300">{grouped[role]!.length} user{grouped[role]!.length !== 1 ? 's' : ''}</span>
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-50">
+                  <span className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase ${m.bg} ${m.text}`}>{m.label}</span>
+                  <span className="text-[11px] font-black text-slate-300">{grouped[role]!.length} user{grouped[role]!.length !== 1 ? 's' : ''}</span>
                 </div>
 
                 {isUserRole ? (
@@ -2700,35 +2701,34 @@ function UsersTab() {
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b border-slate-50">
-                          <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider w-8">No.</th>
-                          <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider">Name</th>
-                          <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider">Email</th>
-                          <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider">Department</th>
-                          <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider w-16">Ext</th>
-                          {role === 'user' && <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider">Special Access</th>}
-                          <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider w-8"></th>
-                          <th className="px-4 py-2 text-[8px] font-black uppercase text-slate-400 tracking-wider w-8"></th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider w-10">No.</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Name</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Email</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Department</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider w-20">Ext</th>
+                          {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Special Access</th>}
+                          <th className="px-2 py-3 w-10"></th>
+                          <th className="px-2 py-3 w-10"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {grouped[role]!.map((u, i) => (
                           <tr key={u.id} className={`hover:bg-slate-50 transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-slate-50' : ''}`}>
-                            <td className="px-4 py-2.5 text-[10px] font-bold text-slate-300">{i + 1}</td>
-                            <td className="px-4 py-2.5">
-                              <div className="flex items-center gap-2">
-                                <img src={u.avatar ?? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(u.name)}`}
-                                  className="size-6 rounded-full bg-slate-100 shrink-0 object-cover" />
-                                <span className="text-[11px] font-black text-slate-800 whitespace-nowrap">{u.name}</span>
+                            <td className="px-5 py-3.5 text-[11px] font-bold text-slate-300">{i + 1}</td>
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-2.5">
+                                <UserAvatar name={u.name} avatar={u.avatar} size={32} />
+                                <span className="text-[13px] font-black text-slate-800 whitespace-nowrap">{u.name}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-2.5 text-[10px] text-slate-400 font-medium">{u.email}</td>
-                            <td className="px-4 py-2.5 text-[10px] text-slate-500 font-bold uppercase">{u.department || '—'}</td>
-                            <td className="px-4 py-2.5 text-[10px] text-slate-400 font-medium">{u.ext || '—'}</td>
+                            <td className="px-5 py-3.5 text-[12px] text-slate-400 font-medium">{u.email}</td>
+                            <td className="px-5 py-3.5 text-[12px] text-slate-500 font-bold uppercase">{u.department || '—'}</td>
+                            <td className="px-5 py-3.5 text-[12px] text-slate-400 font-medium">{u.ext || '—'}</td>
                             {role === 'user' && (
-                              <td className="px-4 py-2.5">
+                              <td className="px-5 py-3.5">
                                 <button
                                   onClick={async () => { await toggleUserSpecialAccess(u.id); qc.invalidateQueries({ queryKey: ['users'] }) }}
-                                  className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-black uppercase tracking-wider whitespace-nowrap"
+                                  className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-black uppercase tracking-wider whitespace-nowrap"
                                   style={u.can_book_special
                                     ? { background: 'rgba(173,238,43,0.1)', borderColor: 'rgba(173,238,43,0.4)', color: '#4d7c00' }
                                     : { background: 'white', borderColor: '#e2e8f0', color: '#94a3b8' }
@@ -2744,21 +2744,21 @@ function UsersTab() {
                                     else { b.style.background = 'white'; b.style.borderColor = '#e2e8f0'; b.style.color = '#94a3b8' }
                                   }}
                                 >
-                                  <span className="material-symbols-outlined" style={{ fontSize: 11, fontVariationSettings: u.can_book_special ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                                  <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: u.can_book_special ? "'FILL' 1" : "'FILL' 0" }}>star</span>
                                   {u.can_book_special ? 'Special' : 'Grant Access'}
                                 </button>
                               </td>
                             )}
-                            <td className="px-2 py-2.5">
+                            <td className="px-2 py-3.5">
                               <button onClick={() => openEdit(u)}
-                                className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>edit</span>
+                                className="size-8 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
                               </button>
                             </td>
-                            <td className="px-2 py-2.5">
+                            <td className="px-2 py-3.5">
                               <button onClick={() => { setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('') }}
-                                className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors">
-                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
+                                className="size-8 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors">
+                                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
                               </button>
                             </td>
                           </tr>
@@ -2770,20 +2770,19 @@ function UsersTab() {
                   /* Card layout for admin roles */
                   <>
                     {grouped[role]!.map((u, i) => (
-                      <div key={u.id} className={`flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-slate-50' : ''}`}>
-                        <img src={u.avatar ?? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(u.name)}`}
-                          className="size-9 rounded-full bg-slate-100 shrink-0 object-cover" />
+                      <div key={u.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-slate-50' : ''}`}>
+                        <UserAvatar name={u.name} avatar={u.avatar} size={44} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-black text-slate-800">{u.name}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">{u.email}</p>
+                          <p className="text-[14px] font-black text-slate-800">{u.name}</p>
+                          <p className="text-[12px] text-slate-400 font-bold">{u.email}</p>
                         </div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase shrink-0">{u.department}</span>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase shrink-0">{u.department}</span>
                         {/* Building tags */}
-                        <div className="flex gap-1 flex-wrap max-w-[200px] justify-end">
+                        <div className="flex gap-1.5 flex-wrap max-w-[220px] justify-end">
                           {(u.admin_buildings ?? []).length === 0
-                            ? <span className="text-[9px] text-orange-400 font-black uppercase">No buildings</span>
+                            ? <span className="text-[11px] text-orange-400 font-black uppercase">No buildings</span>
                             : (u.admin_buildings ?? []).map(b => (
-                              <span key={b.id} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase">{b.name}</span>
+                              <span key={b.id} className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase">{b.name}</span>
                             ))
                           }
                         </div>
@@ -2795,16 +2794,16 @@ function UsersTab() {
                               await toggleUserSpecialAccess(u.id)
                               qc.invalidateQueries({ queryKey: ['users'] })
                             }}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors shrink-0 text-[9px] font-black uppercase tracking-wider"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-colors shrink-0 text-[11px] font-black uppercase tracking-wider"
                             style={{ background: u.can_book_special ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)', color: u.can_book_special ? '#4d7c00' : '#94a3b8' }}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>star</span>
+                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>star</span>
                             {u.can_book_special ? 'Special' : 'Regular'}
                           </button>
                         )}
                         <button onClick={() => openEdit(u)}
-                          className="size-8 flex items-center justify-center rounded-xl text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
-                          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
+                          className="size-9 flex items-center justify-center rounded-xl text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
+                          <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>
                         <button onClick={() => {
                             const isLastAdmin = u.role === 'admin' && (users as User[]).filter(x => x.role === 'admin').length <= 1
@@ -2847,7 +2846,7 @@ function UsersTab() {
             <div className="px-7 py-6 space-y-4">
               <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-3">
                 <div className="size-9 rounded-xl overflow-hidden shrink-0">
-                  <img src={deleteBlockedUser.avatar ?? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(deleteBlockedUser.name)}`}
+                  <UserAvatar name={deleteBlockedUser.name} avatar={deleteBlockedUser.avatar} size={40}
                     className="w-full h-full object-cover" />
                 </div>
                 <div>
@@ -2885,8 +2884,7 @@ function UsersTab() {
           >
             <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
               <div className="size-11 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 overflow-hidden">
-                <img src={deleteUserTarget.avatar ?? `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(deleteUserTarget.name)}`}
-                  className="w-full h-full object-cover" />
+                <UserAvatar name={deleteUserTarget.name} avatar={deleteUserTarget.avatar} size={40} />
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
@@ -2974,9 +2972,8 @@ function UsersTab() {
             onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center gap-3 px-7 pt-6 pb-5 border-b border-slate-100 shrink-0">
-              <img
-                src={editAvatar || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(editUser.name)}`}
-                className="size-12 rounded-2xl bg-slate-100 object-cover shrink-0" />
+              <UserAvatar name={editUser.name} avatar={editAvatar || editUser.avatar} size={48}
+                style={{ borderRadius: 16 }} />
               <div>
                 <h3 className="text-sm font-black uppercase tracking-tight">Edit User</h3>
                 <p className="text-[10px] text-slate-400">{editUser.email}</p>
@@ -3453,7 +3450,7 @@ function ArchiveTab() {
                 <td className="px-5 py-3 text-xs text-slate-500">{b.room?.name ?? '—'}</td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${b.user?.name}`} className="size-6 rounded-full bg-slate-100 shrink-0" />
+                    <UserAvatar name={b.user?.name ?? '?'} avatar={b.user?.avatar} size={24} />
                     <span className="text-xs text-slate-600 truncate">{b.user?.name ?? '—'}</span>
                   </div>
                 </td>
@@ -4395,7 +4392,7 @@ export default function AdminPage() {
                       <td className="px-6 py-3 text-xs text-slate-500">{b.room?.name}</td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-2">
-                          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${b.user?.name}`} className="size-6 rounded-full bg-slate-100" />
+                          <UserAvatar name={b.user?.name ?? '?'} avatar={b.user?.avatar} size={24} />
                           <div>
                             <p className="text-xs text-slate-500">{b.user?.name}</p>
                             {b.booked_for && <p className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>for {b.booked_for}</p>}

@@ -8,6 +8,7 @@ import { useSettings } from '../../context/SettingsContext'
 import { useNotification } from '../../context/NotificationContext'
 import { useNotificationUnreadCount } from './NotificationPanel'
 import UserProfileModal from '../profile/UserProfileModal'
+import UserAvatar from '../ui/UserAvatar'
 import SettingModal from '../profile/SettingModal'
 import HelpModal from '../profile/HelpModal'
 
@@ -89,10 +90,6 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     await logout()
     navigate('/login')
   }
-
-  const avatarSrc = user?.avatar?.startsWith('http') || user?.avatar?.startsWith('/storage')
-    ? user.avatar
-    : `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.avatar || user?.name}`
 
   return (
     <>
@@ -251,10 +248,8 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
               onClick={() => setProfileOpen(o => !o)}
               className="flex items-center gap-2"
             >
-              {user?.avatar?.startsWith('http') || user?.avatar?.startsWith('/storage')
-                ? <img src={avatarSrc} className="size-9 rounded-full border-2 border-[#adee2b] object-cover cursor-pointer" title={user?.name} />
-                : <img src={avatarSrc} className="size-9 rounded-full border-2 border-[#adee2b] p-0.5 bg-slate-100 cursor-pointer" title={user?.name} />
-              }
+              <UserAvatar name={user?.name ?? ''} avatar={user?.avatar} size={36}
+                style={{ border: '2px solid #adee2b', cursor: 'pointer' }} />
             </button>
 
             <div
