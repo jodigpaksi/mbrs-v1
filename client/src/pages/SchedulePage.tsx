@@ -640,12 +640,16 @@ export default function SchedulePage() {
   const { data: myBookings = [], isLoading } = useQuery({
     queryKey: ['my-bookings'],
     queryFn: getMyBookings,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   })
 
   const { data: allMyBookings = [], isLoading: loadingAll } = useQuery({
     queryKey: ['all-my-bookings', user?.id],
     queryFn: () => getBookings({ user_id: user?.id }),
     enabled: !!user?.id,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   })
 
   const isReceptionist = user?.role === 'receptionist'
@@ -653,6 +657,8 @@ export default function SchedulePage() {
     queryKey: ['special-bookings'],
     queryFn: () => getBookings({ special_rooms: true, date_from: toDateStr(past90), date_to: toDateStr(future90) }),
     enabled: isReceptionist,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   })
   const [spShowPast, setSpShowPast]           = useState(true)
   const [spShowCancelled, setSpShowCancelled] = useState(false)
@@ -870,6 +876,7 @@ export default function SchedulePage() {
       else if (action === 'cancel') addCancelToast(booking)
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
       queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
       queryClient.refetchQueries({ queryKey: ['special-bookings'] })
     } finally { setTentativeConfirming(false) }
   }
@@ -886,6 +893,7 @@ export default function SchedulePage() {
     await clearCancelledBookings()
     queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
     queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
+    queryClient.invalidateQueries({ queryKey: ['bookings'] })
     addInfoToast('Cancelled bookings cleared')
   }
 

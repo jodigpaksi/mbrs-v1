@@ -23,7 +23,8 @@ function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
 export default function BookingTooltip({ booking, pos, visible, onMouseEnter, onMouseLeave, currentUserId, onEdit, onCancel, onCancelSeries }: BookingTooltipProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [adjustedPos, setAdjustedPos] = useState(pos)
-  const [forInfoPos, setForInfoPos] = useState<{ x: number; y: number } | null>(null)
+  const [forAnchorRect, setForAnchorRect] = useState<DOMRect | null>(null)
+  const [forComputedPos, setForComputedPos] = useState<{ x: number; y: number } | null>(null)
   const forPopupRef = useRef<HTMLDivElement>(null)
   const { data: directory = [] } = useQuery({ queryKey: ['user-directory'], queryFn: getDirectory, staleTime: 60_000 })
   const forUser = booking?.booked_for_user_id ? directory.find(u => u.id === booking.booked_for_user_id) : null
@@ -31,19 +32,42 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
   function openForInfo(e: React.MouseEvent<HTMLButtonElement>) {
     e.stopPropagation()
     const rect = e.currentTarget.getBoundingClientRect()
-    setForInfoPos(p => p ? null : { x: rect.left, y: rect.bottom + 6 })
+    if (forAnchorRect) {
+      setForAnchorRect(null)
+      setForComputedPos(null)
+    } else {
+      setForAnchorRect(rect)
+      setForComputedPos({ x: rect.left, y: rect.bottom + 6 })
+    }
   }
 
+  // After popup renders, measure and flip/clamp if needed
   useEffect(() => {
-    if (!forInfoPos) return
+    if (!forAnchorRect || !forPopupRef.current) return
+    const popup = forPopupRef.current.getBoundingClientRect()
+    const POPUP_W = 224 // w-56
+    const GAP = 6
+    let x = forAnchorRect.left
+    let y = forAnchorRect.bottom + GAP
+    if (y + popup.height > window.innerHeight - 12) {
+      y = forAnchorRect.top - popup.height - GAP
+    }
+    if (x + POPUP_W > window.innerWidth - 12) x = window.innerWidth - POPUP_W - 12
+    if (x < 8) x = 8
+    setForComputedPos({ x, y })
+  }, [forAnchorRect])
+
+  useEffect(() => {
+    if (!forAnchorRect) return
     function handleClickOutside(e: MouseEvent) {
       if (forPopupRef.current && !forPopupRef.current.contains(e.target as Node)) {
-        setForInfoPos(null)
+        setForAnchorRect(null)
+        setForComputedPos(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [forInfoPos])
+  }, [forAnchorRect])
 
   useEffect(() => {
     if (!visible || !ref.current) return
@@ -303,7 +327,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
     </div>
 
     {/* Booking-for dark glass mini popup */}
-    {forInfoPos && (
+    {forAnchorRect && forComputedPos && (
       <>
         <div
           ref={forPopupRef}
@@ -313,8 +337,8 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
           }}
           className="fixed z-[1001] w-56 rounded-2xl overflow-hidden"
           style={{
-            left: forInfoPos.x,
-            top: forInfoPos.y,
+            left: forComputedPos.x,
+            top: forComputedPos.y,
             background: 'rgba(255,255,255,0.55)',
             backdropFilter: 'blur(28px)',
             WebkitBackdropFilter: 'blur(28px)',

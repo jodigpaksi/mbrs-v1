@@ -1,8 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getMyBookings } from '../../api/bookings'
+import type { Booking } from '../../types'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
+import { useNotification } from '../../context/NotificationContext'
+import { useNotificationUnreadCount } from './NotificationPanel'
 import UserProfileModal from '../profile/UserProfileModal'
 import SettingModal from '../profile/SettingModal'
 import HelpModal from '../profile/HelpModal'
@@ -24,6 +28,19 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const { user, logout } = useAuth()
   const { t } = useSettings()
   const queryClient = useQueryClient()
+  const { openNotifications } = useNotification()
+  const unreadCount = useNotificationUnreadCount()
+  const { data: myBookings = [] } = useQuery<Booking[]>({
+    queryKey: ['my-bookings'],
+    queryFn: getMyBookings,
+    staleTime: 10_000,
+  })
+  const todayCount = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('en-CA')
+    return myBookings.filter(b =>
+      b.status !== 'cancelled' && b.start_at.slice(0, 10) === todayStr
+    ).length
+  }, [myBookings])
   const [q, setQ] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -124,10 +141,10 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             <div className="group relative">
               <button
                 onClick={openSearch}
-                className="size-9 flex items-center justify-center transition-all hover:scale-110"
+                className="relative size-9 flex items-center justify-center rounded-xl transition-colors hover:bg-[var(--ds-bg-raised)]"
                 style={{ color: q ? '#adee2b' : 'var(--ds-text-3)' }}
               >
-                <span className="material-symbols-outlined text-xl">search</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>search</span>
               </button>
               {/* Tooltip */}
               <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-[51] transition-opacity duration-150 whitespace-nowrap ${searchOpen ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -188,15 +205,42 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
           <div className="group relative">
             <button
               onClick={() => { document.dispatchEvent(new CustomEvent('today-panel-toggle')); onTodayClick?.() }}
-              className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+              className="relative size-9 flex items-center justify-center rounded-xl transition-colors hover:bg-[var(--ds-bg-raised)]"
+              style={{ color: 'var(--ds-text-3)' }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 17 }}>calendar_today</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>calendar_today</span>
+              {todayCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-[#adee2b] text-black text-[9px] font-black flex items-center justify-center px-[3px] leading-none border-2 border-white">
+                  {todayCount > 9 ? '9+' : todayCount}
+                </span>
+              )}
             </button>
-            {/* Tooltip */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap">
               <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-slate-500"
                 style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
                 Today's Bookings
+              </div>
+            </div>
+          </div>
+
+          {/* Notification bell */}
+          <div className="group relative">
+            <button
+              onClick={openNotifications}
+              className="relative size-9 flex items-center justify-center rounded-xl transition-colors hover:bg-[var(--ds-bg-raised)]"
+              style={{ color: 'var(--ds-text-3)' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>notifications</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-[#adee2b] text-black text-[9px] font-black flex items-center justify-center px-[3px] leading-none border-2 border-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+            <div className="absolute top-full right-0 mt-2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap">
+              <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-slate-500"
+                style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+                Notifications{unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
               </div>
             </div>
           </div>

@@ -11,6 +11,23 @@ use Illuminate\Http\Request;
 
 class BookingController extends Controller
 {
+    private function notifyCancelRecipient(Booking $booking, Request $request): void
+    {
+        if (!$booking->booked_for_user_id) return;
+        if ($booking->booked_for_user_id === $request->user()->id) return;
+
+        $room    = $booking->room ?? $booking->load('room')->room;
+        $roomName = $room?->name ?? 'a room';
+        $date     = Carbon::parse($booking->start_at)->format('d M, H:i');
+
+        Notification::create([
+            'user_id'    => $booking->booked_for_user_id,
+            'booking_id' => $booking->id,
+            'type'       => 'booking_cancelled',
+            'message'    => "{$request->user()->name} cancelled the booking for {$roomName} on {$date}",
+        ]);
+    }
+
     private function validateTimeBounds(string $startAt, string $endAt): ?JsonResponse
     {
         $s = Carbon::parse($startAt);
@@ -186,11 +203,19 @@ class BookingController extends Controller
             return response()->json(['message' => 'Room is not available at this time. Someone may have just booked it.'], 422);
         }
 
-        if (isset($data['status']) && $data['status'] === 'cancelled') {
+        $becomingCancelled = isset($data['status']) && $data['status'] === 'cancelled'
+            && $booking->status !== 'cancelled';
+
+        if ($becomingCancelled) {
             $data['cancelled_at'] = now();
         }
 
         $booking->update($data);
+
+        if ($becomingCancelled) {
+            $this->notifyCancelRecipient($booking, $request);
+        }
+
         return response()->json($booking->load(['user', 'room']));
     }
 
@@ -201,6 +226,7 @@ class BookingController extends Controller
         }
 
         $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+        $this->notifyCancelRecipient($booking, $request);
         return response()->json(['message' => 'Booking cancelled']);
     }
 
@@ -256,6 +282,7 @@ class BookingController extends Controller
         $now = now();
         foreach ($bookings as $booking) {
             $booking->update(['status' => 'cancelled', 'cancelled_at' => $now]);
+            $this->notifyCancelRecipient($booking, $request);
         }
 
         return response()->json(['cancelled' => $bookings->count()]);

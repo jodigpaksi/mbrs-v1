@@ -165,6 +165,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
 
   const [groupBy, setGroupBy]         = useState<GroupBy>('room')
   const [minCapacity, setMinCapacity] = useState(0)
+  const [specialOnly, setSpecialOnly] = useState(false)
 
   const [searched, setSearched]           = useState(false)
   const [searchKey, setSearchKey]         = useState(0)
@@ -483,6 +484,22 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             )}
           </div>
 
+          {/* Special Rooms only toggle — receptionist/admin only */}
+          {isPrivileged && (
+            <button
+              type="button"
+              onClick={() => setSpecialOnly(v => !v)}
+              className="flex items-center gap-2 w-fit rounded-full px-3 py-1.5 transition-all text-[10px] font-black uppercase tracking-wide border"
+              style={specialOnly
+                ? { background: '#adee2b', borderColor: '#adee2b', color: '#000' }
+                : { background: 'transparent', borderColor: '#e2e8f0', color: '#94a3b8' }
+              }
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 13 }}>star</span>
+              Special Rooms only
+            </button>
+          )}
+
           {/* Search button */}
           <button
             onClick={handleSearch}
@@ -523,7 +540,11 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
           )}
 
           {buildingId && searched && !isFetching && rooms.length > 0 && (() => {
-            const visibleRooms = rooms.filter((r: Room) => (isPrivileged || !r.requires_contact) && (!minCapacity || r.capacity >= minCapacity))
+            const visibleRooms = rooms.filter((r: Room) =>
+  (isPrivileged || !r.requires_contact) &&
+  (!minCapacity || r.capacity >= minCapacity) &&
+  (!specialOnly || r.requires_contact)
+)
             if (visibleRooms.length === 0) return (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
                 <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 44 }}>do_not_disturb</span>

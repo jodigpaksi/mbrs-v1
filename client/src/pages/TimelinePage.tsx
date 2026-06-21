@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, useQueries } from '@tanstack/react-query'
 import type { Booking, Building, Room } from '../types/index'
 import { getRooms } from '../api/rooms'
@@ -43,7 +44,17 @@ export default function TimelinePage() {
   const { defaultView, startDay, defaultBuilding, showBarTitle, t } = useSettings()
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [highlightId, setHighlightId] = useState<number | null>(() => {
+    const h = searchParams.get('highlight')
+    return h ? parseInt(h) : null
+  })
+  const highlightRef = useRef<HTMLDivElement | null>(null)
+  const [currentDate, setCurrentDate] = useState(() => {
+    const d = searchParams.get('date')
+    if (d) { const [y, m, day] = d.split('-').map(Number); return new Date(y, m - 1, day) }
+    return new Date()
+  })
   const [location, setLocation] = useState<Building | null>(null)
   const [deptFilter, setDeptFilter] = useState('')
   const [deptSearch, setDeptSearch] = useState('')
@@ -278,6 +289,25 @@ export default function TimelinePage() {
     }
   }, [buildings])
 
+  // Scroll to and flash highlight booking from notification click
+  useEffect(() => {
+    if (!highlightId || !highlightRef.current) return
+    const el = highlightRef.current
+    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+    el.animate([
+      { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
+      { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
+      { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
+      { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
+      { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
+    ], { duration: 4000, easing: 'ease-in-out' })
+    const t = setTimeout(() => {
+      setHighlightId(null)
+      setSearchParams(p => { p.delete('highlight'); p.delete('date'); return p }, { replace: true })
+    }, 4100)
+    return () => clearTimeout(t)
+  }, [highlightId, highlightRef.current])
+
   const { data: rooms = [], isLoading: roomsLoading } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ['departments'],
@@ -288,6 +318,8 @@ export default function TimelinePage() {
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ['bookings', dateStr],
     queryFn: () => getBookings({ date: dateStr }),
+    refetchInterval: 5_000,
+    staleTime: 3_000,
   })
 
   // Week view
@@ -310,6 +342,8 @@ export default function TimelinePage() {
       queryKey: ['bookings', toLocalDateStr(d)],
       queryFn: () => getBookings({ date: toLocalDateStr(d) }),
       enabled: viewMode === 'week',
+      refetchInterval: 15_000,
+      staleTime: 10_000,
     }))
   })
   const weekData: Booking[][] = weekResults.map(r => (r.data as Booking[]) ?? [])
@@ -321,6 +355,8 @@ export default function TimelinePage() {
     queryKey: ['bookings-month', monthFrom, monthTo],
     queryFn: () => getBookings({ date_from: monthFrom, date_to: monthTo }),
     enabled: viewMode === 'month',
+    refetchInterval: 5_000,
+    staleTime: 3_000,
   })
 
   const today = new Date()
@@ -492,6 +528,7 @@ export default function TimelinePage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
+
 
       {/* Toolbar */}
       <div className="bg-white border-b border-slate-100 px-8 py-2.5 grid grid-cols-3 items-center shrink-0 select-none">
@@ -1201,7 +1238,8 @@ export default function TimelinePage() {
 
                     return (
                       <div key={b.id} className="absolute top-0 z-10"
-                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined }}
+                        ref={b.id === highlightId ? highlightRef : undefined}
+                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined, borderRadius: b.id === highlightId ? 8 : undefined }}
                         onContextMenu={e => {
                           e.preventDefault()
                           e.stopPropagation()

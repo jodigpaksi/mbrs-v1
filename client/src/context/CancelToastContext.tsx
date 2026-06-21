@@ -47,11 +47,24 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
   const cancelTimers     = useRef<Map<number, { timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> }>>(new Map())
   const seriesCancelTimer = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
 
-  function invalidateAll() {
-    queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
-    queryClient.invalidateQueries({ queryKey: ['all-my-bookings'] })
-    queryClient.invalidateQueries({ queryKey: ['bookings'] })
-    queryClient.refetchQueries({ queryKey: ['special-bookings'] })
+  async function invalidateAll(cancelledId?: number) {
+    // Patch active queries immediately (Schedule page still mounted)
+    if (cancelledId) {
+      const patchStatus = (old: unknown) => {
+        if (!Array.isArray(old)) return old
+        return old.map((b: any) => b.id === cancelledId ? { ...b, status: 'cancelled' } : b)
+      }
+      queryClient.setQueryData(['my-bookings'], patchStatus)
+      queryClient.setQueriesData<unknown>({ queryKey: ['all-my-bookings'] }, patchStatus)
+    }
+    // Remove bookings cache entirely so Timeline fetches fresh on next mount
+    queryClient.removeQueries({ queryKey: ['bookings'] })
+    // Refetch active queries
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ['my-bookings'] }),
+      queryClient.refetchQueries({ queryKey: ['all-my-bookings'] }),
+      queryClient.refetchQueries({ queryKey: ['special-bookings'] }),
+    ])
   }
 
   function addCancelToast(booking: Booking) {
@@ -76,7 +89,7 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
         setExitingCancelIds(prev => { const s = new Set(prev); s.delete(bid); return s })
         setPendingCancelIds(prev => { const s = new Set(prev); s.delete(bid); return s })
         await cancelBooking(bid)
-        invalidateAll()
+        invalidateAll(bid)
       }, 380)
     }, 5000)
 
@@ -118,7 +131,7 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
       seriesCancelTimer.current = null
       setSeriesUndoToast(null)
       await cancelSeries(target.series_id)
-      invalidateAll()
+      await invalidateAll()
     }, 5000)
 
     seriesCancelTimer.current = { timer, interval }

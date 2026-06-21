@@ -1,217 +1,251 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMyBookings } from '../../api/bookings'
+import { useNavigate } from 'react-router-dom'
 import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
   clearAllNotifications,
 } from '../../api/notifications'
-import type { Booking, AppNotification } from '../../types'
+import { useNotification } from '../../context/NotificationContext'
+import type { AppNotification } from '../../types'
 
-function parseLocal(s: string): Date {
-  const [date, time] = s.replace('T', ' ').split(' ')
-  const [y, mo, d] = date.split('-').map(Number)
-  const [h, mi] = (time ?? '').split(':').map(Number)
-  return new Date(y, mo - 1, d, h || 0, mi || 0)
+function timeAgo(iso: string) {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
-function fmtTime(s: string) {
-  return parseLocal(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-}
-
-interface Props {
-  anchorEl: HTMLElement | null
-  open: boolean
-  onClose: () => void
-}
-
-export default function NotificationPanel({ anchorEl, open, onClose }: Props) {
+export default function NotificationPanel() {
+  const { open, closeNotifications } = useNotification()
   const qc = useQueryClient()
   const panelRef = useRef<HTMLDivElement>(null)
-  const now = new Date()
+  const navigate = useNavigate()
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const { data: notifData, refetch } = useQuery({
     queryKey: ['notifications'],
     queryFn: getNotifications,
-    refetchInterval: 30_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
+    enabled: open,
   })
   const unreadCount = notifData?.unread_count ?? 0
-  const notifItems: AppNotification[] = notifData?.items ?? []
+  const items: AppNotification[] = notifData?.items ?? []
 
-  const { data: myBookings = [] } = useQuery<Booking[]>({
-    queryKey: ['my-bookings'],
-    queryFn: getMyBookings,
-    staleTime: 30_000,
-  })
-  const ongoingBookings = myBookings.filter(b => {
-    const start = parseLocal(b.start_at)
-    const end = parseLocal(b.end_at)
-    return start <= now && end > now && start.toDateString() === now.toDateString()
-  })
-
-  // Close on outside mousedown
   useEffect(() => {
-    if (!open) return
+    if (!open) { setConfirmClear(false); return }
+    refetch()
     function onMouseDown(e: MouseEvent) {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(e.target as Node) &&
-        anchorEl &&
-        !anchorEl.contains(e.target as Node)
-      ) {
-        onClose()
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        closeNotifications()
       }
     }
     document.addEventListener('mousedown', onMouseDown)
     return () => document.removeEventListener('mousedown', onMouseDown)
-  }, [open, anchorEl, onClose])
+  }, [open])
 
-  if (!open) return null
+  type NotifCache = { unread_count: number; items: AppNotification[] }
 
-  const rect = anchorEl?.getBoundingClientRect()
-  const top = (rect?.bottom ?? 60) + 8
-  const right = window.innerWidth - (rect?.right ?? 320)
+  function optimistic(updater: (old: NotifCache) => NotifCache) {
+    qc.setQueryData<NotifCache>(['notifications'], old =>
+      old ? updater(old) : old
+    )
+  }
 
   async function handleMarkRead(id: number) {
-    await markNotificationRead(id)
-    qc.invalidateQueries({ queryKey: ['notifications'] })
-    refetch()
+    optimistic(old => ({
+      unread_count: Math.max(0, old.unread_count - (old.items.find(n => n.id === id && !n.read_at) ? 1 : 0)),
+      items: old.items.map(n => n.id === id ? { ...n, read_at: new Date().toISOString() } : n),
+    }))
+    await markNotificationRead(id).catch(() => qc.invalidateQueries({ queryKey: ['notifications'] }))
+  }
+
+  function handleClickNotif(n: AppNotification) {
+    if (!n.read_at) handleMarkRead(n.id)
+    closeNotifications()
+    const startAt = n.booking?.start_at
+    if (!startAt) return
+    const date = startAt.slice(0, 10)
+    navigate(`/?date=${date}&highlight=${n.booking_id}`)
   }
 
   async function handleMarkAllRead() {
-    await markAllNotificationsRead()
-    qc.invalidateQueries({ queryKey: ['notifications'] })
-    refetch()
+    if (unreadCount === 0) return
+    const now = new Date().toISOString()
+    optimistic(old => ({
+      unread_count: 0,
+      items: old.items.map(n => ({ ...n, read_at: n.read_at ?? now })),
+    }))
+    await markAllNotificationsRead().catch(() => qc.invalidateQueries({ queryKey: ['notifications'] }))
   }
 
   async function handleClearAll() {
-    if (!window.confirm('Hapus semua notifikasi?')) return
-    await clearAllNotifications()
-    qc.invalidateQueries({ queryKey: ['notifications'] })
-    refetch()
+    if (items.length === 0) return
+    optimistic(() => ({ unread_count: 0, items: [] }))
+    setConfirmClear(false)
+    await clearAllNotifications().catch(() => qc.invalidateQueries({ queryKey: ['notifications'] }))
   }
+
+  if (!open) return null
 
   return createPortal(
     <div
       ref={panelRef}
       style={{
         position: 'fixed',
-        top,
-        right,
-        width: 320,
-        zIndex: 9999,
-        background: 'rgba(255,255,255,0.97)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        border: '1px solid rgba(0,0,0,0.08)',
-        borderRadius: 20,
-        boxShadow: '0 12px 40px rgba(0,0,0,0.16)',
+        top: 64,
+        right: 20,
+        width: 360,
+        zIndex: 99998,
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(48px) saturate(200%)',
+        WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+        border: '1px solid rgba(255,255,255,0.5)',
+        borderRadius: 24,
+        boxShadow: '0 24px 56px -8px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.8)',
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: 500,
+        maxHeight: 520,
         overflow: 'hidden',
+        animation: 'notif-in 0.22s cubic-bezier(0.34,1.04,0.64,1)',
       }}
     >
+      <style>{`@keyframes notif-in{from{opacity:0;transform:translateY(-8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
+
       {/* Header */}
-      <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#475569' }}>
-          Notifications
-        </p>
+      <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid rgba(0,0,0,0.06)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#64748b' }}>notifications</span>
+          <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#334155' }}>Notifications</p>
+          {unreadCount > 0 && (
+            <span style={{ fontSize: 9, fontWeight: 900, background: '#adee2b', color: '#000', borderRadius: 99, padding: '2px 7px', lineHeight: 1.6 }}>{unreadCount}</span>
+          )}
+        </div>
+        <button
+          onClick={closeNotifications}
+          style={{ width: 28, height: 28, borderRadius: 10, border: '1px solid rgba(0,0,0,0.07)', background: 'rgba(0,0,0,0.04)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
+        </button>
       </div>
 
       {/* List */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {ongoingBookings.length === 0 && notifItems.length === 0 ? (
-          <div style={{ padding: '40px 16px', textAlign: 'center' }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase' }}>No notifications</p>
+      <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
+        {items.length === 0 ? (
+          <div style={{ padding: '48px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 36, color: '#cbd5e1' }}>notifications_off</span>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>No notifications</p>
           </div>
         ) : (
-          <>
-            {/* Ongoing meetings */}
-            {ongoingBookings.map(b => (
-              <div key={`og-${b.id}`} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: 'rgba(173,238,43,0.07)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#4d7c00', flexShrink: 0, marginTop: 2 }}>meeting_room</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 11, fontWeight: 900, color: '#1e293b', marginBottom: 2 }}>Meeting in progress</p>
-                  <p style={{ fontSize: 10, fontWeight: 700, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</p>
-                  {b.room && (
-                    <p style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginTop: 2 }}>
-                      {b.room.name}{b.room.building ? ` · ${b.room.building.code ?? b.room.building.name}` : ''}
-                    </p>
-                  )}
-                  <p style={{ fontSize: 9, fontWeight: 900, color: '#4d7c00', marginTop: 4 }}>{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
-                </div>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#adee2b', flexShrink: 0, marginTop: 6, animation: 'pulse 2s infinite' }} />
+          items.map(n => (
+            <div
+              key={n.id}
+              onClick={() => handleClickNotif(n)}
+              style={{
+                display: 'flex', gap: 12, padding: '14px 18px',
+                borderBottom: '1px solid rgba(0,0,0,0.05)',
+                background: n.read_at ? 'transparent' : 'rgba(173,238,43,0.06)',
+                transition: 'background 0.2s',
+                cursor: n.booking?.start_at ? 'pointer' : 'default',
+              }}
+              onMouseEnter={e => { if (n.booking?.start_at) (e.currentTarget as HTMLDivElement).style.background = n.read_at ? 'rgba(0,0,0,0.03)' : 'rgba(173,238,43,0.12)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = n.read_at ? 'transparent' : 'rgba(173,238,43,0.06)' }}
+            >
+              {/* Icon */}
+              <div style={{ width: 34, height: 34, borderRadius: 12, background: n.read_at ? '#f1f5f9' : 'rgba(173,238,43,0.18)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: n.read_at ? '#94a3b8' : '#4d7c00' }}>person_pin</span>
               </div>
-            ))}
 
-            {/* Backend notifications */}
-            {notifItems.map(n => (
-              <div key={n.id} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: n.read_at ? 'white' : 'rgba(248,250,252,1)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#94a3b8', flexShrink: 0, marginTop: 2 }}>person_pin</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#334155', lineHeight: 1.4 }}>{n.message}</p>
-                  <p style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginTop: 4 }}>
-                    {new Date(n.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                    {' · '}
-                    {new Date(n.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                  {!n.read_at ? (
-                    <>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#adee2b', display: 'inline-block' }} />
-                      <button
-                        onClick={() => handleMarkRead(n.id)}
-                        title="Mark as read"
-                        style={{
-                          width: 26, height: 26, borderRadius: 8, border: '1px solid #e2e8f0',
-                          background: 'white', cursor: 'pointer', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', color: '#64748b',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#adee2b'; (e.currentTarget as HTMLButtonElement).style.color = '#000'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#adee2b' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0' }}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>done</span>
-                      </button>
-                    </>
-                  ) : (
-                    <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#cbd5e1' }}>done_all</span>
-                  )}
-                </div>
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: n.read_at ? 600 : 800, color: n.read_at ? '#64748b' : '#1e293b', lineHeight: 1.45, marginBottom: 4 }}>{n.message}</p>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{timeAgo(n.created_at)}</p>
               </div>
-            ))}
-          </>
+
+              {/* Unread dot + mark read */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0, paddingTop: 2 }}>
+                {!n.read_at ? (
+                  <>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#adee2b', display: 'block', flexShrink: 0 }} />
+                    <button
+                      onClick={() => handleMarkRead(n.id)}
+                      title="Mark as read"
+                      style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', transition: 'all 0.15s' }}
+                      onMouseEnter={e => { const b = e.currentTarget; b.style.background = '#adee2b'; b.style.color = '#000'; b.style.borderColor = '#adee2b' }}
+                      onMouseLeave={e => { const b = e.currentTarget; b.style.background = 'white'; b.style.color = '#94a3b8'; b.style.borderColor = '#e2e8f0' }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>done</span>
+                    </button>
+                  </>
+                ) : (
+                  <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#cbd5e1' }}>done_all</span>
+                )}
+              </div>
+            </div>
+          ))
         )}
       </div>
 
       {/* Footer */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderTop: '1px solid #f1f5f9', flexShrink: 0 }}>
-        <button
-          onClick={handleMarkAllRead}
-          style={{
-            fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em',
-            color: unreadCount > 0 ? '#475569' : '#cbd5e1',
-            background: 'none', border: 'none', cursor: unreadCount > 0 ? 'pointer' : 'default', padding: '4px 0',
-          }}
-        >
-          Mark all read
-        </button>
-        <button
-          onClick={handleClearAll}
-          style={{
-            fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em',
-            color: notifItems.length > 0 ? '#ef4444' : '#cbd5e1',
-            background: 'none', border: 'none', cursor: notifItems.length > 0 ? 'pointer' : 'default', padding: '4px 0',
-          }}
-        >
-          Clear all
-        </button>
+      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
+        {confirmClear ? (
+          <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
+              Clear all <span style={{ fontWeight: 900, color: '#1e293b' }}>{items.length}</span> notification{items.length !== 1 ? 's' : ''}?
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setConfirmClear(false)}
+                style={{ flex: 1, padding: '7px 0', borderRadius: 10, border: '1px solid #e2e8f0', background: 'white', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b', cursor: 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearAll}
+                style={{ flex: 1, padding: '7px 0', borderRadius: 10, border: '1px solid #ef4444', background: '#ef4444', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'white', cursor: 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#dc2626'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#dc2626' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#ef4444' }}
+              >
+                Clear all
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', gap: 8 }}>
+            <button
+              onClick={handleMarkAllRead}
+              disabled={unreadCount === 0}
+              style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: unreadCount > 0 ? '#475569' : '#cbd5e1', background: 'none', border: 'none', cursor: unreadCount > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
+            >
+              Mark all as read
+            </button>
+            <button
+              onClick={() => items.length > 0 && setConfirmClear(true)}
+              disabled={items.length === 0}
+              style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: items.length > 0 ? '#ef4444' : '#cbd5e1', background: 'none', border: 'none', cursor: items.length > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
     </div>,
     document.body
   )
+}
+
+export function useNotificationUnreadCount() {
+  const { data } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: getNotifications,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
+  })
+  return data?.unread_count ?? 0
 }
