@@ -82,30 +82,30 @@ function BuildingModal({
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-[440px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-black uppercase tracking-tight">{initial?.id ? 'Edit Building' : 'Add Building'}</h3>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[440px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-black uppercase tracking-tight text-[var(--ds-text-1)]">{initial?.id ? 'Edit Building' : 'Add Building'}</h3>
         {err && <p className="text-xs text-red-500 font-bold">{err}</p>}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Name *</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Gedung Utama"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Code</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Code</label>
             <input value={code} onChange={e => setCode(e.target.value)} placeholder="e.g. GU"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Floors</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Floors</label>
             <input type="number" min={1} value={floors} onChange={e => setFloors(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="col-span-2 space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">City / Location</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">City / Location</label>
             <select value={locationId} onChange={e => setLocationId(e.target.value ? Number(e.target.value) : '')}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-white">
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]">
               <option value="">— No city assigned —</option>
               {locations.map(loc => (
                 <option key={loc.id} value={loc.id}>{loc.name}{loc.code ? ` (${loc.code})` : ''}</option>
@@ -113,24 +113,24 @@ function BuildingModal({
             </select>
           </div>
           <div className="col-span-2 space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Address</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Address</label>
             <input value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. Jl. Sudirman No. 1"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="col-span-2 space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Photo URL</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Photo URL</label>
             <input value={photo} onChange={e => setPhoto(e.target.value)} placeholder="https://..."
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="col-span-2 space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Notes</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Notes</label>
             <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#adee2b] resize-none" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#adee2b] resize-none bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-200 transition-colors">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-3 rounded-2xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">Cancel</button>
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-3 rounded-2xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 transition-colors disabled:opacity-40">
             {saving ? 'Saving...' : 'Save Building'}
@@ -275,20 +275,20 @@ function RoomModal({
           className="w-full max-w-[560px] flex flex-col rounded-[2rem] shadow-2xl overflow-hidden"
           style={{
             height: 620,
-            background: 'rgba(255,255,255,0.92)',
+            background: 'var(--ds-bg-surface)',
             backdropFilter: 'blur(48px) saturate(200%)',
-            border: '1px solid rgba(255,255,255,0.7)',
+            border: '1px solid rgba(128,128,128,0.15)',
           }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-slate-100 shrink-0">
+          <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-[var(--ds-border)] shrink-0">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400">Buildings · Room</p>
-              <h2 className="text-2xl font-black italic tracking-tighter uppercase mt-0.5">{isEdit ? initial?.name ?? 'Edit Room' : 'Add Room'}</h2>
+              <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Buildings · Room</p>
+              <h2 className="text-2xl font-black italic tracking-tighter uppercase mt-0.5 text-[var(--ds-text-1)]">{isEdit ? initial?.name ?? 'Edit Room' : 'Add Room'}</h2>
             </div>
-            <button onClick={onClose} className="size-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
-              <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 18 }}>close</span>
+            <button onClick={onClose} className="size-9 rounded-xl bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-bg-raised)] flex items-center justify-center transition-colors">
+              <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 18 }}>close</span>
             </button>
           </div>
 
@@ -298,23 +298,23 @@ function RoomModal({
               <button key={t.key} disabled={t.disabled}
                 onClick={() => switchTab(t.key)}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-t-xl text-[9px] font-black uppercase tracking-wider transition-all
-                  ${t.disabled ? 'text-slate-300 cursor-not-allowed' : activeTab === t.key ? 'bg-white border border-b-white border-slate-100 text-black shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  ${t.disabled ? 'text-[var(--ds-text-3)] cursor-not-allowed' : activeTab === t.key ? 'bg-[var(--ds-bg-surface)] border border-b-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-1)] shadow-sm' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}
                 title={t.disabled ? 'Save room first to manage this' : undefined}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{t.icon}</span>
                 {t.label}
                 {t.key === 'photos' && isEdit && photos.length > 0 && (
-                  <span className="ml-0.5 size-4 rounded-full bg-slate-200 text-slate-600 text-[8px] flex items-center justify-center font-black">{photos.length}</span>
+                  <span className="ml-0.5 size-4 rounded-full bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] text-[8px] flex items-center justify-center font-black">{photos.length}</span>
                 )}
                 {t.key === 'facilities' && isEdit && facilities.length > 0 && (
-                  <span className="ml-0.5 size-4 rounded-full bg-slate-200 text-slate-600 text-[8px] flex items-center justify-center font-black">{facilities.length}</span>
+                  <span className="ml-0.5 size-4 rounded-full bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] text-[8px] flex items-center justify-center font-black">{facilities.length}</span>
                 )}
               </button>
             ))}
           </div>
 
           {/* Tab content — fixed area, scrolls internally */}
-          <div className="flex-1 border-t border-slate-100 overflow-hidden relative">
+          <div className="flex-1 border-t border-[var(--ds-border)] overflow-hidden relative">
             <div
               key={activeTab}
               className={`absolute inset-0 overflow-y-auto ${animDirRef.current === 'right' ? 'tab-anim-right' : 'tab-anim-left'}`}
@@ -327,41 +327,41 @@ function RoomModal({
                   {err && <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-3 rounded-xl"><span className="material-symbols-outlined" style={{ fontSize: 15 }}>error</span>{err}</div>}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1.5">
-                      <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Room Name *</label>
+                      <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Room Name *</label>
                       <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Executive Suite 2A"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+                        className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Capacity *</label>
+                      <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Capacity *</label>
                       <div className="relative">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" style={{ fontSize: 15 }}>groups</span>
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 15 }}>groups</span>
                         <input type="number" min={1} value={capacity} onChange={e => setCapacity(e.target.value)} placeholder="e.g. 10"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+                          className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Floor *</label>
+                      <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Floor *</label>
                       <div className="relative">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" style={{ fontSize: 15 }}>layers</span>
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 15 }}>layers</span>
                         <input value={floor} onChange={e => setFloor(e.target.value)} placeholder="e.g. 2F"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+                          className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
                       </div>
                     </div>
                     <div className="col-span-2 space-y-1.5">
-                      <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Notes</label>
+                      <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Notes</label>
                       <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent resize-none" />
+                        className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent resize-none text-[var(--ds-text-1)]" />
                     </div>
                     <div className="col-span-2">
                       <button type="button" onClick={() => setRequiresContact(v => !v)}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left
-                          ${requiresContact ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}`}>
-                        <div className={`size-5 rounded-md flex items-center justify-center shrink-0 transition-all ${requiresContact ? 'bg-amber-400' : 'bg-white border-2 border-slate-300'}`}>
+                          ${requiresContact ? 'border-amber-400 bg-amber-50' : 'border-[var(--ds-border)] bg-[var(--ds-bg-raised)] hover:border-[var(--ds-border)]'}`}>
+                        <div className={`size-5 rounded-md flex items-center justify-center shrink-0 transition-all ${requiresContact ? 'bg-amber-400' : 'bg-[var(--ds-bg-surface)] border-2 border-[var(--ds-border)]'}`}>
                           {requiresContact && <span className="material-symbols-outlined text-white" style={{ fontSize: 14 }}>check</span>}
                         </div>
                         <div>
-                          <p className={`text-[10px] font-black uppercase ${requiresContact ? 'text-amber-700' : 'text-slate-500'}`}>Requires Receptionist / GAA</p>
-                          <p className="text-[9px] font-medium text-slate-400 mt-0.5">Room can only be booked through Receptionist or GAA</p>
+                          <p className={`text-[10px] font-black uppercase ${requiresContact ? 'text-amber-700' : 'text-[var(--ds-text-2)]'}`}>Requires Receptionist / GAA</p>
+                          <p className="text-[9px] font-medium text-[var(--ds-text-3)] mt-0.5">Room can only be booked through Receptionist or GAA</p>
                         </div>
                         <span className="material-symbols-outlined ml-auto text-amber-400 shrink-0" style={{ fontSize: 18, opacity: requiresContact ? 1 : 0 }}>support_agent</span>
                       </button>
@@ -373,7 +373,7 @@ function RoomModal({
               {/* ── Photos ── */}
               {activeTab === 'photos' && (
                 <div className="px-7 py-5 space-y-4">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{photos.length} photo{photos.length !== 1 ? 's' : ''} · first is cover</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{photos.length} photo{photos.length !== 1 ? 's' : ''} · first is cover</p>
                   {photos.length > 0 && (
                     <div className="grid grid-cols-3 gap-3">
                       {photos.map((url, i) => (
@@ -407,9 +407,9 @@ function RoomModal({
                   <div className="flex gap-2">
                     <input value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPhoto()}
                       placeholder="Paste image URL and press Enter..."
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+                      className="flex-1 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
                     <button onClick={addPhoto}
-                      className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-[9px] font-black uppercase hover:bg-slate-200 flex items-center gap-1.5 transition-all shrink-0">
+                      className="px-4 py-2 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] flex items-center gap-1.5 transition-all shrink-0">
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add_photo_alternate</span>Add
                     </button>
                   </div>
@@ -419,15 +419,15 @@ function RoomModal({
               {/* ── Facilities ── */}
               {activeTab === 'facilities' && (
                 <div className="px-7 py-5 space-y-4">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{facilities.length} item{facilities.length !== 1 ? 's' : ''}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{facilities.length} item{facilities.length !== 1 ? 's' : ''}</p>
                   {facilities.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {facilities.map((f, i) => (
-                        <div key={i} className="flex items-center gap-2 pl-2.5 pr-1.5 py-1.5 bg-slate-100 rounded-xl group">
-                          <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>{f.icon}</span>
-                          <span className="text-[10px] font-black uppercase text-slate-600">{f.name}</span>
+                        <div key={i} className="flex items-center gap-2 pl-2.5 pr-1.5 py-1.5 bg-[var(--ds-bg-surface-2)] rounded-xl group">
+                          <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>{f.icon}</span>
+                          <span className="text-[10px] font-black uppercase text-[var(--ds-text-2)]">{f.name}</span>
                           <button onClick={() => setFacilities(prev => prev.filter((_, j) => j !== i))}
-                            className="size-4 flex items-center justify-center rounded text-slate-300 hover:text-red-500 transition-colors ml-0.5">
+                            className="size-4 flex items-center justify-center rounded text-[var(--ds-text-3)] hover:text-red-500 transition-colors ml-0.5">
                             <span className="material-symbols-outlined" style={{ fontSize: 12 }}>close</span>
                           </button>
                         </div>
@@ -435,15 +435,15 @@ function RoomModal({
                     </div>
                   )}
                   {showPresets && (
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2.5">Quick Add</p>
+                    <div className="p-3.5 bg-[var(--ds-bg-raised)] rounded-xl border border-[var(--ds-border-sub)]">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2.5">Quick Add</p>
                       <div className="flex flex-wrap gap-1.5">
                         {PRESET_FACILITIES.map(f => {
                           const exists = facilities.some(x => x.name === f.name)
                           return (
                             <button key={f.name} onClick={() => !exists && addPreset(f)} disabled={exists}
                               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all
-                                ${exists ? 'bg-slate-200 text-slate-300 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-600 hover:border-black hover:text-black hover:shadow-sm'}`}>
+                                ${exists ? 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] cursor-not-allowed' : 'bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-black hover:text-black hover:shadow-sm dark:hover:border-white dark:hover:text-white'}`}>
                               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{f.icon}</span>
                               {f.name}
                               {exists && <span className="material-symbols-outlined" style={{ fontSize: 11 }}>check</span>}
@@ -456,19 +456,19 @@ function RoomModal({
                   <div className="flex gap-2 items-center">
                     <button onClick={() => setShowPresets(s => !s)}
                       className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-[9px] font-black uppercase shrink-0 transition-all
-                        ${showPresets ? 'bg-black text-[#adee2b]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                        ${showPresets ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]'}`}>
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>bolt</span>Presets
                     </button>
                     <div className="relative shrink-0">
-                      <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" style={{ fontSize: 15 }}>{customIcon || 'devices'}</span>
+                      <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 15 }}>{customIcon || 'devices'}</span>
                       <input value={customIcon} onChange={e => setCustomIcon(e.target.value)} placeholder="icon"
-                        className="w-28 bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+                        className="w-28 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl pl-8 pr-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
                     </div>
                     <input value={customName} onChange={e => setCustomName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCustom()}
                       placeholder="Facility / asset name..."
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+                      className="flex-1 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
                     <button onClick={addCustom}
-                      className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-[9px] font-black uppercase hover:bg-slate-200 flex items-center gap-1.5 shrink-0 transition-all">
+                      className="px-4 py-2.5 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] flex items-center gap-1.5 shrink-0 transition-all">
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add</span>Add
                     </button>
                   </div>
@@ -478,8 +478,8 @@ function RoomModal({
           </div>
 
           {/* Footer — always visible, action changes per tab */}
-          <div className="px-7 py-5 border-t border-slate-100 shrink-0 flex gap-3">
-            <button onClick={onClose} className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
+          <div className="px-7 py-5 border-t border-[var(--ds-border)] shrink-0 flex gap-3">
+            <button onClick={onClose} className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">Cancel</button>
             <button onClick={footerAction.fn} disabled={footerAction.busy}
               className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-black text-[#adee2b] hover:bg-slate-800 disabled:opacity-40 flex items-center justify-center gap-2 transition-all">
               {footerAction.busy && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
@@ -546,7 +546,7 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
 
   return (
     <div className="space-y-1.5">
-      {saving && <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Saving order...</p>}
+      {saving && <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Saving order...</p>}
       {rooms.map((r, i) => (
         <div
           key={r.id}
@@ -555,17 +555,17 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
           onDragOver={e => onDragOver(e, i)}
           onDragLeave={onDragLeave}
           onDrop={e => onDrop(e, i)}
-          className={`flex items-center gap-3 bg-white rounded-xl border px-3 py-2.5 transition-all select-none
-            ${overIdx === i ? 'border-[#adee2b] bg-[#f7fee7] scale-[1.01]' : 'border-slate-200'}`}
+          className={`flex items-center gap-3 bg-[var(--ds-bg-surface)] rounded-xl border px-3 py-2.5 transition-all select-none
+            ${overIdx === i ? 'border-[#adee2b] bg-[#f7fee7] dark:bg-[#1a2a0a] scale-[1.01]' : 'border-[var(--ds-border)]'}`}
         >
           {/* Drag handle */}
-          <span className="material-symbols-outlined text-slate-300 cursor-grab active:cursor-grabbing shrink-0" style={{ fontSize: 20 }}>drag_indicator</span>
+          <span className="material-symbols-outlined text-[var(--ds-text-3)] cursor-grab active:cursor-grabbing shrink-0" style={{ fontSize: 20 }}>drag_indicator</span>
           {/* Order number */}
-          <span className="text-xs font-black text-slate-400 w-5 text-center shrink-0">{i + 1}</span>
+          <span className="text-xs font-black text-[var(--ds-text-3)] w-5 text-center shrink-0">{i + 1}</span>
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-slate-800 leading-tight truncate">{r.name}</p>
-            <p className="text-[11px] text-slate-400 font-bold mt-0.5">
+            <p className="text-sm font-black text-[var(--ds-text-1)] leading-tight truncate">{r.name}</p>
+            <p className="text-[11px] text-[var(--ds-text-3)] font-bold mt-0.5">
               <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{r.capacity} pax</span>
               {' · '}
               <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>layers</span>{r.floor}</span>
@@ -595,7 +595,7 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
               className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
                 ${r.requires_contact
                   ? 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200'
-                  : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
+                  : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] border-[var(--ds-border)] hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: r.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>
               {togglingSpecial === r.id ? '...' : r.requires_contact ? 'Special' : 'Regular'}
@@ -604,13 +604,13 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
           {/* Actions */}
           <button
             onClick={() => onEdit(r)}
-            className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-black hover:text-[#adee2b] transition-all shrink-0"
+            className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-black hover:text-[#adee2b] transition-all shrink-0"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
           </button>
           <button
             onClick={() => onDelete(r)}
-            className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-red-500 hover:text-white transition-all shrink-0"
+            className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-red-500 hover:text-white transition-all shrink-0"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
           </button>
@@ -654,11 +654,11 @@ function LocationsSection() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-3">
+    <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400">Cities / Areas</p>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">Top-level geographic anchors for buildings</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Cities / Areas</p>
+          <p className="text-xs text-[var(--ds-text-2)] font-medium mt-0.5">Top-level geographic anchors for buildings</p>
         </div>
         <button
           onClick={() => setModal({ open: true })}
@@ -670,23 +670,23 @@ function LocationsSection() {
       </div>
 
       {locations.length === 0 ? (
-        <p className="text-[11px] text-slate-400 font-medium py-2">No cities yet.</p>
+        <p className="text-[11px] text-[var(--ds-text-3)] font-medium py-2">No cities yet.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {locations.map(loc => (
-            <div key={loc.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
-              <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>location_city</span>
+            <div key={loc.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border-sub)]">
+              <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>location_city</span>
               <div>
-                <p className="text-[11px] font-black text-slate-800">{loc.name}</p>
-                {loc.code && <p className="text-[9px] text-slate-400 font-bold uppercase">{loc.code}</p>}
+                <p className="text-[11px] font-black text-[var(--ds-text-1)]">{loc.name}</p>
+                {loc.code && <p className="text-[9px] text-[var(--ds-text-3)] font-bold uppercase">{loc.code}</p>}
               </div>
-              <span className="text-[9px] text-slate-400 font-medium">{loc.buildings_count ?? 0} bldg</span>
+              <span className="text-[9px] text-[var(--ds-text-3)] font-medium">{loc.buildings_count ?? 0} bldg</span>
               <button onClick={() => setModal({ open: true, initial: loc })}
-                className="size-6 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-all">
+                className="size-6 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-all">
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
               </button>
               <button onClick={() => { setDeleteErr(''); setDeleteLocConfirm(''); setDeleteTarget(loc) }}
-                className="size-6 flex items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                className="size-6 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-all">
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
               </button>
             </div>
@@ -711,7 +711,7 @@ function LocationsSection() {
           onClick={() => { setDeleteTarget(null); setDeleteLocConfirm('') }}>
           <div
             className="w-[400px] rounded-[2rem] shadow-2xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(255,255,255,0.7)' }}
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
@@ -720,30 +720,30 @@ function LocationsSection() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">Delete City?</h3>
+                <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete City?</h3>
               </div>
             </div>
             <div className="px-7 py-5 space-y-4">
-              <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-3">
-                <span className="material-symbols-outlined text-slate-300 shrink-0" style={{ fontSize: 20 }}>location_city</span>
+              <div className="bg-[var(--ds-bg-raised)] rounded-xl px-4 py-3 flex items-center gap-3">
+                <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 20 }}>location_city</span>
                 <div>
-                  <p className="text-sm font-black text-slate-800">{deleteTarget.name}</p>
-                  {deleteTarget.code && <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{deleteTarget.code}</p>}
+                  <p className="text-sm font-black text-[var(--ds-text-1)]">{deleteTarget.name}</p>
+                  {deleteTarget.code && <p className="text-[10px] text-[var(--ds-text-3)] font-bold uppercase mt-0.5">{deleteTarget.code}</p>}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                Buildings assigned to this city will be unlinked but not deleted. <span className="font-black text-slate-700">This cannot be undone.</span>
+              <p className="text-[11px] text-[var(--ds-text-2)] font-medium leading-relaxed">
+                Buildings assigned to this city will be unlinked but not deleted. <span className="font-black text-[var(--ds-text-1)]">This cannot be undone.</span>
               </p>
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 px-1">
-                  Type <span className="normal-case text-slate-700">"{deleteTarget.name}"</span> to confirm
+                <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] px-1">
+                  Type <span className="normal-case text-[var(--ds-text-1)]">"{deleteTarget.name}"</span> to confirm
                 </label>
                 <input
                   value={deleteLocConfirm}
                   onChange={e => setDeleteLocConfirm(e.target.value)}
                   placeholder={deleteTarget.name}
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent text-[var(--ds-text-1)]"
                 />
               </div>
               {deleteErr && (
@@ -753,7 +753,7 @@ function LocationsSection() {
               )}
               <div className="flex gap-3 pt-1">
                 <button onClick={() => { setDeleteTarget(null); setDeleteLocConfirm('') }}
-                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
+                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">Cancel</button>
                 <button onClick={handleDelete} disabled={deleting || deleteLocConfirm !== deleteTarget.name}
                   className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-red-500 text-white hover:bg-red-600 disabled:opacity-30 flex items-center justify-center gap-2 transition-all">
                   {deleting && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
@@ -791,23 +791,23 @@ function LocationModal({ initial, onSave, onClose }: {
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[1100] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-[360px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-black uppercase tracking-tight">{initial?.id ? 'Edit City' : 'Add City'}</h3>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[360px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-black uppercase tracking-tight text-[var(--ds-text-1)]">{initial?.id ? 'Edit City' : 'Add City'}</h3>
         {err && <p className="text-xs text-red-500 font-bold">{err}</p>}
         <div className="space-y-3">
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">City / Area Name *</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">City / Area Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Jakarta"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Code (optional)</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Code (optional)</label>
             <input value={code} onChange={e => setCode(e.target.value)} placeholder="e.g. JKT"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
         </div>
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-200">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)]">Cancel</button>
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-40">
             {saving ? 'Saving...' : 'Save'}
@@ -894,13 +894,13 @@ function BuildingsTab() {
     } finally { setDeleting(false) }
   }
 
-  if (isLoading) return <div className="flex items-center justify-center h-48 text-slate-400 text-sm font-bold">Loading...</div>
+  if (isLoading) return <div className="flex items-center justify-center h-48 text-[var(--ds-text-3)] text-sm font-bold">Loading...</div>
 
   return (
     <div className="max-w-4xl space-y-5">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Admin Dashboard</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
           <h1 className="text-3xl font-black italic tracking-tighter uppercase">Buildings</h1>
         </div>
         <button
@@ -915,9 +915,9 @@ function BuildingsTab() {
       <LocationsSection />
 
       {buildings.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
-          <span className="material-symbols-outlined text-slate-300 text-5xl">domain</span>
-          <p className="text-slate-400 font-bold mt-3">No buildings yet.</p>
+        <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-12 text-center">
+          <span className="material-symbols-outlined text-[var(--ds-text-3)] text-5xl">domain</span>
+          <p className="text-[var(--ds-text-3)] font-bold mt-3">No buildings yet.</p>
           <button onClick={() => setBuildingModal({ open: true })}
             className="mt-4 px-4 py-2 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase">
             Add First Building
@@ -931,21 +931,21 @@ function BuildingsTab() {
           const isExpanded = expanded === b.id
 
           return (
-            <div key={b.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+            <div key={b.id} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
               {/* Building header row */}
               <div className="flex items-center gap-4 px-5 py-4">
                 {/* Photo or placeholder */}
-                <div className="size-14 rounded-xl overflow-hidden shrink-0 bg-slate-100 flex items-center justify-center">
+                <div className="size-14 rounded-xl overflow-hidden shrink-0 bg-[var(--ds-bg-surface-2)] flex items-center justify-center">
                   {b.photo
                     ? <img src={b.photo} className="w-full h-full object-cover" />
-                    : <span className="material-symbols-outlined text-slate-300" style={{ fontSize: 28 }}>domain</span>}
+                    : <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 28 }}>domain</span>}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-base font-black text-slate-900">{b.name}</p>
+                    <p className="text-base font-black text-[var(--ds-text-1)]">{b.name}</p>
                     {b.code && (
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-[10px] font-black uppercase text-slate-500">{b.code}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--ds-bg-surface-2)] text-[10px] font-black uppercase text-[var(--ds-text-2)]">{b.code}</span>
                     )}
                     {b.location && (
                       <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[10px] font-black uppercase text-blue-500">{b.location.name}</span>
@@ -956,16 +956,16 @@ function BuildingsTab() {
                   </div>
                   <div className="flex items-center gap-3 mt-1">
                     {b.address && (
-                      <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium truncate">
+                      <span className="flex items-center gap-1 text-[11px] text-[var(--ds-text-3)] font-medium truncate">
                         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>location_on</span>
                         {b.address}
                       </span>
                     )}
-                    <span className="flex items-center gap-1 text-[11px] text-slate-400 font-bold shrink-0">
+                    <span className="flex items-center gap-1 text-[11px] text-[var(--ds-text-3)] font-bold shrink-0">
                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>layers</span>
                       {b.floors} floor{b.floors !== 1 ? 's' : ''}
                     </span>
-                    <span className="flex items-center gap-1 text-[11px] font-black text-slate-600 shrink-0">
+                    <span className="flex items-center gap-1 text-[11px] font-black text-[var(--ds-text-2)] shrink-0">
                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>meeting_room</span>
                       {rooms.length} room{rooms.length !== 1 ? 's' : ''}
                     </span>
@@ -975,21 +975,21 @@ function BuildingsTab() {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => setBuildingModal({ open: true, initial: b })}
-                    className="size-9 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-black hover:text-[#adee2b] transition-all"
+                    className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-black hover:text-[#adee2b] transition-all"
                     title="Edit building"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                   </button>
                   <button
                     onClick={() => { setDeleteErr(''); setConfirmBuildingInput(''); setDeleteTarget(b) }}
-                    className="size-9 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all"
+                    className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-red-50 hover:text-red-500 transition-all"
                     title="Delete building"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
                   </button>
                   <button
                     onClick={() => setExpanded(isExpanded ? null : b.id)}
-                    className="size-9 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
+                    className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-all"
                   >
                     <span className="material-symbols-outlined transition-transform duration-200" style={{ fontSize: 22, transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
                   </button>
@@ -998,9 +998,9 @@ function BuildingsTab() {
 
               {/* Expanded rooms list */}
               {isExpanded && (
-                <div className="border-t border-slate-100 bg-slate-50 px-5 py-4 space-y-3">
+                <div className="border-t border-[var(--ds-border)] bg-[var(--ds-bg-raised)] px-5 py-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-black uppercase text-slate-400 tracking-wider">Rooms in {b.name}</p>
+                    <p className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Rooms in {b.name}</p>
                     <button
                       onClick={() => setRoomModal({ open: true, buildingId: b.id })}
                       className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 transition-colors"
@@ -1011,7 +1011,7 @@ function BuildingsTab() {
                   </div>
 
                   {rooms.length === 0 ? (
-                    <p className="text-xs text-slate-400 font-medium py-2">No rooms yet in this building.</p>
+                    <p className="text-xs text-[var(--ds-text-3)] font-medium py-2">No rooms yet in this building.</p>
                   ) : (
                     <RoomList
                       rooms={rooms}
@@ -1058,7 +1058,7 @@ function BuildingsTab() {
           onClick={() => { setDeleteTarget(null); setConfirmBuildingInput('') }}>
           <div
             className="w-[420px] rounded-[2rem] shadow-2xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(255,255,255,0.7)' }}
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
@@ -1067,30 +1067,30 @@ function BuildingsTab() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">Delete Building?</h3>
+                <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete Building?</h3>
               </div>
             </div>
             <div className="px-7 py-5 space-y-4">
-              <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-3">
-                <span className="material-symbols-outlined text-slate-300 shrink-0" style={{ fontSize: 22 }}>domain</span>
+              <div className="bg-[var(--ds-bg-raised)] rounded-xl px-4 py-3 flex items-center gap-3">
+                <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 22 }}>domain</span>
                 <div>
-                  <p className="text-sm font-black text-slate-800">{deleteTarget.name}</p>
-                  {deleteTarget.address && <p className="text-[10px] text-slate-400 font-medium mt-0.5">{deleteTarget.address}</p>}
+                  <p className="text-sm font-black text-[var(--ds-text-1)]">{deleteTarget.name}</p>
+                  {deleteTarget.address && <p className="text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">{deleteTarget.address}</p>}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                All rooms inside this building will also be deleted. <span className="font-black text-slate-700">This cannot be undone.</span>
+              <p className="text-[11px] text-[var(--ds-text-2)] font-medium leading-relaxed">
+                All rooms inside this building will also be deleted. <span className="font-black text-[var(--ds-text-1)]">This cannot be undone.</span>
               </p>
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 px-1">
-                  Type <span className="normal-case text-slate-700">"{deleteTarget.name}"</span> to confirm
+                <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] px-1">
+                  Type <span className="normal-case text-[var(--ds-text-1)]">"{deleteTarget.name}"</span> to confirm
                 </label>
                 <input
                   value={confirmBuildingInput}
                   onChange={e => setConfirmBuildingInput(e.target.value)}
                   placeholder={deleteTarget.name}
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent text-[var(--ds-text-1)]"
                 />
               </div>
               {deleteErr && (
@@ -1100,7 +1100,7 @@ function BuildingsTab() {
               )}
               <div className="flex gap-3 pt-1">
                 <button onClick={() => { setDeleteTarget(null); setConfirmBuildingInput('') }}
-                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
+                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">Cancel</button>
                 <button onClick={handleDelete} disabled={deleting || confirmBuildingInput !== deleteTarget.name}
                   className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-red-500 text-white hover:bg-red-600 disabled:opacity-30 flex items-center justify-center gap-2 transition-all">
                   {deleting && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
@@ -1121,7 +1121,7 @@ function BuildingsTab() {
           onClick={() => { setDeleteRoomTarget(null); setDeleteRoomErr(''); setConfirmRoomInput('') }}>
           <div
             className="w-[420px] rounded-[2rem] shadow-2xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(255,255,255,0.7)' }}
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
@@ -1130,33 +1130,33 @@ function BuildingsTab() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">Delete Room?</h3>
+                <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete Room?</h3>
               </div>
             </div>
             <div className="px-7 py-5 space-y-4">
-              <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-3">
-                <span className="material-symbols-outlined text-slate-300 shrink-0" style={{ fontSize: 22 }}>meeting_room</span>
+              <div className="bg-[var(--ds-bg-raised)] rounded-xl px-4 py-3 flex items-center gap-3">
+                <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 22 }}>meeting_room</span>
                 <div>
-                  <p className="text-sm font-black text-slate-800">{deleteRoomTarget.name}</p>
-                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                  <p className="text-sm font-black text-[var(--ds-text-1)]">{deleteRoomTarget.name}</p>
+                  <p className="text-[10px] text-[var(--ds-text-3)] font-bold mt-0.5">
                     {deleteRoomTarget.capacity} pax · {deleteRoomTarget.floor}
                     {deleteRoomTarget.requires_contact && ' · Special Room'}
                   </p>
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                Existing bookings linked to this room may be affected. <span className="font-black text-slate-700">This cannot be undone.</span>
+              <p className="text-[11px] text-[var(--ds-text-2)] font-medium leading-relaxed">
+                Existing bookings linked to this room may be affected. <span className="font-black text-[var(--ds-text-1)]">This cannot be undone.</span>
               </p>
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 px-1">
-                  Type <span className="normal-case text-slate-700">"{deleteRoomTarget.name}"</span> to confirm
+                <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] px-1">
+                  Type <span className="normal-case text-[var(--ds-text-1)]">"{deleteRoomTarget.name}"</span> to confirm
                 </label>
                 <input
                   value={confirmRoomInput}
                   onChange={e => setConfirmRoomInput(e.target.value)}
                   placeholder={deleteRoomTarget.name}
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent text-[var(--ds-text-1)]"
                 />
               </div>
               {deleteRoomErr && (
@@ -1168,7 +1168,7 @@ function BuildingsTab() {
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={() => { setDeleteRoomTarget(null); setDeleteRoomErr(''); setConfirmRoomInput('') }}
-                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors"
                 >
                   Cancel
                 </button>
@@ -1215,12 +1215,12 @@ function StatusBadge({ status, onChange }: { status: AssetStatus; onChange?: (s:
         <span className={`size-1.5 rounded-full ${m.dot}`} />{m.label}
         <span className="material-symbols-outlined" style={{ fontSize: 11 }}>expand_more</span>
       </button>
-      <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/sb:flex flex-col bg-white rounded-xl border border-slate-100 shadow-xl overflow-hidden min-w-[110px]">
+      <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/sb:flex flex-col bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border-sub)] shadow-xl overflow-hidden min-w-[110px]">
         {ASSET_STATUSES.filter(s => s !== status).map(s => {
           const sm = STATUS_META[s]
           return (
             <button key={s} onClick={() => onChange(s)}
-              className={`flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase hover:bg-slate-50 ${sm.text}`}>
+              className={`flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] ${sm.text}`}>
               <span className={`size-1.5 rounded-full ${sm.dot}`} />{sm.label}
             </button>
           )
@@ -1255,38 +1255,38 @@ function AssetTypeModal({ initial, onSave, onClose }: {
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-[400px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-black uppercase tracking-tight">{initial?.id ? 'Edit Asset Type' : 'Register Asset Type'}</h3>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[400px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
+        <h3 className="text-base font-black uppercase tracking-tight text-[var(--ds-text-1)]">{initial?.id ? 'Edit Asset Type' : 'Register Asset Type'}</h3>
         {err && <p className="text-xs text-red-500 font-bold">{err}</p>}
         <div className="space-y-3">
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Name *</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Projector Epson EB"
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Category</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Category</label>
               <input value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. AV, IT, Furniture"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Icon</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Icon</label>
               <div className="relative">
-                {icon && <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" style={{ fontSize: 16 }}>{icon}</span>}
+                {icon && <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 16 }}>{icon}</span>}
                 <input value={icon} onChange={e => setIcon(e.target.value)} placeholder="present_to_all"
-                  className={`w-full border border-slate-200 rounded-xl py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] ${icon ? 'pl-9 pr-3' : 'px-3'}`} />
+                  className={`w-full border border-[var(--ds-border)] rounded-xl py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)] ${icon ? 'pl-9 pr-3' : 'px-3'}`} />
               </div>
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Notes</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Notes</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Brand, spec, dsb."
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
         </div>
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2">
             {saving && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
@@ -1324,36 +1324,36 @@ function AssetUnitModal({ assetName, rooms, initial, onSave, onClose }: {
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-[380px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[380px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
         <div>
-          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{assetName}</p>
-          <h3 className="text-base font-black uppercase tracking-tight mt-0.5">{initial?.id ? 'Edit Unit' : 'Add Unit'}</h3>
+          <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{assetName}</p>
+          <h3 className="text-base font-black uppercase tracking-tight mt-0.5 text-[var(--ds-text-1)]">{initial?.id ? 'Edit Unit' : 'Add Unit'}</h3>
         </div>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Unit Code / Serial</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Unit Code / Serial</label>
               <input value={unitCode} onChange={e => setUnitCode(e.target.value)} placeholder="e.g. PRJ-001"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
             </div>
             <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Ruangan</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Ruangan</label>
               <select value={roomId} onChange={e => setRoomId(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-white">
+                className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]">
                 <option value="">— Tidak ada / Gudang —</option>
                 {rooms.map(r => <option key={r.id} value={r.id}>{r.name}{r.floor ? ` (${r.floor})` : ''}</option>)}
               </select>
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Status</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Status</label>
             <div className="flex gap-2 flex-wrap">
               {ASSET_STATUSES.map(s => {
                 const m = STATUS_META[s]
                 return (
                   <button key={s} onClick={() => setStatus(s)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all border
-                      ${status === s ? `${m.bg} ${m.text} border-transparent` : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+                      ${status === s ? `${m.bg} ${m.text} border-transparent` : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-text-3)]'}`}>
                     <span className={`size-1.5 rounded-full ${m.dot}`} />{m.label}
                   </button>
                 )
@@ -1361,13 +1361,13 @@ function AssetUnitModal({ assetName, rooms, initial, onSave, onClose }: {
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Notes</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Notes</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Kondisi, catatan, dsb."
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
         </div>
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2">
             {saving && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
@@ -1452,7 +1452,7 @@ function AssetsTab() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Inventory</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Inventory</p>
           <h1 className="text-3xl font-black italic tracking-tighter uppercase">Assets</h1>
         </div>
         <button onClick={() => setTypeModal({ open: true, target: null })}
@@ -1464,8 +1464,8 @@ function AssetsTab() {
       {/* Stat cards — unit-level counts */}
       <div className="grid grid-cols-6 gap-3">
         {([
-          { label: 'Total Units', value: unitCounts.total, cls: 'bg-black', valCls: 'text-[#adee2b]', subCls: 'text-slate-500' },
-          ...ASSET_STATUSES.map(s => { const m = STATUS_META[s]; return { label: m.label, value: unitCounts[s] ?? 0, cls: 'bg-white border border-slate-100', valCls: m.text, subCls: 'text-slate-400' } }),
+          { label: 'Total Units', value: unitCounts.total, cls: 'bg-black', valCls: 'text-[#adee2b]', subCls: 'text-[var(--ds-text-2)]' },
+          ...ASSET_STATUSES.map(s => { const m = STATUS_META[s]; return { label: m.label, value: unitCounts[s] ?? 0, cls: 'bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)]', valCls: m.text, subCls: 'text-[var(--ds-text-3)]' } }),
         ] as { label: string; value: number; cls: string; valCls: string; subCls: string }[]).map(c => (
           <div key={c.label} className={`${c.cls} rounded-2xl p-4`}>
             <p className={`text-[8px] font-black uppercase tracking-widest ${c.subCls}`}>{c.label}</p>
@@ -1477,29 +1477,29 @@ function AssetsTab() {
       {/* Filters */}
       <div className="flex items-center gap-3">
         <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" style={{ fontSize: 15 }}>search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 15 }}>search</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search asset types..."
-            className="w-52 bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+            className="w-52 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
         </div>
         {categories.length > 0 && (
           <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
-            className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] text-slate-600">
+            className="bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] text-[var(--ds-text-2)]">
             <option value="">All Categories</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
-        <span className="text-[10px] font-black text-slate-400">{filtered.length} types · {unitCounts.total} units</span>
+        <span className="text-[10px] font-black text-[var(--ds-text-3)]">{filtered.length} types · {unitCounts.total} units</span>
       </div>
 
       {/* Asset list */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <span className="material-symbols-outlined animate-spin text-3xl text-slate-300">progress_activity</span>
+          <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-3)]">progress_activity</span>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 48 }}>inventory_2</span>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+          <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 48 }}>inventory_2</span>
+          <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">
             {(assets as Asset[]).length === 0 ? 'No assets registered yet' : 'No assets match the filter'}
           </p>
         </div>
@@ -1511,36 +1511,36 @@ function AssetsTab() {
             const unitStatusCounts = ASSET_STATUSES.map(s => ({ s, n: units.filter(u => u.status === s).length })).filter(x => x.n > 0)
 
             return (
-              <div key={asset.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+              <div key={asset.id} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
                 {/* Asset type row */}
-                <div className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => toggleExpand(asset.id)}>
+                <div className="flex items-center gap-4 px-5 py-4 hover:bg-[var(--ds-bg-raised)] transition-colors cursor-pointer" onClick={() => toggleExpand(asset.id)}>
                   {/* Expand chevron */}
-                  <span className={`material-symbols-outlined text-slate-300 transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-90' : ''}`} style={{ fontSize: 18 }}>chevron_right</span>
+                  <span className={`material-symbols-outlined text-[var(--ds-text-3)] transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-90' : ''}`} style={{ fontSize: 18 }}>chevron_right</span>
 
                   {/* Icon + name */}
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="size-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 18 }}>{asset.icon || 'inventory_2'}</span>
+                    <div className="size-9 rounded-xl bg-[var(--ds-bg-surface-2)] flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>{asset.icon || 'inventory_2'}</span>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[12px] font-black text-slate-800">{asset.name}</p>
-                      {asset.notes && <p className="text-[9px] text-slate-400 truncate">{asset.notes}</p>}
+                      <p className="text-[12px] font-black text-[var(--ds-text-1)]">{asset.name}</p>
+                      {asset.notes && <p className="text-[9px] text-[var(--ds-text-3)] truncate">{asset.notes}</p>}
                     </div>
                   </div>
 
                   {/* Category */}
                   {asset.category && (
-                    <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-[9px] font-black uppercase text-slate-500 shrink-0">{asset.category}</span>
+                    <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] rounded-lg text-[9px] font-black uppercase text-[var(--ds-text-2)] shrink-0">{asset.category}</span>
                   )}
 
                   {/* Unit status summary */}
                   <div className="flex items-center gap-1.5 shrink-0">
                     {units.length === 0 ? (
-                      <span className="text-[9px] font-black text-slate-300 uppercase">No units</span>
+                      <span className="text-[9px] font-black text-[var(--ds-text-3)] uppercase">No units</span>
                     ) : (
                       <>
-                        <span className="text-[10px] font-black text-slate-400">{units.length} unit{units.length !== 1 ? 's' : ''}</span>
-                        <span className="text-slate-200">·</span>
+                        <span className="text-[10px] font-black text-[var(--ds-text-3)]">{units.length} unit{units.length !== 1 ? 's' : ''}</span>
+                        <span className="text-[var(--ds-border)]">·</span>
                         {unitStatusCounts.map(({ s, n }) => {
                           const m = STATUS_META[s]
                           return (
@@ -1556,15 +1556,15 @@ function AssetsTab() {
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                     <button onClick={() => setUnitModal({ open: true, asset, unit: null })}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-[9px] font-black uppercase hover:bg-slate-200 transition-colors">
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add</span>Unit
                     </button>
                     <button onClick={() => setTypeModal({ open: true, target: asset })}
-                      className="size-7 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 transition-colors">
+                      className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] transition-colors">
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>edit</span>
                     </button>
                     <button onClick={() => setDeleteAssetTarget(asset)}
-                      className="size-7 flex items-center justify-center rounded-xl text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors">
+                      className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors">
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
                     </button>
                   </div>
@@ -1572,56 +1572,56 @@ function AssetsTab() {
 
                 {/* Sub-tree: units */}
                 {isOpen && (
-                  <div className="border-t border-slate-50">
+                  <div className="border-t border-[var(--ds-border-sub)]">
                     {units.length === 0 ? (
-                      <div className="flex items-center gap-3 px-14 py-4 text-slate-300">
+                      <div className="flex items-center gap-3 px-14 py-4 text-[var(--ds-text-3)]">
                         <span className="material-symbols-outlined" style={{ fontSize: 16 }}>subdirectory_arrow_right</span>
                         <span className="text-[10px] font-black uppercase tracking-wider">No units yet —</span>
                         <button onClick={() => setUnitModal({ open: true, asset, unit: null })}
-                          className="text-[10px] font-black uppercase text-slate-500 underline underline-offset-2 hover:text-black transition-colors">Add first unit</button>
+                          className="text-[10px] font-black uppercase text-[var(--ds-text-2)] underline underline-offset-2 hover:text-black transition-colors">Add first unit</button>
                       </div>
                     ) : (
                       <table className="w-full">
                         <thead>
-                          <tr className="bg-slate-50/70">
+                          <tr className="bg-[var(--ds-bg-raised)]/70">
                             <th className="w-8" />
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-slate-400">Unit Code</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-slate-400">Room</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-slate-400">Building</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-slate-400">Status</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-slate-400">Notes</th>
+                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Unit Code</th>
+                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Room</th>
+                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Building</th>
+                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Status</th>
+                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Notes</th>
                             <th />
                           </tr>
                         </thead>
                         <tbody>
                           {units.map((unit, i) => (
-                            <tr key={unit.id} className={`hover:bg-slate-50 transition-colors ${i < units.length - 1 ? 'border-b border-slate-50' : ''}`}>
-                              <td className="pl-5 pr-1 py-3 text-slate-200">
+                            <tr key={unit.id} className={`hover:bg-[var(--ds-bg-raised)] transition-colors ${i < units.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''}`}>
+                              <td className="pl-5 pr-1 py-3 text-[var(--ds-text-3)]">
                                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>subdirectory_arrow_right</span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-[11px] font-black text-slate-700 font-mono">{unit.unit_code || <span className="text-slate-300">—</span>}</span>
+                                <span className="text-[11px] font-black text-[var(--ds-text-1)] font-mono">{unit.unit_code || <span className="text-[var(--ds-text-3)]">—</span>}</span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-[11px] font-bold text-slate-600">{unit.room?.name ?? <span className="text-slate-300">Gudang / Unassigned</span>}</span>
+                                <span className="text-[11px] font-bold text-[var(--ds-text-2)]">{unit.room?.name ?? <span className="text-[var(--ds-text-3)]">Gudang / Unassigned</span>}</span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-[10px] font-bold text-slate-400">{unit.room?.building?.name ?? '—'}</span>
+                                <span className="text-[10px] font-bold text-[var(--ds-text-3)]">{unit.room?.building?.name ?? '—'}</span>
                               </td>
                               <td className="px-4 py-3">
                                 <StatusBadge status={unit.status} onChange={s => quickUnitStatus(asset, unit, s)} />
                               </td>
                               <td className="px-4 py-3">
-                                <span className="text-[10px] text-slate-400 truncate max-w-[140px] block">{unit.notes || '—'}</span>
+                                <span className="text-[10px] text-[var(--ds-text-3)] truncate max-w-[140px] block">{unit.notes || '—'}</span>
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-1 justify-end">
                                   <button onClick={() => setUnitModal({ open: true, asset, unit })}
-                                    className="size-7 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 transition-colors">
+                                    className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] transition-colors">
                                     <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
                                   </button>
                                   <button onClick={() => setDeleteUnitTarget({ asset, unit })}
-                                    className="size-7 flex items-center justify-center rounded-xl text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors">
+                                    className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors">
                                     <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
                                   </button>
                                 </div>
@@ -1657,11 +1657,11 @@ function AssetsTab() {
       {deleteAssetTarget && (
         <ModalPortal>
         <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }} onClick={() => setDeleteAssetTarget(null)}>
-          <div className="bg-white rounded-3xl p-7 w-80 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-black uppercase">Delete Asset Type?</p>
-            <p className="text-[11px] text-slate-500">Semua <span className="font-black text-slate-800">{deleteAssetTarget.units?.length ?? 0} unit</span> dari <span className="font-black text-slate-800">{deleteAssetTarget.name}</span> juga akan dihapus.</p>
+          <div className="bg-[var(--ds-bg-surface)] rounded-3xl p-7 w-80 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-black uppercase text-[var(--ds-text-1)]">Delete Asset Type?</p>
+            <p className="text-[11px] text-[var(--ds-text-2)]">Semua <span className="font-black text-[var(--ds-text-1)]">{deleteAssetTarget.units?.length ?? 0} unit</span> dari <span className="font-black text-[var(--ds-text-1)]">{deleteAssetTarget.name}</span> juga akan dihapus.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteAssetTarget(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50">Cancel</button>
+              <button onClick={() => setDeleteAssetTarget(null)} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
               <button onClick={handleDeleteAsset} disabled={deleting} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase hover:bg-red-600 disabled:opacity-50">
                 {deleting ? 'Deleting...' : 'Delete All'}
               </button>
@@ -1675,11 +1675,11 @@ function AssetsTab() {
       {deleteUnitTarget && (
         <ModalPortal>
         <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }} onClick={() => setDeleteUnitTarget(null)}>
-          <div className="bg-white rounded-3xl p-7 w-80 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-black uppercase">Remove Unit?</p>
-            <p className="text-[11px] text-slate-500">Unit <span className="font-black text-slate-800">{deleteUnitTarget.unit.unit_code || `#${deleteUnitTarget.unit.id}`}</span> dari {deleteUnitTarget.asset.name} akan dihapus.</p>
+          <div className="bg-[var(--ds-bg-surface)] rounded-3xl p-7 w-80 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-black uppercase text-[var(--ds-text-1)]">Remove Unit?</p>
+            <p className="text-[11px] text-[var(--ds-text-2)]">Unit <span className="font-black text-[var(--ds-text-1)]">{deleteUnitTarget.unit.unit_code || `#${deleteUnitTarget.unit.id}`}</span> dari {deleteUnitTarget.asset.name} akan dihapus.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteUnitTarget(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase text-slate-500 hover:bg-slate-50">Cancel</button>
+              <button onClick={() => setDeleteUnitTarget(null)} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
               <button onClick={handleDeleteUnit} disabled={deleting} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase hover:bg-red-600 disabled:opacity-50">
                 {deleting ? 'Deleting...' : 'Remove'}
               </button>
@@ -1721,13 +1721,13 @@ function BuildingPicker({ role, bldIds, buildings, locations, onToggle }: {
     return (
       <button onClick={() => onToggle(b.id)}
         className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border mb-1 transition-all text-left
-          ${checked ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>
-        <span className={`size-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-blue-500 border-blue-500' : 'border-slate-300'}`}>
+          ${checked ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[var(--ds-text-3)]'}`}>
+        <span className={`size-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-blue-500 border-blue-500' : 'border-[var(--ds-border)]'}`}>
           {checked && <span className="material-symbols-outlined text-white" style={{ fontSize: 11 }}>check</span>}
         </span>
         <div className="min-w-0">
           <p className="text-[11px] font-black truncate">{b.name}</p>
-          {b.address && <p className="text-[9px] text-slate-400 truncate">{b.address}</p>}
+          {b.address && <p className="text-[9px] text-[var(--ds-text-3)] truncate">{b.address}</p>}
         </div>
       </button>
     )
@@ -1735,13 +1735,13 @@ function BuildingPicker({ role, bldIds, buildings, locations, onToggle }: {
 
   return (
     <div className="space-y-2">
-      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+      <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">
         {role === 'building_admin' ? 'Assigned Buildings' : 'Assigned Location / Buildings'}
       </p>
       <div className="flex flex-col gap-0 max-h-52 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
         {locGroups.map(({ loc, buildings: grp }) => (
           <div key={loc.id}>
-            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 px-1 pt-2 pb-1 flex items-center gap-1">
+            <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1 pt-2 pb-1 flex items-center gap-1">
               <span className="material-symbols-outlined" style={{ fontSize: 10 }}>location_city</span>
               {loc.name}{loc.code ? ` · ${loc.code}` : ''}
             </p>
@@ -1751,7 +1751,7 @@ function BuildingPicker({ role, bldIds, buildings, locations, onToggle }: {
         {withoutLocation.length > 0 && (
           <div>
             {locGroups.length > 0 && (
-              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 px-1 pt-2 pb-1">Other</p>
+              <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1 pt-2 pb-1">Other</p>
             )}
             {withoutLocation.map(b => <Row key={b.id} b={b} />)}
           </div>
@@ -1807,7 +1807,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
     } finally { setSaving(false) }
   }
 
-  const inputBase = 'w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:border-transparent transition-all'
+  const inputBase = 'w-full bg-[var(--ds-bg-raised)] border rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:border-transparent transition-all text-[var(--ds-text-1)]'
 
   return (
     <ModalPortal>
@@ -1820,21 +1820,21 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
         className="w-full max-w-[480px] flex flex-col rounded-[2rem] shadow-2xl overflow-hidden"
         style={{
           height: 640,
-          background: 'rgba(255,255,255,0.90)',
+          background: 'var(--ds-bg-surface)',
           backdropFilter: 'blur(48px) saturate(200%)',
-          border: '1px solid rgba(255,255,255,0.7)',
+          border: '1px solid rgba(128,128,128,0.15)',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-slate-100 shrink-0">
+        <div className="flex items-center justify-between px-7 pt-7 pb-5 border-b border-[var(--ds-border)] shrink-0">
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400">Admin · Users</p>
-            <h2 className="text-2xl font-black italic tracking-tighter uppercase mt-0.5">Add User</h2>
+            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Admin · Users</p>
+            <h2 className="text-2xl font-black italic tracking-tighter uppercase mt-0.5 text-[var(--ds-text-1)]">Add User</h2>
           </div>
           <button onClick={onClose}
-            className="size-9 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
-            <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 18 }}>close</span>
+            className="size-9 rounded-xl bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-bg-raised)] flex items-center justify-center transition-colors">
+            <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>close</span>
           </button>
         </div>
 
@@ -1851,47 +1851,47 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
 
           {/* ── Section: Basic Info ── */}
           <div className="space-y-3">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Basic Info</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Basic Info</p>
 
             {/* Name */}
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Full Name *</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Full Name *</label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" style={{ fontSize: 16 }}>person</span>
+                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>person</span>
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Budi Santoso"
-                  className={`${inputBase} focus:ring-[#adee2b] border-slate-200`} />
+                  className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)]`} />
               </div>
             </div>
 
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Email *</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Email *</label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" style={{ fontSize: 16 }}>mail</span>
+                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>mail</span>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. budi@company.com"
-                  className={`${inputBase} focus:ring-[#adee2b] border-slate-200`} />
+                  className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)]`} />
               </div>
             </div>
 
             {/* Dept + Ext */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Department</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Department</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" style={{ fontSize: 16 }}>corporate_fare</span>
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 16 }}>corporate_fare</span>
                   <select value={deptId ?? ''} onChange={e => setDeptId(e.target.value ? Number(e.target.value) : null)}
-                    className={`${inputBase} focus:ring-[#adee2b] border-slate-200 appearance-none cursor-pointer`}>
+                    className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)] appearance-none cursor-pointer`}>
                     <option value="">— No department —</option>
                     {departments.map(d => <option key={d.id} value={d.id}>{d.name}{d.code ? ` (${d.code})` : ''}</option>)}
                   </select>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Ext (phone)</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Ext (phone)</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" style={{ fontSize: 16 }}>phone</span>
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>phone</span>
                   <input value={ext} onChange={e => setExt(e.target.value)} placeholder="e.g. 1234"
-                    className={`${inputBase} focus:ring-[#adee2b] border-slate-200`} />
+                    className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)]`} />
                 </div>
               </div>
             </div>
@@ -1899,19 +1899,19 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
 
           {/* ── Section: Password ── */}
           <div className="space-y-3">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Password</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Password</p>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between px-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Password *</label>
-                <span className="text-[9px] text-slate-400">Min. 8 characters</span>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Password *</label>
+                <span className="text-[9px] text-[var(--ds-text-3)]">Min. 8 characters</span>
               </div>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" style={{ fontSize: 16 }}>lock</span>
+                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>lock</span>
                 <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
-                  className={`${inputBase} pr-10 ${pwTooShort ? 'border-orange-300 focus:ring-orange-400' : 'border-slate-200 focus:ring-[#adee2b]'}`} />
+                  className={`${inputBase} pr-10 ${pwTooShort ? 'border-orange-300 focus:ring-orange-400' : 'border-[var(--ds-border)] focus:ring-[#adee2b]'}`} />
                 <button type="button" onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors">
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors">
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{showPw ? 'visibility_off' : 'visibility'}</span>
                 </button>
               </div>
@@ -1924,13 +1924,13 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Confirm Password *</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Confirm Password *</label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" style={{ fontSize: 16 }}>lock_reset</span>
+                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>lock_reset</span>
                 <input type={showCf ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Re-enter password"
-                  className={`${inputBase} pr-10 ${pwMismatch ? 'border-red-300 focus:ring-red-400' : confirm && confirm === password ? 'border-green-300 focus:ring-green-400' : 'border-slate-200 focus:ring-[#adee2b]'}`} />
+                  className={`${inputBase} pr-10 ${pwMismatch ? 'border-red-300 focus:ring-red-400' : confirm && confirm === password ? 'border-green-300 focus:ring-green-400' : 'border-[var(--ds-border)] focus:ring-[#adee2b]'}`} />
                 <button type="button" onClick={() => setShowCf(v => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors">
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors">
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{showCf ? 'visibility_off' : 'visibility'}</span>
                 </button>
               </div>
@@ -1951,14 +1951,14 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
 
           {/* ── Section: Role ── */}
           <div className="space-y-3">
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Role</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Role</p>
             <div className="grid grid-cols-2 gap-2">
               {ALL_ROLES.map(r => {
                 const m = ROLE_META[r]
                 return (
                   <button key={r} onClick={() => setRole(r)}
                     className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border text-[10px] font-black uppercase tracking-wide transition-all
-                      ${role === r ? `${m.bg} ${m.text} border-transparent shadow-sm` : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:bg-slate-50'}`}>
+                      ${role === r ? `${m.bg} ${m.text} border-transparent shadow-sm` : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)]'}`}>
                     <span className={`size-2 rounded-full shrink-0 ${role === r ? 'bg-current' : 'bg-slate-200'}`} />
                     {m.label}
                   </button>
@@ -1970,7 +1970,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
           {/* ── Section: Building ── */}
           {(role === 'building_admin' || role === 'receptionist') && (
             <div className="space-y-3">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Buildings</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Buildings</p>
               <BuildingPicker role={role} bldIds={bldIds} buildings={buildings} locations={locations} onToggle={toggleBuilding} />
             </div>
           )}
@@ -1978,15 +1978,15 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-7 py-5 border-t border-slate-100 shrink-0 flex gap-3">
+        <div className="px-7 py-5 border-t border-[var(--ds-border)] shrink-0 flex gap-3">
           <button onClick={onClose}
-            className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+            className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving || pwTooShort || pwMismatch}
             className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-200
               bg-black text-[#adee2b] hover:bg-slate-800 shadow-lg shadow-black/10
-              disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none
+              disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none
               flex items-center justify-center gap-2">
             {saving && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
             {saving ? 'Saving...' : 'Create User →'}
@@ -2169,22 +2169,22 @@ function ImportExportModal({ users, onImport, onClose }: {
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-slate-100">
+        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-[var(--ds-border)]">
           <div>
-            <h3 className="text-lg font-black uppercase tracking-tight">Import / Export Users</h3>
-            <p className="text-[10px] text-slate-400 font-medium mt-0.5">{users.length} users currently in system</p>
+            <h3 className="text-lg font-black uppercase tracking-tight text-[var(--ds-text-1)]">Import / Export Users</h3>
+            <p className="text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">{users.length} users currently in system</p>
           </div>
-          <button onClick={onClose} className="size-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button onClick={onClose} className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)]">
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
           </button>
         </div>
 
         {/* Export strip */}
-        <div className="px-7 py-4 bg-slate-50 border-b border-slate-100">
-          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Export Current Users</p>
+        <div className="px-7 py-4 bg-[var(--ds-bg-raised)] border-b border-[var(--ds-border)]">
+          <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">Export Current Users</p>
           <div className="flex gap-2">
             <button onClick={doExportExcel} disabled={exporting}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase hover:bg-emerald-700 disabled:opacity-50 transition-colors">
@@ -2199,18 +2199,18 @@ function ImportExportModal({ users, onImport, onClose }: {
               {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>database</span>}SQL
             </button>
           </div>
-          <p className="text-[9px] text-slate-400 mt-2">Password diekspor sebagai bcrypt hash — saat diimpor kembali akan dikenali otomatis.</p>
+          <p className="text-[9px] text-[var(--ds-text-3)] mt-2">Password diekspor sebagai bcrypt hash — saat diimpor kembali akan dikenali otomatis.</p>
         </div>
 
         {/* Import section */}
         <div className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
-          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Import Users</p>
+          <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Import Users</p>
 
           {/* Format tabs */}
-          <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+          <div className="flex gap-1 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 w-fit">
             {TABS.map(t => (
               <button key={t.key} onClick={() => { setTab(t.key); setPreview(null); setParseErr(''); setImportResult(null) }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${tab === t.key ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${tab === t.key ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{t.icon}</span>
                 {t.label}
               </button>
@@ -2218,39 +2218,39 @@ function ImportExportModal({ users, onImport, onClose }: {
           </div>
 
           {/* Format docs */}
-          <div className="bg-slate-50 rounded-2xl p-4 space-y-3 text-[11px]">
+          <div className="bg-[var(--ds-bg-raised)] rounded-2xl p-4 space-y-3 text-[11px]">
             {tab === 'excel' && (
               <>
-                <p className="font-black text-slate-700">Format Excel (.xlsx)</p>
+                <p className="font-black text-[var(--ds-text-1)]">Format Excel (.xlsx)</p>
                 <div className="overflow-x-auto">
                   <table className="text-[10px] border-collapse w-full">
                     <thead>
-                      <tr className="bg-slate-200">
+                      <tr className="bg-[var(--ds-border)]">
                         {['Col A', 'Col B', 'Col C', 'Col D', 'Col E', 'Col F'].map(c => (
-                          <th key={c} className="px-3 py-1.5 text-left font-black text-slate-600 border border-slate-300">{c}</th>
+                          <th key={c} className="px-3 py-1.5 text-left font-black text-[var(--ds-text-1)] border border-[var(--ds-border)]">{c}</th>
                         ))}
                       </tr>
-                      <tr className="bg-slate-100">
+                      <tr className="bg-[var(--ds-bg-surface-2)]">
                         {IMPORT_COLS.map(c => (
-                          <th key={c} className="px-3 py-1.5 text-left font-bold text-slate-500 border border-slate-200 font-mono">{c}</th>
+                          <th key={c} className="px-3 py-1.5 text-left font-bold text-[var(--ds-text-2)] border border-[var(--ds-border)] font-mono">{c}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="bg-white">
+                      <tr className="bg-[var(--ds-bg-surface)]">
                         {['Budi Santoso', 'budi@co.com', 'pass1234', 'IT', 'user', '1001'].map((v, i) => (
-                          <td key={i} className="px-3 py-1.5 border border-slate-100 text-slate-600">{v}</td>
+                          <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)]">{v}</td>
                         ))}
                       </tr>
-                      <tr className="bg-slate-50">
+                      <tr className="bg-[var(--ds-bg-raised)]">
                         {['Siti Rahayu', 'siti@co.com', 'pass1234', 'HR', 'receptionist', ''].map((v, i) => (
-                          <td key={i} className="px-3 py-1.5 border border-slate-100 text-slate-500 italic">{v || '(kosong)'}</td>
+                          <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(kosong)'}</td>
                         ))}
                       </tr>
                     </tbody>
                   </table>
                 </div>
-                <ul className="space-y-1 text-slate-500 list-disc pl-4">
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                   <li>Baris pertama = header (wajib ada, boleh nama kolom apa saja — <em>urutan kolom yang menentukan</em>)</li>
                   <li>Kolom A–C wajib; D–F opsional</li>
                   <li>Role: <span className="font-mono bg-slate-200 px-1 rounded">user</span> · <span className="font-mono bg-slate-200 px-1 rounded">admin</span> · <span className="font-mono bg-slate-200 px-1 rounded">receptionist</span> · <span className="font-mono bg-slate-200 px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>)</li>
@@ -2265,13 +2265,13 @@ function ImportExportModal({ users, onImport, onClose }: {
 
             {tab === 'csv' && (
               <>
-                <p className="font-black text-slate-700">Format CSV (.csv)</p>
-                <div className="bg-white rounded-xl border border-slate-200 p-3 font-mono text-[10px] text-slate-600 space-y-0.5">
-                  <p className="text-slate-400">name,email,password,department,role,ext</p>
+                <p className="font-black text-[var(--ds-text-1)]">Format CSV (.csv)</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5">
+                  <p className="text-[var(--ds-text-3)]">name,email,password,department,role,ext</p>
                   <p>Budi Santoso,budi@co.com,pass1234,IT,user,1001</p>
                   <p>Siti Rahayu,siti@co.com,pass1234,HR,receptionist,</p>
                 </div>
-                <ul className="space-y-1 text-slate-500 list-disc pl-4">
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                   <li>Separator: koma <span className="font-mono bg-slate-200 px-1 rounded">,</span> — jika nilai mengandung koma, bungkus dengan tanda kutip ganda</li>
                   <li>Baris pertama = header (nama kolom dipakai untuk mapping, bukan urutan)</li>
                   <li>Kolom <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> wajib</li>
@@ -2286,14 +2286,14 @@ function ImportExportModal({ users, onImport, onClose }: {
 
             {tab === 'sql' && (
               <>
-                <p className="font-black text-slate-700">Format SQL (.sql)</p>
-                <div className="bg-white rounded-xl border border-slate-200 p-3 font-mono text-[10px] text-slate-600 space-y-0.5">
-                  <p className="text-slate-400">-- Urutan kolom wajib: name, email, password, department, role, ext</p>
+                <p className="font-black text-[var(--ds-text-1)]">Format SQL (.sql)</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5">
+                  <p className="text-[var(--ds-text-3)]">-- Urutan kolom wajib: name, email, password, department, role, ext</p>
                   <p>INSERT INTO users (name, email, password, department, role, ext) VALUES</p>
                   <p className="pl-2">('Budi Santoso', 'budi@co.com', 'pass1234', 'IT', 'user', '1001'),</p>
                   <p className="pl-2">('Siti Rahayu', 'siti@co.com', 'pass1234', 'HR', 'receptionist', NULL);</p>
                 </div>
-                <ul className="space-y-1 text-slate-500 list-disc pl-4">
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                   <li>Hanya satu blok <span className="font-mono">INSERT INTO ... VALUES (...)</span> yang diproses</li>
                   <li>Urutan kolom dalam VALUES harus: <span className="font-mono">name, email, password, department, role, ext</span></li>
                   <li>Gunakan <span className="font-mono">NULL</span> atau string kosong <span className="font-mono">''</span> untuk field opsional</li>
@@ -2307,13 +2307,13 @@ function ImportExportModal({ users, onImport, onClose }: {
           {/* File input */}
           {!importResult && (
             <div>
-              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider block mb-2">Pilih File</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider block mb-2">Pilih File</label>
               <input
                 ref={fileRef}
                 type="file"
                 accept={tab === 'excel' ? '.xlsx,.xls' : tab === 'csv' ? '.csv' : '.sql'}
                 onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
-                className="block w-full text-[11px] text-slate-500 font-bold
+                className="block w-full text-[11px] text-[var(--ds-text-2)] font-bold
                   file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0
                   file:text-[10px] file:font-black file:uppercase
                   file:bg-black file:text-[#adee2b] hover:file:bg-slate-800 file:cursor-pointer"
@@ -2326,37 +2326,37 @@ function ImportExportModal({ users, onImport, onClose }: {
           {preview && preview.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Preview — {preview.length} rows</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Preview — {preview.length} rows</p>
                 <button onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = '' }}
-                  className="text-[9px] text-slate-400 hover:text-slate-600 font-bold">Clear</button>
+                  className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Clear</button>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <div className="overflow-x-auto rounded-xl border border-[var(--ds-border)]">
                 <table className="w-full text-[10px]">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
+                    <tr className="bg-[var(--ds-bg-raised)] border-b border-[var(--ds-border)]">
                       {IMPORT_COLS.map(c => (
-                        <th key={c} className="px-3 py-2 text-left font-black text-slate-500 uppercase">{c}</th>
+                        <th key={c} className="px-3 py-2 text-left font-black text-[var(--ds-text-2)] uppercase">{c}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {preview.slice(0, 8).map((row, i) => (
-                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                        <td className="px-3 py-1.5 font-bold text-slate-700">{row.name}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{row.email}</td>
-                        <td className="px-3 py-1.5 text-slate-400 font-mono">{'•'.repeat(Math.min(row.password?.length ?? 0, 8))}</td>
-                        <td className="px-3 py-1.5 text-slate-500">{row.department ?? '—'}</td>
+                      <tr key={i} className={i % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-raised)]'}>
+                        <td className="px-3 py-1.5 font-bold text-[var(--ds-text-1)]">{row.name}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-2)]">{row.email}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-3)] font-mono">{'•'.repeat(Math.min(row.password?.length ?? 0, 8))}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-2)]">{row.department ?? '—'}</td>
                         <td className="px-3 py-1.5">
                           {row.role && ROLE_META[row.role as UserRole] ? (
                             <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${ROLE_META[row.role as UserRole].bg} ${ROLE_META[row.role as UserRole].text}`}>{row.role}</span>
-                          ) : <span className="text-slate-400">{row.role || 'user'}</span>}
+                          ) : <span className="text-[var(--ds-text-3)]">{row.role || 'user'}</span>}
                         </td>
-                        <td className="px-3 py-1.5 text-slate-400">{row.ext || '—'}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.ext || '—'}</td>
                       </tr>
                     ))}
                     {preview.length > 8 && (
                       <tr>
-                        <td colSpan={6} className="px-3 py-2 text-center text-[9px] text-slate-400 font-bold">
+                        <td colSpan={6} className="px-3 py-2 text-center text-[9px] text-[var(--ds-text-3)] font-bold">
                           +{preview.length - 8} more rows...
                         </td>
                       </tr>
@@ -2389,7 +2389,7 @@ function ImportExportModal({ users, onImport, onClose }: {
                 )}
               </div>
               <button onClick={() => setImportResult(null)}
-                className="text-[9px] text-slate-400 hover:text-slate-600 font-bold">Import lagi</button>
+                className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Import lagi</button>
             </div>
           )}
         </div>
@@ -2454,21 +2454,21 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
     }
   }
 
-  const inputCls = 'border border-slate-200 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]'
+  const inputCls = 'border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]'
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+    <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
       {/* Header row */}
       <button onClick={() => setCollapsed(v => !v)}
-        className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors text-left">
-        <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>corporate_fare</span>
-        <span className="flex-1 text-[10px] font-black uppercase tracking-wider text-slate-700">Departments</span>
-        <span className="text-[9px] text-slate-400 font-bold">{departments.length} dept{departments.length !== 1 ? 's' : ''}</span>
-        <span className="material-symbols-outlined text-slate-300" style={{ fontSize: 16 }}>{collapsed ? 'expand_more' : 'expand_less'}</span>
+        className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[var(--ds-bg-raised)] transition-colors text-left">
+        <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>corporate_fare</span>
+        <span className="flex-1 text-[10px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Departments</span>
+        <span className="text-[9px] text-[var(--ds-text-3)] font-bold">{departments.length} dept{departments.length !== 1 ? 's' : ''}</span>
+        <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>{collapsed ? 'expand_more' : 'expand_less'}</span>
       </button>
 
       {!collapsed && (
-        <div className="border-t border-slate-50 px-5 py-4 space-y-3">
+        <div className="border-t border-[var(--ds-border-sub)] px-5 py-4 space-y-3">
           {delErr && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-3 py-2 rounded-xl">
               <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>error</span>{delErr}
@@ -2481,7 +2481,7 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
               {departments.map(d => (
                 <div key={d.id}>
                   {editId === d.id ? (
-                    <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2 bg-[var(--ds-bg-raised)] rounded-xl px-3 py-2">
                       <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name"
                         className={`flex-1 ${inputCls}`} />
                       <input value={editCode} onChange={e => setEditCode(e.target.value)} placeholder="Code" style={{ width: 72 }}
@@ -2491,21 +2491,21 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
                         className="px-3 py-2 rounded-xl bg-black text-[#adee2b] text-[9px] font-black uppercase disabled:opacity-40">
                         {editSaving ? '...' : 'Save'}
                       </button>
-                      <button onClick={() => setEditId(null)} className="px-3 py-2 rounded-xl bg-slate-200 text-slate-600 text-[9px] font-black uppercase">
+                      <button onClick={() => setEditId(null)} className="px-3 py-2 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[9px] font-black uppercase">
                         Cancel
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-slate-50 group">
-                      <span className="flex-1 text-[12px] font-black text-slate-800">{d.name}</span>
-                      {d.code && <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[8px] font-black uppercase">{d.code}</span>}
-                      <span className="text-[9px] text-slate-400 font-bold">{d.users_count ?? 0} user{(d.users_count ?? 0) !== 1 ? 's' : ''}</span>
+                    <div className="flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-[var(--ds-bg-raised)] group">
+                      <span className="flex-1 text-[12px] font-black text-[var(--ds-text-1)]">{d.name}</span>
+                      {d.code && <span className="px-2 py-0.5 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-lg text-[8px] font-black uppercase">{d.code}</span>}
+                      <span className="text-[9px] text-[var(--ds-text-3)] font-bold">{d.users_count ?? 0} user{(d.users_count ?? 0) !== 1 ? 's' : ''}</span>
                       <button onClick={() => openEdit(d)}
-                        className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-all">
+                        className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] opacity-0 group-hover:opacity-100 transition-all">
                         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
                       </button>
                       <button onClick={() => handleDelete(d)}
-                        className="size-7 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                        className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
                         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
                       </button>
                     </div>
@@ -2652,18 +2652,18 @@ function UsersTab() {
     <div className="space-y-5 max-w-5xl">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Management</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Management</p>
           <h1 className="text-3xl font-black italic tracking-tighter uppercase">Users</h1>
         </div>
         {/* Search */}
         <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" style={{ fontSize: 16 }}>search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 16 }}>search</span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users..."
-            className="w-56 bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent" />
+            className="w-56 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
         </div>
         {/* Import / Export */}
         <button onClick={() => setIEModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[11px] font-black uppercase hover:bg-slate-200 transition-colors">
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>import_export</span>
           Import / Export
         </button>
@@ -2680,7 +2680,7 @@ function UsersTab() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <span className="material-symbols-outlined animate-spin text-3xl text-slate-300">progress_activity</span>
+          <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-3)]">progress_activity</span>
         </div>
       ) : (
         <div className="space-y-4">
@@ -2688,11 +2688,11 @@ function UsersTab() {
             const m = ROLE_META[role]
             const isUserRole = role === 'user'
             return (
-              <div key={role} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+              <div key={role} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
                 {/* Group header */}
-                <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-50">
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ds-border-sub)]">
                   <span className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase ${m.bg} ${m.text}`}>{m.label}</span>
-                  <span className="text-[11px] font-black text-slate-300">{grouped[role]!.length} user{grouped[role]!.length !== 1 ? 's' : ''}</span>
+                  <span className="text-[11px] font-black text-[var(--ds-text-3)]">{grouped[role]!.length} user{grouped[role]!.length !== 1 ? 's' : ''}</span>
                 </div>
 
                 {isUserRole ? (
@@ -2700,30 +2700,30 @@ function UsersTab() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
-                        <tr className="border-b border-slate-50">
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider w-10">No.</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Name</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Email</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Department</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider w-20">Ext</th>
-                          {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-slate-400 tracking-wider">Special Access</th>}
+                        <tr className="border-b border-[var(--ds-border-sub)]">
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-10">No.</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Email</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Department</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-20">Ext</th>
+                          {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Special Access</th>}
                           <th className="px-2 py-3 w-10"></th>
                           <th className="px-2 py-3 w-10"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {grouped[role]!.map((u, i) => (
-                          <tr key={u.id} className={`hover:bg-slate-50 transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-slate-50' : ''}`}>
-                            <td className="px-5 py-3.5 text-[11px] font-bold text-slate-300">{i + 1}</td>
+                          <tr key={u.id} className={`hover:bg-[var(--ds-bg-raised)] transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''}`}>
+                            <td className="px-5 py-3.5 text-[11px] font-bold text-[var(--ds-text-3)]">{i + 1}</td>
                             <td className="px-5 py-3.5">
                               <div className="flex items-center gap-2.5">
                                 <UserAvatar name={u.name} avatar={u.avatar} size={32} />
-                                <span className="text-[13px] font-black text-slate-800 whitespace-nowrap">{u.name}</span>
+                                <span className="text-[13px] font-black text-[var(--ds-text-1)] whitespace-nowrap">{u.name}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-3.5 text-[12px] text-slate-400 font-medium">{u.email}</td>
-                            <td className="px-5 py-3.5 text-[12px] text-slate-500 font-bold uppercase">{u.department || '—'}</td>
-                            <td className="px-5 py-3.5 text-[12px] text-slate-400 font-medium">{u.ext || '—'}</td>
+                            <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium">{u.email}</td>
+                            <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-2)] font-bold uppercase">{u.department || '—'}</td>
+                            <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium">{u.ext || '—'}</td>
                             {role === 'user' && (
                               <td className="px-5 py-3.5">
                                 <button
@@ -2731,7 +2731,7 @@ function UsersTab() {
                                   className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-black uppercase tracking-wider whitespace-nowrap"
                                   style={u.can_book_special
                                     ? { background: 'rgba(173,238,43,0.1)', borderColor: 'rgba(173,238,43,0.4)', color: '#4d7c00' }
-                                    : { background: 'white', borderColor: '#e2e8f0', color: '#94a3b8' }
+                                    : { background: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border)', color: '#94a3b8' }
                                   }
                                   onMouseEnter={e => {
                                     const b = e.currentTarget
@@ -2741,7 +2741,7 @@ function UsersTab() {
                                   onMouseLeave={e => {
                                     const b = e.currentTarget
                                     if (u.can_book_special) { b.style.background = 'rgba(173,238,43,0.1)'; b.style.borderColor = 'rgba(173,238,43,0.4)'; b.style.color = '#4d7c00' }
-                                    else { b.style.background = 'white'; b.style.borderColor = '#e2e8f0'; b.style.color = '#94a3b8' }
+                                    else { b.style.background = 'var(--ds-bg-surface)'; b.style.borderColor = 'var(--ds-border)'; b.style.color = '#94a3b8' }
                                   }}
                                 >
                                   <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: u.can_book_special ? "'FILL' 1" : "'FILL' 0" }}>star</span>
@@ -2751,13 +2751,13 @@ function UsersTab() {
                             )}
                             <td className="px-2 py-3.5">
                               <button onClick={() => openEdit(u)}
-                                className="size-8 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
                               </button>
                             </td>
                             <td className="px-2 py-3.5">
                               <button onClick={() => { setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('') }}
-                                className="size-8 flex items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors">
+                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
                               </button>
                             </td>
@@ -2770,13 +2770,13 @@ function UsersTab() {
                   /* Card layout for admin roles */
                   <>
                     {grouped[role]!.map((u, i) => (
-                      <div key={u.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-slate-50' : ''}`}>
+                      <div key={u.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-[var(--ds-bg-raised)] transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''}`}>
                         <UserAvatar name={u.name} avatar={u.avatar} size={44} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-[14px] font-black text-slate-800">{u.name}</p>
-                          <p className="text-[12px] text-slate-400 font-bold">{u.email}</p>
+                          <p className="text-[14px] font-black text-[var(--ds-text-1)]">{u.name}</p>
+                          <p className="text-[12px] text-[var(--ds-text-3)] font-bold">{u.email}</p>
                         </div>
-                        <span className="text-[11px] font-bold text-slate-400 uppercase shrink-0">{u.department}</span>
+                        <span className="text-[11px] font-bold text-[var(--ds-text-3)] uppercase shrink-0">{u.department}</span>
                         {/* Building tags */}
                         <div className="flex gap-1.5 flex-wrap max-w-[220px] justify-end">
                           {(u.admin_buildings ?? []).length === 0
@@ -2802,7 +2802,7 @@ function UsersTab() {
                           </button>
                         )}
                         <button onClick={() => openEdit(u)}
-                          className="size-9 flex items-center justify-center rounded-xl text-slate-300 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
+                          className="size-9 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
                         </button>
                         <button onClick={() => {
@@ -2810,7 +2810,7 @@ function UsersTab() {
                             if (isLastAdmin) { setDeleteBlockedUser(u); return }
                             setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('')
                           }}
-                          className="size-8 flex items-center justify-center rounded-xl text-slate-300 hover:bg-red-50 hover:text-red-500 transition-colors shrink-0">
+                          className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
                         </button>
                       </div>
@@ -2831,7 +2831,7 @@ function UsersTab() {
           onClick={() => setDeleteBlockedUser(null)}>
           <div
             className="w-[400px] rounded-[2rem] shadow-2xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(255,255,255,0.7)' }}
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="px-7 pt-7 pb-5 bg-amber-50 border-b border-amber-100 flex items-center gap-3">
@@ -2840,25 +2840,25 @@ function UsersTab() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-500">Action Blocked</p>
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">Cannot Delete</h3>
+                <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Cannot Delete</h3>
               </div>
             </div>
             <div className="px-7 py-6 space-y-4">
-              <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-3">
+              <div className="bg-[var(--ds-bg-raised)] rounded-xl px-4 py-3 flex items-center gap-3">
                 <div className="size-9 rounded-xl overflow-hidden shrink-0">
                   <UserAvatar name={deleteBlockedUser.name} avatar={deleteBlockedUser.avatar} size={40}
                     className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-slate-800">{deleteBlockedUser.name}</p>
-                  <p className="text-[10px] text-slate-400 font-medium">{deleteBlockedUser.email}</p>
+                  <p className="text-sm font-black text-[var(--ds-text-1)]">{deleteBlockedUser.name}</p>
+                  <p className="text-[10px] text-[var(--ds-text-3)] font-medium">{deleteBlockedUser.email}</p>
                 </div>
                 <span className="ml-auto px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-black text-[#adee2b] shrink-0">Super Admin</span>
               </div>
-              <p className="text-[12px] text-slate-600 font-medium leading-relaxed">
-                This is the <span className="font-black text-slate-900">only Super Admin</span> in the system. Deleting them would leave the system with no administrator.
+              <p className="text-[12px] text-[var(--ds-text-2)] font-medium leading-relaxed">
+                This is the <span className="font-black text-[var(--ds-text-1)]">only Super Admin</span> in the system. Deleting them would leave the system with no administrator.
               </p>
-              <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+              <p className="text-[11px] text-[var(--ds-text-3)] font-medium leading-relaxed">
                 Promote another user to Super Admin first, then come back to delete this account.
               </p>
               <button onClick={() => setDeleteBlockedUser(null)}
@@ -2879,7 +2879,7 @@ function UsersTab() {
           onClick={() => { setDeleteUserTarget(null); setConfirmUserInput('') }}>
           <div
             className="w-[420px] rounded-[2rem] shadow-2xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(255,255,255,0.7)' }}
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
@@ -2888,15 +2888,15 @@ function UsersTab() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">Delete User?</h3>
+                <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete User?</h3>
               </div>
             </div>
             <div className="px-7 py-5 space-y-4">
-              <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-3">
-                <span className="material-symbols-outlined text-slate-300 shrink-0" style={{ fontSize: 20 }}>person</span>
+              <div className="bg-[var(--ds-bg-raised)] rounded-xl px-4 py-3 flex items-center gap-3">
+                <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 20 }}>person</span>
                 <div>
-                  <p className="text-sm font-black text-slate-800">{deleteUserTarget.name}</p>
-                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                  <p className="text-sm font-black text-[var(--ds-text-1)]">{deleteUserTarget.name}</p>
+                  <p className="text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">
                     {deleteUserTarget.email}
                     {deleteUserTarget.department ? ` · ${deleteUserTarget.department}` : ''}
                   </p>
@@ -2905,19 +2905,19 @@ function UsersTab() {
                   {ROLE_META[deleteUserTarget.role].label}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                This account and all associated data will be permanently removed. <span className="font-black text-slate-700">This cannot be undone.</span>
+              <p className="text-[11px] text-[var(--ds-text-2)] font-medium leading-relaxed">
+                This account and all associated data will be permanently removed. <span className="font-black text-[var(--ds-text-1)]">This cannot be undone.</span>
               </p>
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 px-1">
-                  Type <span className="normal-case text-slate-700">"{deleteUserTarget.name}"</span> to confirm
+                <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] px-1">
+                  Type <span className="normal-case text-[var(--ds-text-1)]">"{deleteUserTarget.name}"</span> to confirm
                 </label>
                 <input
                   value={confirmUserInput}
                   onChange={e => setConfirmUserInput(e.target.value)}
                   placeholder={deleteUserTarget.name}
                   autoFocus
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent text-[var(--ds-text-1)]"
                 />
               </div>
               {deleteUserErr && (
@@ -2928,7 +2928,7 @@ function UsersTab() {
               )}
               <div className="flex gap-3 pt-1">
                 <button onClick={() => { setDeleteUserTarget(null); setConfirmUserInput('') }}
-                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">
                   Cancel
                 </button>
                 <button onClick={handleDeleteUser} disabled={deletingUser || confirmUserInput !== deleteUserTarget.name}
@@ -2968,15 +2968,15 @@ function UsersTab() {
         <ModalPortal>
         <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={() => setEditUser(null)}>
           <div className="w-[460px] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
-            style={{ height: 680, background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(255,255,255,0.7)' }}
+            style={{ height: 680, background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div className="flex items-center gap-3 px-7 pt-6 pb-5 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-3 px-7 pt-6 pb-5 border-b border-[var(--ds-border-sub)] shrink-0">
               <UserAvatar name={editUser.name} avatar={editAvatar || editUser.avatar} size={48}
                 style={{ borderRadius: 16 }} />
               <div>
-                <h3 className="text-sm font-black uppercase tracking-tight">Edit User</h3>
-                <p className="text-[10px] text-slate-400">{editUser.email}</p>
+                <h3 className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">Edit User</h3>
+                <p className="text-[10px] text-[var(--ds-text-3)]">{editUser.email}</p>
               </div>
             </div>
 
@@ -3001,19 +3001,19 @@ function UsersTab() {
               ]
               return (
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Avatar</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Avatar</label>
                   <div className="flex gap-2 flex-wrap">
                     {PRESET_AVATARS.map(url => (
                       <button key={url} type="button" onClick={() => setEditAvatar(editAvatar === url ? '' : url)}
-                        className={`size-9 rounded-xl overflow-hidden border-2 transition-all ${editAvatar === url ? 'border-[#adee2b] shadow-md scale-110' : 'border-transparent hover:border-slate-300'}`}>
+                        className={`size-9 rounded-xl overflow-hidden border-2 transition-all ${editAvatar === url ? 'border-[#adee2b] shadow-md scale-110' : 'border-transparent hover:border-[var(--ds-border)]'}`}>
                         <img src={url} className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400">Custom URL</label>
+                    <label className="text-[9px] font-bold text-[var(--ds-text-3)]">Custom URL</label>
                     <input value={editAvatar} onChange={e => setEditAvatar(e.target.value)} placeholder="https://..."
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                      className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
                   </div>
                 </div>
               )
@@ -3022,45 +3022,45 @@ function UsersTab() {
             {/* Info fields */}
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Full Name *</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Full Name *</label>
                 <input value={editName} onChange={e => setEditName(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                  className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
               </div>
               <div className="col-span-2 space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Email *</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Email *</label>
                 <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                  className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Department</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Department</label>
                 <select value={editDeptId ?? ''} onChange={e => setEditDeptId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] appearance-none cursor-pointer">
+                  className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] appearance-none cursor-pointer bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]">
                   <option value="">— No department —</option>
                   {(departments as Department[]).map(d => <option key={d.id} value={d.id}>{d.name}{d.code ? ` (${d.code})` : ''}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Ext (phone)</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Ext (phone)</label>
                 <input value={editExt} onChange={e => setEditExt(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                  className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
               </div>
               <div className="col-span-2 space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">New Password <span className="normal-case font-medium">(leave blank to keep)</span></label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">New Password <span className="normal-case font-medium">(leave blank to keep)</span></label>
                 <div className="relative">
                   <input type={editShowPw ? 'text' : 'password'} value={editPw} onChange={e => setEditPw(e.target.value)} placeholder="min. 8 characters"
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 pr-10 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                    className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 pr-10 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
                   <button type="button" onClick={() => setEditShowPw(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)]">
                     <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{editShowPw ? 'visibility_off' : 'visibility'}</span>
                   </button>
                 </div>
               </div>
               {editPw && (
                 <div className="col-span-2 space-y-1">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Confirm New Password</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Confirm New Password</label>
                   <div className="relative">
                     <input type={editShowPw ? 'text' : 'password'} value={editConfirmPw} onChange={e => setEditConfirmPw(e.target.value)} placeholder="Re-enter new password"
-                      className={`w-full border rounded-xl px-3 py-2 pr-10 text-sm font-bold focus:outline-none focus:ring-2 ${editConfirmPw && editConfirmPw !== editPw ? 'border-red-300 focus:ring-red-400' : editConfirmPw && editConfirmPw === editPw ? 'border-green-300 focus:ring-green-400' : 'border-slate-200 focus:ring-[#adee2b]'}`} />
+                      className={`w-full border rounded-xl px-3 py-2 pr-10 text-sm font-bold focus:outline-none focus:ring-2 bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)] ${editConfirmPw && editConfirmPw !== editPw ? 'border-red-300 focus:ring-red-400' : editConfirmPw && editConfirmPw === editPw ? 'border-green-300 focus:ring-green-400' : 'border-[var(--ds-border)] focus:ring-[#adee2b]'}`} />
                   </div>
                   {editConfirmPw && editConfirmPw !== editPw && (
                     <p className="flex items-center gap-1 text-[10px] text-red-500 font-bold">
@@ -3082,7 +3082,7 @@ function UsersTab() {
               const isLastAdmin = editUser?.role === 'admin' && adminCount <= 1
               return (
                 <div className="space-y-2">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">Role</p>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">Role</p>
                   <div className="grid grid-cols-2 gap-2">
                     {ALL_ROLES.map(r => {
                       const m = ROLE_META[r]
@@ -3093,9 +3093,9 @@ function UsersTab() {
                           disabled={blocked}
                           title={blocked ? 'Cannot demote the last Super Admin' : undefined}
                           className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-[10px] font-black uppercase transition-all
-                            ${blocked ? 'opacity-30 cursor-not-allowed bg-white border-slate-200 text-slate-400'
+                            ${blocked ? 'opacity-30 cursor-not-allowed bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)]'
                               : roleValue === r ? `${m.bg} ${m.text} border-transparent`
-                              : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+                              : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-border)]'}`}>
                           <span className={`size-2 rounded-full ${roleValue === r ? 'bg-current' : 'bg-slate-200'}`} />
                           {m.label}
                         </button>
@@ -3128,8 +3128,8 @@ function UsersTab() {
             </div>{/* end scrollable body */}
 
             {/* Footer — pinned */}
-            <div className="px-7 py-5 border-t border-slate-100 shrink-0 flex gap-3">
-              <button onClick={() => setEditUser(null)} className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">Cancel</button>
+            <div className="px-7 py-5 border-t border-[var(--ds-border-sub)] shrink-0 flex gap-3">
+              <button onClick={() => setEditUser(null)} className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">Cancel</button>
               <button onClick={handleSave} disabled={saving || (roleValue === 'building_admin' && bldIds.length === 0)}
                 className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-black text-[#adee2b] hover:bg-slate-800 disabled:opacity-40 flex items-center justify-center gap-2 transition-all">
                 {saving && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
@@ -3323,50 +3323,50 @@ function ArchiveTab() {
     <div className="max-w-5xl space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Admin Dashboard</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
           <h1 className="text-3xl font-black italic tracking-tighter uppercase">Archive</h1>
         </div>
         <div className="flex items-center gap-2">
           {/* icon-only utility buttons */}
           <button onClick={() => { qc.invalidateQueries({ queryKey: ['archive'] }); qc.invalidateQueries({ queryKey: ['exports'] }) }}
-            title="Refresh" className="size-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
+            title="Refresh" className="size-9 flex items-center justify-center rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">
             <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
           </button>
 
-          <div className="w-px h-5 bg-slate-200" />
+          <div className="w-px h-5 bg-[var(--ds-border)]" />
 
           {/* archive actions */}
           <button onClick={() => doRun()} disabled={running}
-            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-40">
             <span className={`material-symbols-outlined ${running ? 'animate-spin' : ''}`} style={{ fontSize: 14 }}>sync</span>
             {running ? 'Running…' : 'Run Now'}
           </button>
           <button onClick={doRestoreAll} disabled={restoringAll || !data?.total}
-            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-40">
             <span className={`material-symbols-outlined ${restoringAll ? 'animate-spin' : ''}`} style={{ fontSize: 14 }}>restore</span>
             {restoringAll ? 'Restoring…' : 'Restore All'}
           </button>
 
-          <div className="w-px h-5 bg-slate-200" />
+          <div className="w-px h-5 bg-[var(--ds-border)]" />
 
           {/* import / export */}
           <button onClick={() => importRef.current?.click()} disabled={importing}
-            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-40">
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>upload_file</span>
             {importing ? 'Importing…' : 'Import'}
           </button>
           <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) { doImport(f); e.target.value = '' } }} />
           <button onClick={exportExcel} disabled={!data?.data.length}
-            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-30">
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-30">
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>table_view</span>Excel
           </button>
           <button onClick={exportCsv} disabled={!data?.data.length}
-            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors disabled:opacity-30">
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-30">
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>csv</span>CSV
           </button>
 
-          <div className="w-px h-5 bg-slate-200" />
+          <div className="w-px h-5 bg-[var(--ds-border)]" />
 
           {/* destructive */}
           <button onClick={() => setPurgeConfirm(true)}
@@ -3379,20 +3379,20 @@ function ArchiveTab() {
       {/* Stats */}
       {data && (
         <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-100 p-5">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Archived</p>
-            <p className="text-3xl font-black">{data.total.toLocaleString()}</p>
-            <p className="text-[12px] text-slate-400 mt-0.5">bookings in archive</p>
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-1">Total Archived</p>
+            <p className="text-3xl font-black text-[var(--ds-text-1)]">{data.total.toLocaleString()}</p>
+            <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">bookings in archive</p>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-100 p-5">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Oldest Entry</p>
-            <p className="text-xl font-black">{data.oldest ? fmtDate(data.oldest) : '—'}</p>
-            <p className="text-[12px] text-slate-400 mt-0.5">earliest archived booking</p>
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-1">Oldest Entry</p>
+            <p className="text-xl font-black text-[var(--ds-text-1)]">{data.oldest ? fmtDate(data.oldest) : '—'}</p>
+            <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">earliest archived booking</p>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-100 p-5">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Next Auto-Purge</p>
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-1">Next Auto-Purge</p>
             <p className="text-xl font-black text-red-500">{data.purge_date ? fmtDate(data.purge_date) : '—'}</p>
-            <p className="text-[12px] text-slate-400 mt-0.5">oldest entry eligible</p>
+            <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">oldest entry eligible</p>
           </div>
         </div>
       )}
@@ -3400,66 +3400,66 @@ function ArchiveTab() {
       {/* Filters */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" style={{ fontSize: 16 }}>search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>search</span>
           <input
             value={search} onChange={e => onSearchChange(e.target.value)}
             placeholder="Search title, room, user…"
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none"
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]"
           />
         </div>
         <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); applyFilters({ date_from: e.target.value || undefined }) }}
-          className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
-        <span className="text-slate-300 font-black">→</span>
+          className="px-3 py-2.5 rounded-xl bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+        <span className="text-[var(--ds-text-3)] font-black">→</span>
         <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); applyFilters({ date_to: e.target.value || undefined }) }}
-          className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+          className="px-3 py-2.5 rounded-xl bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[12px] font-medium focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
         {(search || dateFrom || dateTo) && (
           <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setParams({ page: 1 }) }}
-            className="text-[10px] font-black text-slate-400 hover:text-slate-700 uppercase tracking-wider px-2">
+            className="text-[10px] font-black text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] uppercase tracking-wider px-2">
             Clear
           </button>
         )}
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+      <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
         {isFetching && <div className="h-1 bg-[#adee2b] animate-pulse" />}
         <table className="w-full">
           <thead>
-            <tr className="border-b border-slate-100">
+            <tr className="border-b border-[var(--ds-border-sub)]">
               {['Date', 'Time', 'Title', 'Room', 'User', 'Status', 'Archived', ''].map(h => (
-                <th key={h} className="px-5 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-widest">{h}</th>
+                <th key={h} className="px-5 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {!data?.data.length && !isFetching && (
-              <tr><td colSpan={8} className="px-5 py-12 text-center text-slate-400 text-sm font-bold">No archived bookings found.</td></tr>
+              <tr><td colSpan={8} className="px-5 py-12 text-center text-[var(--ds-text-3)] text-sm font-bold">No archived bookings found.</td></tr>
             )}
             {data?.data.map(b => (
-              <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                <td className="px-5 py-3 text-xs font-bold text-slate-700 whitespace-nowrap">
+              <tr key={b.id} className="border-b border-[var(--ds-border-sub)] hover:bg-[var(--ds-bg-raised)] transition-colors">
+                <td className="px-5 py-3 text-xs font-bold text-[var(--ds-text-1)] whitespace-nowrap">
                   {fmtDate(b.start_at as unknown as string)}
                 </td>
-                <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap tabular-nums">
+                <td className="px-5 py-3 text-xs text-[var(--ds-text-2)] whitespace-nowrap tabular-nums">
                   {fmtTime(b.start_at as unknown as string)} – {fmtTime(b.end_at as unknown as string)}
                 </td>
                 <td className="px-5 py-3 max-w-[160px]">
-                  <p className="text-xs font-bold truncate">{b.title}</p>
-                  {b.description && <p className="text-[10px] text-slate-400 truncate">{b.description}</p>}
+                  <p className="text-xs font-bold text-[var(--ds-text-1)] truncate">{b.title}</p>
+                  {b.description && <p className="text-[10px] text-[var(--ds-text-3)] truncate">{b.description}</p>}
                 </td>
-                <td className="px-5 py-3 text-xs text-slate-500">{b.room?.name ?? '—'}</td>
+                <td className="px-5 py-3 text-xs text-[var(--ds-text-2)]">{b.room?.name ?? '—'}</td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
                     <UserAvatar name={b.user?.name ?? '?'} avatar={b.user?.avatar} size={24} />
-                    <span className="text-xs text-slate-600 truncate">{b.user?.name ?? '—'}</span>
+                    <span className="text-xs text-[var(--ds-text-2)] truncate">{b.user?.name ?? '—'}</span>
                   </div>
                 </td>
                 <td className="px-5 py-3">
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColor[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusColor[b.status] ?? 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)]'}`}>
                     {b.status}
                   </span>
                 </td>
-                <td className="px-5 py-3 text-[10px] text-slate-400 whitespace-nowrap">
+                <td className="px-5 py-3 text-[10px] text-[var(--ds-text-3)] whitespace-nowrap">
                   {b.archived_at ? fmtDate(b.archived_at) : '—'}
                 </td>
                 <td className="px-3 py-3">
@@ -3479,15 +3479,15 @@ function ArchiveTab() {
 
         {/* Pagination */}
         {data && data.last_page > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
-            <p className="text-[10px] text-slate-400 font-bold">Page {data.page} of {data.last_page}</p>
+          <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--ds-border-sub)]">
+            <p className="text-[10px] text-[var(--ds-text-3)] font-bold">Page {data.page} of {data.last_page}</p>
             <div className="flex gap-2">
               <button onClick={() => setParams(p => ({ ...p, page: (p.page ?? 1) - 1 }))} disabled={(params.page ?? 1) <= 1}
-                className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-black hover:text-[#adee2b] disabled:opacity-30 transition-all">
+                className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-black hover:text-[#adee2b] disabled:opacity-30 transition-all">
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_left</span>
               </button>
               <button onClick={() => setParams(p => ({ ...p, page: (p.page ?? 1) + 1 }))} disabled={(params.page ?? 1) >= data.last_page}
-                className="size-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-black hover:text-[#adee2b] disabled:opacity-30 transition-all">
+                className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-black hover:text-[#adee2b] disabled:opacity-30 transition-all">
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
               </button>
             </div>
@@ -3496,11 +3496,11 @@ function ArchiveTab() {
       </div>
 
       {/* Server Exports */}
-      <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--ds-border-sub)]">
           <div>
-            <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Server Exports</p>
-            <p className="text-[12px] text-slate-400 mt-0.5">Files generated by scheduler or manual export</p>
+            <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Server Exports</p>
+            <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Files generated by scheduler or manual export</p>
           </div>
           <button onClick={() => doExportNow(['excel', 'csv', 'pdf'])} disabled={exportingNow}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-40 transition-opacity">
@@ -3509,22 +3509,22 @@ function ArchiveTab() {
           </button>
         </div>
         {exports.length === 0 ? (
-          <p className="px-6 py-8 text-center text-slate-400 text-sm font-bold">No exports yet.</p>
+          <p className="px-6 py-8 text-center text-[var(--ds-text-3)] text-sm font-bold">No exports yet.</p>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-[var(--ds-border-sub)]">
             {exports.map(e => (
               <div key={e.label} className="px-6 py-4 flex items-center justify-between">
                 <div>
-                  <p className="text-[14px] font-black text-slate-700">{e.label}</p>
-                  <p className="text-[12px] text-slate-400 mt-0.5">{new Date(e.created_at * 1000).toLocaleString('en-GB')}</p>
+                  <p className="text-[14px] font-black text-[var(--ds-text-1)]">{e.label}</p>
+                  <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">{new Date(e.created_at * 1000).toLocaleString('en-GB')}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {e.files.map(f => (
                     <a key={f.path} href={getExportDownloadUrl(f.path)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors">
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>
                       {f.name.split('.').pop()?.toUpperCase()}
-                      <span className="text-slate-400 font-normal">({(f.size / 1024).toFixed(0)}kb)</span>
+                      <span className="text-[var(--ds-text-3)] font-normal">({(f.size / 1024).toFixed(0)}kb)</span>
                     </a>
                   ))}
                 </div>
@@ -3541,7 +3541,7 @@ function ArchiveTab() {
               <p className="text-[10px] text-red-400 mt-0.5">Delete all {exports.length} export batch{exports.length !== 1 ? 'es' : ''} and their files permanently.</p>
             </div>
             <button onClick={() => { setDeleteExportsConfirm(true); setDeleteExportsInput('') }}
-              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-300 bg-white text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
+              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-300 bg-[var(--ds-bg-surface)] text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete_forever</span>
               Delete All
             </button>
@@ -3555,24 +3555,24 @@ function ArchiveTab() {
           style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
           onClick={() => setDeleteExportsConfirm(false)}>
           <div className="w-[420px] rounded-[2rem] overflow-hidden shadow-2xl"
-            style={{ background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(48px)' }}
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}>
             <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
               <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
               </div>
               <div>
-                <p className="text-base font-black text-slate-800">Delete All Export Records</p>
-                <p className="text-[11px] text-slate-500">This will permanently delete all files from the server.</p>
+                <p className="text-base font-black text-[var(--ds-text-1)]">Delete All Export Records</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">This will permanently delete all files from the server.</p>
               </div>
             </div>
             <div className="px-7 py-6 space-y-5">
-              <p className="text-[12px] text-slate-600 leading-relaxed">
-                All <span className="font-black text-slate-800">{exports.length} export batch{exports.length !== 1 ? 'es' : ''}</span> and their files will be permanently removed from the server. This action <span className="font-black text-red-500">cannot be undone</span>.
+              <p className="text-[12px] text-[var(--ds-text-2)] leading-relaxed">
+                All <span className="font-black text-[var(--ds-text-1)]">{exports.length} export batch{exports.length !== 1 ? 'es' : ''}</span> and their files will be permanently removed from the server. This action <span className="font-black text-red-500">cannot be undone</span>.
               </p>
               <div className="space-y-1.5">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Confirm action</p>
-                <p className="text-[11px] text-slate-500">Type <span className="font-black text-red-500 font-mono">Delete all records</span> to confirm</p>
+                <p className="text-[10px] font-black text-[var(--ds-text-2)] uppercase tracking-wider">Confirm action</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">Type <span className="font-black text-red-500 font-mono">Delete all records</span> to confirm</p>
                 <input
                   type="text"
                   value={deleteExportsInput}
@@ -3580,12 +3580,12 @@ function ArchiveTab() {
                   placeholder="Delete all records"
                   autoFocus
                   onKeyDown={e => { if (e.key === 'Enter' && deleteExportsInput === 'Delete all records') doDeleteAllExports() }}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-slate-300"
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
                 />
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setDeleteExportsConfirm(false)}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-[11px] font-black uppercase hover:bg-slate-50 transition-colors">
+                  className="px-5 py-2.5 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
                   Cancel
                 </button>
                 <button onClick={doDeleteAllExports}
@@ -3606,24 +3606,24 @@ function ArchiveTab() {
           style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
           onClick={() => setPurgeConfirm(false)}>
           <div className="w-[400px] rounded-[2rem] overflow-hidden shadow-2xl"
-            style={{ background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(48px)' }}
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}>
             <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
               <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center">
                 <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
               </div>
               <div>
-                <p className="text-base font-black text-slate-800">Purge Archive</p>
-                <p className="text-[11px] text-slate-500">This will permanently delete eligible archived bookings.</p>
+                <p className="text-base font-black text-[var(--ds-text-1)]">Purge Archive</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">This will permanently delete eligible archived bookings.</p>
               </div>
             </div>
             <div className="px-7 py-5 space-y-4">
-              <p className="text-[12px] text-slate-600 leading-relaxed">
-                All <span className="font-black">{data?.total} archived booking{(data?.total ?? 0) !== 1 ? 's' : ''}</span> will be permanently deleted. This action cannot be undone.
+              <p className="text-[12px] text-[var(--ds-text-2)] leading-relaxed">
+                All <span className="font-black text-[var(--ds-text-1)]">{data?.total} archived booking{(data?.total ?? 0) !== 1 ? 's' : ''}</span> will be permanently deleted. This action cannot be undone.
               </p>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setPurgeConfirm(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-[10px] font-black uppercase hover:bg-slate-50 transition-colors">
+                  className="px-4 py-2 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
                   Cancel
                 </button>
                 <button onClick={() => doPurge()} disabled={purging}
@@ -3788,7 +3788,7 @@ function SettingsTab() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Admin Dashboard</p>
+        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
         <h1 className="text-3xl font-black italic tracking-tighter uppercase">Settings</h1>
       </div>
 
@@ -3798,33 +3798,33 @@ function SettingsTab() {
       <div className="flex-1 min-w-0 max-w-2xl space-y-6 pb-32">
 
       {/* Booking Hours — keep save button (destructive) */}
-      <div ref={el => { secRefs.current.hours = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      <div ref={el => { secRefs.current.hours = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Booking Hours</p>
-          <p className="text-[12px] text-slate-400 mt-0.5">Set the global time window during which rooms can be booked.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Booking Hours</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Set the global time window during which rooms can be booked.</p>
         </div>
         <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-700 font-semibold leading-relaxed">
           <span className="font-black">Warning:</span> Tightening these hours will automatically trim or cancel existing future bookings that fall outside the new window.
         </div>
         <div className="flex items-end gap-4">
           <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Start Time</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Start Time</label>
             <GlassTimePicker value={localStart} onChange={setLocalStart} min="00:00" max="23:00" step={30} panelWidth={140}>
-              {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>schedule</span>{localStart}</button>)}
+              {() => (<button type="button" className="flex items-center gap-2 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums text-[var(--ds-text-1)]"><span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>schedule</span>{localStart}</button>)}
             </GlassTimePicker>
           </div>
-          <span className="text-slate-300 text-lg font-black pb-2.5">→</span>
+          <span className="text-[var(--ds-text-3)] text-lg font-black pb-2.5">→</span>
           <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">End Time</label>
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">End Time</label>
             <GlassTimePicker value={localEnd} onChange={setLocalEnd} min="00:30" max="23:30" step={30} panelWidth={140}>
-              {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 16 }}>schedule</span>{localEnd}</button>)}
+              {() => (<button type="button" className="flex items-center gap-2 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl text-[13px] font-black px-4 py-2.5 hover:border-[#adee2b] transition-all tabular-nums text-[var(--ds-text-1)]"><span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>schedule</span>{localEnd}</button>)}
             </GlassTimePicker>
           </div>
         </div>
         {!isValid && <p className="text-[10px] text-red-500 font-semibold">End time must be at least 30 minutes after start time.</p>}
         {hoursError && <p className="text-[10px] text-red-500 font-semibold">Failed to save. Please try again.</p>}
         {saved && (
-          <div className="p-3 bg-[#f0ffe0] border border-[#adee2b] rounded-xl text-[10px] font-semibold text-slate-700">
+          <div className="p-3 bg-[#f0ffe0] border border-[#adee2b] rounded-xl text-[10px] font-semibold text-[var(--ds-text-1)]">
             Saved. {saved.trimmed > 0 && <span>{saved.trimmed} booking{saved.trimmed !== 1 ? 's' : ''} trimmed. </span>}
             {saved.cancelled > 0 && <span>{saved.cancelled} booking{saved.cancelled !== 1 ? 's' : ''} cancelled.</span>}
             {saved.trimmed === 0 && saved.cancelled === 0 && <span>No existing bookings were affected.</span>}
@@ -3837,23 +3837,23 @@ function SettingsTab() {
       </div>
 
       {/* Weekend — auto-save */}
-      <div ref={el => { secRefs.current.weekend = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      <div ref={el => { secRefs.current.weekend = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Weekend (Red Dates)</p>
-          <p className="text-[12px] text-slate-400 mt-0.5">Mark Saturday and/or Sunday as weekend days — shown in red on all calendars.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Weekend (Red Dates)</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Mark Saturday and/or Sunday as weekend days — shown in red on all calendars.</p>
         </div>
         <div className="space-y-3">
           {([{ label: 'Saturday', val: wkSat, toggle: toggleSat }, { label: 'Sunday', val: wkSun, toggle: toggleSun }] as const).map(({ label, val, toggle }, i) => (
             <div key={label}>
-              {i > 0 && <div className="border-t border-slate-50 mb-3" />}
+              {i > 0 && <div className="border-t border-[var(--ds-border-sub)] mb-3" />}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: val ? 'rgba(239,68,68,0.1)' : 'rgba(0,0,0,0.04)' }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 20, color: val ? '#ef4444' : '#94a3b8' }}>calendar_today</span>
                   </div>
                   <div>
-                    <p className="text-[14px] font-black text-slate-700">{label}</p>
-                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{val ? 'Shown as red / weekend' : 'Regular day'}</p>
+                    <p className="text-[14px] font-black text-[var(--ds-text-1)]">{label}</p>
+                    <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{val ? 'Shown as red / weekend' : 'Regular day'}</p>
                   </div>
                 </div>
                 <button type="button" onClick={toggle} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3867,10 +3867,10 @@ function SettingsTab() {
       </div>
 
       {/* Booking Rules — auto-save */}
-      <div ref={el => { secRefs.current.rules = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      <div ref={el => { secRefs.current.rules = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Booking Rules</p>
-          <p className="text-[12px] text-slate-400 mt-0.5">Control how users can create bookings across the system.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Booking Rules</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Control how users can create bookings across the system.</p>
         </div>
 
         {/* Max advance days */}
@@ -3880,19 +3880,19 @@ function SettingsTab() {
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>event_upcoming</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-slate-700">Max Advance Booking</p>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">How many days ahead users can book</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Max Advance Booking</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">How many days ahead users can book</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <input type="number" min={1} max={365} value={maxDays}
               onChange={e => onMaxDaysChange(Math.max(1, Math.min(365, Number(e.target.value))))}
-              className="w-16 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
-            <span className="text-[12px] font-bold text-slate-400">days</span>
+              className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+            <span className="text-[12px] font-bold text-[var(--ds-text-3)]">days</span>
           </div>
         </div>
 
-        <div className="border-t border-slate-50" />
+        <div className="border-t border-[var(--ds-border-sub)]" />
 
         {/* Allow book for others */}
         <div className="flex items-center justify-between">
@@ -3901,8 +3901,8 @@ function SettingsTab() {
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: allowBookFor ? '#4d7c00' : '#94a3b8' }}>person_add</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-slate-700">Book on Behalf of Others</p>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{allowBookFor ? 'Users can book for others' : 'Disabled — own bookings only'}</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Book on Behalf of Others</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowBookFor ? 'Users can book for others' : 'Disabled — own bookings only'}</p>
             </div>
           </div>
           <button type="button" onClick={toggleAllowBookFor} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3911,7 +3911,7 @@ function SettingsTab() {
           </button>
         </div>
 
-        <div className="border-t border-slate-50" />
+        <div className="border-t border-[var(--ds-border-sub)]" />
 
         {/* After-hours restriction */}
         <div className="space-y-3">
@@ -3921,8 +3921,8 @@ function SettingsTab() {
                 <span className="material-symbols-outlined" style={{ fontSize: 20, color: restrictAH ? '#6366f1' : '#94a3b8' }}>schedule</span>
               </div>
               <div>
-                <p className="text-[14px] font-black text-slate-700">After-Hours Restriction</p>
-                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{restrictAH ? `Users cannot book after ${workEnd}` : 'No restriction — any booking hour'}</p>
+                <p className="text-[14px] font-black text-[var(--ds-text-1)]">After-Hours Restriction</p>
+                <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{restrictAH ? `Users cannot book after ${workEnd}` : 'No restriction — any booking hour'}</p>
               </div>
             </div>
             <button type="button" onClick={toggleRestrictAH} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3932,9 +3932,9 @@ function SettingsTab() {
           </div>
           {restrictAH && (
             <div className="flex items-center gap-3 pl-11">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Working hours end:</p>
+              <p className="text-[10px] font-black text-[var(--ds-text-2)] uppercase tracking-wider">Working hours end:</p>
               <GlassTimePicker value={workEnd} onChange={onWorkEndChange} min="12:00" max="22:00" step={30} panelWidth={140}>
-                {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>schedule</span>{workEnd}</button>)}
+                {() => (<button type="button" className="flex items-center gap-2 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums text-[var(--ds-text-1)]"><span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>schedule</span>{workEnd}</button>)}
               </GlassTimePicker>
             </div>
           )}
@@ -3942,10 +3942,10 @@ function SettingsTab() {
       </div>
 
       {/* Features — auto-save */}
-      <div ref={el => { secRefs.current.features = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      <div ref={el => { secRefs.current.features = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Features</p>
-          <p className="text-[12px] text-slate-400 mt-0.5">Enable or disable system-wide features.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Features</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Enable or disable system-wide features.</p>
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -3953,8 +3953,8 @@ function SettingsTab() {
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: aiChat ? '#4d7c00' : '#94a3b8' }}>smart_toy</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-slate-700">AI Chat</p>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{aiChat ? 'AI FAB visible to all users' : 'Hidden — reduce server load'}</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">AI Chat</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{aiChat ? 'AI FAB visible to all users' : 'Hidden — reduce server load'}</p>
             </div>
           </div>
           <button type="button" onClick={toggleAiChat} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -3963,7 +3963,7 @@ function SettingsTab() {
           </button>
         </div>
 
-        <div className="border-t border-slate-50" />
+        <div className="border-t border-[var(--ds-border-sub)]" />
 
         {/* Rooms grid columns */}
         <div className="flex items-center justify-between">
@@ -3972,11 +3972,11 @@ function SettingsTab() {
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>grid_view</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-slate-700">Rooms Grid Columns</p>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Cards per row on Rooms page</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Rooms Grid Columns</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Cards per row on Rooms page</p>
             </div>
           </div>
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
             {[2, 3, 4, 5].map(n => (
               <button
                 key={n}
@@ -3996,10 +3996,10 @@ function SettingsTab() {
       </div>
 
       {/* Archive settings */}
-      <div ref={el => { secRefs.current.archive = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      <div ref={el => { secRefs.current.archive = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Archive</p>
-          <p className="text-[12px] text-slate-400 mt-0.5">Control when bookings are archived and auto-deleted.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Archive</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Control when bookings are archived and auto-deleted.</p>
         </div>
 
         {/* Archive after N days */}
@@ -4009,19 +4009,19 @@ function SettingsTab() {
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>inventory_2</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-slate-700">Archive After</p>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Past bookings hidden from all views</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Archive After</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Past bookings hidden from all views</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <input type="number" min={1} max={365} value={archiveDays}
               onChange={e => onArchiveDaysChange(Math.max(1, Math.min(365, Number(e.target.value))))}
-              className="w-16 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
-            <span className="text-[12px] font-bold text-slate-400">days</span>
+              className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+            <span className="text-[12px] font-bold text-[var(--ds-text-3)]">days</span>
           </div>
         </div>
 
-        <div className="border-t border-slate-50" />
+        <div className="border-t border-[var(--ds-border-sub)]" />
 
         {/* Auto-delete after N days */}
         <div className="flex items-center justify-between">
@@ -4030,29 +4030,29 @@ function SettingsTab() {
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#ef4444' }}>delete_sweep</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-slate-700">Auto-Delete Archive After</p>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Permanently delete from archive</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Auto-Delete Archive After</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Permanently delete from archive</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <input type="number" min={1} max={730} value={deleteDays}
               onChange={e => onDeleteDaysChange(Math.max(1, Math.min(730, Number(e.target.value))))}
-              className="w-16 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
-            <span className="text-[12px] font-bold text-slate-400">days</span>
+              className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+            <span className="text-[12px] font-bold text-[var(--ds-text-3)]">days</span>
           </div>
         </div>
 
-        <div className="p-3 bg-slate-50 rounded-xl text-[10px] text-slate-500 font-semibold leading-relaxed">
-          Bookings older than <span className="font-black text-slate-700">{archiveDays} days</span> move to archive.
-          Archive entries older than <span className="font-black text-slate-700">{deleteDays} days</span> are permanently deleted nightly at 02:00.
+        <div className="p-3 bg-[var(--ds-bg-raised)] rounded-xl text-[10px] text-[var(--ds-text-2)] font-semibold leading-relaxed">
+          Bookings older than <span className="font-black text-[var(--ds-text-1)]">{archiveDays} days</span> move to archive.
+          Archive entries older than <span className="font-black text-[var(--ds-text-1)]">{deleteDays} days</span> are permanently deleted nightly at 02:00.
         </div>
       </div>
 
       {/* Export Schedule */}
-      <div ref={el => { secRefs.current.export = el }} className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+      <div ref={el => { secRefs.current.export = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-slate-700">Export Schedule</p>
-          <p className="text-[12px] text-slate-400 mt-0.5">Auto-export archive to server storage on a schedule.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Export Schedule</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Auto-export archive to server storage on a schedule.</p>
         </div>
 
         {/* Enable toggle */}
@@ -4062,8 +4062,8 @@ function SettingsTab() {
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: exportEnabled ? '#4d7c00' : '#94a3b8' }}>schedule_send</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-slate-700">Auto Export</p>
-              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{exportEnabled ? 'Enabled — runs on schedule' : 'Disabled'}</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Auto Export</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{exportEnabled ? 'Enabled — runs on schedule' : 'Disabled'}</p>
             </div>
           </div>
           <button type="button" onClick={toggleExportEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
@@ -4073,17 +4073,17 @@ function SettingsTab() {
         </div>
 
         {exportEnabled && (<>
-          <div className="border-t border-slate-50" />
+          <div className="border-t border-[var(--ds-border-sub)]" />
 
           {/* Frequency */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
-                <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>repeat</span>
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>repeat</span>
               </div>
-              <p className="text-[14px] font-black text-slate-700">Frequency</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Frequency</p>
             </div>
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
               {(['daily', 'weekly', 'monthly'] as const).map(f => (
                 <button key={f} type="button" onClick={() => onExportFrequencyChange(f)}
                   className="px-3 h-7 rounded-lg text-[10px] font-black uppercase transition-all"
@@ -4097,13 +4097,13 @@ function SettingsTab() {
           {/* Time */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
-                <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>schedule</span>
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>schedule</span>
               </div>
-              <p className="text-[14px] font-black text-slate-700">Time</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Time</p>
             </div>
             <GlassTimePicker value={exportTime} onChange={onExportTimeChange} min="00:00" max="23:30" step={30} panelWidth={140}>
-              {() => (<button type="button" className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums"><span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>schedule</span>{exportTime}</button>)}
+              {() => (<button type="button" className="flex items-center gap-2 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums text-[var(--ds-text-1)]"><span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>schedule</span>{exportTime}</button>)}
             </GlassTimePicker>
           </div>
 
@@ -4111,12 +4111,12 @@ function SettingsTab() {
           {exportFrequency === 'weekly' && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
-                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>today</span>
+                <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>today</span>
                 </div>
-                <p className="text-[14px] font-black text-slate-700">Day of Week</p>
+                <p className="text-[14px] font-black text-[var(--ds-text-1)]">Day of Week</p>
               </div>
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
                   <button key={i} type="button" onClick={() => onExportDowChange(i)}
                     className="w-8 h-7 rounded-lg text-[10px] font-black transition-all"
@@ -4132,29 +4132,29 @@ function SettingsTab() {
           {exportFrequency === 'monthly' && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
-                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>calendar_month</span>
+                <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>calendar_month</span>
                 </div>
-                <p className="text-[14px] font-black text-slate-700">Day of Month</p>
+                <p className="text-[14px] font-black text-[var(--ds-text-1)]">Day of Month</p>
               </div>
               <div className="flex items-center gap-2">
                 <input type="number" min={1} max={28} value={exportDom}
                   onChange={e => onExportDomChange(Math.max(1, Math.min(28, Number(e.target.value))))}
-                  className="w-14 text-center text-[13px] font-black bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
-                <span className="text-[12px] font-bold text-slate-400">of month</span>
+                  className="w-14 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+                <span className="text-[12px] font-bold text-[var(--ds-text-3)]">of month</span>
               </div>
             </div>
           )}
 
-          <div className="border-t border-slate-50" />
+          <div className="border-t border-[var(--ds-border-sub)]" />
 
           {/* Formats */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-2xl flex items-center justify-center bg-slate-50">
-                <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#64748b' }}>description</span>
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>description</span>
               </div>
-              <p className="text-[14px] font-black text-slate-700">Export Formats</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Export Formats</p>
             </div>
             <div className="flex items-center gap-2">
               {(['excel', 'csv', 'pdf'] as const).map(fmt => (
@@ -4162,7 +4162,7 @@ function SettingsTab() {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase transition-all"
                   style={exportFormats.includes(fmt)
                     ? { background: 'rgba(173,238,43,0.1)', borderColor: 'rgba(173,238,43,0.5)', color: '#4d7c00' }
-                    : { background: '#f8fafc', borderColor: '#e2e8f0', color: '#94a3b8' }}>
+                    : { background: 'var(--ds-bg-raised)', borderColor: 'var(--ds-border)', color: '#94a3b8' }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 11, fontVariationSettings: exportFormats.includes(fmt) ? "'FILL' 1" : "'FILL' 0" }}>check_circle</span>
                   {fmt}
                 </button>
@@ -4176,8 +4176,8 @@ function SettingsTab() {
 
       {/* ── Floating TOC sidebar ── */}
       <div className="w-44 shrink-0 sticky top-4">
-        <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 px-4 pt-4 pb-2">On this page</p>
+        <div className="rounded-2xl border border-[var(--ds-border-sub)] bg-[var(--ds-bg-surface)] shadow-sm overflow-hidden">
+          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] px-4 pt-4 pb-2">On this page</p>
           <div className="pb-2">
             {SETTINGS_SECTIONS.map(s => (
               <button
@@ -4195,7 +4195,7 @@ function SettingsTab() {
                 </span>
                 <span
                   className="text-[11px] font-black transition-colors"
-                  style={{ color: activeSection === s.key ? '#1e293b' : '#94a3b8' }}
+                  style={{ color: activeSection === s.key ? 'var(--ds-text-1)' : '#94a3b8' }}
                 >
                   {s.label}
                 </span>
@@ -4267,7 +4267,7 @@ export default function AdminPage() {
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
 
   return (
-    <div className="flex flex-1 overflow-hidden bg-[#f7f8f6]">
+    <div className="flex flex-1 overflow-hidden bg-[var(--ds-bg-surface)]">
       <style>{`
         @keyframes admin-tab-in {
           from { opacity: 0; transform: translateY(10px) }
@@ -4363,7 +4363,7 @@ export default function AdminPage() {
         {tab === 'overview' && (
           <div className="max-w-4xl space-y-6 admin-tab-in">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Admin Dashboard</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
               <h1 className="text-3xl font-black italic tracking-tighter uppercase">Overview</h1>
             </div>
             <div className="grid grid-cols-4 gap-4">
@@ -4372,39 +4372,39 @@ export default function AdminPage() {
               <StatCard label="Active Rooms" value={String(totalRooms)} sub="available" />
               <StatCard label="Users" value={String(totalUsers)} sub="registered" />
             </div>
-            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-sm font-black uppercase">Recent Bookings</h3>
+            <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
+              <div className="px-6 py-4 border-b border-[var(--ds-border-sub)] flex items-center justify-between">
+                <h3 className="text-sm font-black uppercase text-[var(--ds-text-1)]">Recent Bookings</h3>
                 <button onClick={() => setTab('bookings')} className="text-[9px] font-black uppercase text-[#adee2b] bg-black px-3 py-1.5 rounded-lg hover:opacity-80">View All</button>
               </div>
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-100">
+                  <tr className="border-b border-[var(--ds-border-sub)]">
                     {['Title', 'Room', 'User', 'Date', 'Status'].map(h => (
-                      <th key={h} className="px-6 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-widest">{h}</th>
+                      <th key={h} className="px-6 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {recentBookings.map(b => (
-                    <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-3 text-xs font-bold">{b.title}</td>
-                      <td className="px-6 py-3 text-xs text-slate-500">{b.room?.name}</td>
+                    <tr key={b.id} className="border-b border-[var(--ds-border-sub)] hover:bg-[var(--ds-bg-raised)] transition-colors">
+                      <td className="px-6 py-3 text-xs font-bold text-[var(--ds-text-1)]">{b.title}</td>
+                      <td className="px-6 py-3 text-xs text-[var(--ds-text-2)]">{b.room?.name}</td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-2">
                           <UserAvatar name={b.user?.name ?? '?'} avatar={b.user?.avatar} size={24} />
                           <div>
-                            <p className="text-xs text-slate-500">{b.user?.name}</p>
-                            {b.booked_for && <p className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>for {b.booked_for}</p>}
+                            <p className="text-xs text-[var(--ds-text-2)]">{b.user?.name}</p>
+                            {b.booked_for && <p className="text-[9px] text-[var(--ds-text-3)] font-bold flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>for {b.booked_for}</p>}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-3 text-xs text-slate-500">
+                      <td className="px-6 py-3 text-xs text-[var(--ds-text-2)]">
                         {new Date(b.start_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                       </td>
                       <td className="px-6 py-3">
                         <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full
-                          ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : b.status === 'tentative' ? 'bg-slate-100 text-slate-500' : 'bg-red-100 text-red-500'}`}>
+                          ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : b.status === 'tentative' ? 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)]' : 'bg-red-100 text-red-500'}`}>
                           {b.status}
                         </span>
                       </td>
@@ -4420,16 +4420,16 @@ export default function AdminPage() {
           <div className="max-w-5xl space-y-4 admin-tab-in">
             <div className="flex items-end justify-between">
               <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">Admin Dashboard</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
                 <h1 className="text-3xl font-black italic tracking-tighter uppercase">All Bookings</h1>
               </div>
-              <p className="text-[9px] font-bold text-slate-400">Upcoming first · Past at bottom</p>
+              <p className="text-[9px] font-bold text-[var(--ds-text-3)]">Upcoming first · Past at bottom</p>
             </div>
-            <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+            <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-widest">#</th>
+                  <tr className="border-b border-[var(--ds-border-sub)] bg-[var(--ds-bg-raised)]">
+                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">#</th>
                     {([
                       { label: 'Title', key: 'title' },
                       { label: 'Room', key: 'room' },
@@ -4439,46 +4439,46 @@ export default function AdminPage() {
                     ] as { label: string; key: SortKey }[]).map(h => (
                       <th key={h.key} className="px-4 py-3 text-left">
                         <button onClick={() => toggleSort(h.key)}
-                          className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest hover:text-slate-700 transition-colors"
-                          style={{ color: sortKey === h.key ? '#000' : '' }}>
-                          <span className={sortKey === h.key ? 'text-black' : 'text-slate-400'}>{h.label}</span>
-                          <span className="material-symbols-outlined text-[10px] leading-none" style={{ color: sortKey === h.key ? '#000' : '#cbd5e1' }}>
+                          className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest hover:text-[var(--ds-text-1)] transition-colors"
+                          style={{ color: sortKey === h.key ? 'var(--ds-text-1)' : '' }}>
+                          <span className={sortKey === h.key ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}>{h.label}</span>
+                          <span className="material-symbols-outlined text-[10px] leading-none" style={{ color: sortKey === h.key ? 'var(--ds-text-1)' : '#cbd5e1' }}>
                             {sortKey === h.key ? (sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}
                           </span>
                         </button>
                       </th>
                     ))}
-                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-widest">End</th>
-                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-widest">Type</th>
+                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">End</th>
+                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">Type</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedBookings.map(b => {
                     const isPast = new Date(b.end_at) < now
                     return (
-                      <tr key={b.id} className={`border-b border-slate-50 transition-colors ${isPast ? 'opacity-40 hover:opacity-60' : 'hover:bg-slate-50'}`}>
-                        <td className="px-4 py-3 text-[10px] font-black text-slate-300">{b.id}</td>
-                        <td className="px-4 py-3 text-xs font-bold">{b.title}</td>
-                        <td className="px-4 py-3 text-xs text-slate-500">{b.room?.name}</td>
+                      <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] transition-colors ${isPast ? 'opacity-40 hover:opacity-60' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
+                        <td className="px-4 py-3 text-[10px] font-black text-[var(--ds-text-3)]">{b.id}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-[var(--ds-text-1)]">{b.title}</td>
+                        <td className="px-4 py-3 text-xs text-[var(--ds-text-2)]">{b.room?.name}</td>
                         <td className="px-4 py-3">
-                          <p className="text-xs font-bold">{b.user?.name}</p>
-                          <p className="text-[9px] text-slate-400">{b.user?.department_name ?? (typeof b.user?.department === 'string' ? b.user.department : '')}</p>
-                          {b.booked_for && <p className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5 mt-0.5"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>for {b.booked_for}</p>}
+                          <p className="text-xs font-bold text-[var(--ds-text-1)]">{b.user?.name}</p>
+                          <p className="text-[9px] text-[var(--ds-text-3)]">{b.user?.department_name ?? (typeof b.user?.department === 'string' ? b.user.department : '')}</p>
+                          {b.booked_for && <p className="text-[9px] text-[var(--ds-text-3)] font-bold flex items-center gap-0.5 mt-0.5"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>for {b.booked_for}</p>}
                         </td>
-                        <td className="px-4 py-3 text-[10px] text-slate-500">
+                        <td className="px-4 py-3 text-[10px] text-[var(--ds-text-2)]">
                           {new Date(b.start_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                           {' '}{new Date(b.start_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full
-                            ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : b.status === 'tentative' ? 'bg-slate-100 text-slate-500' : 'bg-red-100 text-red-500'}`}>
+                            ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : b.status === 'tentative' ? 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)]' : 'bg-red-100 text-red-500'}`}>
                             {b.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-[10px] text-slate-500">
+                        <td className="px-4 py-3 text-[10px] text-[var(--ds-text-2)]">
                           {new Date(b.end_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                         </td>
-                        <td className="px-4 py-3 text-[9px] text-slate-400 uppercase font-bold">{b.type}</td>
+                        <td className="px-4 py-3 text-[9px] text-[var(--ds-text-3)] uppercase font-bold">{b.type}</td>
                       </tr>
                     )
                   })}

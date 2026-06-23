@@ -86,6 +86,8 @@ export default function TimelinePage() {
   const [pendingSeriesId, setPendingSeriesId] = useState<{ seriesId: string; title: string; count: number } | null>(null)
   const seriesCancelTimerRef = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => defaultView)
+  const [ganttKey, setGanttKey] = useState(0)
+  const [ganttAnim, setGanttAnim] = useState<'left' | 'right' | 'up' | 'fade'>('fade')
 
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
@@ -526,16 +528,62 @@ export default function TimelinePage() {
     setToastCountdown(null)
   }
 
+  const VIEW_ORDER = { day: 0, week: 1, month: 2 } as const
+  const ganttAnimCSS = {
+    left:  'gantt-enter-left 0.2s cubic-bezier(0.4,0,0.2,1) both',
+    right: 'gantt-enter-right 0.2s cubic-bezier(0.4,0,0.2,1) both',
+    up:    'gantt-enter-up 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
+    fade:  'gantt-enter-fade 0.18s ease both',
+  } as const
+
+  function switchViewMode(mode: 'day' | 'week' | 'month') {
+    if (mode === viewMode) return
+    setGanttAnim(VIEW_ORDER[mode] > VIEW_ORDER[viewMode] ? 'left' : 'right')
+    setGanttKey(k => k + 1)
+    setViewMode(mode)
+  }
+
+  function switchBuilding(b: Building | null) {
+    setGanttAnim('up')
+    setGanttKey(k => k + 1)
+    setLocation(b)
+  }
+
+  function switchDept(d: string) {
+    setGanttAnim('fade')
+    setGanttKey(k => k + 1)
+    setDeptFilter(d)
+  }
+
+  function switchDate(newDate: Date, dir: 'left' | 'right' | 'fade') {
+    setGanttAnim(dir)
+    setGanttKey(k => k + 1)
+    setCurrentDate(newDate)
+  }
+
+  function navDate(forward: boolean) {
+    const d = new Date(currentDate)
+    if (viewMode === 'week') d.setDate(d.getDate() + (forward ? 7 : -7))
+    else if (viewMode === 'month') d.setMonth(d.getMonth() + (forward ? 1 : -1))
+    else d.setDate(d.getDate() + (forward ? 1 : -1))
+    switchDate(d, forward ? 'left' : 'right')
+  }
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-
+      <style>{`
+        @keyframes gantt-enter-left{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes gantt-enter-right{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes gantt-enter-up{from{opacity:0;transform:translateY(16px) scale(0.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes gantt-enter-fade{from{opacity:0}to{opacity:1}}
+      `}</style>
 
       {/* Toolbar */}
       <div className="bg-white border-b border-slate-100 px-8 py-2.5 grid grid-cols-3 items-center shrink-0 select-none">
 
         {/* Date nav */}
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setCurrentDate(new Date())}
+          <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade') }}
             className="px-5 py-2.5 bg-black text-[#adee2b] rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-80 transition-opacity">
             Today
           </button>
@@ -545,15 +593,15 @@ export default function TimelinePage() {
             return (
               <GlassDatePicker
                 value={dateStr}
-                onChange={(iso) => { const [yy, mm, dd] = iso.split('-').map(Number); setCurrentDate(new Date(yy, mm - 1, dd)) }}
+                onChange={(iso) => { const [yy, mm, dd] = iso.split('-').map(Number); switchDate(new Date(yy, mm - 1, dd), iso > dateStr ? 'left' : 'right') }}
                 highlightWeek={viewMode === 'week' ? { start: toLocalDateStr(weekDates[0]), end: toLocalDateStr(weekDates[6]) } : undefined}
                 footer={(close) => (
                   <>
-                    <button onClick={() => { setCurrentDate(new Date()); close() }}
+                    <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade'); close() }}
                       className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
-                    <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); setCurrentDate(d); close() }}
+                    <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); switchDate(d, 'right'); close() }}
                       className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">- 1 Week</button>
-                    <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); setCurrentDate(d); close() }}
+                    <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); switchDate(d, 'left'); close() }}
                       className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">+ 1 Week</button>
                   </>
                 )}
@@ -572,22 +620,10 @@ export default function TimelinePage() {
             )
           })()}
           <div className="flex items-center">
-            <button onClick={() => {
-              const d = new Date(currentDate)
-              if (viewMode === 'week') d.setDate(d.getDate() - 7)
-              else if (viewMode === 'month') d.setMonth(d.getMonth() - 1)
-              else d.setDate(d.getDate() - 1)
-              setCurrentDate(d)
-            }} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors">
+            <button onClick={() => navDate(false)} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors">
               <span className="material-symbols-outlined text-sm">chevron_left</span>
             </button>
-            <button onClick={() => {
-              const d = new Date(currentDate)
-              if (viewMode === 'week') d.setDate(d.getDate() + 7)
-              else if (viewMode === 'month') d.setMonth(d.getMonth() + 1)
-              else d.setDate(d.getDate() + 1)
-              setCurrentDate(d)
-            }} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors">
+            <button onClick={() => navDate(true)} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors">
               <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>
           </div>
@@ -631,7 +667,7 @@ export default function TimelinePage() {
                   <div key={b.id}
                     className={`group relative px-5 py-5 rounded-xl cursor-pointer transition-colors
                       ${location?.id === b.id ? 'bg-[#adee2b] text-black' : 'text-slate-700 hover:bg-[#adee2b]/25 hover:text-black'}`}
-                    onClick={() => { setLocation(b); setLocationOpen(false) }}>
+                    onClick={() => { switchBuilding(b); setLocationOpen(false) }}>
                     <p className="flex items-center gap-1 text-[10px] font-black uppercase">
                       {b.code || b.name}
                       {b.address && (
@@ -695,7 +731,7 @@ export default function TimelinePage() {
                 return (
                 <button
                   key={mode}
-                  onClick={() => setViewMode(mode)}
+                  onClick={() => switchViewMode(mode)}
                   className={`relative z-10 w-[72px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === mode ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>{icon}</span>
@@ -718,7 +754,7 @@ export default function TimelinePage() {
                 {deptFilter || 'Dept'}
                 {deptFilter && (
                   <span
-                    onClick={e => { e.stopPropagation(); setDeptFilter('') }}
+                    onClick={e => { e.stopPropagation(); switchDept('') }}
                     className="material-symbols-outlined text-slate-400 hover:text-slate-700 transition-colors"
                     style={{ fontSize: 13 }}
                   >close</span>
@@ -733,7 +769,7 @@ export default function TimelinePage() {
                   </div>
                   <div className="pb-1.5">
                     {(!deptSearch || 'all depts'.includes(deptSearch.toLowerCase())) && (
-                      <button onClick={() => { setDeptFilter(''); setDeptOpen(false); setDeptSearch('') }}
+                      <button onClick={() => { switchDept(''); setDeptOpen(false); setDeptSearch('') }}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
                         <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0">
                           <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 11 }}>layers</span>
@@ -742,7 +778,7 @@ export default function TimelinePage() {
                       </button>
                     )}
                     {filteredDepts.map(d => (
-                      <button key={d} onClick={() => { setDeptFilter(d); setDeptOpen(false); setDeptSearch('') }}
+                      <button key={d} onClick={() => { switchDept(d); setDeptOpen(false); setDeptSearch('') }}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
                         <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0 text-[8px] font-black text-slate-600">{d.slice(0, 2)}</span>
                         <span className="text-[10px] font-black uppercase text-slate-700">{d}</span>
@@ -767,7 +803,7 @@ export default function TimelinePage() {
 
       {/* Week view */}
       {viewMode === 'week' && (
-        <main className="flex-1 overflow-auto bg-white relative select-none" style={{ scrollbarWidth: 'thin' }}>
+        <main key={ganttKey} className="flex-1 overflow-auto bg-white relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], scrollbarWidth: 'thin' }}>
           {roomsLoading && (
             <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-50">
               <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>
@@ -795,7 +831,7 @@ export default function TimelinePage() {
                     className={`flex-1 flex flex-col items-center justify-center border-r border-slate-200 cursor-pointer transition-colors group/wh
                       ${isTd ? 'bg-[#f7fee7]' : 'hover:bg-[#f7fee7]'}`}
                     style={{ height: CELL_H }}
-                    onClick={() => { setCurrentDate(d); setViewMode('day') }}
+                    onClick={() => { setCurrentDate(d); switchViewMode('day') }}
                   >
                     <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-700' : isWeekend ? 'text-red-400 group-hover/wh:text-red-500' : 'text-slate-400 group-hover/wh:text-slate-600'}`}>
                       {d.toLocaleDateString('en-GB', { weekday: 'short' })}
@@ -868,7 +904,7 @@ export default function TimelinePage() {
                         className={`flex-1 border-r border-slate-100 px-1.5 py-2 overflow-hidden cursor-pointer transition-colors relative flex flex-col
                           ${isTd ? 'bg-[#f7fee7]/40' : 'hover:bg-[#f7fee7]/60'}`}
                         style={{ height: WEEK_CELL_H }}
-                        onClick={() => { setCurrentDate(d); setViewMode('day') }}
+                        onClick={() => { setCurrentDate(d); switchViewMode('day') }}
                         onContextMenu={e => {
                           if (e.ctrlKey) return
                           e.preventDefault()
@@ -949,7 +985,7 @@ export default function TimelinePage() {
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
         return (
-          <main className="flex-1 overflow-auto bg-white p-6">
+          <main key={ganttKey} className="flex-1 overflow-auto bg-white p-6" style={{ animation: ganttAnimCSS[ganttAnim] }}>
             {/* Month header */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[28px] font-black text-slate-900 uppercase tracking-tight leading-none">
@@ -957,13 +993,13 @@ export default function TimelinePage() {
               </h2>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => { const d = new Date(currentDate); d.setMonth(d.getMonth() - 1); setCurrentDate(d) }}
+                  onClick={() => navDate(false)}
                   className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_left</span>
                 </button>
                 <button
-                  onClick={() => { const d = new Date(currentDate); d.setMonth(d.getMonth() + 1); setCurrentDate(d) }}
+                  onClick={() => navDate(true)}
                   className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_right</span>
@@ -1001,7 +1037,7 @@ export default function TimelinePage() {
                 return (
                   <div
                     key={idx}
-                    onClick={() => { setCurrentDate(cellDate); setViewMode('day') }}
+                    onClick={() => { setCurrentDate(cellDate); switchViewMode('day') }}
                     onContextMenu={e => {
                       if (e.ctrlKey) return
                       e.preventDefault()
@@ -1072,7 +1108,7 @@ export default function TimelinePage() {
 
       {/* Day view grid */}
       {viewMode === 'day' && (
-      <main ref={mainRef} className="flex-1 overflow-auto relative select-none" style={{ background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
+      <main key={ganttKey} ref={mainRef} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
         {(roomsLoading || bookingsLoading) && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-50">
             <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>

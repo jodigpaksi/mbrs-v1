@@ -207,7 +207,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>calendar_today</span>
               {todayCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-[#adee2b] text-black text-[9px] font-black flex items-center justify-center px-[3px] leading-none border-2 border-white">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-[#adee2b] text-black text-[9px] font-black flex items-center justify-center px-[3px] leading-none border-2 border-[var(--ds-bg-surface)]">
                   {todayCount > 9 ? '9+' : todayCount}
                 </span>
               )}
@@ -229,7 +229,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>notifications</span>
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-[#adee2b] text-black text-[9px] font-black flex items-center justify-center px-[3px] leading-none border-2 border-white">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-[#adee2b] text-black text-[9px] font-black flex items-center justify-center px-[3px] leading-none border-2 border-[var(--ds-bg-surface)]">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}

@@ -31,7 +31,7 @@ function GlassTip({ label }: { label: string }) {
     <div className="absolute top-full right-0 mt-2 z-20 pointer-events-none opacity-0 translate-y-1 group-hover/tip:opacity-100 group-hover/tip:translate-y-0 transition-all duration-200">
       <div className="px-3 py-1.5 rounded-xl whitespace-nowrap"
         style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06)' }}>
-        <span className="text-[9px] font-black uppercase tracking-widest text-slate-700">{label}</span>
+        <span className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-2)]">{label}</span>
       </div>
     </div>
   )
@@ -191,7 +191,7 @@ export default function RoomsPage() {
         {/* Photo */}
         {photo
           ? <img src={photo} alt={room.name} style={vtStyle(vtId === room.id && !detailOpen ? 'room-hero' : undefined)} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-          : <div className="absolute inset-0 bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center">
+          : <div className="absolute inset-0 bg-gradient-to-br from-[var(--ds-border)] to-[var(--ds-text-3)] flex items-center justify-center">
               <span className="material-symbols-outlined text-white/40" style={{ fontSize: 72 }}>meeting_room</span>
             </div>
         }
@@ -268,7 +268,7 @@ export default function RoomsPage() {
             <span className="shrink-0 px-4 py-2.5 rounded-full bg-white/10 text-white/50 text-[11px] font-black border border-white/15">Unavailable</span>
           ) : (
             <button onClick={e => { e.stopPropagation(); handleBook(room) }}
-              className="shrink-0 flex items-center gap-1 pl-3 pr-4 py-2.5 rounded-full bg-[#adee2b] text-black text-[11px] font-black hover:bg-white transition-all">
+              className="shrink-0 flex items-center gap-1 pl-3 pr-4 py-2.5 rounded-full bg-[#adee2b] text-black text-[11px] font-black hover:bg-[var(--ds-bg-surface)] transition-all">
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>Book
             </button>
           )}
@@ -282,11 +282,11 @@ export default function RoomsPage() {
     const isMaintenance = room.status === 'maintenance'
     return (
       <tr key={room.id} onClick={() => openDetail(room)}
-        className={`cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-50 ${i === total - 1 ? 'border-b-0' : ''}`}
+        className={`cursor-pointer hover:bg-[var(--ds-bg-raised)] transition-colors border-b border-[var(--ds-border-sub)] ${i === total - 1 ? 'border-b-0' : ''}`}
         style={{ animation: `fadeSlideUp 200ms ease ${i * 30}ms both` }}>
         <td className="px-5 py-3.5">
           <div>
-            <span className="text-[12px] font-black text-slate-800">{room.name}</span>
+            <span className="text-[12px] font-black text-[var(--ds-text-1)]">{room.name}</span>
             {isPrivileged ? (
               <button onClick={e => toggleSpecialRoom(room, e)} disabled={togglingRoomId === room.id} title={room.requires_contact ? 'Special room (click to unset)' : 'Click to set as special'} className="ml-1.5 inline-flex items-center transition-all disabled:opacity-40">
                 <span className="material-symbols-outlined" style={{ fontSize: 13, color: room.requires_contact ? '#d97706' : '#d1d5db', fontVariationSettings: room.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>
@@ -297,10 +297,10 @@ export default function RoomsPage() {
           </div>
         </td>
         <td className="px-5 py-3.5">
-          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[9px] font-black uppercase">{room.floor}</span>
+          <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-lg text-[9px] font-black uppercase">{room.floor}</span>
         </td>
         <td className="px-5 py-3.5">
-          <span className="text-[11px] font-bold text-slate-500">{room.capacity} pax</span>
+          <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{room.capacity} pax</span>
         </td>
         <td className="px-5 py-3.5">
           {isMaintenance ? (
@@ -315,13 +315,13 @@ export default function RoomsPage() {
           )}
         </td>
         <td className="px-5 py-3.5">
-          <span className="text-[11px] font-bold text-slate-400">{room.facilities?.length ?? 0} items</span>
+          <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{room.facilities?.length ?? 0} items</span>
         </td>
         <td className="px-5 py-3.5">
           <div className="flex items-center gap-2 justify-end">
             {isPrivileged && (
               <button onClick={e => toggleMaintenance(room, e)} disabled={togglingRoomId === room.id}
-                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${isMaintenance ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-slate-100 text-slate-500 hover:bg-orange-100 hover:text-orange-700'}`}>
+                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${isMaintenance ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-orange-100 hover:text-orange-700'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>
               </button>
             )}
@@ -330,7 +330,7 @@ export default function RoomsPage() {
                 className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase bg-amber-400 text-amber-900 hover:bg-amber-300 transition-all">Contact</button>
             ) : !isMaintenance ? (
               <button onClick={e => { e.stopPropagation(); handleBook(room) }}
-                className="px-4 py-1.5 rounded-xl text-[9px] font-black uppercase bg-slate-900 text-white hover:bg-[#adee2b] hover:text-black transition-all">Book</button>
+                className="px-4 py-1.5 rounded-xl text-[9px] font-black uppercase bg-[var(--ds-text-1)] text-[var(--ds-bg-surface)] hover:bg-[#adee2b] hover:text-black transition-all">Book</button>
             ) : null}
           </div>
         </td>
@@ -350,13 +350,13 @@ export default function RoomsPage() {
       <div className="relative z-[1] flex flex-col flex-1 overflow-hidden">
 
       {/* Toolbar */}
-      <div className="bg-white border-b border-slate-100 px-8 shrink-0">
+      <div className="bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)] px-8 shrink-0">
         {/* Row 1: title + search + view toggle */}
         <div className="flex items-center justify-between py-3 gap-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-[16px] font-black text-slate-900 uppercase tracking-tight">Rooms</h1>
+            <h1 className="text-[16px] font-black text-[var(--ds-text-1)] uppercase tracking-tight">Rooms</h1>
             {!isLoading && (
-              <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-500 uppercase">
+              <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] rounded-lg text-[10px] font-black text-[var(--ds-text-3)] uppercase">
                 {filtered.length} room{filtered.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -364,18 +364,18 @@ export default function RoomsPage() {
           <div className="flex items-center gap-3">
             {/* Search */}
             <div className="relative flex items-center">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-base pointer-events-none">search</span>
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] text-base pointer-events-none">search</span>
               <input type="text" placeholder="Search rooms..." value={search} onChange={e => setSearch(e.target.value)}
-                className="w-44 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all" />
+                className="w-44 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all" />
             </div>
             {/* View toggle */}
-            <div className="flex gap-0.5 bg-slate-100 rounded-xl p-1 shrink-0">
+            <div className="flex gap-0.5 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 shrink-0">
               <button onClick={() => setViewMode('card')} title="Card view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>grid_view</span>
               </button>
               <button onClick={() => setViewMode('list')} title="List view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>view_list</span>
               </button>
             </div>
@@ -385,14 +385,14 @@ export default function RoomsPage() {
         {/* Row 2: building pills + floor/maint (only when building selected) */}
         <div className="flex items-center gap-2 pb-3">
           {/* Building pills */}
-          <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
+          <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
             <button onClick={() => selectBuilding(null)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${buildingFilter === null ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${buildingFilter === null ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
               All
             </button>
             {(buildings as Building[]).map(b => (
               <button key={b.id} onClick={() => selectBuilding(b.id)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all whitespace-nowrap ${buildingFilter === b.id ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all whitespace-nowrap ${buildingFilter === b.id ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 {b.code || b.name}{(b.location?.name || b.address) ? ` - ${b.location?.name || b.address}` : ''}
               </button>
             ))}
@@ -401,21 +401,21 @@ export default function RoomsPage() {
           {/* Floor + Maint — only when a building is selected */}
           {showFloorMaint && floors.length > 0 && (
             <>
-              <div className="w-px h-5 bg-slate-200 shrink-0" />
-              <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5">
+              <div className="w-px h-5 bg-[var(--ds-border)] shrink-0" />
+              <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
                 <button onClick={() => { setFloorFilter(''); setStatusFilter('') }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${!floorFilter && !statusFilter ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${!floorFilter && !statusFilter ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   All
                 </button>
                 {floors.map(f => (
                   <button key={f} onClick={() => { setFloorFilter(floorFilter === f ? '' : f); setStatusFilter('') }}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${floorFilter === f ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${floorFilter === f ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                     {f}
                   </button>
                 ))}
-                <div className="w-px h-4 bg-slate-300/60 mx-0.5" />
+                <div className="w-px h-4 bg-[var(--ds-border)] mx-0.5" />
                 <button onClick={() => { setStatusFilter(statusFilter === 'maintenance' ? '' : 'maintenance'); setFloorFilter('') }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1 ${statusFilter === 'maintenance' ? 'bg-orange-100 text-orange-700 shadow' : 'text-slate-400 hover:text-slate-600'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1 ${statusFilter === 'maintenance' ? 'bg-orange-100 text-orange-700 shadow' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>Maint.
                 </button>
               </div>
@@ -426,16 +426,16 @@ export default function RoomsPage() {
           <div className="flex items-center gap-1.5 ml-auto">
             {defaultBuilding != null && buildingFilter !== defaultBuilding && (
               <button onClick={() => selectBuilding(defaultBuilding)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border bg-white border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 transition-all">
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-indigo-300 hover:text-indigo-600 transition-all">
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>business</span>My Building
               </button>
             )}
             <button onClick={() => setQuickBig(v => !v)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickBig ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-600'}`}>
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickBig ? 'bg-[var(--ds-text-1)] border-[var(--ds-text-1)] text-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-border)] hover:text-[var(--ds-text-2)]'}`}>
               <span className="material-symbols-outlined" style={{ fontSize: 13 }}>group</span>10+ seats
             </button>
             <button onClick={() => setQuickAvailable(v => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickAvailable ? 'bg-[#adee2b] border-[#adee2b] text-black' : 'bg-white border-slate-200 text-slate-400 hover:border-[#adee2b]/60 hover:text-slate-600'}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickAvailable ? 'bg-[#adee2b] border-[#adee2b] text-black' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[#adee2b]/60 hover:text-[var(--ds-text-2)]'}`}>
               <span className={`size-1.5 rounded-full shrink-0 ${quickAvailable ? 'bg-black' : 'bg-[#adee2b] animate-pulse'}`} />
               Available now
             </button>
@@ -489,7 +489,7 @@ export default function RoomsPage() {
 
         {isLoading && (
           <div className="flex items-center justify-center py-24">
-            <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>
+            <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-3)]">progress_activity</span>
           </div>
         )}
 
@@ -497,16 +497,16 @@ export default function RoomsPage() {
           <div className="flex flex-col items-center justify-center py-24 gap-5">
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-[#adee2b]/25 blur-2xl animate-pulse" />
-              <div className="relative size-24 rounded-[28px] bg-white border border-slate-100 shadow-sm flex items-center justify-center rotate-3">
-                <span className="material-symbols-outlined text-slate-300" style={{ fontSize: 46 }}>meeting_room</span>
+              <div className="relative size-24 rounded-[28px] bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] shadow-sm flex items-center justify-center rotate-3">
+                <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 46 }}>meeting_room</span>
               </div>
               <div className="absolute -bottom-2 -right-2 size-9 rounded-2xl bg-slate-900 flex items-center justify-center shadow-lg -rotate-6">
                 <span className="material-symbols-outlined text-[#adee2b]" style={{ fontSize: 18 }}>search_off</span>
               </div>
             </div>
             <div className="text-center">
-              <p className="text-[14px] font-black text-slate-700 uppercase tracking-tight">No rooms found</p>
-              <p className="text-[11px] font-bold text-slate-400 mt-1">Try adjusting your search or filters</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-2)] uppercase tracking-tight">No rooms found</p>
+              <p className="text-[11px] font-bold text-[var(--ds-text-3)] mt-1">Try adjusting your search or filters</p>
             </div>
             {(search || floorFilter || statusFilter || buildingFilter !== null || quickAvailable || quickBig) && (
               <button
@@ -531,21 +531,21 @@ export default function RoomsPage() {
                 <div key={bid ?? 'none'} className="mb-10">
                   <div className="flex items-end gap-4 mb-4">
                     <div className="min-w-0">
-                      <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 leading-none mb-1.5">{getBuildingName(bid)}</p>
+                      <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] leading-none mb-1.5">{getBuildingName(bid)}</p>
                       <div className="flex items-center gap-2">
                         {/* Occupancy meter */}
-                        <div className="w-28 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="w-28 h-1.5 rounded-full bg-[var(--ds-border)] overflow-hidden">
                           <div className="h-full rounded-full transition-all duration-700"
                             style={{ width: `${pct}%`, background: pct >= 75 ? '#ef4444' : pct >= 40 ? '#fb923c' : '#adee2b' }} />
                         </div>
-                        <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">{pct}% busy</span>
+                        <span className="text-[9px] font-black uppercase tracking-wide text-[var(--ds-text-3)]">{pct}% busy</span>
                       </div>
                     </div>
-                    <div className="flex-1 h-px bg-slate-200 mb-1" />
+                    <div className="flex-1 h-px bg-[var(--ds-border)] mb-1" />
                     {/* Decorative count */}
                     <div className="flex items-baseline gap-1 shrink-0">
-                      <span className="text-3xl font-black italic tracking-tighter text-slate-300 tabular-nums leading-none">{bRooms.length}</span>
-                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-300">rooms</span>
+                      <span className="text-3xl font-black italic tracking-tighter text-[var(--ds-text-3)] tabular-nums leading-none">{bRooms.length}</span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">rooms</span>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}>
@@ -571,16 +571,16 @@ export default function RoomsPage() {
               grouped.map(([bid, bRooms]) => (
                 <div key={bid ?? 'none'} className="mb-6">
                   <div className="flex items-center gap-3 mb-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 whitespace-nowrap">{getBuildingName(bid)}</p>
-                    <div className="flex-1 h-px bg-slate-200" />
-                    <span className="text-[9px] font-black text-slate-300">{bRooms.length}</span>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] whitespace-nowrap">{getBuildingName(bid)}</p>
+                    <div className="flex-1 h-px bg-[var(--ds-border)]" />
+                    <span className="text-[9px] font-black text-[var(--ds-text-3)]">{bRooms.length}</span>
                   </div>
-                  <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                  <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-slate-100">
+                        <tr className="border-b border-[var(--ds-border-sub)]">
                           {['Room', 'Floor', 'Capacity', 'Status', 'Facilities', ''].map(h => (
-                            <th key={h} className="text-left px-5 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">{h}</th>
+                            <th key={h} className="text-left px-5 py-3 text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -591,12 +591,12 @@ export default function RoomsPage() {
               ))
             ) : (
               // Single building
-              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+              <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-100">
+                    <tr className="border-b border-[var(--ds-border-sub)]">
                       {['Room', 'Floor', 'Capacity', 'Status', 'Facilities', ''].map(h => (
-                        <th key={h} className="text-left px-5 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">{h}</th>
+                        <th key={h} className="text-left px-5 py-3 text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{h}</th>
                       ))}
                     </tr>
                   </thead>

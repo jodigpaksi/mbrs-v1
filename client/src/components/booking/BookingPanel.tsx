@@ -509,11 +509,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         }}
       >
         {/* Header */}
-        <div className="px-5 pt-5 pb-4 border-b border-slate-100">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400 mb-1.5">Free Slots</p>
-          <p className="text-[16px] font-black text-slate-800 leading-tight truncate">{selectedRoom?.name ?? ''}</p>
+        <div className="px-5 pt-5 pb-4 border-b border-[var(--ds-border-sub)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--ds-text-3)] mb-1.5">Free Slots</p>
+          <p className="text-[16px] font-black text-[var(--ds-text-1)] leading-tight truncate">{selectedRoom?.name ?? ''}</p>
           {date && (
-            <p className="text-[12px] font-bold text-slate-400 mt-1">
+            <p className="text-[12px] font-bold text-[var(--ds-text-3)] mt-1">
               {new Date(date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </p>
           )}
@@ -524,13 +524,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           {miniSlots === null ? (
             <div className="px-4 space-y-2.5">
               {[1,2,3].map(i => (
-                <div key={i} className="h-12 bg-slate-100 rounded-2xl animate-pulse" style={{ opacity: 1 - i * 0.25 }} />
+                <div key={i} className="h-12 bg-[var(--ds-bg-surface-2)] rounded-2xl animate-pulse" style={{ opacity: 1 - i * 0.25 }} />
               ))}
             </div>
           ) : miniSlots.length === 0 ? (
             <div className="flex flex-col items-center gap-2.5 py-6 px-4 text-center">
-              <span className="material-symbols-outlined text-4xl text-slate-300">event_busy</span>
-              <p className="text-[11px] font-black uppercase tracking-wide text-slate-300">Fully Booked</p>
+              <span className="material-symbols-outlined text-4xl text-[var(--ds-text-3)]">event_busy</span>
+              <p className="text-[11px] font-black uppercase tracking-wide text-[var(--ds-text-3)]">Fully Booked</p>
             </div>
           ) : (
             <div className="px-3 space-y-2">
@@ -554,15 +554,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     onClick={() => { setStartTime(sHH); setEndTime(eHH) }}
                     className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl transition-all text-left active:scale-95"
                     style={{
-                      background: isSelected ? '#adee2b' : 'rgba(241,245,249,0.9)',
+                      background: isSelected ? '#adee2b' : 'var(--ds-bg-raised)',
                       border: isSelected ? '1.5px solid #8bc200' : '1.5px solid transparent',
                     }}
                   >
-                    <span className="text-[14px] font-black tabular-nums" style={{ color: isSelected ? '#1a3a00' : '#1e293b' }}>
+                    <span className="text-[14px] font-black tabular-nums" style={{ color: isSelected ? '#1a3a00' : 'var(--ds-text-1)' }}>
                       {sHH} – {eHH}
                     </span>
                     <span className="text-[11px] font-black px-2 py-1 rounded-xl shrink-0"
-                      style={{ background: isSelected ? 'rgba(0,0,0,0.12)' : '#e2e8f0', color: isSelected ? '#1a3a00' : '#64748b' }}>
+                      style={{ background: isSelected ? 'rgba(0,0,0,0.12)' : 'var(--ds-border)', color: isSelected ? '#1a3a00' : 'var(--ds-text-2)' }}>
                       {durLabel}
                     </span>
                   </button>
@@ -593,7 +593,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         {/* Header */}
         <div className="p-7 pb-4 flex items-start justify-between shrink-0">
           <div>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.25em] leading-none">
+            <p className="text-[9px] font-black text-[var(--ds-text-3)] uppercase tracking-[0.25em] leading-none">
               {isEdit ? 'Edit Booking' : 'Create Booking'}
             </p>
             {/* Room selector */}
@@ -607,15 +607,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <span className="material-symbols-outlined text-lg text-blue-400">expand_more</span>
               </button>
               {showRoomDrop && (
-                <div className="absolute top-full left-0 mt-2 w-80 bg-white border border-slate-100 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="absolute top-full left-0 mt-2 w-80 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl shadow-2xl z-50 overflow-hidden">
                   {/* Building selector */}
                   {(buildings as Building[]).length > 1 && (
-                    <div className="px-3 pt-3 pb-2 border-b border-slate-100">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Building</p>
+                    <div className="px-3 pt-3 pb-2 border-b border-[var(--ds-border-sub)]">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">Building</p>
                       <div className="flex flex-wrap gap-1.5">
                         <button
                           onClick={() => setActiveBuildingId(null)}
-                          className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeBuildingId === null ? 'bg-black text-[#adee2b]' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                          className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeBuildingId === null ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-[var(--ds-border)]'}`}
                         >
                           All
                         </button>
@@ -623,7 +623,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           <button
                             key={b.id}
                             onClick={() => setActiveBuildingId(b.id)}
-                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeBuildingId === b.id ? 'bg-black text-[#adee2b]' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeBuildingId === b.id ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-[var(--ds-border)]'}`}
                           >
                             {b.code ?? b.name}
                           </button>
@@ -632,13 +632,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     </div>
                   )}
                   {/* Search */}
-                  <div className="p-3 border-b border-slate-100">
+                  <div className="p-3 border-b border-[var(--ds-border-sub)]">
                     <input
                       type="text"
                       placeholder="Search room..."
                       value={roomSearch}
                       onChange={e => setRoomSearch(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+                      className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
                       autoFocus
                     />
                   </div>
@@ -661,11 +661,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left ${isMaint ? 'hover:bg-orange-50' : 'hover:bg-[#f7fee7]'}`}
                           >
                             <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-black flex items-center gap-2 ${isMaint ? 'text-orange-700' : 'text-slate-800'}`}>
+                              <p className={`text-sm font-black flex items-center gap-2 ${isMaint ? 'text-orange-700' : 'text-[var(--ds-text-1)]'}`}>
                                 {r.name}
                                 <span className={`size-2 rounded-full shrink-0 ${isMaint ? 'bg-orange-400' : 'bg-green-400'}`} />
                               </p>
-                              <p className={`text-[11px] font-bold mt-0.5 flex items-center gap-1 ${isMaint ? 'text-orange-400' : 'text-slate-400'}`}>
+                              <p className={`text-[11px] font-bold mt-0.5 flex items-center gap-1 ${isMaint ? 'text-orange-400' : 'text-[var(--ds-text-3)]'}`}>
                                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>groups</span>
                                 {r.capacity} seats
                                 <span className="mx-1 opacity-40">·</span>
@@ -698,7 +698,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           </div>
           <button
             onClick={onClose}
-            className="size-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-900 hover:text-[#adee2b] transition-all group"
+            className="size-10 flex items-center justify-center rounded-full bg-[var(--ds-bg-surface-2)] hover:bg-slate-900 hover:text-[#adee2b] transition-all group"
           >
             <span className="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">close</span>
           </button>
@@ -721,7 +721,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               </div>
               <button
                 onClick={() => { setSelectedRoom(null); setShowRoomDrop(true) }}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors text-[10px] font-black uppercase text-slate-600"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] transition-colors text-[10px] font-black uppercase text-[var(--ds-text-2)]"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
                 Pilih ruangan lain
@@ -744,7 +744,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               </div>
               <button
                 onClick={() => setStartTime('')}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors text-[10px] font-black uppercase text-slate-600"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] transition-colors text-[10px] font-black uppercase text-[var(--ds-text-2)]"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
                 Change time
@@ -782,18 +782,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             )}
 
             {/* Date & Time */}
-            <div className="bg-slate-50 px-4 py-3.5 rounded-[1.8rem] border border-slate-100 space-y-2.5">
+            <div className="bg-[var(--ds-bg-raised)] px-4 py-3.5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-2.5">
               {/* Date */}
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Date</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Date</label>
                 <GlassDatePicker value={date} onChange={setDate} min={today} compact>
                   {() => (
                     <button type="button"
-                      className="w-full flex items-center gap-2 bg-white border border-slate-200 rounded-xl text-xs font-bold px-3 py-2 hover:border-[#adee2b] transition-all"
+                      className="w-full flex items-center gap-2 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-3 py-2 hover:border-[#adee2b] transition-all"
                       style={glowActive ? { animation: 'field-glow-pulse 1.4s ease-in-out forwards' } : undefined}>
-                      <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 15 }}>calendar_today</span>
-                      <span className={`flex-1 text-left ${date ? 'text-slate-800' : 'text-slate-400'}`}>{fmtFieldDate(date)}</span>
-                      <span className="material-symbols-outlined text-slate-300 shrink-0" style={{ fontSize: 13 }}>expand_more</span>
+                      <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 15 }}>calendar_today</span>
+                      <span className={`flex-1 text-left ${date ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>{fmtFieldDate(date)}</span>
+                      <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>expand_more</span>
                     </button>
                   )}
                 </GlassDatePicker>
@@ -802,14 +802,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {/* Time + Duration */}
               <div className="flex items-start gap-1.5">
                 <div className="w-[88px] shrink-0 space-y-1">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Start Time</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Start Time</label>
                   <GlassTimePicker value={startTime} onChange={setStartTime} min={bsStr} max={fromMin(bookingEndMin - 30)}>
                     {() => (
                       <button type="button"
-                        className="w-full flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold px-2.5 py-2 hover:border-[#adee2b] transition-all"
+                        className="w-full flex items-center gap-1.5 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-2.5 py-2 hover:border-[#adee2b] transition-all"
                         style={glowActive ? { animation: 'field-glow-pulse 1.4s ease-in-out forwards' } : undefined}>
-                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 14 }}>schedule</span>
-                        <span className={startTime ? 'text-slate-800 tabular-nums' : 'text-slate-400'}>{startTime || '—'}</span>
+                        <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
+                        <span className={startTime ? 'text-[var(--ds-text-1)] tabular-nums' : 'text-[var(--ds-text-3)]'}>{startTime || '—'}</span>
                       </button>
                     )}
                   </GlassTimePicker>
@@ -817,18 +817,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
                 {/* Arrow — pt skips the label row, self-stretch+flex+items-center centers within field height */}
                 <div className="self-stretch flex items-center shrink-0" style={{ paddingTop: 20 }}>
-                  <span className="text-slate-300 text-[10px] font-black">→</span>
+                  <span className="text-[var(--ds-text-3)] text-[10px] font-black">→</span>
                 </div>
 
                 <div className="w-[88px] shrink-0 space-y-1">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">End Time</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">End Time</label>
                   <GlassTimePicker value={endTime} onChange={setEndTime} min={fromMin(bookingStartMin + 30)} max={beStr} align="right">
                     {() => (
                       <button type="button"
-                        className="w-full flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold px-2.5 py-2 hover:border-[#adee2b] transition-all"
+                        className="w-full flex items-center gap-1.5 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-2.5 py-2 hover:border-[#adee2b] transition-all"
                         style={glowActive ? { animation: 'field-glow-pulse 1.4s ease-in-out forwards' } : undefined}>
-                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 14 }}>schedule</span>
-                        <span className={endTime ? 'text-slate-800 tabular-nums' : 'text-slate-400'}>{endTime || '—'}</span>
+                        <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
+                        <span className={endTime ? 'text-[var(--ds-text-1)] tabular-nums' : 'text-[var(--ds-text-3)]'}>{endTime || '—'}</span>
                       </button>
                     )}
                   </GlassTimePicker>
@@ -836,7 +836,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
                 {/* Duration badge — same label+field structure for alignment */}
                 <div className="shrink-0 space-y-1">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Duration</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Duration</label>
                   <div className="px-3 py-2 rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center"
                     style={{
                       backgroundColor: '#d9faa0',
@@ -855,9 +855,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   onClick={() => setShowMiniPanel(v => !v)}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all active:scale-95"
                   style={{
-                    background: showMiniPanel ? '#adee2b' : 'rgba(241,245,249,1)',
-                    color: showMiniPanel ? '#1a3a00' : '#64748b',
-                    border: showMiniPanel ? '1.5px solid #8bc200' : '1.5px solid #e2e8f0',
+                    background: showMiniPanel ? '#adee2b' : 'var(--ds-bg-surface-2)',
+                    color: showMiniPanel ? '#1a3a00' : 'var(--ds-text-2)',
+                    border: showMiniPanel ? '1.5px solid #8bc200' : '1.5px solid var(--ds-border)',
                   }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
@@ -869,18 +869,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             </div>
 
             {/* Details */}
-            <div className="bg-slate-50 p-5 rounded-[1.8rem] border border-slate-100 space-y-3">
+            <div className="bg-[var(--ds-bg-raised)] p-5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-3">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider px-1">Meeting Title *</label>
+                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Meeting Title *</label>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
                   placeholder="e.g. Brand Strategy 2026"
-                  className="w-full bg-white border border-slate-200 rounded-xl text-sm font-black p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider px-1">Description</label>
+                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Description</label>
                 <textarea rows={2} value={desc} onChange={e => setDesc(e.target.value)}
                   placeholder="Agenda, notes..."
-                  className="w-full bg-white border border-slate-200 rounded-xl text-sm font-medium p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none resize-none" />
+                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none resize-none" />
               </div>
 
               {/* Book for — accordion (hidden if disabled by admin) */}
@@ -889,18 +889,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   type="button"
                   onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setShowBookForDrop(false) } }}
                   className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider transition-colors"
-                  style={{ color: showBookFor ? '#475569' : '#94a3b8' }}
+                  style={{ color: showBookFor ? 'var(--ds-text-2)' : 'var(--ds-text-3)' }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
                     {showBookFor ? 'remove' : 'add'}
                   </span>
                   Book for (optional)
-                  {bookFor && <span className="ml-1 px-1.5 py-0.5 bg-slate-200 rounded text-slate-600 normal-case font-bold tracking-normal">{bookFor}</span>}
+                  {bookFor && <span className="ml-1 px-1.5 py-0.5 bg-[var(--ds-bg-surface-2)] rounded text-[var(--ds-text-2)] normal-case font-bold tracking-normal">{bookFor}</span>}
                 </button>
 
                 {showBookFor && (
                   <div className="relative mt-2">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-300" style={{ fontSize: 15 }}>person</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 15 }}>person</span>
                     <input
                       type="text"
                       value={bookFor}
@@ -908,11 +908,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       onFocus={() => setShowBookForDrop(true)}
                       placeholder="Type name or pick from dept..."
                       autoFocus
-                      className="w-full bg-white border border-slate-200 rounded-xl text-sm font-medium pl-8 pr-8 py-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none"
+                      className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium pl-8 pr-8 py-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none"
                     />
                     {bookFor && (
                       <button type="button" onClick={() => setBookFor('')}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]">
                         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
                       </button>
                     )}
@@ -922,15 +922,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       const filtered = sameDept.filter(u => !q || u.name.toLowerCase().includes(q))
                       if (filtered.length === 0) return null
                       return (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 overflow-hidden" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl shadow-xl z-50 overflow-hidden" style={{ maxHeight: 200, overflowY: 'auto' }}>
                           {filtered.map(u => (
                             <button key={u.id} type="button"
                               onMouseDown={e => { e.preventDefault(); setBookFor(u.name); setBookForUserId(u.id); setShowBookForDrop(false) }}
                               className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f7fee7] transition-colors text-left">
-                              <span className="size-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 shrink-0">
+                              <span className="size-6 rounded-full bg-[var(--ds-bg-surface-2)] flex items-center justify-center text-[10px] font-black text-[var(--ds-text-3)] shrink-0">
                                 {u.name.charAt(0).toUpperCase()}
                               </span>
-                              <span className="text-sm font-bold text-slate-700 truncate">{u.name}</span>
+                              <span className="text-sm font-bold text-[var(--ds-text-2)] truncate">{u.name}</span>
                             </button>
                           ))}
                         </div>
@@ -949,10 +949,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             </div>
 
             {/* Options */}
-            <div className="bg-slate-50 p-5 rounded-[1.8rem] border border-slate-100 space-y-4">
+            <div className="bg-[var(--ds-bg-raised)] p-5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider px-1">Type</label>
+                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Type</label>
                   {isPrivileged ? (
                     <div className="grid grid-cols-2 gap-1">
                       {([
@@ -967,8 +967,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           className="py-1.5 text-[10px] font-black uppercase rounded-full border transition-all duration-150"
                           style={{
                             background: type === opt.value ? opt.bg : 'transparent',
-                            color: type === opt.value ? opt.text : '#94a3b8',
-                            borderColor: type === opt.value ? opt.bg : '#e2e8f0',
+                            color: type === opt.value ? opt.text : 'var(--ds-text-3)',
+                            borderColor: type === opt.value ? opt.bg : 'var(--ds-border)',
                           }}
                         >
                           {opt.label}
@@ -980,18 +980,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       <div className="absolute top-1 bottom-1 w-[calc(50%-2px)] rounded-full shadow-sm pointer-events-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
                         style={{ left: type === 'internal' ? 3 : 'calc(50%)', width: 'calc(50% - 3px)', background: type === 'internal' ? '#1d4ed8' : '#f97316', transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1)' }} />
                       <button onClick={() => setType('internal')}
-                        className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'internal' ? 'text-white' : 'text-slate-400'}`}>
+                        className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'internal' ? 'text-white' : 'text-[var(--ds-text-3)]'}`}>
                         Internal
                       </button>
                       <button onClick={() => setType('external')}
-                        className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'external' ? 'text-white' : 'text-slate-400'}`}>
+                        className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'external' ? 'text-white' : 'text-[var(--ds-text-3)]'}`}>
                         External
                       </button>
                     </div>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase text-slate-400 tracking-wider px-1">Status</label>
+                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Status</label>
                   <div className="relative flex bg-slate-200/60 p-[3px] rounded-full border border-black/5">
                     <div className="absolute inset-y-[3px] rounded-full shadow-sm pointer-events-none"
                       style={{
@@ -1002,11 +1002,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         backgroundImage: status === 'tentative' ? 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.09) 4px, rgba(0,0,0,0.09) 8px)' : undefined,
                       }} />
                     <button onClick={() => setStatus('confirmed')}
-                      className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'confirmed' ? 'text-black' : 'text-slate-400'}`}>
+                      className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'confirmed' ? 'text-black' : 'text-[var(--ds-text-3)]'}`}>
                       Confirmed
                     </button>
                     <button onClick={() => setStatus('tentative')}
-                      className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'tentative' ? 'text-slate-600' : 'text-slate-400'}`}>
+                      className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'tentative' ? 'text-[var(--ds-text-2)]' : 'text-[var(--ds-text-3)]'}`}>
                       Tentative
                     </button>
                   </div>
@@ -1016,14 +1016,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {/* Repeat — only for create */}
               {!isEdit && (
                 <div className="space-y-3">
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Repeat</label>
                   {/* Repeat mode toggle: None / Daily / Weekly */}
                   <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
-                    <div className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                    <div className="absolute top-1 bottom-1 rounded-full bg-[var(--ds-bg-surface)] shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
                       style={{ left: 4, width: 'calc((100% - 8px) / 3)', transform: `translateX(${repeat === 'none' ? 0 : repeat === 'daily' ? 100 : 200}%)` }} />
                     {(['none', 'daily', 'weekly'] as const).map(r => (
                       <button key={r} onClick={() => handleRepeatChange(r)}
-                        className={`relative z-10 flex-1 py-1.5 text-[11px] font-black uppercase rounded-full transition-colors duration-150 ${repeat === r ? 'text-black' : 'text-slate-400'}`}>
+                        className={`relative z-10 flex-1 py-1.5 text-[11px] font-black uppercase rounded-full transition-colors duration-150 ${repeat === r ? 'text-black' : 'text-[var(--ds-text-3)]'}`}>
                         {r}
                       </button>
                     ))}
@@ -1034,7 +1034,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       {/* Weekly day picker */}
                       {repeat === 'weekly' && (
                         <div className="space-y-1.5">
-                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat Days</p>
+                          <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Repeat Days</p>
                           <div className="flex gap-1">
                             {DOW_KEYS.map(key => {
                               const selected = weeklyDays.includes(key)
@@ -1062,7 +1062,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       )}
 
                       {/* Count vs Until toggle */}
-                      <div className="bg-white border border-slate-100 rounded-2xl p-3 space-y-2">
+                      <div className="bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl p-3 space-y-2">
                         {/* Radio: By count */}
                         <label className="flex items-center gap-3 cursor-pointer">
                           <div
@@ -1071,27 +1071,27 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           >
                             {repeatMode === 'count' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
-                          <span className="text-[10px] font-black uppercase text-slate-500 flex-1" onClick={() => setRepeatMode('count')}>
+                          <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex-1" onClick={() => setRepeatMode('count')}>
                             {repeat === 'daily' ? 'For N days' : 'For N weeks'}
                           </span>
                           {repeatMode === 'count' && (
                             <div className="flex items-center gap-1.5 ml-auto">
                               <button type="button"
                                 onClick={() => setRepeatCount(c => Math.max(2, c - 1))}
-                                className="size-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-black text-slate-600 transition-colors">
+                                className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 15 }}>remove</span>
                               </button>
-                              <span className="text-[15px] font-black text-slate-900 w-6 text-center tabular-nums">{repeatCount}</span>
+                              <span className="text-[15px] font-black text-[var(--ds-text-1)] w-6 text-center tabular-nums">{repeatCount}</span>
                               <button type="button"
                                 onClick={() => setRepeatCount(c => Math.min(repeat === 'daily' ? 90 : 52, c + 1))}
-                                className="size-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-black text-slate-600 transition-colors">
+                                className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add</span>
                               </button>
                             </div>
                           )}
                         </label>
 
-                        <div className="border-t border-slate-100" />
+                        <div className="border-t border-[var(--ds-border-sub)]" />
 
                         {/* Radio: Until date */}
                         <label className="flex items-center gap-3 cursor-pointer">
@@ -1101,16 +1101,16 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           >
                             {repeatMode === 'until' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
-                          <span className="text-[10px] font-black uppercase text-slate-500 flex-1" onClick={() => setRepeatMode('until')}>
+                          <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex-1" onClick={() => setRepeatMode('until')}>
                             Until date
                           </span>
                           {repeatMode === 'until' && (
                             <div className="ml-auto" onClick={e => e.stopPropagation()}>
                               <GlassDatePicker value={repeatEndDate} onChange={setRepeatEndDate} min={date || today} align="right" panelWidth={260}>
                                 {() => (
-                                  <button type="button" className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl px-3 py-1.5 text-[10px] font-black transition-all">
-                                    <span className="text-slate-700">{repeatEndDate ? fmtShortDate(repeatEndDate) : 'Pick date'}</span>
-                                    <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>calendar_today</span>
+                                  <button type="button" className="flex items-center gap-1.5 bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] rounded-xl px-3 py-1.5 text-[10px] font-black transition-all">
+                                    <span className="text-[var(--ds-text-2)]">{repeatEndDate ? fmtShortDate(repeatEndDate) : 'Pick date'}</span>
+                                    <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>calendar_today</span>
                                   </button>
                                 )}
                               </GlassDatePicker>
@@ -1123,13 +1123,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       <button
                         type="button"
                         onClick={() => setSkipConflicts(!skipConflicts)}
-                        className="w-full flex items-center gap-3 bg-white border border-slate-100 rounded-2xl px-4 py-2.5 transition-all hover:border-slate-200"
+                        className="w-full flex items-center gap-3 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl px-4 py-2.5 transition-all hover:border-[var(--ds-border)]"
                       >
                         <div className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${skipConflicts ? 'bg-black' : 'bg-slate-200'}`}>
                           <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${skipConflicts ? 'translate-x-4' : 'translate-x-0.5'}`} />
                         </div>
-                        <span className="text-[10px] font-black uppercase text-slate-600">Skip past conflicts</span>
-                        <span className="ml-auto text-[9px] text-slate-400 font-medium">
+                        <span className="text-[10px] font-black uppercase text-[var(--ds-text-2)]">Skip past conflicts</span>
+                        <span className="ml-auto text-[9px] text-[var(--ds-text-3)] font-medium">
                           {skipConflicts ? 'conflicts skipped' : 'stop on conflict'}
                         </span>
                       </button>
@@ -1138,13 +1138,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       {repeatDates.length > 0 && (
                         <div className="bg-black/[0.04] rounded-2xl px-4 py-3 space-y-2">
                           <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 14 }}>event_repeat</span>
-                            <span className="text-[10px] font-black text-slate-600">{repeatSummary}</span>
+                            <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>event_repeat</span>
+                            <span className="text-[10px] font-black text-[var(--ds-text-2)]">{repeatSummary}</span>
                           </div>
                           {/* Preview first 6 dates */}
                           <div className="flex flex-wrap gap-1">
                             {repeatDates.slice(0, 6).map(d => (
-                              <span key={d} className="text-[8px] font-bold bg-white border border-slate-100 rounded-lg px-2 py-0.5 text-slate-500">
+                              <span key={d} className="text-[8px] font-bold bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-lg px-2 py-0.5 text-[var(--ds-text-3)]">
                                 {fmtShortDate(d)}
                               </span>
                             ))}
@@ -1188,11 +1188,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   </div>
                 )}
                 {isTimeValid() === true && availChecking && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-slate-100 bg-slate-50">
-                    <div className="size-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-[var(--ds-border-sub)] bg-[var(--ds-bg-raised)]">
+                    <div className="size-8 rounded-xl bg-[var(--ds-bg-surface-2)] flex items-center justify-center text-[var(--ds-text-3)] shrink-0">
                       <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
                     </div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Checking availability&hellip;</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Checking availability&hellip;</p>
                   </div>
                 )}
                 {isTimeValid() === true && !availChecking && isAvailable() === true && (
@@ -1227,9 +1227,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
           {/* Pantry Slide */}
           <div
-            className={`absolute inset-0 bg-white z-30 flex flex-col border-l-4 border-[#adee2b] transition-transform duration-500 ${pantryOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            className={`absolute inset-0 bg-[var(--ds-bg-surface)] z-30 flex flex-col border-l-4 border-[#adee2b] transition-transform duration-500 ${pantryOpen ? 'translate-x-0' : 'translate-x-full'}`}
           >
-            <div className="p-6 flex items-center justify-between border-b shrink-0">
+            <div className="p-6 flex items-center justify-between border-b border-[var(--ds-border)] shrink-0">
               <div className="flex items-center gap-3">
                 <div className="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b]">
                   <span className="material-symbols-outlined text-base">flatware</span>
@@ -1238,18 +1238,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               </div>
               <button
                 onClick={() => setPantryOpen(false)}
-                className="size-8 bg-slate-100 rounded-full flex items-center justify-center hover:bg-black hover:text-[#adee2b] transition-all"
+                className="size-8 bg-[var(--ds-bg-surface-2)] rounded-full flex items-center justify-center hover:bg-black hover:text-[#adee2b] transition-all"
               >
                 <span className="material-symbols-outlined text-sm">arrow_back</span>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-slate-50/50">
-              <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1 mb-3">Hot Beverages</p>
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[var(--ds-bg-raised)]">
+              <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-widest px-1 mb-3">Hot Beverages</p>
               {[
                 { label: 'Coffee', icon: 'coffee', qty: coffeeQty, set: setCoffeeQty, color: 'orange' },
                 { label: 'Tea', icon: 'emoji_food_beverage', qty: teaQty, set: setTeaQty, color: 'green' },
               ].map(item => (
-                <div key={item.label} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                <div key={item.label} className="bg-[var(--ds-bg-surface)] p-4 rounded-3xl border border-[var(--ds-border-sub)] shadow-sm">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`size-10 bg-${item.color}-50 text-${item.color}-500 rounded-2xl flex items-center justify-center`}>
@@ -1257,35 +1257,35 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       </div>
                       <span className="text-xs font-black uppercase">{item.label}</span>
                     </div>
-                    <div className="flex items-center bg-slate-100 rounded-full p-1 gap-1">
-                      <button onClick={() => item.set(Math.max(0, item.qty - 1))} className="size-7 flex items-center justify-center text-sm font-black hover:bg-white rounded-full transition-colors">−</button>
+                    <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-full p-1 gap-1">
+                      <button onClick={() => item.set(Math.max(0, item.qty - 1))} className="size-7 flex items-center justify-center text-sm font-black hover:bg-[var(--ds-bg-surface)] rounded-full transition-colors">−</button>
                       <span className="w-6 text-center text-xs font-black">{item.qty}</span>
-                      <button onClick={() => item.set(item.qty + 1)} className="size-7 flex items-center justify-center text-sm font-black hover:bg-white rounded-full transition-colors">+</button>
+                      <button onClick={() => item.set(item.qty + 1)} className="size-7 flex items-center justify-center text-sm font-black hover:bg-[var(--ds-bg-surface)] rounded-full transition-colors">+</button>
                     </div>
                   </div>
                 </div>
               ))}
-              <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1 mt-4 mb-3">Others</p>
+              <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-widest px-1 mt-4 mb-3">Others</p>
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: 'Water', icon: 'water_full', qty: waterQty, set: setWaterQty, color: 'blue' },
                   { label: 'Snacks', icon: 'cookie', qty: snackQty, set: setSnackQty, color: 'amber' },
                 ].map(item => (
-                  <div key={item.label} className="bg-white p-3 rounded-2xl border border-slate-100 flex flex-col gap-2">
+                  <div key={item.label} className="bg-[var(--ds-bg-surface)] p-3 rounded-2xl border border-[var(--ds-border-sub)] flex flex-col gap-2">
                     <div className="flex items-center gap-2">
                       <span className={`material-symbols-outlined text-${item.color}-400 text-base`}>{item.icon}</span>
                       <span className="text-[10px] font-black uppercase">{item.label}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => item.set(Math.max(0, item.qty - 1))} className="size-6 flex items-center justify-center text-sm font-black text-slate-400 hover:text-black">−</button>
+                      <button onClick={() => item.set(Math.max(0, item.qty - 1))} className="size-6 flex items-center justify-center text-sm font-black text-[var(--ds-text-3)] hover:text-black">−</button>
                       <span className={`text-[10px] font-black text-${item.color}-600`}>{item.qty}</span>
-                      <button onClick={() => item.set(item.qty + 1)} className="size-6 flex items-center justify-center text-sm font-black text-slate-400 hover:text-black">+</button>
+                      <button onClick={() => item.set(item.qty + 1)} className="size-6 flex items-center justify-center text-sm font-black text-[var(--ds-text-3)] hover:text-black">+</button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="p-5 bg-white border-t shrink-0">
+            <div className="p-5 bg-[var(--ds-bg-surface)] border-t border-[var(--ds-border)] shrink-0">
               <button
                 onClick={() => { setPantryOpen(false); setPantrySaved(true) }}
                 className="w-full py-4 bg-black text-[#adee2b] rounded-full text-[9px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-transform"
@@ -1298,23 +1298,23 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           {/* Cancel Series Modal */}
           {showCancelModal && editBooking && onCancel && (
             <div className="absolute inset-0 z-40 flex items-end" style={{ background: 'rgba(0,0,0,0.35)' }}>
-              <div className="w-full bg-white rounded-t-3xl p-6 space-y-4 shadow-2xl">
+              <div className="w-full bg-[var(--ds-bg-surface)] rounded-t-3xl p-6 space-y-4 shadow-2xl">
                 <div className="flex items-center gap-3">
                   <div className="size-9 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
                     <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>cancel</span>
                   </div>
                   <div>
-                    <p className="text-sm font-black uppercase tracking-tight text-slate-800">Cancel Booking</p>
-                    <p className="text-[10px] text-slate-400 font-bold">Part of a series</p>
+                    <p className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">Cancel Booking</p>
+                    <p className="text-[10px] text-[var(--ds-text-3)] font-bold">Part of a series</p>
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
+                <p className="text-[11px] text-[var(--ds-text-3)] leading-relaxed">
                   Cancel just this booking, or cancel all bookings in the series?
                 </p>
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <button
                     onClick={() => { setShowCancelModal(false); onClose(); setTimeout(() => onCancel(editBooking), 150) }}
-                    className="py-3.5 rounded-2xl bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wide hover:bg-slate-200 transition-all"
+                    className="py-3.5 rounded-2xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase tracking-wide hover:bg-[var(--ds-border)] transition-all"
                   >
                     Just this one
                   </button>
@@ -1335,7 +1335,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 </div>
                 <button
                   onClick={() => setShowCancelModal(false)}
-                  className="w-full text-[9px] font-black uppercase text-slate-400 hover:text-slate-600 py-1 tracking-wider transition-colors"
+                  className="w-full text-[9px] font-black uppercase text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)] py-1 tracking-wider transition-colors"
                 >
                   Back
                 </button>
@@ -1346,14 +1346,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           {/* Conflict Preview Modal (all-or-nothing) */}
           {conflictInfo && (
             <div className="absolute inset-0 z-40 flex items-end" style={{ background: 'rgba(0,0,0,0.45)' }}>
-              <div className="w-full bg-white rounded-t-3xl p-6 space-y-4 shadow-2xl">
+              <div className="w-full bg-[var(--ds-bg-surface)] rounded-t-3xl p-6 space-y-4 shadow-2xl">
                 <div className="flex items-center gap-3">
                   <div className="size-9 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
                     <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>event_busy</span>
                   </div>
                   <div>
-                    <p className="text-sm font-black uppercase tracking-tight text-slate-800">Conflicts Found</p>
-                    <p className="text-[10px] text-slate-400 font-bold">
+                    <p className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">Conflicts Found</p>
+                    <p className="text-[10px] text-[var(--ds-text-3)] font-bold">
                       {conflictInfo.conflicting.length} slot{conflictInfo.conflicting.length !== 1 ? 's' : ''} already booked
                     </p>
                   </div>
@@ -1369,7 +1369,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   ))}
                 </div>
 
-                <p className="text-[11px] text-slate-500 leading-relaxed">
+                <p className="text-[11px] text-[var(--ds-text-3)] leading-relaxed">
                   {conflictInfo.available.length > 0
                     ? `Turn on "Skip conflicts" to book the ${conflictInfo.available.length} available slot${conflictInfo.available.length !== 1 ? 's' : ''} and skip the ${conflictInfo.conflicting.length} above.`
                     : 'All selected slots are already booked. Choose different dates or times.'}
@@ -1407,7 +1407,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   )}
                   <button
                     onClick={() => setConflictInfo(null)}
-                    className="py-3.5 rounded-2xl bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wide hover:bg-slate-200 transition-all"
+                    className="py-3.5 rounded-2xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase tracking-wide hover:bg-[var(--ds-border)] transition-all"
                   >
                     Cancel
                   </button>
@@ -1431,15 +1431,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
           {/* Skipped dates result — inline after series booking */}
           {skippedResult && (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+            <div className="bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-2xl p-4 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="size-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#adee2b' }}>
                     <span className="material-symbols-outlined text-black" style={{ fontSize: 14 }}>task_alt</span>
                   </div>
                   <div>
-                    <p className="text-[11px] font-black text-slate-800">{skippedResult.created} of {skippedResult.total} booked</p>
-                    <p className="text-[9px] text-slate-400 font-bold">{skippedResult.skipped.length} skipped — conflicts</p>
+                    <p className="text-[11px] font-black text-[var(--ds-text-1)]">{skippedResult.created} of {skippedResult.total} booked</p>
+                    <p className="text-[9px] text-[var(--ds-text-3)] font-bold">{skippedResult.skipped.length} skipped — conflicts</p>
                   </div>
                 </div>
                 <button
@@ -1485,7 +1485,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   disabled={!isValid() || submitting}
                   className="py-4 rounded-full text-[9px] font-black uppercase tracking-wide transition-all
                     bg-[#adee2b] text-black hover:bg-slate-900 hover:text-[#adee2b]
-                    disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed"
                 >
                   {submitting ? '...' : 'Save this'}
                 </button>
@@ -1504,7 +1504,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   disabled={!isValid() || submitting}
                   className="py-4 rounded-full text-[9px] font-black uppercase tracking-wide transition-all flex items-center justify-center gap-1
                     bg-blue-600 text-white hover:bg-blue-700
-                    disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed"
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>link</span>
                   {submitting ? '...' : 'Save series'}
@@ -1528,7 +1528,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 disabled={!isValid() || submitting}
                 className="w-full py-5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all duration-200
                   bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] shadow-lime-400/20
-                  disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none"
+                  disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none"
               >
                 {submitting ? 'Saving...' : isEdit ? 'Save Changes' : repeat !== 'none' ? `Schedule ${repeatDates.length > 0 ? `(${repeatDates.length})` : ''} Bookings` : 'Confirm Booking'}
               </button>

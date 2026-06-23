@@ -11,6 +11,7 @@ import { useCancelToast } from '../context/CancelToastContext'
 import BookingPanel from '../components/booking/BookingPanel'
 import { useBookingHours } from '../hooks/useBookingHours'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
+import UserHoverCard from '../components/ui/UserHoverCard'
 
 function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
 function dur(start: string, end: string) {
@@ -174,10 +175,14 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
         </div>
         <div className="text-right shrink-0">
           {b.booked_for && !b.is_recipient && (
-            <p className="text-[9px] font-black text-slate-400 mb-1.5 truncate max-w-[110px]">for {b.booked_for}</p>
+            <UserHoverCard name={b.booked_for} userId={b.booked_for_user_id}>
+              <p className="text-[11px] font-black text-slate-500 mb-1.5 truncate max-w-[120px]">for {b.booked_for}</p>
+            </UserHoverCard>
           )}
-          {b.is_recipient && (
-            <p className="text-[9px] font-black mb-1.5 truncate max-w-[110px]" style={{ color: '#6b9900' }}>by {b.user?.name}</p>
+          {b.is_recipient && b.user && (
+            <UserHoverCard name={b.user.name} user={b.user}>
+              <p className="text-[11px] font-black mb-1.5 truncate max-w-[120px]" style={{ color: '#4d7a00' }}>by {b.user.name}</p>
+            </UserHoverCard>
           )}
           <p className={`text-2xl font-black tabular-nums leading-none ${t1}`}>{fmtTime(b.start_at)}</p>
           <p className={`text-sm font-bold mt-1 ${t2}`}>{fmtTime(b.end_at)}</p>
@@ -249,10 +254,14 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
         {b.description && <p className={`text-[10px] font-medium truncate mt-0.5 ${subClr}`}>{b.description}</p>}
       </div>
       {b.booked_for && !b.is_recipient && (
-        <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">for {b.booked_for}</span>
+        <UserHoverCard name={b.booked_for} userId={b.booked_for_user_id}>
+          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 shrink-0">for {b.booked_for}</span>
+        </UserHoverCard>
       )}
-      {b.is_recipient && (
-        <span className="text-[8px] font-black px-2 py-0.5 rounded-full shrink-0" style={{ background: '#f7fee7', color: '#4d7c00' }}>by {b.user?.name}</span>
+      {b.is_recipient && b.user && (
+        <UserHoverCard name={b.user.name} user={b.user}>
+          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full shrink-0" style={{ background: '#ecfccb', color: '#3a5c00' }}>by {b.user.name}</span>
+        </UserHoverCard>
       )}
       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0"
         style={{ backgroundColor: tStyle.bg, color: tStyle.text }}>{tStyle.label}</span>
@@ -515,16 +524,20 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
             <span className="material-symbols-outlined shrink-0" style={{ fontSize: 12, color: '#d97706' }} title="Special room">star</span>
           )}
         </div>
-        {b.is_recipient ? (
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#6b9900', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>person</span>
-            by {b.user?.name}
-          </p>
+        {b.is_recipient && b.user ? (
+          <UserHoverCard name={b.user.name} user={b.user}>
+            <p style={{ fontSize: 12, fontWeight: 900, color: '#3a5c00', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 13 }}>person</span>
+              by {b.user.name}
+            </p>
+          </UserHoverCard>
         ) : b.booked_for ? (
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>person_pin</span>
-            for {b.booked_for}
-          </p>
+          <UserHoverCard name={b.booked_for} userId={b.booked_for_user_id}>
+            <p style={{ fontSize: 12, fontWeight: 900, color: '#475569', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 13 }}>person_pin</span>
+              for {b.booked_for}
+            </p>
+          </UserHoverCard>
         ) : null}
         <p style={{ fontSize: 13, fontWeight: 900, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
       </div>
@@ -673,12 +686,23 @@ export default function SchedulePage() {
   const [spSortDir, setSpSortDir]             = useState<'asc' | 'desc'>('asc')
   const spExportRef = useRef<HTMLDivElement>(null)
 
+  const [allExportOpen, setAllExportOpen]     = useState(false)
+  const [allExportGroups, setAllExportGroups] = useState({ upcoming: true, past: true, cancelled: false })
+  const allExportRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!spExportOpen) return
     const fn = (e: MouseEvent) => { if (spExportRef.current && !spExportRef.current.contains(e.target as Node)) setSpExportOpen(null) }
     document.addEventListener('mousedown', fn)
     return () => document.removeEventListener('mousedown', fn)
   }, [spExportOpen])
+
+  useEffect(() => {
+    if (!allExportOpen) return
+    const fn = (e: MouseEvent) => { if (allExportRef.current && !allExportRef.current.contains(e.target as Node)) setAllExportOpen(false) }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [allExportOpen])
 
   const today = new Date()
   const minus7 = new Date(today); minus7.setDate(today.getDate() - 7)
@@ -906,6 +930,11 @@ export default function SchedulePage() {
   const pastInAll     = allList.filter((b: Booking) => isActuallyPast(b))
   const pastPreview   = pastInAll.slice(0, 5)
   const allListForDisplay = [...upcomingInAll, ...pastPreview]
+  const allExportRows = [
+    ...(allExportGroups.upcoming ? upcomingInAll : []),
+    ...(allExportGroups.past ? pastInAll : []),
+    ...(allExportGroups.cancelled ? cancelledList : []),
+  ]
   const allListFiltered = useMemo(() => {
     let list = allListForDisplay
     if (buildingFilter) list = list.filter((b: Booking) => b.room?.building_id === buildingFilter)
@@ -920,74 +949,132 @@ export default function SchedulePage() {
     )
   }, [allListForDisplay, allSearch, buildingFilter])
 
-  function exportExcel() {
-    const rows = upcomingInAll.map((b: Booking) => ({
-      Date: fmtTableDate(b.start_at), Day: fmtTableDay(b.start_at),
-      'Start Time': fmtTime(b.start_at), 'End Time': fmtTime(b.end_at),
-      Duration: dur(b.start_at, b.end_at), Room: b.room?.name ?? '',
-      Floor: b.room?.floor ?? '', Title: b.title,
-      Description: b.description ?? '', Status: b.status, Type: b.type,
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
+  interface AllExportCounts { upcoming: number | null; past: number | null; cancelled: number | null }
+
+  function exportAllExcel(rows: Booking[], counts: AllExportCounts) {
+    const exportedAt = today.toLocaleDateString('en-GB')
+    const summaryParts = [
+      counts.upcoming != null ? `Upcoming & Today: ${counts.upcoming}` : null,
+      counts.past      != null ? `Past: ${counts.past}`               : null,
+      counts.cancelled != null ? `Cancelled: ${counts.cancelled}`     : null,
+    ].filter(Boolean).join('   |   ')
+
+    const headers = ['No.', 'Date', 'Day', 'Start Time', 'End Time', 'Duration', 'Room', 'Building', 'Floor', 'Title', 'Description', 'Booked For', 'Status', 'Type']
+    const aoa: (string | number)[][] = [
+      [`My Bookings — ${user?.name ?? ''}`],
+      [`${user?.department ?? ''}   ·   Exported ${exportedAt}   ·   Total: ${rows.length}`],
+      [summaryParts],
+      [],
+      headers,
+      ...rows.map((b: Booking, i: number) => [
+        i + 1,
+        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
+        fmtTime(b.start_at), fmtTime(b.end_at),
+        dur(b.start_at, b.end_at), b.room?.name ?? '',
+        b.room?.building?.code || b.room?.building?.name || '',
+        b.room?.floor ?? '', b.title,
+        b.description ?? '', b.booked_for ?? '',
+        b.status, b.type,
+      ]),
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 6 }, { wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 10 }, { wch: 12 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'My Bookings')
-    XLSX.writeFile(wb, `bookings-${user?.name?.replace(' ', '-').toLowerCase()}.xlsx`)
+    XLSX.writeFile(wb, `my-bookings-${user?.name?.replace(' ', '-').toLowerCase()}.xlsx`)
   }
 
-  function exportPDF() {
+  function exportAllPDF(rows: Booking[], counts: AllExportCounts) {
     const doc = new jsPDF()
     doc.setFontSize(14); doc.text(`My Bookings — ${user?.name}`, 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
-    doc.text(`${user?.department} · Exported ${today.toLocaleDateString('en-GB')}`, 14, 22)
+    doc.text(`${user?.department ?? ''}   ·   Exported ${today.toLocaleDateString('en-GB')}   ·   Total: ${rows.length}`, 14, 22)
+    const summaryParts = [
+      counts.upcoming != null ? `Upcoming & Today: ${counts.upcoming}` : null,
+      counts.past      != null ? `Past: ${counts.past}`               : null,
+      counts.cancelled != null ? `Cancelled: ${counts.cancelled}`     : null,
+    ].filter(Boolean).join('   |   ')
+    doc.setFontSize(8); doc.setTextColor(120)
+    doc.text(summaryParts, 14, 28)
     autoTable(doc, {
-      startY: 28,
-      head: [['Date', 'Day', 'Time', 'Room', 'Title', 'Status']],
-      body: upcomingInAll.map((b: Booking) => [
+      startY: 34,
+      head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status']],
+      body: rows.map((b: Booking, i: number) => [
+        i + 1,
         fmtTableDate(b.start_at), fmtTableDay(b.start_at),
         `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
-        b.room?.name ?? '', b.title, b.status,
+        b.room?.name ?? '', b.title, b.booked_for ?? '', b.status,
       ]),
       styles: { fontSize: 8, cellPadding: 3 },
       headStyles: { fillColor: [0, 0, 0], textColor: [173, 238, 43], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { cellWidth: 12, halign: 'center' } },
     })
-    doc.save(`bookings-${user?.name?.replace(' ', '-').toLowerCase()}.pdf`)
+    doc.save(`my-bookings-${user?.name?.replace(' ', '-').toLowerCase()}.pdf`)
   }
 
-  function exportSpecialExcel(rows: Booking[]) {
-    const data = rows.map((b: Booking) => ({
-      Date: fmtTableDate(b.start_at), Day: fmtTableDay(b.start_at),
-      'Start Time': fmtTime(b.start_at), 'End Time': fmtTime(b.end_at),
-      Duration: dur(b.start_at, b.end_at), Room: b.room?.name ?? '',
-      Building: b.room?.building?.code || b.room?.building?.name || '',
-      Booker: b.user?.name ?? '', Role: b.user?.role ?? '', Department: b.user?.department_name ?? '',
-      Title: b.title, Description: b.description ?? '',
-      'Booked For': b.booked_for ?? '', Status: b.status, Type: b.type,
-    }))
-    const ws = XLSX.utils.json_to_sheet(data)
+  interface SpExportCounts { active: number | null; past: number | null; cancelled: number | null }
+
+  function exportSpecialExcel(rows: Booking[], counts: SpExportCounts) {
+    const exportedAt = today.toLocaleDateString('en-GB')
+    const summaryParts = [
+      counts.active    != null ? `Upcoming & Today: ${counts.active}`  : null,
+      counts.past      != null ? `Past: ${counts.past}`                : null,
+      counts.cancelled != null ? `Cancelled: ${counts.cancelled}`      : null,
+    ].filter(Boolean).join('   |   ')
+
+    const headers = ['No.', 'Date', 'Day', 'Start Time', 'End Time', 'Duration', 'Room', 'Building', 'Booker', 'Role', 'Department', 'Title', 'Description', 'Booked For', 'Status', 'Type']
+    const aoa: (string | number)[][] = [
+      ['Special Room Bookings'],
+      [`±90 days   ·   Exported ${exportedAt}   ·   Total: ${rows.length}`],
+      [summaryParts],
+      [],
+      headers,
+      ...rows.map((b: Booking, i: number) => [
+        i + 1,
+        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
+        fmtTime(b.start_at), fmtTime(b.end_at),
+        dur(b.start_at, b.end_at), b.room?.name ?? '',
+        b.room?.building?.code || b.room?.building?.name || '',
+        b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '',
+        b.title, b.description ?? '', b.booked_for ?? '', b.status, b.type,
+      ]),
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 10 }, { wch: 12 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Special Room Bookings')
     XLSX.writeFile(wb, `special-room-bookings-${toDateStr(today)}.xlsx`)
   }
 
-  function exportSpecialPDF(rows: Booking[]) {
-    const doc = new jsPDF()
+  function exportSpecialPDF(rows: Booking[], counts: SpExportCounts) {
+    const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFontSize(14); doc.text('Special Room Bookings', 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
-    doc.text(`±90 days · Exported ${today.toLocaleDateString('en-GB')}`, 14, 22)
+    doc.text(`±90 days   ·   Exported ${today.toLocaleDateString('en-GB')}   ·   Total: ${rows.length}`, 14, 22)
+    const summaryParts = [
+      counts.active    != null ? `Upcoming & Today: ${counts.active}`  : null,
+      counts.past      != null ? `Past: ${counts.past}`                : null,
+      counts.cancelled != null ? `Cancelled: ${counts.cancelled}`      : null,
+    ].filter(Boolean).join('   |   ')
+    doc.setFontSize(8); doc.setTextColor(120)
+    doc.text(summaryParts, 14, 28)
     autoTable(doc, {
-      startY: 28,
-      head: [['Date', 'Time', 'Room', 'Building', 'Booker', 'Role', 'Dept', 'Title', 'Status']],
-      body: rows.map((b: Booking) => [
+      startY: 34,
+      head: [['No.', 'Date', 'Time', 'Room', 'Building', 'Booker', 'Role', 'Dept', 'Title', 'For', 'Status']],
+      body: rows.map((b: Booking, i: number) => [
+        i + 1,
         fmtTableDate(b.start_at),
         `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
         b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
-        b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '', b.title, b.status,
+        b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '',
+        b.title, b.booked_for ?? '', b.status,
       ]),
       styles: { fontSize: 7.5, cellPadding: 2.5 },
       headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [255, 251, 235] },
+      columnStyles: { 0: { cellWidth: 12, halign: 'center' } },
     })
     doc.save(`special-room-bookings-${toDateStr(today)}.pdf`)
   }
@@ -1335,14 +1422,14 @@ export default function SchedulePage() {
                                     >All</button>
                                     <button
                                       disabled={spExportRows.length === 0}
-                                      onClick={() => { exportSpecialExcel(spExportRows); setSpExportOpen(null) }}
+                                      onClick={() => { exportSpecialExcel(spExportRows, { active: spExportGroups.active ? spActive.length : null, past: spExportGroups.past ? spPast.length : null, cancelled: spExportGroups.cancelled ? spCancelled.length : null }); setSpExportOpen(null) }}
                                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-[11px] font-black uppercase hover:bg-emerald-100 transition-colors border border-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
                                     </button>
                                     <button
                                       disabled={spExportRows.length === 0}
-                                      onClick={() => { exportSpecialPDF(spExportRows); setSpExportOpen(null) }}
+                                      onClick={() => { exportSpecialPDF(spExportRows, { active: spExportGroups.active ? spActive.length : null, past: spExportGroups.past ? spPast.length : null, cancelled: spExportGroups.cancelled ? spCancelled.length : null }); setSpExportOpen(null) }}
                                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 text-[11px] font-black uppercase hover:bg-red-100 transition-colors border border-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
@@ -1988,15 +2075,56 @@ export default function SchedulePage() {
                     </button>
                   )}
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={exportExcel}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:border-green-400 hover:text-green-600 hover:bg-green-50 transition-all">
-                    <span className="material-symbols-outlined text-sm">table_view</span>Excel
+                <div className="relative shrink-0" ref={allExportRef}>
+                  <button
+                    onClick={() => setAllExportOpen(o => !o)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-colors border ${allExportOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>download</span>Export
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{allExportOpen ? 'expand_less' : 'expand_more'}</span>
                   </button>
-                  <button onClick={exportPDF}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:border-red-400 hover:text-red-600 hover:bg-red-50 transition-all">
-                    <span className="material-symbols-outlined text-sm">picture_as_pdf</span>PDF
-                  </button>
+                  {allExportOpen && (
+                    <div className="absolute right-0 top-full mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/60 p-4 w-72">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Select groups to export</p>
+                      <div className="space-y-2.5 mb-4">
+                        <label className="flex items-center gap-2.5 cursor-pointer">
+                          <input type="checkbox" checked={allExportGroups.upcoming} onChange={e => setAllExportGroups(g => ({ ...g, upcoming: e.target.checked }))} className="accent-black w-4 h-4" />
+                          <span className="text-[12px] font-bold text-slate-600 flex-1">Upcoming &amp; Today</span>
+                          <span className="text-[11px] font-black text-slate-700">{upcomingInAll.length}</span>
+                        </label>
+                        <label className="flex items-center gap-2.5 cursor-pointer">
+                          <input type="checkbox" checked={allExportGroups.past} onChange={e => setAllExportGroups(g => ({ ...g, past: e.target.checked }))} className="accent-slate-400 w-4 h-4" />
+                          <span className="text-[12px] font-bold text-slate-600 flex-1">Past</span>
+                          <span className="text-[11px] font-black text-slate-400">{pastInAll.length}</span>
+                        </label>
+                        <label className="flex items-center gap-2.5 cursor-pointer">
+                          <input type="checkbox" checked={allExportGroups.cancelled} onChange={e => setAllExportGroups(g => ({ ...g, cancelled: e.target.checked }))} className="accent-red-400 w-4 h-4" />
+                          <span className="text-[12px] font-bold text-slate-600 flex-1">Cancelled <span className="text-[9px] font-bold text-slate-300 normal-case">last 7 days</span></span>
+                          <span className="text-[11px] font-black text-red-400">{cancelledList.length}</span>
+                        </label>
+                      </div>
+                      <div className="pt-3 border-t border-slate-100 flex items-center gap-1.5">
+                        <button
+                          onClick={() => setAllExportGroups({ upcoming: true, past: true, cancelled: true })}
+                          className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-colors px-2 py-1 rounded-lg hover:bg-slate-50 flex-1"
+                        >All</button>
+                        <button
+                          disabled={allExportRows.length === 0}
+                          onClick={() => { exportAllExcel(allExportRows, { upcoming: allExportGroups.upcoming ? upcomingInAll.length : null, past: allExportGroups.past ? pastInAll.length : null, cancelled: allExportGroups.cancelled ? cancelledList.length : null }); setAllExportOpen(false) }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-[11px] font-black uppercase hover:bg-emerald-100 transition-colors border border-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
+                        </button>
+                        <button
+                          disabled={allExportRows.length === 0}
+                          onClick={() => { exportAllPDF(allExportRows, { upcoming: allExportGroups.upcoming ? upcomingInAll.length : null, past: allExportGroups.past ? pastInAll.length : null, cancelled: allExportGroups.cancelled ? cancelledList.length : null }); setAllExportOpen(false) }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 text-[11px] font-black uppercase hover:bg-red-100 transition-colors border border-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
