@@ -1416,8 +1416,8 @@ export default function TimelinePage() {
         const b = weekBarTooltip.booking
         const isMe = b.user_id === user?.id
         const tStyle: Record<string, { bg: string; text: string; label: string }> = {
-          internal: { bg: '#dbeafe', text: '#1d4ed8', label: 'Internal' },
-          external: { bg: '#ffedd5', text: '#c2410c', label: 'External' },
+          internal: { bg: 'var(--ds-type-int-bg)', text: 'var(--ds-type-int-text)', label: 'Internal' },
+          external: { bg: 'var(--ds-type-ext-bg)', text: 'var(--ds-type-ext-text)', label: 'External' },
         }
         const ts = tStyle[b.type] ?? tStyle.internal
         const tx = Math.min(weekBarTooltip.x + 14, window.innerWidth - 240)

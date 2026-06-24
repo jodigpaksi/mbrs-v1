@@ -73,13 +73,13 @@ export default function UserHoverCard({ name, userId, user: propUser, children }
           top: py,
           zIndex: 9999,
           pointerEvents: 'none',
-          background: 'rgba(255,255,255,0.86)',
+          background: 'var(--ds-glass-bg)',
           backdropFilter: 'blur(48px) saturate(200%)',
           WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-          border: '1px solid rgba(255,255,255,0.95)',
+          border: '1px solid var(--ds-glass-border)',
           borderRadius: '1.25rem',
           width: CARD_W,
-          boxShadow: '0 12px 48px rgba(0,0,0,0.10), 0 4px 16px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,1)',
+          boxShadow: 'var(--ds-glass-shadow)',
           animation: 'user-hover-in 0.16s cubic-bezier(0.4,0,0.2,1) both',
           padding: '14px 16px',
         }}>
@@ -89,11 +89,11 @@ export default function UserHoverCard({ name, userId, user: propUser, children }
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: resolved ? 10 : 0 }}>
             <UserAvatar name={name} avatar={(propUser as User | undefined)?.avatar} size={38} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 900, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: 13, fontWeight: 900, color: 'var(--ds-text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {name}
               </p>
               {dept && (
-                <p style={{ fontSize: 9, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: 2 }}>
+                <p style={{ fontSize: 9, fontWeight: 800, color: 'var(--ds-text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: 2 }}>
                   {dept}
                 </p>
               )}
@@ -102,27 +102,27 @@ export default function UserHoverCard({ name, userId, user: propUser, children }
 
           {/* Details */}
           {resolved && (
-            <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ borderTop: '1px solid var(--ds-border-sub)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
               {(resolved as DirUser).email && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>mail</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 12, color: 'var(--ds-text-3)', flexShrink: 0 }}>mail</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ds-text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {(resolved as DirUser).email}
                   </span>
                 </div>
               )}
               {(resolved as DirUser).ext && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>call</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: '#475569' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 12, color: 'var(--ds-text-3)', flexShrink: 0 }}>call</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ds-text-2)' }}>
                     ext. {(resolved as DirUser).ext}
                   </span>
                 </div>
               )}
               {(propUser as User | undefined)?.role && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>badge</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'capitalize' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 12, color: 'var(--ds-text-3)', flexShrink: 0 }}>badge</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--ds-text-2)', textTransform: 'capitalize' }}>
                     {(propUser as User).role}
                   </span>
                 </div>

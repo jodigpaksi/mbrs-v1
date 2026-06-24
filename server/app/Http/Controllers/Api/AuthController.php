@@ -96,4 +96,11 @@ class AuthController extends Controller
         $user->update(['avatar' => Storage::url($path)]);
         return response()->json($user);
     }
+
+    public function removeAvatar(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $user->update(['avatar' => null]);
+        return response()->json(array_merge($user->fresh()->toArray(), ['avatar' => null]));
+    }
 }

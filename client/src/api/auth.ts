@@ -38,3 +38,8 @@ export async function updateAvatar(file: File) {
   })
   return res.data
 }
+
+export async function removeAvatar() {
+  const res = await api.delete('/me/avatar')
+  return res.data
+}

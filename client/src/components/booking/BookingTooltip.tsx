@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Booking } from '../../types/index'
-import { deptColors } from '../../data/mockData'
 import { getDirectory } from '../../api/users'
 import UserAvatar from '../ui/UserAvatar'
 
@@ -42,11 +41,10 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
     }
   }
 
-  // After popup renders, measure and flip/clamp if needed
   useEffect(() => {
     if (!forAnchorRect || !forPopupRef.current) return
     const popup = forPopupRef.current.getBoundingClientRect()
-    const POPUP_W = 224 // w-56
+    const POPUP_W = 224
     const GAP = 6
     let x = forAnchorRect.left
     let y = forAnchorRect.bottom + GAP
@@ -84,9 +82,9 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
   if (!booking) return null
 
   const dept = booking.user?.department_name || (typeof booking.user?.department === 'string' ? booking.user.department : '') || ''
-  const colors = deptColors[dept] || deptColors['GAA']
   const isMe = booking.user_id === currentUserId
   const isTentative = booking.status === 'tentative'
+  const isConf = booking.status === 'confirmed'
 
   function formatTime(iso: string) {
     return parseLocal(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -138,12 +136,12 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
       style={{
         left: adjustedPos.x,
         top: adjustedPos.y,
-        background: 'rgba(255,255,255,0.82)',
+        background: 'var(--ds-glass-bg)',
         backdropFilter: 'blur(48px) saturate(200%)',
         WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-        border: '1px solid rgba(255,255,255,0.95)',
+        border: '1px solid var(--ds-glass-border)',
         borderRadius: '1.75rem',
-        boxShadow: '0 12px 48px rgba(0,0,0,0.10), 0 4px 16px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,1)',
+        boxShadow: 'var(--ds-glass-shadow)',
         opacity: visible ? 1 : 0,
         visibility: visible ? 'visible' : 'hidden',
         transform: visible ? 'translateY(0) scale(1)' : 'translateY(8px) scale(0.97)',
@@ -159,20 +157,22 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
             </span>
           )}
           {booking.series_id && (
-            <span className="flex items-center gap-1 bg-blue-100 text-blue-700 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide">
+            <span className="flex items-center gap-1 bg-blue-500/15 text-blue-700 dark:text-blue-400 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide">
               <span className="material-symbols-outlined" style={{ fontSize: 11 }}>link</span>Series
             </span>
           )}
           {booking.room?.requires_contact && (
-            <span className="flex items-center gap-1 bg-amber-50 text-amber-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide">
+            <span className="flex items-center gap-1 bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide">
               <span className="material-symbols-outlined" style={{ fontSize: 11 }}>star</span>Special
             </span>
           )}
           <span
             className="text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide ml-auto"
             style={isTentative
-              ? { backgroundColor: '#e4e6ea', backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.03) 3px,rgba(0,0,0,0.03) 6px)', color: '#4b5563' }
-              : { background: colors.bg, color: colors.text }}
+              ? { background: 'var(--ds-bg-surface-2)', backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 6px)', color: 'var(--ds-text-2)' }
+              : isConf
+                ? { background: 'rgba(173,238,43,0.15)', color: '#4d7c00' }
+                : { background: 'var(--ds-bg-surface-2)', color: 'var(--ds-text-2)' }}
           >
             {isTentative ? 'Tentative' : booking.status === 'confirmed' ? 'Confirmed' : booking.status}
           </span>
@@ -180,34 +180,35 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
 
         {/* Title & desc */}
         <div className="space-y-1.5">
-          <p className="text-[15px] font-black text-slate-900 leading-tight">{booking.title}</p>
+          <p className="text-[15px] font-black leading-tight" style={{ color: 'var(--ds-text-1)' }}>{booking.title}</p>
           {booking.description && (
-            <p className="text-[12px] text-slate-500 font-medium leading-relaxed">{booking.description}</p>
+            <p className="text-[12px] font-medium leading-relaxed" style={{ color: 'var(--ds-text-2)' }}>{booking.description}</p>
           )}
           <span
             className="inline-block text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide mt-0.5"
             style={booking.type === 'external'
-              ? { backgroundColor: '#ffedd5', color: '#c2410c' }
-              : { backgroundColor: '#dbeafe', color: '#1d4ed8' }}
+              ? { backgroundColor: 'var(--ds-type-ext-bg)', color: 'var(--ds-type-ext-text)' }
+              : { backgroundColor: 'var(--ds-type-int-bg)', color: 'var(--ds-type-int-text)' }}
           >
             {booking.type === 'external' ? 'External' : 'Internal'}
           </span>
         </div>
 
         {/* Time */}
-        <div className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center gap-3">
-          <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 16 }}>schedule</span>
+        <div className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background: 'var(--ds-bg-surface-2)' }}>
+          <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>schedule</span>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-black tabular-nums text-slate-900">
+            <p className="text-[13px] font-black tabular-nums" style={{ color: 'var(--ds-text-1)' }}>
               {formatTime(booking.start_at)} &ndash; {formatTime(booking.end_at)}
-              <span className="text-slate-400 font-bold ml-1.5">&middot; {getDuration()}</span>
+              <span className="font-bold ml-1.5" style={{ color: 'var(--ds-text-3)' }}>&middot; {getDuration()}</span>
             </p>
-            <p className="text-[11px] font-bold text-slate-500 mt-0.5">{booking.room?.name}</p>
+            <p className="text-[11px] font-bold mt-0.5" style={{ color: 'var(--ds-text-2)' }}>{booking.room?.name}</p>
           </div>
           <button
             id="tt-copy-booking"
             onClick={copyBookingInfo}
-            className="shrink-0 flex items-center gap-1 bg-white border border-slate-200 hover:bg-[#adee2b] hover:border-[#adee2b] hover:text-black text-slate-400 px-2.5 py-1.5 rounded-xl transition-all text-[9px] font-black uppercase"
+            className="shrink-0 flex items-center gap-1 hover:bg-[#adee2b] hover:text-black px-2.5 py-1.5 rounded-xl transition-all text-[9px] font-black uppercase"
+            style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-3)' }}
             title="Copy booking info"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>content_copy</span>
@@ -216,17 +217,18 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
         </div>
 
         {/* User */}
-        <div className="border-t border-slate-200/70 pt-4 space-y-3">
+        <div className="pt-4 space-y-3" style={{ borderTop: '1px solid var(--ds-border-sub)' }}>
           <div className="flex items-center gap-3.5">
             <UserAvatar name={booking.user?.name ?? '?'} avatar={booking.user?.avatar} size={48}
-              style={{ borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)' }} />
+              style={{ borderRadius: 12, border: '1px solid var(--ds-border-sub)' }} />
             <div>
-              <p className="text-base font-black text-slate-900 leading-tight">{booking.user?.name}</p>
-              <p className="text-[11px] font-bold uppercase mt-0.5 text-slate-500">{dept}</p>
+              <p className="text-base font-black leading-tight" style={{ color: 'var(--ds-text-1)' }}>{booking.user?.name}</p>
+              <p className="text-[11px] font-bold uppercase mt-0.5" style={{ color: 'var(--ds-text-3)' }}>{dept}</p>
               {booking.booked_for && (
                 <button
                   onClick={openForInfo}
-                  className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-500 transition-colors mt-1"
+                  className="flex items-center gap-1 text-[10px] font-bold transition-colors mt-1"
+                  style={{ color: 'var(--ds-text-3)' }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>person_pin</span>
                   Booking for <span style={{ color: '#72ddf7' }}>{booking.booked_for}</span>
@@ -240,27 +242,29 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
           <div className="space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 15 }}>phone_in_talk</span>
-                <span className="text-[11px] font-bold text-slate-500">Ext</span>
-                <span className="text-[11px] font-black text-slate-800">{booking.user?.ext}</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 15, color: 'var(--ds-text-3)' }}>phone_in_talk</span>
+                <span className="text-[11px] font-bold" style={{ color: 'var(--ds-text-3)' }}>Ext</span>
+                <span className="text-[11px] font-black" style={{ color: 'var(--ds-text-1)' }}>{booking.user?.ext}</span>
               </div>
               <button
                 id="tt-copy-ext"
                 onClick={() => copyToClip(booking.user?.ext || '', 'tt-copy-ext')}
-                className="shrink-0 flex items-center gap-1 bg-slate-100 hover:bg-[#adee2b] hover:text-black text-slate-500 px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
+                className="shrink-0 flex items-center gap-1 hover:bg-[#adee2b] hover:text-black px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
+                style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
               </button>
             </div>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 15 }}>mail</span>
-                <span className="text-[11px] font-black text-slate-800 truncate">{booking.user?.email}</span>
+                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15, color: 'var(--ds-text-3)' }}>mail</span>
+                <span className="text-[11px] font-black truncate" style={{ color: 'var(--ds-text-1)' }}>{booking.user?.email}</span>
               </div>
               <button
                 id="tt-copy-email"
                 onClick={() => copyToClip(booking.user?.email || '', 'tt-copy-email')}
-                className="shrink-0 flex items-center gap-1 bg-slate-100 hover:bg-[#adee2b] hover:text-black text-slate-500 px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
+                className="shrink-0 flex items-center gap-1 hover:bg-[#adee2b] hover:text-black px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
+                style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
               </button>
@@ -282,7 +286,8 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
                   </button>
                   <button
                     onClick={() => onEdit?.(booking)}
-                    className="flex-1 bg-black text-[#adee2b] text-[9px] font-black uppercase rounded-xl py-2.5 hover:bg-slate-800 transition-colors flex items-center justify-center gap-1"
+                    className="flex-1 text-[#adee2b] text-[9px] font-black uppercase rounded-xl py-2.5 transition-colors flex items-center justify-center gap-1"
+                    style={{ background: 'var(--ds-text-1)' }}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 11 }}>link</span>
                     Edit series
@@ -291,13 +296,14 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
                 <div className="flex gap-2">
                   <button
                     onClick={() => onCancel?.(booking)}
-                    className="flex-1 bg-slate-100 text-slate-600 text-[9px] font-black uppercase rounded-xl py-2 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    className="flex-1 text-[9px] font-black uppercase rounded-xl py-2 hover:bg-red-500/15 hover:text-red-500 transition-colors"
+                    style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' }}
                   >
                     Cancel this
                   </button>
                   <button
                     onClick={() => onCancelSeries?.(booking)}
-                    className="flex-1 bg-red-50 text-red-500 text-[9px] font-black uppercase rounded-xl py-2 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-1"
+                    className="flex-1 bg-red-500/10 text-red-500 dark:text-red-400 text-[9px] font-black uppercase rounded-xl py-2 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-1"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 11 }}>link</span>
                     Cancel series
@@ -314,7 +320,8 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
                 </button>
                 <button
                   onClick={() => onCancel?.(booking)}
-                  className="flex-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase rounded-xl py-2.5 hover:bg-red-50 hover:text-red-500 transition-colors"
+                  className="flex-1 text-[10px] font-black uppercase rounded-xl py-2.5 hover:bg-red-500/15 hover:text-red-500 transition-colors"
+                  style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' }}
                 >
                   Cancel
                 </button>
@@ -325,70 +332,68 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
       </div>
     </div>
 
-    {/* Booking-for dark glass mini popup */}
+    {/* Booking-for glass mini popup */}
     {forAnchorRect && forComputedPos && (
-      <>
-        <div
-          ref={forPopupRef}
-          onMouseLeave={(e) => {
-            if (ref.current?.contains(e.relatedTarget as Node)) return
-            onMouseLeave()
-          }}
-          className="fixed z-[1001] w-56 rounded-2xl overflow-hidden"
-          style={{
-            left: forComputedPos.x,
-            top: forComputedPos.y,
-            background: 'rgba(255,255,255,0.55)',
-            backdropFilter: 'blur(28px)',
-            WebkitBackdropFilter: 'blur(28px)',
-            border: '1px solid rgba(255,255,255,0.75)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 1.5px 6px rgba(0,0,0,0.06)',
-          }}
-        >
-          <div className="px-4 pt-4 pb-3">
-            {/* Avatar + name */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className="size-10 rounded-xl bg-slate-200/60 flex items-center justify-center text-base font-black text-slate-600 shrink-0">
-                {(forUser?.name ?? booking.booked_for ?? '?').charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[13px] font-black leading-tight truncate" style={{ color: '#72ddf7' }}>
-                  {forUser?.name ?? booking.booked_for}
-                </p>
-                {forUser?.department && (
-                  <p className="text-[9px] font-black uppercase tracking-wider mt-0.5 text-slate-400">
-                    {forUser.department}
-                  </p>
-                )}
-              </div>
+      <div
+        ref={forPopupRef}
+        onMouseLeave={(e) => {
+          if (ref.current?.contains(e.relatedTarget as Node)) return
+          onMouseLeave()
+        }}
+        className="fixed z-[1001] w-56 rounded-2xl overflow-hidden"
+        style={{
+          left: forComputedPos.x,
+          top: forComputedPos.y,
+          background: 'var(--ds-glass-bg)',
+          backdropFilter: 'blur(32px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+          border: '1px solid var(--ds-glass-border)',
+          boxShadow: 'var(--ds-glass-shadow)',
+        }}
+      >
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="size-10 rounded-xl flex items-center justify-center text-base font-black shrink-0"
+              style={{ background: 'var(--ds-bg-surface-2)', color: 'var(--ds-text-2)' }}>
+              {(forUser?.name ?? booking.booked_for ?? '?').charAt(0).toUpperCase()}
             </div>
-
-            {forUser ? (
-              <div className="space-y-2 border-t border-slate-200/60 pt-3">
-                {forUser.ext && (
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>phone_in_talk</span>
-                    <span className="text-[11px] font-bold text-slate-400">Ext</span>
-                    <span className="text-[11px] font-black text-slate-700">{forUser.ext}</span>
-                  </div>
-                )}
-                {forUser.email && (
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>mail</span>
-                    <span className="text-[10px] font-bold text-slate-600 truncate flex-1">{forUser.email}</span>
-                    <button onClick={() => navigator.clipboard.writeText(forUser!.email)}
-                      className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors">
-                      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-[10px] italic text-slate-400">No account info available</p>
-            )}
+            <div className="min-w-0">
+              <p className="text-[13px] font-black leading-tight truncate" style={{ color: '#72ddf7' }}>
+                {forUser?.name ?? booking.booked_for}
+              </p>
+              {forUser?.department && (
+                <p className="text-[9px] font-black uppercase tracking-wider mt-0.5" style={{ color: 'var(--ds-text-3)' }}>
+                  {forUser.department}
+                </p>
+              )}
+            </div>
           </div>
+
+          {forUser ? (
+            <div className="space-y-2 pt-3" style={{ borderTop: '1px solid var(--ds-border-sub)' }}>
+              {forUser.ext && (
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13, color: 'var(--ds-text-3)' }}>phone_in_talk</span>
+                  <span className="text-[11px] font-bold" style={{ color: 'var(--ds-text-3)' }}>Ext</span>
+                  <span className="text-[11px] font-black" style={{ color: 'var(--ds-text-1)' }}>{forUser.ext}</span>
+                </div>
+              )}
+              {forUser.email && (
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13, color: 'var(--ds-text-3)' }}>mail</span>
+                  <span className="text-[10px] font-bold truncate flex-1" style={{ color: 'var(--ds-text-2)' }}>{forUser.email}</span>
+                  <button onClick={() => navigator.clipboard.writeText(forUser!.email)}
+                    className="shrink-0 transition-colors" style={{ color: 'var(--ds-text-3)' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-[10px] italic" style={{ color: 'var(--ds-text-3)' }}>No account info available</p>
+          )}
         </div>
-      </>
+      </div>
     )}
     </>
   )
