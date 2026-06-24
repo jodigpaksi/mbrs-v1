@@ -62,9 +62,9 @@ type AllSortKey = 'start_at' | 'title' | 'room' | 'status' | 'type'
 type AllSortDir = 'asc' | 'desc'
 
 const TAB_META: Record<Tab, { color: string; indicatorColor: string }> = {
-  today:     { color: 'text-black',        indicatorColor: '#000' },
-  upcoming:  { color: 'text-black',        indicatorColor: '#000' },
-  all:       { color: 'text-black',        indicatorColor: '#000' },
+  today:     { color: 'text-[var(--ds-text-1)]', indicatorColor: 'var(--ds-text-1)' },
+  upcoming:  { color: 'text-[var(--ds-text-1)]', indicatorColor: 'var(--ds-text-1)' },
+  all:       { color: 'text-[var(--ds-text-1)]', indicatorColor: 'var(--ds-text-1)' },
   past:      { color: 'text-slate-500',    indicatorColor: '#64748b' },
   cancelled: { color: 'text-red-500',      indicatorColor: '#ef4444' },
   tentative: { color: 'text-amber-500',    indicatorColor: '#f59e0b' },
@@ -106,7 +106,7 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
   const canEdit = !isPast && !isCancelled
   const tStyle = typeStyle[b.type] || typeStyle.internal
 
-  const cardBg = isCancelled ? 'bg-red-50 border border-red-100'
+  const cardBg = isCancelled ? 'bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40'
     : isConf ? 'bg-[#adee2b]' : ''
   const titleClr = isPastTab ? 'text-slate-500' : isCancelled ? 'text-red-700' : isTentative ? 'text-slate-600' : isConf ? 'text-black' : 'text-slate-700'
   const loc  = isPastTab ? 'text-slate-400' : isCancelled ? 'text-red-400' : isTentative ? 'text-slate-400' : isConf ? 'text-black/50' : 'text-slate-400'
@@ -125,7 +125,7 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
   const baseCardStyle = isTentative
     ? { backgroundColor: TENTATIVE_HATCH_BG, backgroundImage: TENTATIVE_HATCH_IMG, border: '1px solid #dde0e4' }
     : (!isCancelled && !isConf)
-      ? { background: isPastTab ? '#f8f9fb' : 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }
+      ? { background: isPastTab ? 'var(--ds-bg-surface-2)' : 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }
       : {}
 
   return (
@@ -196,7 +196,7 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
           </span>
           <button onClick={e => { e.stopPropagation(); onCancel(b) }} disabled={isPending}
             className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all disabled:opacity-40
-              ${isConf ? 'bg-black/10 text-black/50 hover:bg-black hover:text-[#adee2b]' : 'bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500'}`}>
+              ${isConf ? 'bg-black/10 text-black/50 hover:bg-black hover:text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500'}`}>
             Cancel
           </button>
         </div>
@@ -216,7 +216,7 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
   const canEdit = !isPast && !isCancelled
   const tStyle = typeStyle[b.type] || typeStyle.internal
 
-  const rowBg = isCancelled ? 'bg-red-50 border-red-100'
+  const rowBg = isCancelled ? 'bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900/40'
     : isConf ? 'bg-[#adee2b] border-transparent' : ''
   const dot     = isPastTab ? 'bg-slate-300' : isCancelled ? 'bg-red-400' : isTentative ? 'bg-slate-400' : isConf ? 'bg-black' : 'bg-slate-400'
   const titleClr = isPastTab ? 'text-slate-500' : isCancelled ? 'text-red-700' : isTentative ? 'text-slate-600' : isConf ? 'text-black' : 'text-slate-700'
@@ -281,7 +281,7 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
       {canEdit ? (
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           <button onClick={() => { if (isTentative && onTentativeAction) onTentativeAction(b); else onEdit(b) }}
-            className={`size-7 flex items-center justify-center rounded-lg transition-all ${isConf ? 'bg-black/10 text-black/60 hover:bg-black hover:text-[#adee2b]' : 'bg-slate-100 text-slate-400 hover:bg-black hover:text-[#adee2b]'}`}>
+            className={`size-7 flex items-center justify-center rounded-lg transition-all ${isConf ? 'bg-black/10 text-black/60 hover:bg-black hover:text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-black hover:text-[#adee2b]'}`}>
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{isTentative ? 'tune' : 'edit'}</span>
           </button>
           <button onClick={() => onCancel(b)}
@@ -332,26 +332,26 @@ function SeriesGroupRow({
   return (
     <tbody>
       <tr
-        className={`border-b border-slate-100 transition-colors hover:bg-blue-50/40 cursor-pointer ${allCancelled ? 'opacity-40' : ''}`}
+        className={`border-b border-[var(--ds-border-sub)] transition-colors hover:bg-[var(--ds-bg-raised)] cursor-pointer ${allCancelled ? 'opacity-40' : ''}`}
         onClick={() => setOpen(o => !o)}
       >
         <td className="px-3 py-3.5">
           <span
-            className="material-symbols-outlined text-slate-400 transition-transform duration-200"
+            className="material-symbols-outlined text-[var(--ds-text-3)] transition-transform duration-200"
             style={{ fontSize: 16, display: 'block', transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}
           >chevron_right</span>
         </td>
         <td className="px-3 py-3.5">
           <div>
-            <p className="text-xs font-black text-slate-800">{first.room?.name ?? '—'}</p>
+            <p className="text-xs font-black text-[var(--ds-text-1)]">{first.room?.name ?? '—'}</p>
             {first.room?.building && (
-              <p className="text-[9px] font-bold text-slate-400 mt-0.5">{first.room.building.code || first.room.building.name}</p>
+              <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5">{first.room.building.code || first.room.building.name}</p>
             )}
           </div>
         </td>
-        <td className="px-3 py-3.5 text-xs font-black text-slate-700">{first.title}</td>
+        <td className="px-3 py-3.5 text-xs font-black text-[var(--ds-text-1)]">{first.title}</td>
         <td className="px-3 py-3.5">
-          <p className="text-xs font-bold text-slate-600 whitespace-nowrap">{dateRange}</p>
+          <p className="text-xs font-bold text-[var(--ds-text-2)] whitespace-nowrap">{dateRange}</p>
         </td>
         <td className="px-3 py-3.5">
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-[9px] font-black uppercase whitespace-nowrap">
@@ -371,7 +371,7 @@ function SeriesGroupRow({
             <button
               onClick={() => onEdit(first)}
               title="Edit series"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[9px] font-black uppercase hover:bg-black hover:text-[#adee2b] transition-all"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[9px] font-black uppercase hover:bg-black hover:text-[#adee2b] transition-all"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 12 }}>edit</span>
               Series
@@ -393,7 +393,7 @@ function SeriesGroupRow({
         const isConf = b.status === 'confirmed'
         const isCancelled = b.status === 'cancelled'
         return (
-          <tr key={b.id} className={`border-b border-slate-50 bg-blue-50/20 ${isPast || isCancelled ? 'opacity-50' : ''}`}>
+          <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] bg-[var(--ds-bg-surface-2)]/30 ${isPast || isCancelled ? 'opacity-50' : ''}`}>
             <td className="pl-8 pr-3 py-2.5">
               <div className="w-3 h-px bg-slate-200 ml-1" />
             </td>
@@ -1178,7 +1178,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Divider */}
-          <div className="mx-5 mb-3 w-px h-4 bg-slate-200 self-end" />
+          <div className="mx-5 mb-3 w-px h-4 bg-[var(--ds-border)] self-end" />
 
           {/* Secondary tabs */}
           <div className="flex items-end gap-5">
@@ -1189,15 +1189,15 @@ export default function SchedulePage() {
                 <button key={key} ref={el => { tabRefs.current[PRIMARY_TABS.length + i] = el }}
                   onClick={() => setActiveTab(key)}
                   className={`relative group/stab flex items-center gap-2 pb-3 text-[12px] font-black uppercase tracking-wide transition-colors duration-200
-                    ${activeTab === key ? m.color : 'text-slate-300 hover:text-slate-400'}`}>
+                    ${activeTab === key ? m.color : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   {tabLabels[key]}
                   {tabCounts[key] > 0 && (
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded-full transition-colors
                       ${activeTab === key
-                        ? key === 'cancelled' ? 'bg-red-100 text-red-500'
-                          : key === 'tentative' ? 'bg-amber-100 text-amber-600'
-                          : 'bg-slate-200 text-slate-500'
-                        : 'bg-slate-100 text-slate-300'}`}>
+                        ? key === 'cancelled' ? 'bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400'
+                          : key === 'tentative' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400'
+                          : 'bg-[var(--ds-bg-surface-2)] dark:ring-1 dark:ring-white/10 text-[var(--ds-text-2)]'
+                        : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)]'}`}>
                       {tabCounts[key]}
                     </span>
                   )}
@@ -1220,24 +1220,24 @@ export default function SchedulePage() {
                 setOverviewOpen(o => !o)
               }}
               title="Overview stats"
-              className={`size-8 flex items-center justify-center rounded-lg transition-all ${overviewOpen ? 'bg-black text-[#adee2b] shadow' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}
+              className={`size-8 flex items-center justify-center rounded-lg transition-all ${overviewOpen ? 'bg-black text-[#adee2b] shadow' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 17 }}>bar_chart</span>
             </button>
 
             {/* View toggle */}
-            <div className={`flex gap-0.5 bg-slate-100 rounded-xl p-1 ${(activeTab === 'all' || activeTab === 'series' || activeTab === 'hcal' || activeTab === 'special') ? 'opacity-35' : ''}`}>
+            <div className={`flex gap-0.5 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 ${(activeTab === 'all' || activeTab === 'series' || activeTab === 'hcal' || activeTab === 'special') ? 'opacity-35' : ''}`}>
               <button
                 onClick={() => { if (activeTab !== 'all' && activeTab !== 'series' && activeTab !== 'hcal' && activeTab !== 'special' && viewMode !== 'card') { setViewMode('card'); setViewAnimKey(k => k + 1) } }}
                 title="Card view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:ring-1 dark:ring-white/[0.09]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>grid_view</span>
               </button>
               <button
                 onClick={() => { if (activeTab !== 'all' && activeTab !== 'series' && activeTab !== 'hcal' && activeTab !== 'special' && viewMode !== 'list') { setViewMode('list'); setViewAnimKey(k => k + 1) } }}
                 title="List view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:ring-1 dark:ring-white/[0.09]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>view_list</span>
               </button>
@@ -1263,21 +1263,21 @@ export default function SchedulePage() {
                   <div key={card.label} style={{
                     width: 190,
                     borderRadius: 18, padding: '14px 16px',
-                    background: 'rgba(255,255,255,0.92)',
+                    background: 'var(--ds-glass-bg)',
                     backdropFilter: 'blur(24px) saturate(180%)',
                     WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-                    border: '1px solid rgba(255,255,255,0.95)',
-                    boxShadow: '0 12px 32px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,1)',
+                    border: '1px solid var(--ds-glass-border)',
+                    boxShadow: 'var(--ds-glass-shadow)',
                     animation: `overview-card-in 0.3s cubic-bezier(0.34,1.04,0.64,1) ${idx * 50}ms both`,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <div style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${card.clr}1a` }}>
                         <span className="material-symbols-outlined" style={{ fontSize: 16, color: card.clr }}>{card.icon}</span>
                       </div>
-                      <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#94a3b8' }}>{card.label}</p>
+                      <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ds-text-3)' }}>{card.label}</p>
                     </div>
-                    <p style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: '#0f172a' }}>{card.value}</p>
-                    <p style={{ fontSize: 9, fontWeight: 700, marginTop: 5, color: '#94a3b8' }}>{card.sub}</p>
+                    <p style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: 'var(--ds-text-1)' }}>{card.value}</p>
+                    <p style={{ fontSize: 9, fontWeight: 700, marginTop: 5, color: 'var(--ds-text-3)' }}>{card.sub}</p>
                   </div>
                 ))}
               </div>
@@ -1296,7 +1296,7 @@ export default function SchedulePage() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Main content */}
-        <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50" style={{ scrollbarWidth: 'thin' }}>
+        <div className="flex-1 overflow-y-auto px-8 py-6 bg-[var(--ds-bg-base)]" style={{ scrollbarWidth: 'thin' }}>
           {(isLoading || loadingAll) ? (
             <div className="flex items-center justify-center h-full">
               <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>
@@ -1330,7 +1330,7 @@ export default function SchedulePage() {
                         key={bld.id}
                         onClick={() => setBuildingFilter(isActive ? null : bld.id)}
                         className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-[10px] font-black uppercase transition-all
-                          ${isActive ? 'bg-black text-[#adee2b]' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                          ${isActive ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] dark:border dark:border-white/10 text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]'}`}
                       >
                         {bld.code || bld.name}{(bld.locationName || bld.address) ? ` - ${bld.locationName || bld.address}` : ''}
                         <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none

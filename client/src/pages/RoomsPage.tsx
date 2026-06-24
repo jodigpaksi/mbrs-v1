@@ -268,7 +268,7 @@ export default function RoomsPage() {
             <span className="shrink-0 px-4 py-2.5 rounded-full bg-white/10 text-white/50 text-[11px] font-black border border-white/15">Unavailable</span>
           ) : (
             <button onClick={e => { e.stopPropagation(); handleBook(room) }}
-              className="shrink-0 flex items-center gap-1 pl-3 pr-4 py-2.5 rounded-full bg-[#adee2b] text-black text-[11px] font-black hover:bg-[var(--ds-bg-surface)] transition-all">
+              className="shrink-0 flex items-center gap-1 pl-3 pr-4 py-2.5 rounded-full bg-[#adee2b] text-black text-[11px] font-black hover:opacity-90 transition-all">
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>Book
             </button>
           )}
@@ -297,7 +297,7 @@ export default function RoomsPage() {
           </div>
         </td>
         <td className="px-5 py-3.5">
-          <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-lg text-[9px] font-black uppercase">{room.floor}</span>
+          <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] dark:bg-white/[0.06] dark:ring-1 dark:ring-white/[0.07] text-[var(--ds-text-2)] rounded-lg text-[9px] font-black uppercase">{room.floor}</span>
         </td>
         <td className="px-5 py-3.5">
           <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{room.capacity} pax</span>
@@ -321,7 +321,7 @@ export default function RoomsPage() {
           <div className="flex items-center gap-2 justify-end">
             {isPrivileged && (
               <button onClick={e => toggleMaintenance(room, e)} disabled={togglingRoomId === room.id}
-                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${isMaintenance ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-orange-100 hover:text-orange-700'}`}>
+                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${isMaintenance ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60' : 'bg-[var(--ds-bg-surface-2)] dark:ring-1 dark:ring-white/10 text-[var(--ds-text-3)] dark:text-[var(--ds-text-2)] hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-300'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>
               </button>
             )}
@@ -341,11 +341,11 @@ export default function RoomsPage() {
   return (
     <div className="relative flex flex-col flex-1 overflow-hidden"
       style={{
-        backgroundColor: '#f4f5f2',
+        backgroundColor: 'var(--ds-bg-base)',
         backgroundImage: 'radial-gradient(circle at 12% -5%, rgba(173,238,43,0.10), transparent 38%), radial-gradient(circle at 92% 108%, rgba(99,102,241,0.07), transparent 42%)',
       }}>
       {/* Film grain overlay — adds depth behind the glass UI */}
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.04] mix-blend-multiply"
+      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.04] mix-blend-multiply dark:mix-blend-screen dark:opacity-[0.02]"
         style={{ backgroundImage: GRAIN, backgroundSize: '180px 180px' }} />
       <div className="relative z-[1] flex flex-col flex-1 overflow-hidden">
 
@@ -356,7 +356,7 @@ export default function RoomsPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-[16px] font-black text-[var(--ds-text-1)] uppercase tracking-tight">Rooms</h1>
             {!isLoading && (
-              <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] rounded-lg text-[10px] font-black text-[var(--ds-text-3)] uppercase">
+              <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] dark:bg-white/[0.06] dark:ring-1 dark:ring-white/[0.07] rounded-lg text-[10px] font-black text-[var(--ds-text-3)] dark:text-[var(--ds-text-2)] uppercase">
                 {filtered.length} room{filtered.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -371,11 +371,11 @@ export default function RoomsPage() {
             {/* View toggle */}
             <div className="flex gap-0.5 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 shrink-0">
               <button onClick={() => setViewMode('card')} title="Card view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>grid_view</span>
               </button>
               <button onClick={() => setViewMode('list')} title="List view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>view_list</span>
               </button>
             </div>
@@ -387,12 +387,12 @@ export default function RoomsPage() {
           {/* Building pills */}
           <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
             <button onClick={() => selectBuilding(null)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${buildingFilter === null ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${buildingFilter === null ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
               All
             </button>
             {(buildings as Building[]).map(b => (
               <button key={b.id} onClick={() => selectBuilding(b.id)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all whitespace-nowrap ${buildingFilter === b.id ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all whitespace-nowrap ${buildingFilter === b.id ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 {b.code || b.name}{(b.location?.name || b.address) ? ` - ${b.location?.name || b.address}` : ''}
               </button>
             ))}
@@ -404,18 +404,18 @@ export default function RoomsPage() {
               <div className="w-px h-5 bg-[var(--ds-border)] shrink-0" />
               <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
                 <button onClick={() => { setFloorFilter(''); setStatusFilter('') }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${!floorFilter && !statusFilter ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${!floorFilter && !statusFilter ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   All
                 </button>
                 {floors.map(f => (
                   <button key={f} onClick={() => { setFloorFilter(floorFilter === f ? '' : f); setStatusFilter('') }}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${floorFilter === f ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${floorFilter === f ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                     {f}
                   </button>
                 ))}
                 <div className="w-px h-4 bg-[var(--ds-border)] mx-0.5" />
                 <button onClick={() => { setStatusFilter(statusFilter === 'maintenance' ? '' : 'maintenance'); setFloorFilter('') }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1 ${statusFilter === 'maintenance' ? 'bg-orange-100 text-orange-700 shadow' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1 ${statusFilter === 'maintenance' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 shadow' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>Maint.
                 </button>
               </div>
@@ -431,11 +431,11 @@ export default function RoomsPage() {
               </button>
             )}
             <button onClick={() => setQuickBig(v => !v)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickBig ? 'bg-[var(--ds-text-1)] border-[var(--ds-text-1)] text-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-border)] hover:text-[var(--ds-text-2)]'}`}>
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickBig ? 'bg-[var(--ds-text-1)] border-[var(--ds-text-1)] text-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] dark:border-white/20 text-[var(--ds-text-3)] dark:text-[var(--ds-text-2)] hover:border-[var(--ds-border)] hover:text-[var(--ds-text-2)]'}`}>
               <span className="material-symbols-outlined" style={{ fontSize: 13 }}>group</span>10+ seats
             </button>
             <button onClick={() => setQuickAvailable(v => !v)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickAvailable ? 'bg-[#adee2b] border-[#adee2b] text-black' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[#adee2b]/60 hover:text-[var(--ds-text-2)]'}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${quickAvailable ? 'bg-[#adee2b] border-[#adee2b] text-black' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] dark:border-white/20 text-[var(--ds-text-3)] dark:text-[var(--ds-text-2)] hover:border-[#adee2b]/60 hover:text-[var(--ds-text-2)]'}`}>
               <span className={`size-1.5 rounded-full shrink-0 ${quickAvailable ? 'bg-black' : 'bg-[#adee2b] animate-pulse'}`} />
               Available now
             </button>
@@ -450,8 +450,8 @@ export default function RoomsPage() {
           <div className="mb-5" style={{ animation: 'fadeSlideUp 300ms ease both' }}>
             <div className="rounded-2xl overflow-hidden" style={{
               background: 'rgba(10,15,40,0.84)',
-              backdropFilter: 'blur(28px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+              backdropFilter: 'blur(12px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(12px) saturate(160%)',
               border: '1px solid rgba(173,238,43,0.22)',
               boxShadow: '0 0 0 1px rgba(173,238,43,0.08), 0 8px 32px rgba(0,0,0,0.18)',
             }}>
