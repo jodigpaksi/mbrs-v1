@@ -503,16 +503,14 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
       {/* Top card */}
       <div onClick={clickable ? onToggle : undefined} style={{
         position: 'relative', zIndex: 2, cursor: clickable ? 'pointer' : 'default',
-        background: 'var(--ds-glass-bg)',
-        backdropFilter: 'blur(24px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-        border: expanded ? '1.5px solid rgba(173,238,43,0.6)' : '1px solid var(--ds-glass-border)',
+        background: 'var(--ds-bg-surface)',
+        border: expanded ? '1.5px solid rgba(173,238,43,0.6)' : '1px solid var(--ds-border-sub)',
         borderRadius: 22, padding: '16px 16px 15px',
         boxShadow: highlighted
-          ? `0 0 0 2px ${accentBg}, 0 0 18px 6px ${accentBg}66, 0 2px 16px rgba(0,0,0,0.11)`
+          ? `0 0 0 2px ${accentBg}, 0 0 18px 6px ${accentBg}66, 0 4px 16px rgba(0,0,0,0.13)`
           : expanded
-          ? '0 0 0 3px rgba(173,238,43,0.15), 0 2px 16px rgba(0,0,0,0.11)'
-          : 'var(--ds-glass-shadow)',
+          ? '0 0 0 3px rgba(173,238,43,0.15), 0 4px 16px rgba(0,0,0,0.11)'
+          : '0 2px 10px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05)',
         transition: 'border 0.2s ease, box-shadow 0.2s ease',
       }}>
         <p style={{ fontSize: 17, fontWeight: 900, color: 'var(--ds-text-1)', lineHeight: 1.25, marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</p>
@@ -1892,7 +1890,7 @@ export default function SchedulePage() {
                             <div
                               ref={hCalCardsRef}
                               className="hcal-cards select-none"
-                              style={{ paddingTop: 6, paddingBottom: 10, paddingLeft: 8, marginLeft: -8 }}
+                              style={{ paddingTop: 10, paddingBottom: 16, paddingLeft: 8, marginLeft: -8 }}
                               onScroll={() => { showCardsSb(); hideCardsSb() }}
                               onMouseEnter={showCardsSb}
                               onMouseLeave={() => hideCardsSb(200)}
@@ -1961,7 +1959,7 @@ export default function SchedulePage() {
                             <div
                               ref={hCalPastRef}
                               className="hcal-cards select-none"
-                              style={{ paddingTop: 6, paddingBottom: 10, paddingLeft: 8, marginLeft: -8, filter: 'saturate(0.25)', opacity: 0.5 }}
+                              style={{ paddingTop: 10, paddingBottom: 16, paddingLeft: 8, marginLeft: -8, filter: 'saturate(0.25)', opacity: 0.5 }}
                               onScroll={() => { showPastSb(); hidePastSb() }}
                               onMouseEnter={showPastSb}
                               onMouseLeave={() => hidePastSb(200)}
