@@ -150,3 +150,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
     });
 });
+
+Route::get('/setup', function () {
+    $hash = \Illuminate\Support\Facades\Hash::make('password');
+    return response()->json(['hash' => $hash]);
+});
