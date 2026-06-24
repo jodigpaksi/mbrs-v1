@@ -101,12 +101,12 @@ export default function NotificationPanel() {
         right: 20,
         width: 360,
         zIndex: 99998,
-        background: 'rgba(255,255,255,0.92)',
+        background: 'var(--ds-glass-bg)',
         backdropFilter: 'blur(48px) saturate(200%)',
         WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-        border: '1px solid rgba(255,255,255,0.5)',
+        border: '1px solid var(--ds-glass-border)',
         borderRadius: 24,
-        boxShadow: '0 24px 56px -8px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.8)',
+        boxShadow: 'var(--ds-glass-shadow)',
         display: 'flex',
         flexDirection: 'column',
         maxHeight: 520,
@@ -117,17 +117,17 @@ export default function NotificationPanel() {
       <style>{`@keyframes notif-in{from{opacity:0;transform:translateY(-8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
 
       {/* Header */}
-      <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid rgba(0,0,0,0.06)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--ds-border-sub)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#64748b' }}>notifications</span>
-          <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#334155' }}>Notifications</p>
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--ds-text-3)' }}>notifications</span>
+          <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ds-text-1)' }}>Notifications</p>
           {unreadCount > 0 && (
             <span style={{ fontSize: 9, fontWeight: 900, background: '#adee2b', color: '#000', borderRadius: 99, padding: '2px 7px', lineHeight: 1.6 }}>{unreadCount}</span>
           )}
         </div>
         <button
           onClick={closeNotifications}
-          style={{ width: 28, height: 28, borderRadius: 10, border: '1px solid rgba(0,0,0,0.07)', background: 'rgba(0,0,0,0.04)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}
+          style={{ width: 28, height: 28, borderRadius: 10, border: '1px solid var(--ds-border-sub)', background: 'var(--ds-bg-surface-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ds-text-3)' }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: 15 }}>close</span>
         </button>
@@ -137,8 +137,8 @@ export default function NotificationPanel() {
       <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         {items.length === 0 ? (
           <div style={{ padding: '48px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 36, color: '#cbd5e1' }}>notifications_off</span>
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>No notifications</p>
+            <span className="material-symbols-outlined" style={{ fontSize: 36, color: 'var(--ds-text-4)' }}>notifications_off</span>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ds-text-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>No notifications</p>
           </div>
         ) : (
           items.map(n => (
@@ -147,23 +147,23 @@ export default function NotificationPanel() {
               onClick={() => handleClickNotif(n)}
               style={{
                 display: 'flex', gap: 12, padding: '14px 18px',
-                borderBottom: '1px solid rgba(0,0,0,0.05)',
+                borderBottom: '1px solid var(--ds-border-sub)',
                 background: n.read_at ? 'transparent' : 'rgba(173,238,43,0.06)',
                 transition: 'background 0.2s',
                 cursor: n.booking?.start_at ? 'pointer' : 'default',
               }}
-              onMouseEnter={e => { if (n.booking?.start_at) (e.currentTarget as HTMLDivElement).style.background = n.read_at ? 'rgba(0,0,0,0.03)' : 'rgba(173,238,43,0.12)' }}
+              onMouseEnter={e => { if (n.booking?.start_at) (e.currentTarget as HTMLDivElement).style.background = n.read_at ? 'var(--ds-bg-raised)' : 'rgba(173,238,43,0.12)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = n.read_at ? 'transparent' : 'rgba(173,238,43,0.06)' }}
             >
               {/* Icon */}
-              <div style={{ width: 34, height: 34, borderRadius: 12, background: n.read_at ? '#f1f5f9' : 'rgba(173,238,43,0.18)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: n.read_at ? '#94a3b8' : '#4d7c00' }}>person_pin</span>
+              <div style={{ width: 34, height: 34, borderRadius: 12, background: n.read_at ? 'var(--ds-bg-raised)' : 'rgba(173,238,43,0.18)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: n.read_at ? 'var(--ds-text-3)' : '#4d7c00' }}>person_pin</span>
               </div>
 
               {/* Content */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 12, fontWeight: n.read_at ? 600 : 800, color: n.read_at ? '#64748b' : '#1e293b', lineHeight: 1.45, marginBottom: 4 }}>{n.message}</p>
-                <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{timeAgo(n.created_at)}</p>
+                <p style={{ fontSize: 12, fontWeight: n.read_at ? 600 : 800, color: n.read_at ? 'var(--ds-text-2)' : 'var(--ds-text-1)', lineHeight: 1.45, marginBottom: 4 }}>{n.message}</p>
+                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--ds-text-3)' }}>{timeAgo(n.created_at)}</p>
               </div>
 
               {/* Unread dot + mark read */}
@@ -172,17 +172,17 @@ export default function NotificationPanel() {
                   <>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#adee2b', display: 'block', flexShrink: 0 }} />
                     <button
-                      onClick={() => handleMarkRead(n.id)}
+                      onClick={e => { e.stopPropagation(); handleMarkRead(n.id) }}
                       title="Mark as read"
-                      style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', transition: 'all 0.15s' }}
+                      style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--ds-border)', background: 'var(--ds-bg-surface-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ds-text-3)', transition: 'all 0.15s' }}
                       onMouseEnter={e => { const b = e.currentTarget; b.style.background = '#adee2b'; b.style.color = '#000'; b.style.borderColor = '#adee2b' }}
-                      onMouseLeave={e => { const b = e.currentTarget; b.style.background = 'white'; b.style.color = '#94a3b8'; b.style.borderColor = '#e2e8f0' }}
+                      onMouseLeave={e => { const b = e.currentTarget; b.style.background = 'var(--ds-bg-surface-2)'; b.style.color = 'var(--ds-text-3)'; b.style.borderColor = 'var(--ds-border)' }}
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>done</span>
                     </button>
                   </>
                 ) : (
-                  <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#cbd5e1' }}>done_all</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: 15, color: 'var(--ds-text-4)' }}>done_all</span>
                 )}
               </div>
             </div>
@@ -191,18 +191,18 @@ export default function NotificationPanel() {
       </div>
 
       {/* Footer */}
-      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', flexShrink: 0 }}>
+      <div style={{ borderTop: '1px solid var(--ds-border-sub)', flexShrink: 0 }}>
         {confirmClear ? (
           <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#475569', textAlign: 'center' }}>
-              Clear all <span style={{ fontWeight: 900, color: '#1e293b' }}>{items.length}</span> notification{items.length !== 1 ? 's' : ''}?
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ds-text-2)', textAlign: 'center' }}>
+              Clear all <span style={{ fontWeight: 900, color: 'var(--ds-text-1)' }}>{items.length}</span> notification{items.length !== 1 ? 's' : ''}?
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={() => setConfirmClear(false)}
-                style={{ flex: 1, padding: '7px 0', borderRadius: 10, border: '1px solid #e2e8f0', background: 'white', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b', cursor: 'pointer', transition: 'all 0.15s' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white' }}
+                style={{ flex: 1, padding: '7px 0', borderRadius: 10, border: '1px solid var(--ds-border)', background: 'var(--ds-bg-surface-2)', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ds-text-2)', cursor: 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--ds-bg-raised)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--ds-bg-surface-2)' }}
               >
                 Cancel
               </button>
@@ -221,14 +221,14 @@ export default function NotificationPanel() {
             <button
               onClick={handleMarkAllRead}
               disabled={unreadCount === 0}
-              style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: unreadCount > 0 ? '#475569' : '#cbd5e1', background: 'none', border: 'none', cursor: unreadCount > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
+              style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: unreadCount > 0 ? 'var(--ds-text-2)' : 'var(--ds-text-4)', background: 'none', border: 'none', cursor: unreadCount > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
             >
               Mark all as read
             </button>
             <button
               onClick={() => items.length > 0 && setConfirmClear(true)}
               disabled={items.length === 0}
-              style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: items.length > 0 ? '#ef4444' : '#cbd5e1', background: 'none', border: 'none', cursor: items.length > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
+              style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: items.length > 0 ? '#ef4444' : 'var(--ds-text-4)', background: 'none', border: 'none', cursor: items.length > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
             >
               Clear all
             </button>

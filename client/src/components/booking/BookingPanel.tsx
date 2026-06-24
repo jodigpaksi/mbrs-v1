@@ -501,11 +501,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           opacity: miniEnabled ? 1 : 0,
           transform: miniEnabled ? 'translateX(0) scale(1)' : 'translateX(24px) scale(0.96)',
           pointerEvents: miniEnabled ? 'auto' : 'none',
-          background: 'rgba(255,255,255,0.98)',
-          backdropFilter: 'blur(24px)',
+          background: 'var(--ds-glass-bg)',
+          backdropFilter: 'blur(32px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(180%)',
           borderRadius: 24,
-          border: '1px solid rgba(226,232,240,0.9)',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid var(--ds-glass-border)',
+          boxShadow: 'var(--ds-glass-shadow)',
         }}
       >
         {/* Header */}
@@ -646,10 +647,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     <style>{`
                       .room-drop-list::-webkit-scrollbar { width: 8px; }
                       .room-drop-list::-webkit-scrollbar-track { background: transparent; margin: 4px 0; }
-                      .room-drop-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; border: 2px solid white; }
-                      .room-drop-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+                      .room-drop-list::-webkit-scrollbar-thumb { background: var(--ds-border); border-radius: 99px; border: 2px solid var(--ds-bg-surface); }
+                      .room-drop-list::-webkit-scrollbar-thumb:hover { background: var(--ds-text-4); }
                     `}</style>
-                    <div className="room-drop-list overflow-y-auto" style={{ maxHeight: 380, scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
+                    <div className="room-drop-list overflow-y-auto" style={{ maxHeight: 380, scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-border) transparent' }}>
                       {filteredRooms.map(r => {
                         const isMaint = r.status === 'maintenance'
                         return (
@@ -766,13 +767,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
             {/* Maintenance warning */}
             {roomIsMaintenance && (
-              <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isPrivileged ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
+              <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isPrivileged ? 'bg-orange-500/10 border-orange-500/25 dark:border-orange-500/20' : 'bg-red-500/10 border-red-500/25 dark:border-red-500/20'}`}>
                 <span className={`material-symbols-outlined shrink-0 mt-0.5 ${isPrivileged ? 'text-orange-500' : 'text-red-500'}`} style={{ fontSize: 18 }}>construction</span>
                 <div>
-                  <p className={`text-[11px] font-black uppercase tracking-wide ${isPrivileged ? 'text-orange-700' : 'text-red-700'}`}>
+                  <p className={`text-[11px] font-black uppercase tracking-wide ${isPrivileged ? 'text-orange-700 dark:text-orange-400' : 'text-red-700 dark:text-red-400'}`}>
                     Room Under Maintenance
                   </p>
-                  <p className={`text-[10px] font-medium mt-0.5 leading-relaxed ${isPrivileged ? 'text-orange-600' : 'text-red-500'}`}>
+                  <p className={`text-[10px] font-medium mt-0.5 leading-relaxed ${isPrivileged ? 'text-orange-600 dark:text-orange-300' : 'text-red-500 dark:text-red-400'}`}>
                     {isPrivileged
                       ? 'This room is under maintenance. As admin/receptionist you may still book.'
                       : 'This room is currently under maintenance and cannot be booked. Please contact Receptionist or GAA.'}
@@ -1137,7 +1138,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
                       {/* Repeat preview summary */}
                       {repeatDates.length > 0 && (
-                        <div className="bg-black/[0.04] rounded-2xl px-4 py-3 space-y-2">
+                        <div className="bg-[var(--ds-bg-surface-2)] rounded-2xl px-4 py-3 space-y-2">
                           <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>event_repeat</span>
                             <span className="text-[10px] font-black text-[var(--ds-text-2)]">{repeatSummary}</span>
@@ -1178,13 +1179,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             {repeat === 'none' && (
               <>
                 {isTimeValid() === false && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-200 bg-red-50">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-500/30 bg-red-500/10">
                     <div className="size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0">
                       <span className="material-symbols-outlined text-base">schedule</span>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-red-800">Invalid Time</p>
-                      <p className="text-[9px] text-red-600 mt-0.5">End time must be after start time.</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Invalid Time</p>
+                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">End time must be after start time.</p>
                     </div>
                   </div>
                 )}
@@ -1197,28 +1198,28 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   </div>
                 )}
                 {isTimeValid() === true && !availChecking && isAvailable() === true && (
-                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 ${(availResult?.other_viewers ?? 0) > 0 ? 'border-amber-300 bg-amber-50' : 'border-[#adee2b] bg-[#f7fee7]'}`}>
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 ${(availResult?.other_viewers ?? 0) > 0 ? 'border-amber-500/30 bg-amber-500/10' : 'border-[#adee2b]/50 bg-[#adee2b]/10'}`}>
                     <div className={`size-8 rounded-xl flex items-center justify-center shrink-0 ${(availResult?.other_viewers ?? 0) > 0 ? 'bg-amber-400 text-white' : 'bg-[#adee2b] text-black'}`}>
                       <span className="material-symbols-outlined text-base">{(availResult?.other_viewers ?? 0) > 0 ? 'group' : 'verified'}</span>
                     </div>
                     <div>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-800' : 'text-green-800'}`}>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-green-800 dark:text-[#adee2b]'}`}>
                         {(availResult?.other_viewers ?? 0) > 0 ? `${availResult!.other_viewers} other user${availResult!.other_viewers > 1 ? 's' : ''} viewing this slot` : 'Room Available'}
                       </p>
-                      <p className={`text-[9px] mt-0.5 ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                      <p className={`text-[9px] mt-0.5 ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-green-700 dark:text-[#adee2b]/70'}`}>
                         {(availResult?.other_viewers ?? 0) > 0 ? 'Submit quickly — someone else may book first.' : 'No conflicts for this slot.'}
                       </p>
                     </div>
                   </div>
                 )}
                 {isTimeValid() === true && !availChecking && isAvailable() === false && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-200 bg-red-50">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-500/30 bg-red-500/10">
                     <div className="size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0">
                       <span className="material-symbols-outlined text-base">block</span>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-red-800">Room Conflict</p>
-                      <p className="text-[9px] text-red-600 mt-0.5">Another booking exists at this time.</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Room Conflict</p>
+                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">Another booking exists at this time.</p>
                     </div>
                   </div>
                 )}

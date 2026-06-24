@@ -15,12 +15,6 @@ function fmtTime(s: string): string {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  confirmed: 'bg-[#adee2b] text-black',
-  tentative: 'bg-amber-100 text-amber-700',
-  cancelled: 'bg-red-100 text-red-500',
-}
-
 export default function TodayPanel() {
   const [open, setOpen] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -73,26 +67,30 @@ export default function TodayPanel() {
           ${open ? 'translate-x-0' : 'translate-x-full'}`}
         style={{
           width: 360,
-          background: 'rgba(255,255,255,0.96)',
+          background: 'var(--ds-glass-bg)',
           backdropFilter: 'blur(48px) saturate(200%)',
-          borderLeft: '1px solid rgba(0,0,0,0.08)',
-          boxShadow: '-20px 0 80px rgba(0,0,0,0.12)',
+          WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+          borderLeft: '1px solid var(--ds-border)',
+          boxShadow: '-20px 0 80px rgba(0,0,0,0.18)',
           visibility: visible ? 'visible' : 'hidden',
         }}
       >
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
+        <div className="px-6 pt-6 pb-4 shrink-0" style={{ borderBottom: '1px solid var(--ds-border-sub)' }}>
           <div className="flex items-center gap-3">
             <div className="size-9 rounded-xl bg-black flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-[#adee2b]" style={{ fontSize: 18 }}>calendar_today</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">My Schedule</p>
-              <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight truncate">{todayLabel}</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--ds-text-3)' }}>My Schedule</p>
+              <p className="text-[11px] font-black uppercase tracking-tight truncate" style={{ color: 'var(--ds-text-1)' }}>{todayLabel}</p>
             </div>
             <button onClick={() => setOpen(false)}
-              className="size-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors shrink-0">
-              <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 16 }}>close</span>
+              className="size-8 rounded-xl flex items-center justify-center transition-colors shrink-0"
+              style={{ background: 'var(--ds-bg-surface-2)', color: 'var(--ds-text-2)' }}
+              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'var(--ds-bg-raised)'}
+              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'var(--ds-bg-surface-2)'}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
             </button>
           </div>
         </div>
@@ -101,9 +99,9 @@ export default function TodayPanel() {
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3" style={{ scrollbarWidth: 'thin' }}>
           {todayList.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
-              <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 52 }}>event_available</span>
-              <p className="text-[12px] font-black text-slate-400 uppercase tracking-wide">No bookings today</p>
-              <p className="text-[11px] text-slate-400 font-medium">Your schedule is clear for today.</p>
+              <span className="material-symbols-outlined" style={{ fontSize: 52, color: 'var(--ds-text-4)' }}>event_available</span>
+              <p className="text-[12px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>No bookings today</p>
+              <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>Your schedule is clear for today.</p>
             </div>
           ) : (() => {
             const active = todayList.filter(b => parseLocal(b.end_at) > now)
@@ -112,18 +110,25 @@ export default function TodayPanel() {
             const renderCard = (b: Booking) => {
               const ongoing = parseLocal(b.start_at) <= now && parseLocal(b.end_at) > now
               const isPast  = parseLocal(b.end_at) <= now
+              const isCancelled = b.status === 'cancelled'
+              const isTentative = b.status === 'tentative'
+
+              const cardStyle = ongoing
+                ? { background: 'rgba(173,238,43,0.12)', border: '2px solid #adee2b' }
+                : isPast
+                  ? { background: 'var(--ds-bg-surface-2)', border: '1px solid var(--ds-border-sub)', opacity: 0.65 }
+                  : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }
+
+              const statusBadgeClass = isCancelled
+                ? 'bg-red-500/15 text-red-500 dark:text-red-400'
+                : isTentative
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  : 'bg-[#adee2b] text-black'
+
               return (
-                <div key={b.id}
-                  className={`rounded-2xl px-4 py-3.5 space-y-2 transition-colors ${
-                    ongoing
-                      ? 'bg-[#f6ffe0] border-2 border-[#adee2b]'
-                      : isPast
-                        ? 'bg-slate-50 border border-slate-100 opacity-60'
-                        : 'bg-white border border-slate-100 hover:border-slate-200'
-                  }`}
-                >
+                <div key={b.id} className="rounded-2xl px-4 py-3.5 space-y-2 transition-colors" style={cardStyle}>
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-[12px] font-black text-slate-800 leading-tight flex-1">{b.title}</p>
+                    <p className="text-[12px] font-black leading-tight flex-1" style={{ color: 'var(--ds-text-1)' }}>{b.title}</p>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {ongoing && (
                         <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-[#adee2b] text-black">
@@ -131,23 +136,23 @@ export default function TodayPanel() {
                           On Going
                         </span>
                       )}
-                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${STATUS_STYLE[b.status] ?? 'bg-slate-100 text-slate-500'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${statusBadgeClass}`}>
                         {b.status}
                       </span>
                     </div>
                   </div>
                   {b.booked_for && (
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
+                    <div className="flex items-center gap-2 text-[10px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
                       <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>person_pin</span>
                       <span className="truncate">for {b.booked_for}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold">
+                  <div className="flex items-center gap-2 text-[10px] font-bold" style={{ color: 'var(--ds-text-2)' }}>
                     <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>schedule</span>
                     <span className="tabular-nums">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</span>
                   </div>
                   {b.room && (
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
+                    <div className="flex items-center gap-2 text-[10px] font-medium" style={{ color: 'var(--ds-text-3)' }}>
                       <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>meeting_room</span>
                       <span className="truncate">{b.room.name}{b.room.building ? ` · ${b.room.building.code ?? b.room.building.name}` : ''}</span>
                     </div>
@@ -158,16 +163,16 @@ export default function TodayPanel() {
 
             return (
               <>
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-3)' }}>
                   {todayList.length} booking{todayList.length !== 1 ? 's' : ''} today
                 </p>
                 {active.map(renderCard)}
                 {past.length > 0 && (
                   <>
                     <div className="flex items-center gap-2 pt-1">
-                      <div className="flex-1 h-px bg-slate-100" />
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-300">Past</span>
-                      <div className="flex-1 h-px bg-slate-100" />
+                      <div className="flex-1 h-px" style={{ background: 'var(--ds-border-sub)' }} />
+                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>Past</span>
+                      <div className="flex-1 h-px" style={{ background: 'var(--ds-border-sub)' }} />
                     </div>
                     {past.map(renderCard)}
                   </>
