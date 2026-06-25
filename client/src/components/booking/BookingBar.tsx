@@ -52,7 +52,7 @@ export default function BookingBar({
   return (
     <div
       className={`absolute inset-y-2 left-1 right-1 rounded-xl flex items-center px-2.5 gap-1.5 overflow-hidden z-10 transition-all
-        hover:brightness-105 hover:z-30 group/bar
+        hover:brightness-105 hover:z-30 group/bar dark:brightness-[0.82] dark:hover:brightness-[0.92]
         ${isDragging ? 'opacity-60 scale-[0.98] cursor-grabbing z-50' : isMe ? 'cursor-grab' : 'cursor-pointer'}
         hover:scale-[1.02]`}
       style={{

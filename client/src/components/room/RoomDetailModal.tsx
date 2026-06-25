@@ -68,7 +68,8 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       <div
-        className="relative bg-[#f7f8f6] rounded-2xl overflow-hidden shadow-2xl overflow-y-auto transition-transform duration-300"
+        className="relative rounded-2xl overflow-hidden shadow-2xl overflow-y-auto transition-transform duration-300"
+        style={{ backgroundColor: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}
         style={{ width: 980, maxHeight: '92vh', transform: open ? 'scale(1)' : 'scale(0.97)' }}
       >
         <button
@@ -186,15 +187,15 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
 
           {/* ── Stats ── */}
           <div style={{ gridColumn: '3/4', gridRow: '1/2', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ background: 'white', borderRadius: 20, padding: '18px 20px', flex: 1, border: '0.5px solid #e2e8f0' }}>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', margin: '0 0 6px' }}>This Month</p>
-              <p style={{ fontSize: 40, fontWeight: 800, color: '#1e293b', lineHeight: 1, margin: 0 }}>{stats?.bookings_this_month ?? '–'}</p>
-              <p style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', margin: '4px 0 0' }}>bookings</p>
+            <div style={{ background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', flex: 1, border: '1px solid var(--ds-border)' }}>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 6px' }}>This Month</p>
+              <p style={{ fontSize: 40, fontWeight: 800, color: 'var(--ds-text-1)', lineHeight: 1, margin: 0 }}>{stats?.bookings_this_month ?? '–'}</p>
+              <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--ds-text-3)', textTransform: 'uppercase', margin: '4px 0 0' }}>bookings</p>
             </div>
-            <div style={{ background: 'white', borderRadius: 20, padding: '18px 20px', flex: 1, border: '0.5px solid #e2e8f0' }}>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', margin: '0 0 6px' }}>Utilization</p>
-              <p style={{ fontSize: 40, fontWeight: 800, color: '#1e293b', lineHeight: 1, margin: 0 }}>{stats ? `${stats.utilization}%` : '–'}</p>
-              <p style={{ fontSize: 8, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', margin: '4px 0 0' }}>this month</p>
+            <div style={{ background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', flex: 1, border: '1px solid var(--ds-border)' }}>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 6px' }}>Utilization</p>
+              <p style={{ fontSize: 40, fontWeight: 800, color: 'var(--ds-text-1)', lineHeight: 1, margin: 0 }}>{stats ? `${stats.utilization}%` : '–'}</p>
+              <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--ds-text-3)', textTransform: 'uppercase', margin: '4px 0 0' }}>this month</p>
             </div>
           </div>
 
@@ -222,19 +223,19 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
           </div>
 
           {/* ── Today's Occupancy ── */}
-          <div style={{ gridColumn: '1/3', gridRow: '3/4', background: 'white', borderRadius: 20, padding: '18px 20px', border: '0.5px solid #e2e8f0' }}>
+          <div style={{ gridColumn: '1/3', gridRow: '3/4', background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', border: '1px solid var(--ds-border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', margin: 0 }}>Today&rsquo;s Occupancy</p>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: 0 }}>Today&rsquo;s Occupancy</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', padding: '3px 10px', borderRadius: 99, background: room.status === 'maintenance' ? '#ffedd5' : isAvailableNow ? '#dcfce7' : '#fee2e2', color: room.status === 'maintenance' ? '#c2410c' : isAvailableNow ? '#16a34a' : '#ef4444' }}>
+                <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', padding: '3px 10px', borderRadius: 99, background: room.status === 'maintenance' ? 'rgba(251,146,60,0.18)' : isAvailableNow ? 'rgba(74,222,128,0.18)' : 'rgba(248,113,113,0.18)', color: room.status === 'maintenance' ? '#fb923c' : isAvailableNow ? '#22c55e' : '#ef4444' }}>
                   {room.status === 'maintenance' ? 'Under Maintenance' : isAvailableNow ? 'Free Now' : 'Currently Occupied'}
                 </span>
                 {room.requires_contact && <SpecialRoomBadge size="xs" />}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', width: 22, textAlign: 'right' }}>07</span>
-              <div style={{ flex: 1, height: 28, background: '#f1f5f9', borderRadius: 8, position: 'relative', overflow: 'hidden' }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--ds-text-4)', width: 22, textAlign: 'right' }}>07</span>
+              <div style={{ flex: 1, height: 28, background: 'var(--ds-bg-raised)', borderRadius: 8, position: 'relative', overflow: 'hidden' }}>
                 <div style={{ position: 'absolute', left: `${nowPct}%`, width: 2, height: '100%', background: '#ef4444', zIndex: 10 }} />
                 {todayBookings.map(b => {
                   const startH = parseLocal(b.start_at).getHours() + parseLocal(b.start_at).getMinutes() / 60
@@ -251,20 +252,20 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                   )
                 })}
               </div>
-              <span style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', width: 22 }}>19</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--ds-text-4)', width: 22 }}>19</span>
             </div>
             {todayBookings.length === 0 && (
-              <p style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, marginTop: 8, marginBottom: 0 }}>No bookings today — room is fully available</p>
+              <p style={{ fontSize: 10, color: 'var(--ds-text-4)', fontWeight: 600, marginTop: 8, marginBottom: 0 }}>No bookings today — room is fully available</p>
             )}
           </div>
 
           {/* ── Notes ── */}
-          <div style={{ gridColumn: '3/4', gridRow: '3/4', background: 'white', borderRadius: 20, padding: '18px 20px', border: '0.5px solid #e2e8f0' }}>
-            <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: '#94a3b8', margin: '0 0 10px' }}>Notes</p>
+          <div style={{ gridColumn: '3/4', gridRow: '3/4', background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', border: '1px solid var(--ds-border)' }}>
+            <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 10px' }}>Notes</p>
             {room.notes ? (
-              <p style={{ fontSize: 11, fontWeight: 500, color: '#64748b', lineHeight: 1.6, margin: 0 }}>{room.notes}</p>
+              <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--ds-text-2)', lineHeight: 1.6, margin: 0 }}>{room.notes}</p>
             ) : (
-              <p style={{ fontSize: 11, fontWeight: 500, color: '#cbd5e1', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>No notes for this room.</p>
+              <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--ds-text-4)', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>No notes for this room.</p>
             )}
           </div>
 

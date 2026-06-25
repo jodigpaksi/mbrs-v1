@@ -120,7 +120,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  style={{ width: ITEM_W, color: isActive(item.path) ? 'var(--ds-text-1)' : 'var(--ds-text-3)' }}
+                  style={{ width: ITEM_W, color: isActive(item.path) ? 'var(--ds-text-1)' : 'var(--ds-text-2)' }}
                   className="relative flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors duration-200 z-10 hover:text-[--ds-text-2]"
                 >
                   <span className="material-symbols-outlined text-sm">{item.icon}</span>
@@ -139,14 +139,14 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
               <button
                 onClick={openSearch}
                 className="relative size-9 flex items-center justify-center rounded-xl transition-colors hover:bg-[var(--ds-bg-raised)]"
-                style={{ color: q ? '#adee2b' : 'var(--ds-text-3)' }}
+                style={{ color: q ? '#adee2b' : 'var(--ds-text-2)' }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>search</span>
               </button>
               {/* Tooltip */}
               <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-[51] transition-opacity duration-150 whitespace-nowrap ${searchOpen ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
-                <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-slate-500"
-                  style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+                <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-[var(--ds-text-2)]"
+                  style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                   Search
                 </div>
               </div>
@@ -203,7 +203,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             <button
               onClick={() => { document.dispatchEvent(new CustomEvent('today-panel-toggle')); onTodayClick?.() }}
               className="relative size-9 flex items-center justify-center rounded-xl transition-colors hover:bg-[var(--ds-bg-raised)]"
-              style={{ color: 'var(--ds-text-3)' }}
+              style={{ color: 'var(--ds-text-2)' }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>calendar_today</span>
               {todayCount > 0 && (
@@ -213,8 +213,8 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
               )}
             </button>
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap">
-              <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-slate-500"
-                style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+              <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-[var(--ds-text-2)]"
+                style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                 Today's Bookings
               </div>
             </div>
@@ -225,7 +225,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             <button
               onClick={openNotifications}
               className="relative size-9 flex items-center justify-center rounded-xl transition-colors hover:bg-[var(--ds-bg-raised)]"
-              style={{ color: 'var(--ds-text-3)' }}
+              style={{ color: 'var(--ds-text-2)' }}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>notifications</span>
               {unreadCount > 0 && (
@@ -235,8 +235,8 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
               )}
             </button>
             <div className="absolute top-full right-0 mt-2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap">
-              <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-slate-500"
-                style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.6)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+              <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-[var(--ds-text-2)]"
+                style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                 Notifications{unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
               </div>
             </div>

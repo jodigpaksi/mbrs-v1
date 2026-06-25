@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/me/avatar', [AuthController::class, 'updateAvatar']);
+    Route::delete('/me/avatar', [AuthController::class, 'removeAvatar']);
     Route::patch('/me/password', [AuthController::class, 'updatePassword']);
     Route::patch('/me/on-duty', [AuthController::class, 'updateOnDuty']);
 

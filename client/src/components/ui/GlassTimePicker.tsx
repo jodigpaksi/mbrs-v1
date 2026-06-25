@@ -54,10 +54,8 @@ export default function GlassTimePicker({
 
       {open && (
         <div
-          className={`absolute top-full mt-2 z-[400] ${align === 'right' ? 'right-0 dropdown-enter-right' : 'left-0 dropdown-enter'}
-            bg-white/70 backdrop-blur-2xl border border-white/60 ring-1 ring-black/5
-            rounded-[1.4rem] shadow-2xl shadow-slate-900/20 p-2`}
-          style={{ width: panelWidth }}
+          className={`absolute top-full mt-2 z-[400] ${align === 'right' ? 'right-0 dropdown-enter-right' : 'left-0 dropdown-enter'} rounded-[1.4rem] p-2`}
+          style={{ width: panelWidth, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}
         >
           <div ref={listRef} className="tp-scroll relative max-h-[224px] overflow-y-auto grid grid-cols-2 gap-1 pr-1">
             {slots.map(t => {
@@ -67,7 +65,7 @@ export default function GlassTimePicker({
                   onClick={() => { onChange(fromMin(t)); setOpen(false) }}
                   className={`h-9 rounded-xl text-[11px] font-black tabular-nums transition-all
                     ${isSel ? 'bg-[#adee2b] text-black shadow-sm ring-1 ring-black/10'
-                      : 'text-slate-600 hover:bg-white/80'}`}>
+                      : 'text-[var(--ds-text-1)] hover:bg-[var(--ds-bg-raised)]'}`}>
                   {fromMin(t)}
                 </button>
               )

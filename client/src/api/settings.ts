@@ -5,6 +5,7 @@ export interface WeekendSettings { saturday: boolean; sunday: boolean }
 export interface GeneralSettings {
   max_advance_days: number
   allow_book_for_others: boolean
+  allow_password_change: boolean
   restrict_after_hours: boolean
   working_hours_end: string
   feature_ai_chat: boolean

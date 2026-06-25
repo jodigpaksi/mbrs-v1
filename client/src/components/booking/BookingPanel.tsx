@@ -501,11 +501,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           opacity: miniEnabled ? 1 : 0,
           transform: miniEnabled ? 'translateX(0) scale(1)' : 'translateX(24px) scale(0.96)',
           pointerEvents: miniEnabled ? 'auto' : 'none',
-          background: 'rgba(255,255,255,0.98)',
-          backdropFilter: 'blur(24px)',
+          background: 'var(--ds-glass-bg)',
+          backdropFilter: 'blur(32px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(180%)',
           borderRadius: 24,
-          border: '1px solid rgba(226,232,240,0.9)',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid var(--ds-glass-border)',
+          boxShadow: 'var(--ds-glass-shadow)',
         }}
       >
         {/* Header */}
@@ -646,10 +647,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     <style>{`
                       .room-drop-list::-webkit-scrollbar { width: 8px; }
                       .room-drop-list::-webkit-scrollbar-track { background: transparent; margin: 4px 0; }
-                      .room-drop-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; border: 2px solid white; }
-                      .room-drop-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+                      .room-drop-list::-webkit-scrollbar-thumb { background: var(--ds-border); border-radius: 99px; border: 2px solid var(--ds-bg-surface); }
+                      .room-drop-list::-webkit-scrollbar-thumb:hover { background: var(--ds-text-4); }
                     `}</style>
-                    <div className="room-drop-list overflow-y-auto" style={{ maxHeight: 380, scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}>
+                    <div className="room-drop-list overflow-y-auto" style={{ maxHeight: 380, scrollbarWidth: 'thin', scrollbarColor: 'var(--ds-border) transparent' }}>
                       {filteredRooms.map(r => {
                         const isMaint = r.status === 'maintenance'
                         return (
@@ -658,7 +659,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             onClick={() => { setSelectedRoom(r); setShowRoomDrop(false); setRoomSearch('') }}
                             onMouseMove={e => { const p = (r.photos ?? [])[0]; if (p) setHoverRoomPhoto({ x: e.clientX, y: e.clientY, src: p }) }}
                             onMouseLeave={() => setHoverRoomPhoto(null)}
-                            className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left ${isMaint ? 'hover:bg-orange-50' : 'hover:bg-[#f7fee7]'}`}
+                            className={`w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left ${isMaint ? 'hover:bg-orange-500/10' : 'hover:bg-[#adee2b]/10'}`}
                           >
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-black flex items-center gap-2 ${isMaint ? 'text-orange-700' : 'text-[var(--ds-text-1)]'}`}>
@@ -674,7 +675,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                               </p>
                             </div>
                             {isMaint && (
-                              <span className="shrink-0 flex items-center gap-1 px-2.5 py-1 bg-orange-100 text-orange-600 rounded-lg text-[9px] font-black uppercase">
+                              <span className="shrink-0 flex items-center gap-1 px-2.5 py-1 bg-orange-500/15 text-orange-500 dark:text-orange-400 rounded-lg text-[9px] font-black uppercase">
                                 <span className="material-symbols-outlined" style={{ fontSize: 11 }}>construction</span>
                                 Maint.
                               </span>
@@ -766,13 +767,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
             {/* Maintenance warning */}
             {roomIsMaintenance && (
-              <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isPrivileged ? 'bg-orange-50 border-orange-200' : 'bg-red-50 border-red-200'}`}>
+              <div className={`flex items-start gap-3 p-4 rounded-2xl border ${isPrivileged ? 'bg-orange-500/10 border-orange-500/25 dark:border-orange-500/20' : 'bg-red-500/10 border-red-500/25 dark:border-red-500/20'}`}>
                 <span className={`material-symbols-outlined shrink-0 mt-0.5 ${isPrivileged ? 'text-orange-500' : 'text-red-500'}`} style={{ fontSize: 18 }}>construction</span>
                 <div>
-                  <p className={`text-[11px] font-black uppercase tracking-wide ${isPrivileged ? 'text-orange-700' : 'text-red-700'}`}>
+                  <p className={`text-[11px] font-black uppercase tracking-wide ${isPrivileged ? 'text-orange-700 dark:text-orange-400' : 'text-red-700 dark:text-red-400'}`}>
                     Room Under Maintenance
                   </p>
-                  <p className={`text-[10px] font-medium mt-0.5 leading-relaxed ${isPrivileged ? 'text-orange-600' : 'text-red-500'}`}>
+                  <p className={`text-[10px] font-medium mt-0.5 leading-relaxed ${isPrivileged ? 'text-orange-600 dark:text-orange-300' : 'text-red-500 dark:text-red-400'}`}>
                     {isPrivileged
                       ? 'This room is under maintenance. As admin/receptionist you may still book.'
                       : 'This room is currently under maintenance and cannot be booked. Please contact Receptionist or GAA.'}
@@ -837,7 +838,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 {/* Duration badge — same label+field structure for alignment */}
                 <div className="shrink-0 space-y-1">
                   <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Duration</label>
-                  <div className="px-3 py-2 rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center"
+                  <div className="px-3 py-2 rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center dark:bg-[#adee2b]/15 dark:text-[#adee2b]"
                     style={{
                       backgroundColor: '#d9faa0',
                       color: '#2d5a00',
@@ -926,7 +927,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           {filtered.map(u => (
                             <button key={u.id} type="button"
                               onMouseDown={e => { e.preventDefault(); setBookFor(u.name); setBookForUserId(u.id); setShowBookForDrop(false) }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f7fee7] transition-colors text-left">
+                              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#adee2b]/10 transition-colors text-left">
                               <span className="size-6 rounded-full bg-[var(--ds-bg-surface-2)] flex items-center justify-center text-[10px] font-black text-[var(--ds-text-3)] shrink-0">
                                 {u.name.charAt(0).toUpperCase()}
                               </span>
@@ -976,7 +977,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       ))}
                     </div>
                   ) : (
-                    <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
+                    <div className="relative flex bg-[var(--ds-bg-surface-2)] p-1 rounded-full border border-[var(--ds-border-sub)]">
                       <div className="absolute top-1 bottom-1 w-[calc(50%-2px)] rounded-full shadow-sm pointer-events-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
                         style={{ left: type === 'internal' ? 3 : 'calc(50%)', width: 'calc(50% - 3px)', background: type === 'internal' ? '#1d4ed8' : '#f97316', transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1)' }} />
                       <button onClick={() => setType('internal')}
@@ -992,7 +993,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Status</label>
-                  <div className="relative flex bg-slate-200/60 p-[3px] rounded-full border border-black/5">
+                  <div className="relative flex bg-[var(--ds-bg-surface-2)] p-[3px] rounded-full border border-[var(--ds-border-sub)]">
                     <div className="absolute inset-y-[3px] rounded-full shadow-sm pointer-events-none"
                       style={{
                         left: status === 'confirmed' ? 3 : 'calc(50%)',
@@ -1018,12 +1019,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <div className="space-y-3">
                   <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Repeat</label>
                   {/* Repeat mode toggle: None / Daily / Weekly */}
-                  <div className="relative flex bg-slate-200/60 p-1 rounded-full border border-black/5">
+                  <div className="relative flex bg-[var(--ds-bg-surface-2)] p-1 rounded-full border border-[var(--ds-border-sub)]">
                     <div className="absolute top-1 bottom-1 rounded-full bg-[var(--ds-bg-surface)] shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
                       style={{ left: 4, width: 'calc((100% - 8px) / 3)', transform: `translateX(${repeat === 'none' ? 0 : repeat === 'daily' ? 100 : 200}%)` }} />
                     {(['none', 'daily', 'weekly'] as const).map(r => (
                       <button key={r} onClick={() => handleRepeatChange(r)}
-                        className={`relative z-10 flex-1 py-1.5 text-[11px] font-black uppercase rounded-full transition-colors duration-150 ${repeat === r ? 'text-black' : 'text-[var(--ds-text-3)]'}`}>
+                        className={`relative z-10 flex-1 py-1.5 text-[11px] font-black uppercase rounded-full transition-colors duration-150 ${repeat === r ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>
                         {r}
                       </button>
                     ))}
@@ -1049,8 +1050,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                   }}
                                   className="flex-1 h-8 rounded-xl text-[9px] font-black uppercase transition-all duration-150"
                                   style={{
-                                    background: selected ? '#1e293b' : '#f1f5f9',
-                                    color: selected ? '#adee2b' : '#94a3b8',
+                                    background: selected ? 'var(--ds-bg-raised)' : 'var(--ds-bg-surface-2)',
+                                    color: selected ? '#adee2b' : 'var(--ds-text-3)',
+                                    border: selected ? '1px solid var(--ds-border)' : '1px solid transparent',
                                   }}
                                 >
                                   {DOW_LABELS[key]}
@@ -1067,7 +1069,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         <label className="flex items-center gap-3 cursor-pointer">
                           <div
                             onClick={() => setRepeatMode('count')}
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${repeatMode === 'count' ? 'border-black bg-black' : 'border-slate-300'}`}
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${repeatMode === 'count' ? 'border-black bg-black' : 'border-[var(--ds-border)]'}`}
                           >
                             {repeatMode === 'count' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
@@ -1097,7 +1099,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         <label className="flex items-center gap-3 cursor-pointer">
                           <div
                             onClick={() => setRepeatMode('until')}
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${repeatMode === 'until' ? 'border-black bg-black' : 'border-slate-300'}`}
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${repeatMode === 'until' ? 'border-black bg-black' : 'border-[var(--ds-border)]'}`}
                           >
                             {repeatMode === 'until' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
@@ -1125,18 +1127,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         onClick={() => setSkipConflicts(!skipConflicts)}
                         className="w-full flex items-center gap-3 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl px-4 py-2.5 transition-all hover:border-[var(--ds-border)]"
                       >
-                        <div className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${skipConflicts ? 'bg-black' : 'bg-slate-200'}`}>
-                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${skipConflicts ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                        <div className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${skipConflicts ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}>
+                          <div className={`absolute top-0.5 w-4 h-4 rounded-full shadow-sm transition-transform duration-200 ${skipConflicts ? 'translate-x-4 bg-black' : 'translate-x-0.5 bg-[var(--ds-bg-surface)]'}`} />
                         </div>
-                        <span className="text-[10px] font-black uppercase text-[var(--ds-text-2)]">Skip past conflicts</span>
-                        <span className="ml-auto text-[9px] text-[var(--ds-text-3)] font-medium">
-                          {skipConflicts ? 'conflicts skipped' : 'stop on conflict'}
+                        <span className={`text-[10px] font-black uppercase ${skipConflicts ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>Skip past conflicts</span>
+                        <span className={`ml-auto text-[9px] font-black uppercase ${skipConflicts ? 'text-[#adee2b] dark:text-[#adee2b]/80' : 'text-[var(--ds-text-4)]'}`}>
+                          {skipConflicts ? 'ON' : 'OFF'}
                         </span>
                       </button>
 
                       {/* Repeat preview summary */}
                       {repeatDates.length > 0 && (
-                        <div className="bg-black/[0.04] rounded-2xl px-4 py-3 space-y-2">
+                        <div className="bg-[var(--ds-bg-surface-2)] rounded-2xl px-4 py-3 space-y-2">
                           <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>event_repeat</span>
                             <span className="text-[10px] font-black text-[var(--ds-text-2)]">{repeatSummary}</span>
@@ -1177,13 +1179,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             {repeat === 'none' && (
               <>
                 {isTimeValid() === false && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-200 bg-red-50">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-500/30 bg-red-500/10">
                     <div className="size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0">
                       <span className="material-symbols-outlined text-base">schedule</span>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-red-800">Invalid Time</p>
-                      <p className="text-[9px] text-red-600 mt-0.5">End time must be after start time.</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Invalid Time</p>
+                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">End time must be after start time.</p>
                     </div>
                   </div>
                 )}
@@ -1196,28 +1198,28 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   </div>
                 )}
                 {isTimeValid() === true && !availChecking && isAvailable() === true && (
-                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 ${(availResult?.other_viewers ?? 0) > 0 ? 'border-amber-300 bg-amber-50' : 'border-[#adee2b] bg-[#f7fee7]'}`}>
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 ${(availResult?.other_viewers ?? 0) > 0 ? 'border-amber-500/30 bg-amber-500/10' : 'border-[#adee2b]/50 bg-[#adee2b]/10'}`}>
                     <div className={`size-8 rounded-xl flex items-center justify-center shrink-0 ${(availResult?.other_viewers ?? 0) > 0 ? 'bg-amber-400 text-white' : 'bg-[#adee2b] text-black'}`}>
                       <span className="material-symbols-outlined text-base">{(availResult?.other_viewers ?? 0) > 0 ? 'group' : 'verified'}</span>
                     </div>
                     <div>
-                      <p className={`text-[9px] font-black uppercase tracking-widest ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-800' : 'text-green-800'}`}>
+                      <p className={`text-[9px] font-black uppercase tracking-widest ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-green-800 dark:text-[#adee2b]'}`}>
                         {(availResult?.other_viewers ?? 0) > 0 ? `${availResult!.other_viewers} other user${availResult!.other_viewers > 1 ? 's' : ''} viewing this slot` : 'Room Available'}
                       </p>
-                      <p className={`text-[9px] mt-0.5 ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                      <p className={`text-[9px] mt-0.5 ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-green-700 dark:text-[#adee2b]/70'}`}>
                         {(availResult?.other_viewers ?? 0) > 0 ? 'Submit quickly — someone else may book first.' : 'No conflicts for this slot.'}
                       </p>
                     </div>
                   </div>
                 )}
                 {isTimeValid() === true && !availChecking && isAvailable() === false && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-200 bg-red-50">
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-500/30 bg-red-500/10">
                     <div className="size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0">
                       <span className="material-symbols-outlined text-base">block</span>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-red-800">Room Conflict</p>
-                      <p className="text-[9px] text-red-600 mt-0.5">Another booking exists at this time.</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Room Conflict</p>
+                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">Another booking exists at this time.</p>
                     </div>
                   </div>
                 )}

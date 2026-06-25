@@ -3717,7 +3717,8 @@ function SettingsTab() {
   // General — auto-save each field
   const { data: general } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings })
   const [maxDays,      setMaxDays]      = useState(general?.max_advance_days ?? 30)
-  const [allowBookFor, setAllowBookFor] = useState(general?.allow_book_for_others ?? true)
+  const [allowBookFor,      setAllowBookFor]      = useState(general?.allow_book_for_others ?? true)
+  const [allowPasswordChange, setAllowPasswordChange] = useState(general?.allow_password_change ?? true)
   const [restrictAH,   setRestrictAH]   = useState(general?.restrict_after_hours ?? false)
   const [workEnd,      setWorkEnd]      = useState(general?.working_hours_end ?? '17:00')
   const [aiChat,       setAiChat]       = useState(general?.feature_ai_chat ?? true)
@@ -3735,6 +3736,7 @@ function SettingsTab() {
   useEffect(() => {
     if (general) {
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
+      setAllowPasswordChange(general.allow_password_change ?? true)
       setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
       setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
       setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
@@ -3743,7 +3745,7 @@ function SettingsTab() {
       setExportDom(general.export_day_of_month)
       setExportFormats((general.export_formats ?? 'excel,csv').split(',').filter(Boolean))
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -3753,7 +3755,8 @@ function SettingsTab() {
     await doSaveGeneral(patch)
     addInfoToast(msg)
   }
-  async function toggleAllowBookFor() { const v = !allowBookFor; setAllowBookFor(v); await saveGeneral({ allow_book_for_others: v }, v ? 'Book for others enabled' : 'Book for others disabled') }
+  async function toggleAllowBookFor()        { const v = !allowBookFor;       setAllowBookFor(v);       await saveGeneral({ allow_book_for_others: v },    v ? 'Book for others enabled' : 'Book for others disabled') }
+  async function toggleAllowPasswordChange() { const v = !allowPasswordChange; setAllowPasswordChange(v); await saveGeneral({ allow_password_change: v }, v ? 'Password change enabled' : 'Password change disabled') }
   async function toggleRestrictAH()  { const v = !restrictAH;   setRestrictAH(v);   await saveGeneral({ restrict_after_hours: v }, v ? 'After-hours restriction enabled' : 'After-hours restriction disabled') }
   async function toggleAiChat()      { const v = !aiChat;       setAiChat(v);       await saveGeneral({ feature_ai_chat: v }, v ? 'AI Chat enabled' : 'AI Chat disabled') }
   async function setRoomsGridCols(v: number) { setRoomsGrid(v); await saveGeneral({ rooms_grid_cols: v }, `Rooms grid set to ${v} columns`) }
@@ -3908,6 +3911,25 @@ function SettingsTab() {
           <button type="button" onClick={toggleAllowBookFor} className="relative shrink-0" style={{ width: 44, height: 24 }}>
             <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowBookFor ? '#adee2b' : '#e2e8f0' }} />
             <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: allowBookFor ? 24 : 4 }} />
+          </button>
+        </div>
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Allow password change */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: allowPasswordChange ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: allowPasswordChange ? '#4d7c00' : '#94a3b8' }}>lock_reset</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Allow Password Change</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowPasswordChange ? 'Users can change their own password' : 'Disabled — superadmin only'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleAllowPasswordChange} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowPasswordChange ? '#adee2b' : '#e2e8f0' }} />
+            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: allowPasswordChange ? 24 : 4 }} />
           </button>
         </div>
 

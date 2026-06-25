@@ -579,7 +579,7 @@ export default function TimelinePage() {
       `}</style>
 
       {/* Toolbar */}
-      <div className="bg-white border-b border-slate-100 px-8 py-2.5 grid grid-cols-3 items-center shrink-0 select-none">
+      <div className="bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)] px-8 py-2.5 grid grid-cols-3 items-center shrink-0 select-none">
 
         {/* Date nav */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -600,30 +600,30 @@ export default function TimelinePage() {
                     <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade'); close() }}
                       className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); switchDate(d, 'right'); close() }}
-                      className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">- 1 Week</button>
+                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">- 1 Week</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); switchDate(d, 'left'); close() }}
-                      className="flex-1 py-2.5 bg-white/70 text-slate-600 rounded-xl text-[9px] font-black uppercase hover:bg-white">+ 1 Week</button>
+                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">+ 1 Week</button>
                   </>
                 )}
               >
                 {({ open }) => (
                   <button
-                    className="flex items-center gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group" style={{ width: 190 }}>
-                    <span className="material-symbols-outlined text-sm text-slate-400 group-hover:text-black shrink-0">calendar_today</span>
-                    <span className="text-[11px] font-black text-slate-800 uppercase flex-1 text-left truncate">
+                    className="flex items-center gap-1.5 border border-[var(--ds-border)] rounded-xl px-2.5 py-1.5 hover:border-[#adee2b] hover:bg-[#adee2b]/10 transition-all group" style={{ width: 190 }}>
+                    <span className="material-symbols-outlined text-sm text-[var(--ds-text-3)] group-hover:text-[var(--ds-text-1)] shrink-0">calendar_today</span>
+                    <span className="text-[11px] font-black text-[var(--ds-text-1)] uppercase flex-1 text-left truncate">
                       {weekLabel ?? fmtDate(currentDate)}
                     </span>
-                    <span className={`material-symbols-outlined text-xs text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+                    <span className={`material-symbols-outlined text-xs text-[var(--ds-text-3)] transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
                   </button>
                 )}
               </GlassDatePicker>
             )
           })()}
           <div className="flex items-center">
-            <button onClick={() => navDate(false)} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors">
+            <button onClick={() => navDate(false)} className="px-1.5 py-1.5 text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-l-xl border border-[var(--ds-border)] transition-colors">
               <span className="material-symbols-outlined text-sm">chevron_left</span>
             </button>
-            <button onClick={() => navDate(true)} className="px-1.5 py-1.5 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors">
+            <button onClick={() => navDate(true)} className="px-1.5 py-1.5 text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-r-xl border border-[var(--ds-border)] border-l-0 transition-colors">
               <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>
           </div>
@@ -644,9 +644,9 @@ export default function TimelinePage() {
         {/* Location */}
         <div ref={locationRef} className="flex justify-center relative">
           <button onClick={() => setLocationOpen(!locationOpen)}
-            className="flex items-center min-w-[240px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
-            <span className="material-symbols-outlined text-slate-400 text-base mr-2">apartment</span>
-            <span className="text-[10px] font-black uppercase text-slate-700 flex-1 text-left flex items-center gap-1">
+            className="flex items-center min-w-[240px] bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
+            <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base mr-2">apartment</span>
+            <span className="text-[10px] font-black uppercase text-[var(--ds-text-1)] flex-1 text-left flex items-center gap-1">
               {location ? (
                 <>
                   {location.code || location.name}
@@ -656,17 +656,17 @@ export default function TimelinePage() {
                 </>
               ) : 'Select Building'}
             </span>
-            <span className="material-symbols-outlined text-slate-400 text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
+            <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
           </button>
           {locationOpen && (
             <div className="dropdown-enter absolute top-full mt-2 w-[260px] rounded-2xl z-[200] p-1.5"
-              style={{ background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid rgba(255,255,255,0.65)', boxShadow: '0 8px 32px rgba(0,0,0,0.10)' }}>
+              style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
               {(buildings as Building[]).map(b => {
                 const roomCount = (rooms as Room[]).filter(r => r.building_id === b.id && r.is_active).length
                 return (
                   <div key={b.id}
                     className={`group relative px-5 py-5 rounded-xl cursor-pointer transition-colors
-                      ${location?.id === b.id ? 'bg-[#adee2b] text-black' : 'text-slate-700 hover:bg-[#adee2b]/25 hover:text-black'}`}
+                      ${location?.id === b.id ? 'bg-[#adee2b] text-black' : 'text-[var(--ds-text-1)] hover:bg-[#adee2b]/25 hover:text-black'}`}
                     onClick={() => { switchBuilding(b); setLocationOpen(false) }}>
                     <p className="flex items-center gap-1 text-[10px] font-black uppercase">
                       {b.code || b.name}
@@ -709,7 +709,7 @@ export default function TimelinePage() {
         <div className="flex justify-end items-center gap-3">
 
           {/* Unified filter pill */}
-          <div className="flex items-center bg-slate-100 rounded-2xl p-1 gap-0.5">
+          <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-2xl p-1 gap-0.5">
 
             {/* View toggle — animated sliding pill (Day | Week | Month) */}
             <div className="relative flex">
@@ -717,7 +717,7 @@ export default function TimelinePage() {
                 const idx = viewMode === 'day' ? 0 : viewMode === 'week' ? 1 : 2
                 return (
                   <div
-                    className="absolute inset-y-0 w-1/3 bg-white rounded-xl shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                    className="absolute inset-y-0 w-1/3 bg-[var(--ds-bg-surface)] rounded-xl shadow-sm dark:ring-1 dark:ring-white/[0.09] pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
                     style={{ transform: `translateX(${idx * 100}%)` }}
                   />
                 )
@@ -732,7 +732,7 @@ export default function TimelinePage() {
                 <button
                   key={mode}
                   onClick={() => switchViewMode(mode)}
-                  className={`relative z-10 w-[72px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === mode ? 'text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`relative z-10 w-[72px] flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-black uppercase transition-colors duration-150 ${viewMode === mode ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 15 }}>{icon}</span>
                   {label}
@@ -741,51 +741,51 @@ export default function TimelinePage() {
             </div>
 
             {/* Divider */}
-            <div className="w-px h-5 bg-slate-300/60 mx-0.5 shrink-0" />
+            <div className="w-px h-5 bg-[var(--ds-border)] mx-0.5 shrink-0" />
 
             {/* Dept filter */}
             <div ref={deptRef} className="relative">
               <button
                 onClick={() => { setDeptOpen(!deptOpen); if (!deptOpen) setDeptSearch('') }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all
-                  ${deptFilter ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                  ${deptFilter ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:ring-1 dark:ring-white/[0.09]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>filter_list</span>
                 {deptFilter || 'Dept'}
                 {deptFilter && (
                   <span
                     onClick={e => { e.stopPropagation(); switchDept('') }}
-                    className="material-symbols-outlined text-slate-400 hover:text-slate-700 transition-colors"
+                    className="material-symbols-outlined text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors"
                     style={{ fontSize: 13 }}
                   >close</span>
                 )}
               </button>
               {deptOpen && (
-                <div className="dropdown-enter-right absolute top-full right-0 mt-2 w-[164px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[300] overflow-hidden">
+                <div className="dropdown-enter-right absolute top-full right-0 mt-2 w-[164px] rounded-2xl shadow-2xl z-[300] overflow-hidden" style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)' }}>
                   <div className="px-2.5 pt-2.5 pb-1.5">
                     <input type="text" placeholder="Search dept..." value={deptSearch}
                       onChange={e => setDeptSearch(e.target.value)} autoFocus
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] font-bold outline-none focus:border-[#adee2b] focus:bg-white transition-all" />
+                      className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-[var(--ds-text-1)] outline-none focus:border-[#adee2b] transition-all" />
                   </div>
                   <div className="pb-1.5">
                     {(!deptSearch || 'all depts'.includes(deptSearch.toLowerCase())) && (
                       <button onClick={() => { switchDept(''); setDeptOpen(false); setDeptSearch('') }}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
-                        <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0">
-                          <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 11 }}>layers</span>
+                        <span className="size-5 rounded-md bg-[var(--ds-bg-raised)] flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 11 }}>layers</span>
                         </span>
-                        <span className="text-[10px] font-black uppercase text-slate-700">All Depts</span>
+                        <span className="text-[10px] font-black uppercase text-[var(--ds-text-1)]">All Depts</span>
                       </button>
                     )}
                     {filteredDepts.map(d => (
                       <button key={d} onClick={() => { switchDept(d); setDeptOpen(false); setDeptSearch('') }}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
-                        <span className="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0 text-[8px] font-black text-slate-600">{d.slice(0, 2)}</span>
-                        <span className="text-[10px] font-black uppercase text-slate-700">{d}</span>
+                        <span className="size-5 rounded-md bg-[var(--ds-bg-raised)] flex items-center justify-center shrink-0 text-[8px] font-black text-[var(--ds-text-2)]">{d.slice(0, 2)}</span>
+                        <span className="text-[10px] font-black uppercase text-[var(--ds-text-1)]">{d}</span>
                       </button>
                     ))}
                     {filteredDepts.length === 0 && deptSearch && (
-                      <p className="px-3 py-3 text-[10px] text-slate-300 font-bold">No results</p>
+                      <p className="px-3 py-3 text-[10px] text-[var(--ds-text-3)] font-bold">No results</p>
                     )}
                   </div>
                 </div>
@@ -803,17 +803,17 @@ export default function TimelinePage() {
 
       {/* Week view */}
       {viewMode === 'week' && (
-        <main key={ganttKey} className="flex-1 overflow-auto bg-white relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], scrollbarWidth: 'thin' }}>
+        <main key={ganttKey} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], scrollbarWidth: 'thin' }}>
           {roomsLoading && (
-            <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-50">
-              <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>
+            <div className="absolute inset-0 bg-[var(--ds-bg-base)]/80 flex items-center justify-center z-50">
+              <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
             </div>
           )}
           <div style={{ minWidth: ROOM_W + 7 * 140 }}>
             {/* Week header */}
-            <div className="sticky top-0 z-40 bg-white border-b shadow-sm flex">
+            <div className="sticky top-0 z-40 bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)] shadow-sm flex">
               <div
-                className="shrink-0 flex items-center px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest border-r-2 border-slate-200"
+                className="shrink-0 flex items-center px-3 text-[9px] font-black text-[var(--ds-text-3)] uppercase tracking-widest border-r-2 border-[var(--ds-border)]"
                 style={{ width: ROOM_W, height: CELL_H }}
               >Room</div>
               {weekDates.map((d, i) => {
@@ -828,25 +828,25 @@ export default function TimelinePage() {
                 const isWeekend = (dow === 6 && wkSat) || (dow === 0 && wkSun)
                 return (
                   <div key={i}
-                    className={`flex-1 flex flex-col items-center justify-center border-r border-slate-200 cursor-pointer transition-colors group/wh
-                      ${isTd ? 'bg-[#f7fee7]' : 'hover:bg-[#f7fee7]'}`}
+                    className={`flex-1 flex flex-col items-center justify-center border-r border-[var(--ds-border-sub)] cursor-pointer transition-colors group/wh
+                      ${isTd ? 'bg-[#adee2b]/10' : 'hover:bg-[#adee2b]/5'}`}
                     style={{ height: CELL_H }}
                     onClick={() => { setCurrentDate(d); switchViewMode('day') }}
                   >
-                    <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-700' : isWeekend ? 'text-red-400 group-hover/wh:text-red-500' : 'text-slate-400 group-hover/wh:text-slate-600'}`}>
+                    <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400 group-hover/wh:text-red-500' : 'text-[var(--ds-text-3)] group-hover/wh:text-[var(--ds-text-2)]'}`}>
                       {d.toLocaleDateString('en-GB', { weekday: 'short' })}
                     </span>
                     <div className={`mt-0.5 flex items-center justify-center rounded-full text-[15px] font-black transition-colors`}
-                      style={{ width: 30, height: 30, background: isTd ? '#000' : 'transparent', color: isTd ? '#adee2b' : isWeekend ? '#ef4444' : '#334155' }}>
+                      style={{ width: 30, height: 30, background: isTd ? '#000' : 'transparent', color: isTd ? '#adee2b' : isWeekend ? '#ef4444' : 'var(--ds-text-1)' }}>
                       {d.getDate()}
                     </div>
                     {showMonth && !isColLoading && (
-                      <span className="text-[8px] font-bold text-slate-300 mt-0.5">
+                      <span className="text-[8px] font-bold text-[var(--ds-text-4)] mt-0.5">
                         {d.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase()}
                       </span>
                     )}
                     {isColLoading && (
-                      <span className="material-symbols-outlined animate-spin text-slate-300 mt-0.5" style={{ fontSize: 10 }}>progress_activity</span>
+                      <span className="material-symbols-outlined animate-spin text-[var(--ds-text-4)] mt-0.5" style={{ fontSize: 10 }}>progress_activity</span>
                     )}
                     {!isColLoading && hasMyBooking && (
                       <span className="size-1.5 rounded-full mt-0.5 shrink-0" style={{ background: '#72ddf7' }} />
@@ -859,8 +859,8 @@ export default function TimelinePage() {
             {/* Empty search state — week view */}
             {search && filteredRooms.length === 0 && (
               <div className="flex flex-col items-center justify-center py-24 gap-3">
-                <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 48 }}>search_off</span>
-                <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">No rooms match "{search}"</p>
+                <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 48 }}>search_off</span>
+                <p className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-widest">No rooms match "{search}"</p>
               </div>
             )}
 
@@ -870,18 +870,18 @@ export default function TimelinePage() {
               const occupied = isRoomOccupied(room)
               const isMaintRoom = room.status === 'maintenance'
               return (
-                <div key={room.id} className={`flex border-b border-slate-100 group/row ${isMaintRoom ? 'hover:bg-orange-50/40' : 'hover:bg-slate-50/50'}`}>
+                <div key={room.id} className={`flex border-b border-[var(--ds-border-sub)] group/row ${isMaintRoom ? 'hover:bg-orange-50/40 dark:hover:bg-orange-900/10' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
                   {/* Room label — same style as day view, sticky */}
                   <div
                     className={`shrink-0 flex items-center justify-between px-3 border-r-2 sticky left-0 z-20 transition-colors cursor-pointer
-                      ${isMaintRoom ? 'bg-orange-50 border-orange-200 group-hover/row:bg-orange-100/50' : 'bg-white border-slate-200 group-hover/row:bg-slate-50/50'}`}
+                      ${isMaintRoom ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/40 group-hover/row:bg-orange-100/50 dark:group-hover/row:bg-orange-900/20' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] group-hover/row:bg-[var(--ds-bg-raised)]'}`}
                     style={{ width: ROOM_W, height: WEEK_CELL_H }}
                     onClick={() => { setDetailRoom(room); setDetailOpen(true) }}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="min-w-0">
-                        <span className={`text-[12px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-700' : 'text-slate-800'}`}>{room.name}</span>
-                        <span className={`text-[10px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400' : 'text-slate-400'}`}>
+                        <span className={`text-[12px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-600 dark:text-orange-400' : 'text-[var(--ds-text-1)]'}`}>{room.name}</span>
+                        <span className={`text-[10px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400 dark:text-orange-600' : 'text-[var(--ds-text-3)]'}`}>
                           {isMaintRoom
                             ? <><span className="material-symbols-outlined" style={{ fontSize: 10 }}>construction</span>Maintenance</>
                             : room.requires_contact
@@ -901,7 +901,7 @@ export default function TimelinePage() {
                     )
                     return (
                       <div key={dayIdx}
-                        className={`flex-1 border-r border-slate-100 px-1.5 py-2 overflow-hidden cursor-pointer transition-colors relative flex flex-col
+                        className={`flex-1 border-r border-[var(--ds-border-sub)] px-1.5 py-2 overflow-hidden cursor-pointer transition-colors relative flex flex-col
                           ${isTd ? 'bg-[#f7fee7]/40' : 'hover:bg-[#f7fee7]/60'}`}
                         style={{ height: WEEK_CELL_H }}
                         onClick={() => { setCurrentDate(d); switchViewMode('day') }}
@@ -915,7 +915,7 @@ export default function TimelinePage() {
                         {isTd && <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#adee2b]/60 pointer-events-none" />}
                         {dayBookings.length === 0 ? (
                           <div className="flex-1 flex items-center justify-center">
-                            <div className="w-4 h-0.5 bg-slate-100 rounded-full" />
+                            <div className="w-4 h-0.5 bg-[var(--ds-border)] rounded-full" />
                           </div>
                         ) : (
                           <>
@@ -946,7 +946,7 @@ export default function TimelinePage() {
                                 )
                               })}
                             </div>
-                            <div className="mt-auto text-[7px] font-black text-slate-400 text-center leading-none pt-0.5">
+                            <div className="mt-auto text-[7px] font-black text-[var(--ds-text-3)] text-center leading-none pt-0.5">
                               {dayBookings.length}
                             </div>
                           </>
@@ -985,22 +985,22 @@ export default function TimelinePage() {
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
         return (
-          <main key={ganttKey} className="flex-1 overflow-auto bg-white p-6" style={{ animation: ganttAnimCSS[ganttAnim] }}>
+          <main key={ganttKey} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] p-6" style={{ animation: ganttAnimCSS[ganttAnim] }}>
             {/* Month header */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[28px] font-black text-slate-900 uppercase tracking-tight leading-none">
+              <h2 className="text-[28px] font-black text-[var(--ds-text-1)] uppercase tracking-tight leading-none">
                 {currentDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase()}
               </h2>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => navDate(false)}
-                  className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors"
+                  className="px-2.5 py-2 text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-l-xl border border-[var(--ds-border)] transition-colors"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_left</span>
                 </button>
                 <button
                   onClick={() => navDate(true)}
-                  className="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors"
+                  className="px-2.5 py-2 text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-r-xl border border-[var(--ds-border)] border-l-0 transition-colors"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_right</span>
                 </button>
@@ -1012,13 +1012,13 @@ export default function TimelinePage() {
               {DOW.map(d => {
                 const isWkHeader = (d === 'Sat' && wkSat) || (d === 'Sun' && wkSun)
                 return (
-                  <div key={d} className={`text-center py-2 text-[9px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-slate-400'}`}>{d}</div>
+                  <div key={d} className={`text-center py-2 text-[9px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
                 )
               })}
             </div>
 
             {/* Calendar grid */}
-            <div className="grid grid-cols-7 border-l border-t border-slate-100">
+            <div className="grid grid-cols-7 border-l border-t border-[var(--ds-border-sub)]">
               {cells.map((cellDate, idx) => {
                 const isCurrentMonth = cellDate.getMonth() === month
                 const isTodayCell = cellDate.toDateString() === today.toDateString()
@@ -1044,15 +1044,15 @@ export default function TimelinePage() {
                       e.stopPropagation()
                       setCellCtxMenu({ room: null, slot: 4, date: cellDate, x: e.clientX, y: e.clientY })
                     }}
-                    className={`min-h-[110px] border-r border-b border-slate-100 p-2 cursor-pointer transition-colors group
-                      ${isCurrentMonth ? 'bg-white hover:bg-[#f7fee7]/60' : 'bg-slate-50/50 hover:bg-slate-50'}
-                      ${isTodayCell ? 'bg-[#f7fee7]/70 ring-2 ring-inset ring-[#adee2b]' : ''}`}
+                    className={`min-h-[110px] border-r border-b border-[var(--ds-border-sub)] p-2 cursor-pointer transition-colors group
+                      ${isCurrentMonth ? 'bg-[var(--ds-bg-surface)] hover:bg-[#adee2b]/5' : 'bg-[var(--ds-bg-base)] hover:bg-[var(--ds-bg-surface-2)]'}
+                      ${isTodayCell ? 'ring-2 ring-inset ring-[#adee2b]' : ''}`}
                   >
                     {/* Date number */}
                     <div className="flex items-center justify-between mb-1.5">
                       <span
                         className={`flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black transition-colors
-                          ${isTodayCell ? 'bg-black text-[#adee2b]' : isCurrentMonth ? (isCellWeekend ? 'text-red-500 group-hover:bg-red-50' : 'text-slate-700 group-hover:bg-slate-200') : (isCellWeekend ? 'text-red-200' : 'text-slate-300')}`}
+                          ${isTodayCell ? 'bg-black text-[#adee2b]' : isCurrentMonth ? (isCellWeekend ? 'text-red-500 group-hover:bg-red-50 dark:group-hover:bg-red-900/20' : 'text-[var(--ds-text-1)] group-hover:bg-[var(--ds-bg-raised)]') : (isCellWeekend ? 'text-red-300/50' : 'text-[var(--ds-text-4)]')}`}
                       >
                         {cellDate.getDate()}
                       </span>
@@ -1095,7 +1095,7 @@ export default function TimelinePage() {
                         )
                       })}
                       {overflow > 0 && (
-                        <p className="text-[7px] font-black text-slate-400 leading-none self-end">+{overflow}</p>
+                        <p className="text-[7px] font-black text-[var(--ds-text-3)] leading-none self-end">+{overflow}</p>
                       )}
                     </div>
                   </div>
@@ -1110,24 +1110,24 @@ export default function TimelinePage() {
       {viewMode === 'day' && (
       <main key={ganttKey} ref={mainRef} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
         {(roomsLoading || bookingsLoading) && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-50">
-            <span className="material-symbols-outlined animate-spin text-4xl text-slate-300">progress_activity</span>
+          <div className="absolute inset-0 bg-[var(--ds-bg-base)]/70 flex items-center justify-center z-50">
+            <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
           </div>
         )}
         <div style={{ width: ROOM_W + slots * SLOT_W, minWidth: '100%' }}>
 
           {/* Header row */}
           <div className="sticky top-0 z-40 border-b shadow-sm flex" style={{ background: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border)' }}>
-            <div className="shrink-0 flex items-center px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest border-r-2 border-slate-200"
+            <div className="shrink-0 flex items-center px-3 text-[9px] font-black text-[var(--ds-text-3)] uppercase tracking-widest border-r-2 border-[var(--ds-border)]"
               style={{ width: ROOM_W, height: CELL_H }}>Room</div>
             {Array.from({ length: HOUR_END - HOUR_START }, (_, i) => {
               const h = HOUR_START + i
               return (
                 <div key={h} style={{ width: SLOT_W * 2, height: CELL_H }} className="flex shrink-0">
-                  <div className="flex-1 flex items-center justify-center text-[13px] font-black text-slate-700 border-r-2 border-slate-200 border-b">
+                  <div className="flex-1 flex items-center justify-center text-[13px] font-black text-[var(--ds-text-1)] border-r-2 border-[var(--ds-border)] border-b border-b-[var(--ds-border-sub)]">
                     {h}:00
                   </div>
-                  <div className="flex-1 flex items-center justify-center text-[10px] font-medium text-slate-400 border-r border-slate-100 border-b">
+                  <div className="flex-1 flex items-center justify-center text-[10px] font-medium text-[var(--ds-text-3)] border-r border-[var(--ds-border-sub)] border-b border-b-[var(--ds-border-sub)]">
                     {h}:30
                   </div>
                 </div>
@@ -1138,9 +1138,9 @@ export default function TimelinePage() {
           {/* Empty search state — day view */}
           {search && filteredRooms.length === 0 && (
             <div className="flex flex-col items-center justify-center py-32 gap-3">
-              <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 52 }}>search_off</span>
-              <p className="text-[13px] font-black text-slate-300 uppercase tracking-widest">No results for "{search}"</p>
-              <p className="text-[10px] font-bold text-slate-200">Try searching by title, user, dept, room, or time</p>
+              <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 52 }}>search_off</span>
+              <p className="text-[13px] font-black text-[var(--ds-text-3)] uppercase tracking-widest">No results for "{search}"</p>
+              <p className="text-[10px] font-bold text-[var(--ds-text-4)]">Try searching by title, user, dept, room, or time</p>
             </div>
           )}
 
@@ -1156,13 +1156,13 @@ export default function TimelinePage() {
             const cellDragMaxSlot = cellDragRef.current ? Math.max(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
 
             return (
-              <div key={room.id} className={`flex group/row relative border-b border-slate-100 ${isMaintRoom ? 'hover:bg-orange-50/60' : 'hover:bg-[#f1f7ff]'}`}>
+              <div key={room.id} className={`flex group/row relative border-b border-[var(--ds-border-sub)] ${isMaintRoom ? 'hover:bg-orange-50/60 dark:hover:bg-orange-900/10' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
                 {/* Room label */}
                 <div
                   className={`shrink-0 flex items-center justify-between px-3 border-r-2 group/room cursor-pointer sticky left-0 z-20 transition-colors
                     ${isMaintRoom
-                      ? 'bg-orange-50 border-orange-200 group-hover/row:bg-orange-100/60'
-                      : 'bg-white border-slate-200 group-hover/row:bg-[#eef3ff]'}`}
+                      ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900/40 group-hover/row:bg-orange-100/60 dark:group-hover/row:bg-orange-900/20'
+                      : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] group-hover/row:bg-[var(--ds-bg-raised)]'}`}
                   style={{ width: ROOM_W, height: CELL_H }}
                   onMouseEnter={e => {
                     if (roomHoverTimer.current) clearTimeout(roomHoverTimer.current)
@@ -1175,8 +1175,8 @@ export default function TimelinePage() {
                 >
                   <div className="flex items-center gap-2 min-w-0" onClick={() => { setDetailRoom(room); setDetailOpen(true) }}>
                     <div className="min-w-0">
-                      <span className={`text-[13px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-700' : 'text-slate-800'}`}>{room.name}</span>
-                      <span className={`text-[11px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400' : 'text-slate-400'}`}>
+                      <span className={`text-[13px] font-black leading-tight block truncate ${isMaintRoom ? 'text-orange-600 dark:text-orange-400' : 'text-[var(--ds-text-1)]'}`}>{room.name}</span>
+                      <span className={`text-[11px] font-bold flex items-center gap-1 mt-0.5 ${isMaintRoom ? 'text-orange-400 dark:text-orange-600' : 'text-[var(--ds-text-3)]'}`}>
                         {isMaintRoom
                           ? <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>construction</span>Maintenance</>
                           : room.requires_contact
@@ -1188,7 +1188,7 @@ export default function TimelinePage() {
                   </div>
                   <button
                     onClick={() => { setDetailRoom(room); setDetailOpen(true) }}
-                    className={`size-6 rounded-lg items-center justify-center hidden group-hover/room:flex shrink-0 ${isMaintRoom ? 'bg-orange-100 hover:bg-orange-400 text-orange-600 hover:text-white' : 'bg-slate-100 hover:bg-[#adee2b]'}`}
+                    className={`size-6 rounded-lg items-center justify-center hidden group-hover/room:flex shrink-0 ${isMaintRoom ? 'bg-orange-100 dark:bg-orange-900/40 hover:bg-orange-400 text-orange-600 hover:text-white' : 'bg-[var(--ds-bg-raised)] hover:bg-[#adee2b]'}`}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span>
                   </button>
@@ -1202,9 +1202,9 @@ export default function TimelinePage() {
                       const isCellSel = isCellDragRow && s >= cellDragMinSlot && s <= cellDragMaxSlot
                       return (
                         <div key={s}
-                          className={`shrink-0 border-r border-slate-100 transition-colors cursor-cell
-                            ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#f7fee7]'}
-                            ${(s + 1) % 2 === 0 ? 'border-r-slate-200' : ''}`}
+                          className={`shrink-0 border-r border-[var(--ds-border-sub)] transition-colors cursor-cell
+                            ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#adee2b]/5'}
+                            ${(s + 1) % 2 === 0 ? 'border-r-[var(--ds-border)]' : ''}`}
                           style={{ width: SLOT_W, height: CELL_H }}
                           onMouseDown={e => {
                             if (e.button !== 0) return
@@ -1371,7 +1371,7 @@ export default function TimelinePage() {
       )}
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-100 px-8 py-2.5 flex items-center justify-between shrink-0">
+      <footer className="bg-[var(--ds-bg-surface)] border-t border-[var(--ds-border-sub)] px-8 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-5">
           {[
             { label: 'My Booking', style: { backgroundColor: '#72ddf7' } },
@@ -1382,19 +1382,19 @@ export default function TimelinePage() {
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1.5">
               <div className="size-2.5 rounded-md" style={l.style} />
-              <span className="text-[8px] font-bold text-slate-400 uppercase">{l.label}</span>
+              <span className="text-[8px] font-bold text-[var(--ds-text-3)] uppercase">{l.label}</span>
             </div>
           ))}
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-0.5 bg-red-500" />
-            <span className="text-[8px] font-bold text-slate-400 uppercase">Now</span>
+            <span className="text-[8px] font-bold text-[var(--ds-text-3)] uppercase">Now</span>
           </div>
-          <div className="flex items-center gap-1.5 border-l border-slate-100 pl-4">
-            <span className="material-symbols-outlined text-slate-300" style={{ fontSize: 12 }}>drag_pan</span>
-            <span className="text-[8px] font-bold text-slate-300 uppercase">Drag bar to move &middot; drag edge to resize &middot; drag cell to create</span>
+          <div className="flex items-center gap-1.5 border-l border-[var(--ds-border-sub)] pl-4">
+            <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 12 }}>drag_pan</span>
+            <span className="text-[8px] font-bold text-[var(--ds-text-4)] uppercase">Drag bar to move &middot; drag edge to resize &middot; drag cell to create</span>
           </div>
         </div>
-        <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest italic">RoomSync Pro v2.1 &middot; 2026</p>
+        <p className="text-[8px] font-black text-[var(--ds-text-4)] uppercase tracking-widest italic">RoomSync Pro v2.1 &middot; 2026</p>
       </footer>
 
       {/* Booking Tooltip */}
@@ -1416,8 +1416,8 @@ export default function TimelinePage() {
         const b = weekBarTooltip.booking
         const isMe = b.user_id === user?.id
         const tStyle: Record<string, { bg: string; text: string; label: string }> = {
-          internal: { bg: '#dbeafe', text: '#1d4ed8', label: 'Internal' },
-          external: { bg: '#ffedd5', text: '#c2410c', label: 'External' },
+          internal: { bg: 'var(--ds-type-int-bg)', text: 'var(--ds-type-int-text)', label: 'Internal' },
+          external: { bg: 'var(--ds-type-ext-bg)', text: 'var(--ds-type-ext-text)', label: 'External' },
         }
         const ts = tStyle[b.type] ?? tStyle.internal
         const tx = Math.min(weekBarTooltip.x + 14, window.innerWidth - 240)
@@ -1425,11 +1425,11 @@ export default function TimelinePage() {
         return (
           <div className="fixed pointer-events-none z-[9999]" style={{ left: tx, top: ty }}>
             <div style={{
-              background: 'rgba(255,255,255,0.92)',
+              background: 'var(--ds-glass-bg)',
               backdropFilter: 'blur(32px) saturate(180%)',
               WebkitBackdropFilter: 'blur(32px) saturate(180%)',
-              border: '1px solid rgba(255,255,255,0.95)',
-              boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,1)',
+              border: '1px solid var(--ds-glass-border)',
+              boxShadow: 'var(--ds-glass-shadow)',
               borderRadius: 14,
               padding: '10px 14px',
               minWidth: 200,
@@ -1440,9 +1440,9 @@ export default function TimelinePage() {
                 </span>
                 <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full" style={{ backgroundColor: ts.bg, color: ts.text }}>{ts.label}</span>
               </div>
-              <p className="text-[12px] font-black text-slate-800 leading-tight">{b.title}</p>
-              {b.room && <p className="text-[10px] font-bold text-slate-400 mt-0.5">{b.room.name}</p>}
-              <p className="text-[11px] font-black text-slate-600 tabular-nums mt-1">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)] leading-tight">{b.title}</p>
+              {b.room && <p className="text-[10px] font-bold text-[var(--ds-text-3)] mt-0.5">{b.room.name}</p>}
+              <p className="text-[11px] font-black text-[var(--ds-text-2)] tabular-nums mt-1">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
             </div>
           </div>
         )
@@ -1459,14 +1459,14 @@ export default function TimelinePage() {
             onMouseLeave={() => { roomHoverTimer.current = setTimeout(() => setRoomHover(null), 250) }}
           >
             <div style={{
-              background: 'rgba(255,255,255,0.82)',
+              background: 'var(--ds-glass-bg)',
               backdropFilter: 'blur(48px) saturate(200%)',
               WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-              border: '1px solid rgba(255,255,255,0.95)',
+              border: '1px solid var(--ds-glass-border)',
               borderRadius: '1.5rem',
               width: 288,
               overflow: 'hidden',
-              boxShadow: '0 12px 48px rgba(0,0,0,0.10), 0 4px 16px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,1)',
+              boxShadow: 'var(--ds-glass-shadow)',
               animation: 'room-hover-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}>
               {/* Photo slideshow */}
@@ -1517,20 +1517,20 @@ export default function TimelinePage() {
               <div style={{ padding: '14px 16px 16px' }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <div className={`size-1.5 rounded-full shrink-0 ${roomHover.room.type === 'Ballroom' ? 'bg-purple-400' : roomHover.room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'}`} />
-                  <span className="text-[8px] font-black uppercase text-slate-400">{roomHover.room.type}</span>
+                  <span className="text-[8px] font-black uppercase text-[var(--ds-text-3)]">{roomHover.room.type}</span>
                 </div>
-                <p className="text-[17px] font-black text-slate-900 leading-tight">{roomHover.room.name}</p>
+                <p className="text-[17px] font-black text-[var(--ds-text-1)] leading-tight">{roomHover.room.name}</p>
                 <div className="flex items-center gap-3 mt-2">
-                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 12 }}>groups</span>
+                  <span className="text-[11px] font-bold text-[var(--ds-text-2)] flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 12 }}>groups</span>
                     {roomHover.room.capacity} seats
                   </span>
-                  <span className="text-[11px] font-bold text-slate-400">Floor {roomHover.room.floor}</span>
+                  <span className="text-[11px] font-bold text-[var(--ds-text-3)]">Floor {roomHover.room.floor}</span>
                 </div>
                 <div className="flex flex-wrap gap-1 mt-3">
                   {(roomHover.room.facilities ?? []).slice(0, 5).map(f => (
-                    <span key={f.name} className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-full text-[8px] font-bold text-slate-500">
-                      <span className="material-symbols-outlined text-slate-400" style={{ fontSize: 9 }}>{f.icon}</span>
+                    <span key={f.name} className="flex items-center gap-1 bg-[var(--ds-bg-raised)] px-2 py-0.5 rounded-full text-[8px] font-bold text-[var(--ds-text-2)]">
+                      <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 9 }}>{f.icon}</span>
                       {f.name}
                     </span>
                   ))}
@@ -1589,12 +1589,12 @@ export default function TimelinePage() {
                 left: Math.min(otherCtxMenu.x, window.innerWidth - 200),
                 top: Math.min(otherCtxMenu.y, window.innerHeight - 150),
                 minWidth: 188,
-                background: 'rgba(255,255,255,0.82)',
-                backdropFilter: 'blur(48px) saturate(200%)',
-                WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-                border: '1px solid rgba(255,255,255,0.95)',
+                background: 'var(--ds-glass-bg)',
+                backdropFilter: 'blur(48px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+                border: '1px solid var(--ds-glass-border)',
                 borderRadius: 14,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,1)',
+                boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
                 animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
@@ -1602,9 +1602,9 @@ export default function TimelinePage() {
             >
               {/* Header */}
               <div className="px-3.5 pt-2.5 pb-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 truncate">{otherCtxMenu.booking.user?.name}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] truncate">{otherCtxMenu.booking.user?.name}</p>
               </div>
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 4 }} />
+              <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
 
               {/* Copy Ext */}
               <button
@@ -1615,12 +1615,12 @@ export default function TimelinePage() {
                   if (toastTimer.current) clearTimeout(toastTimer.current)
                   toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
               >
-                <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>phone_in_talk</span>
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>phone_in_talk</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-slate-700 leading-none">Copy Ext</p>
-                  <p className="text-[9px] font-bold text-slate-400 mt-0.5">{otherCtxMenu.booking.user?.ext}</p>
+                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">Copy Ext</p>
+                  <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5">{otherCtxMenu.booking.user?.ext}</p>
                 </div>
               </button>
 
@@ -1633,16 +1633,16 @@ export default function TimelinePage() {
                   if (toastTimer.current) clearTimeout(toastTimer.current)
                   toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
               >
-                <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>mail</span>
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>mail</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-slate-700 leading-none">Copy Email</p>
-                  <p className="text-[9px] font-bold text-slate-400 mt-0.5 truncate">{otherCtxMenu.booking.user?.email}</p>
+                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">Copy Email</p>
+                  <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5 truncate">{otherCtxMenu.booking.user?.email}</p>
                 </div>
               </button>
 
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '4px 0' }} />
+              <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
 
               {/* View Room */}
               <button
@@ -1651,10 +1651,10 @@ export default function TimelinePage() {
                   setDetailOpen(true)
                   setOtherCtxMenu(null)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
               >
-                <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>open_in_new</span>
-                <span className="text-[11px] font-black uppercase text-slate-700">View Room Detail</span>
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room Detail</span>
               </button>
             </div>
           </div>
@@ -1673,12 +1673,12 @@ export default function TimelinePage() {
                 left: Math.min(cellCtxMenu.x, window.innerWidth - 200),
                 top: Math.min(cellCtxMenu.y, window.innerHeight - 120),
                 minWidth: 188,
-                background: 'rgba(255,255,255,0.82)',
-                backdropFilter: 'blur(48px) saturate(200%)',
-                WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-                border: '1px solid rgba(255,255,255,0.95)',
+                background: 'var(--ds-glass-bg)',
+                backdropFilter: 'blur(48px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+                border: '1px solid var(--ds-glass-border)',
                 borderRadius: 14,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,1)',
+                boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
                 animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
@@ -1686,11 +1686,11 @@ export default function TimelinePage() {
             >
               {/* Header — room + time */}
               <div className="px-3.5 pt-2.5 pb-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 truncate">
+                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] truncate">
                   {cellCtxMenu.room ? cellCtxMenu.room.name : cellCtxMenu.date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </p>
               </div>
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 4 }} />
+              <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
 
               {/* New Booking */}
               <button
@@ -1703,20 +1703,20 @@ export default function TimelinePage() {
                   setBookingPanelOpen(true)
                   setCellCtxMenu(null)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
               >
-                <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>add_circle</span>
-                <span className="text-[11px] font-black uppercase text-slate-700">New Booking</span>
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>add_circle</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">New Booking</span>
               </button>
 
               {/* View Room */}
               {cellCtxMenu.room && (
                 <button
                   onClick={() => { setDetailRoom(cellCtxMenu.room); setDetailOpen(true); setCellCtxMenu(null) }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
                 >
-                  <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>open_in_new</span>
-                  <span className="text-[11px] font-black uppercase text-slate-700">View Room</span>
+                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room</span>
                 </button>
               )}
             </div>
@@ -1736,12 +1736,12 @@ export default function TimelinePage() {
                 left: Math.min(ctxMenu.x, window.innerWidth - 184),
                 top: Math.min(ctxMenu.y, window.innerHeight - 130),
                 minWidth: 172,
-                background: 'rgba(255,255,255,0.72)',
+                background: 'var(--ds-glass-bg)',
                 backdropFilter: 'blur(48px) saturate(180%)',
                 WebkitBackdropFilter: 'blur(48px) saturate(180%)',
-                border: '1px solid rgba(255,255,255,0.9)',
+                border: '1px solid var(--ds-glass-border)',
                 borderRadius: 14,
-                boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
+                boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
                 animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
@@ -1749,17 +1749,17 @@ export default function TimelinePage() {
             >
               {/* Header — booking title */}
               <div className="px-3.5 pt-2.5 pb-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 truncate">{ctxMenu.booking.title}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] truncate">{ctxMenu.booking.title}</p>
               </div>
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 4 }} />
+              <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
 
               {/* Edit */}
               <button
                 onClick={() => { openEdit(ctxMenu.booking); setCtxMenu(null) }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-black/5"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
               >
-                <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>edit</span>
-                <span className="text-[11px] font-black uppercase text-slate-700">Edit</span>
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>edit</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Edit</span>
               </button>
 
               {/* Cancel */}

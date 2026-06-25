@@ -46,7 +46,8 @@ class SettingController extends Controller
 
         return response()->json([
             'max_advance_days'      => (int) $get('max_advance_days', '30'),
-            'allow_book_for_others' => $get('allow_book_for_others', 'true') !== 'false',
+            'allow_book_for_others'   => $get('allow_book_for_others', 'true') !== 'false',
+            'allow_password_change'   => $get('allow_password_change', 'true') !== 'false',
             'restrict_after_hours'  => $get('restrict_after_hours', 'false') === 'true',
             'working_hours_end'     => $get('working_hours_end', '17:00'),
             'feature_ai_chat'       => $get('feature_ai_chat', 'true') !== 'false',
@@ -66,7 +67,8 @@ class SettingController extends Controller
     {
         $data = $request->validate([
             'max_advance_days'      => 'sometimes|integer|min:1|max:365',
-            'allow_book_for_others' => 'sometimes|boolean',
+            'allow_book_for_others'   => 'sometimes|boolean',
+            'allow_password_change'   => 'sometimes|boolean',
             'restrict_after_hours'  => 'sometimes|boolean',
             'working_hours_end'     => 'sometimes|date_format:H:i',
             'feature_ai_chat'       => 'sometimes|boolean',

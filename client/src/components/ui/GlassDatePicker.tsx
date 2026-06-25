@@ -98,11 +98,11 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
     dayCells.push(
       <button key={d} type="button" disabled={disabled} onClick={() => pick(dd)}
         className={`${compact ? 'w-[27px] h-[27px] text-[10px]' : 'w-[34px] h-[34px] text-[11px]'} flex items-center justify-center font-black transition-all duration-150
-          ${disabled ? 'text-slate-300 cursor-not-allowed rounded-[7px]'
+          ${disabled ? 'text-[var(--ds-text-4)] cursor-not-allowed rounded-[7px]'
             : isToday ? 'bg-black text-[#adee2b] shadow-md hover:scale-110 rounded-full'
             : isSel ? 'bg-[#adee2b] text-black shadow-sm ring-1 ring-black/10 scale-105 rounded-full'
-            : inWeek ? `bg-[#adee2b]/20 hover:bg-[#adee2b]/40 ${weekRoundClass} ${isWeekend ? 'text-red-500' : 'text-slate-700'}`
-            : `${compact ? 'rounded-[7px]' : 'rounded-[10px]'} hover:bg-white hover:scale-110 hover:shadow-sm ${isWeekend ? 'text-red-500' : 'text-slate-600'}`}`}>
+            : inWeek ? `bg-[#adee2b]/20 hover:bg-[#adee2b]/40 ${weekRoundClass} ${isWeekend ? 'text-red-500' : 'text-[var(--ds-text-1)]'}`
+            : `${compact ? 'rounded-[7px]' : 'rounded-[10px]'} hover:bg-[var(--ds-bg-raised)] hover:scale-110 ${isWeekend ? 'text-red-500' : 'text-[var(--ds-text-1)]'}`}`}>
         {d}
       </button>
     )
@@ -120,36 +120,34 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
 
       {open && (
         <div
-          className={`absolute top-full mt-2 z-[400] ${align === 'right' ? 'right-0 dropdown-enter-right' : 'left-0 dropdown-enter'}
-            bg-white/70 backdrop-blur-2xl border border-white/60 ring-1 ring-black/5
-            rounded-[1.5rem] shadow-2xl shadow-slate-900/20 p-4`}
-          style={{ width: panelWidth }}
+          className={`absolute top-full mt-2 z-[400] ${align === 'right' ? 'right-0 dropdown-enter-right' : 'left-0 dropdown-enter'} rounded-[1.5rem] p-4`}
+          style={{ width: panelWidth, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}
         >
           {/* header */}
           <div className="flex items-center justify-between mb-3">
             <button type="button" onClick={() => step(-1)}
-              className={`${compact ? 'size-6 rounded-lg' : 'size-8 rounded-xl'} hover:bg-white/80 flex items-center justify-center text-slate-500 transition-colors`}>
+              className={`${compact ? 'size-6 rounded-lg' : 'size-8 rounded-xl'} hover:bg-[var(--ds-bg-raised)] flex items-center justify-center text-[var(--ds-text-2)] transition-colors`}>
               <span className="material-symbols-outlined" style={{ fontSize: compact ? 14 : 18 }}>chevron_left</span>
             </button>
 
             {view === 'days' ? (
               <div className="flex items-center gap-1">
                 <button type="button" onClick={() => setView('months')}
-                  className={`px-2 py-0.5 rounded-lg ${compact ? 'text-[10px]' : 'text-[12px]'} font-black uppercase tracking-wider text-slate-700 hover:bg-white/80 transition-colors`}>
+                  className={`px-2 py-0.5 rounded-lg ${compact ? 'text-[10px]' : 'text-[12px]'} font-black uppercase tracking-wider text-[var(--ds-text-1)] hover:bg-[var(--ds-bg-raised)] transition-colors`}>
                   {MONTHS_LONG[m]}
                 </button>
-                <span className={`px-1.5 py-0.5 ${compact ? 'text-[10px]' : 'text-[12px]'} font-black uppercase tracking-wider text-slate-400 select-none`}>
+                <span className={`px-1.5 py-0.5 ${compact ? 'text-[10px]' : 'text-[12px]'} font-black uppercase tracking-wider text-[var(--ds-text-3)] select-none`}>
                   {y}
                 </span>
               </div>
             ) : (
-              <span className={`px-2 py-0.5 ${compact ? 'text-[10px]' : 'text-[12px]'} font-black uppercase tracking-widest text-slate-700 select-none`}>
+              <span className={`px-2 py-0.5 ${compact ? 'text-[10px]' : 'text-[12px]'} font-black uppercase tracking-widest text-[var(--ds-text-1)] select-none`}>
                 {y}
               </span>
             )}
 
             <button type="button" onClick={() => step(1)}
-              className={`${compact ? 'size-6 rounded-lg' : 'size-8 rounded-xl'} hover:bg-white/80 flex items-center justify-center text-slate-500 transition-colors`}>
+              className={`${compact ? 'size-6 rounded-lg' : 'size-8 rounded-xl'} hover:bg-[var(--ds-bg-raised)] flex items-center justify-center text-[var(--ds-text-2)] transition-colors`}>
               <span className="material-symbols-outlined" style={{ fontSize: compact ? 14 : 18 }}>chevron_right</span>
             </button>
           </div>
@@ -161,7 +159,7 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
                 {weekdays.map(d => {
                   const isWkHeader = (d === 'Sa' && wkSat) || (d === 'Su' && wkSun)
                   return (
-                    <div key={d} className={`text-center ${compact ? 'text-[8px]' : 'text-[9px]'} font-black uppercase py-0.5 ${isWkHeader ? 'text-red-400' : 'text-slate-400'}`}>{d}</div>
+                    <div key={d} className={`text-center ${compact ? 'text-[8px]' : 'text-[9px]'} font-black uppercase py-0.5 ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
                   )
                 })}
               </div>
@@ -180,7 +178,7 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
                     className={`${compact ? 'h-8 text-[10px]' : 'h-11 text-[11px]'} rounded-xl font-black uppercase tracking-wide transition-all
                       ${isCur ? 'bg-black text-[#adee2b]'
                         : isSel ? 'bg-[#adee2b] text-black'
-                        : 'text-slate-600 hover:bg-white/80'}`}>
+                        : 'text-[var(--ds-text-1)] hover:bg-[var(--ds-bg-raised)]'}`}>
                     {mo}
                   </button>
                 )
@@ -189,7 +187,7 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
           )}
 
           {footer && view === 'days' && (
-            <div className="flex gap-2 mt-3 pt-3 border-t border-white/60">
+            <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--ds-border-sub)]">
               {footer(() => setOpen(false))}
             </div>
           )}
