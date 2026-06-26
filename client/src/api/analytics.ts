@@ -51,8 +51,17 @@ export interface AnalyticsFilters {
   page?: number
 }
 
-export async function getAnalyticsOverview(period: 7 | 30 = 7): Promise<AnalyticsOverview> {
-  const { data } = await api.get('/analytics/overview', { params: { period } })
+export type SectionPeriod = 'month' | 'all'
+
+export async function getAnalyticsOverview(
+  period: 7 | 30 = 7,
+  statusPeriod: SectionPeriod = 'month',
+  roomsPeriod: SectionPeriod = 'month',
+  hoursPeriod: SectionPeriod = 'month',
+): Promise<AnalyticsOverview> {
+  const { data } = await api.get('/analytics/overview', {
+    params: { period, status_period: statusPeriod, rooms_period: roomsPeriod, hours_period: hoursPeriod },
+  })
   return data
 }
 

@@ -18,6 +18,11 @@ class AnalyticsController extends Controller
         $period = (int) ($request->query('period', 7));
         if (!in_array($period, [7, 30])) $period = 7;
 
+        $statusPeriod = $request->query('status_period', 'month');
+        $roomsPeriod  = $request->query('rooms_period',  'month');
+        $hoursPeriod  = $request->query('hours_period',  'month');
+        $monthStart   = now()->startOfMonth();
+
         $stats = [
             'total_bookings' => Booking::count(),
             'confirmed'      => Booking::where('status', 'confirmed')->count(),
@@ -36,6 +41,7 @@ class AnalyticsController extends Controller
 
         $topRooms = Booking::selectRaw('rooms.name as room, COUNT(*) as count')
             ->join('rooms', 'bookings.room_id', '=', 'rooms.id')
+            ->when($roomsPeriod === 'month', fn ($q) => $q->where('bookings.start_at', '>=', $monthStart))
             ->groupBy('rooms.id', 'rooms.name')
             ->orderByDesc('count')
             ->limit(5)
@@ -43,11 +49,13 @@ class AnalyticsController extends Controller
             ->map(fn ($r) => ['room' => $r->room, 'count' => (int) $r->count]);
 
         $statusBreakdown = Booking::selectRaw('status, COUNT(*) as count')
+            ->when($statusPeriod === 'month', fn ($q) => $q->where('start_at', '>=', $monthStart))
             ->groupBy('status')
             ->get()
             ->map(fn ($r) => ['status' => $r->status, 'count' => (int) $r->count]);
 
         $peakHours = Booking::selectRaw('HOUR(start_at) as hour, COUNT(*) as count')
+            ->when($hoursPeriod === 'month', fn ($q) => $q->where('start_at', '>=', $monthStart))
             ->groupByRaw('HOUR(start_at)')
             ->orderBy('hour')
             ->get()

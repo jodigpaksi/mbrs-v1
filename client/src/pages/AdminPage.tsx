@@ -1,6 +1,9 @@
 ﻿import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { getAnalyticsOverview } from '../api/analytics'
+import { ResponsiveLine } from '@nivo/line'
+import { ResponsivePie } from '@nivo/pie'
+import { ResponsiveBar } from '@nivo/bar'
+import { getAnalyticsOverview, downloadAnalyticsExport } from '../api/analytics'
+import type { SectionPeriod } from '../api/analytics'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
@@ -3842,19 +3845,56 @@ export default function AdminPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // Overview
-  const [overviewPeriod, setOverviewPeriod] = useState<7 | 30>(7)
+  const [overviewPeriod, setOverviewPeriod]   = useState<7 | 30>(7)
+  const [statusPeriod, setStatusPeriod]       = useState<SectionPeriod>('month')
+  const [roomsPeriod, setRoomsPeriod]         = useState<SectionPeriod>('month')
+  const [hoursPeriod, setHoursPeriod]         = useState<SectionPeriod>('month')
+  const [exportModal, setExportModal]         = useState(false)
+  const [exportMonth, setExportMonth]         = useState(() => new Date().toISOString().slice(0, 7))
+  const [exportAllTime, setExportAllTime]     = useState(false)
+  const [exporting, setExporting]             = useState(false)
+
   const { data: overviewData, isLoading: overviewLoading } = useQuery({
-    queryKey: ['analytics-overview', overviewPeriod],
-    queryFn: () => getAnalyticsOverview(overviewPeriod),
+    queryKey: ['analytics-overview', overviewPeriod, statusPeriod, roomsPeriod, hoursPeriod],
+    queryFn: () => getAnalyticsOverview(overviewPeriod, statusPeriod, roomsPeriod, hoursPeriod),
     staleTime: 60_000,
     enabled: tab === 'overview',
   })
 
-  // Fill peak hours array with 0s for missing hours
   const peakHoursFull = useMemo(() => {
     const map = new Map((overviewData?.peak_hours ?? []).map(h => [h.hour, h.count]))
     return Array.from({ length: 24 }, (_, i) => ({ hour: i, count: map.get(i) ?? 0 }))
   }, [overviewData?.peak_hours])
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      if (exportAllTime) {
+        await downloadAnalyticsExport({})
+      } else {
+        const [y, m] = exportMonth.split('-').map(Number)
+        const from = `${exportMonth}-01`
+        const lastDay = new Date(y, m, 0).getDate()
+        const to = `${exportMonth}-${String(lastDay).padStart(2, '0')}`
+        await downloadAnalyticsExport({ from, to })
+      }
+      setExportModal(false)
+    } finally { setExporting(false) }
+  }
+
+  function SectionPill({ value, onChange }: { value: SectionPeriod; onChange: (v: SectionPeriod) => void }) {
+    return (
+      <div className="flex gap-0.5 p-0.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
+        {(['month', 'all'] as const).map(p => (
+          <button key={p} onClick={() => onChange(p)}
+            className="text-[8px] font-black px-2.5 py-1 rounded-[9px] transition-all uppercase tracking-wide"
+            style={{ background: value === p ? 'var(--ds-bg-surface)' : 'transparent', color: value === p ? 'var(--ds-text-1)' : 'var(--ds-text-4)', boxShadow: value === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+            {p === 'month' ? 'This Month' : 'All Time'}
+          </button>
+        ))}
+      </div>
+    )
+  }
 
   const mainTabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
@@ -3962,9 +4002,16 @@ export default function AdminPage() {
 
         {tab === 'overview' && (
           <div className="max-w-5xl space-y-6 admin-tab-in">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
-              <h1 className="text-3xl font-black italic tracking-tighter uppercase">Overview</h1>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
+                <h1 className="text-3xl font-black italic tracking-tighter uppercase">Overview</h1>
+              </div>
+              <button onClick={() => setExportModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all hover:opacity-80"
+                style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)', color: 'var(--ds-text-2)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>download</span>Export XLSX
+              </button>
             </div>
 
             {overviewLoading ? (
@@ -3999,45 +4046,91 @@ export default function AdminPage() {
                       ))}
                     </div>
                   </div>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <AreaChart data={overviewData.trend} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
-                      <defs>
-                        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.25} />
-                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                      <XAxis dataKey="date" axisLine={false} tickLine={false}
-                        tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }}
-                        tickFormatter={d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }} allowDecimals={false} />
-                      <Tooltip
-                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }}
-                        cursor={{ stroke: 'rgba(99,102,241,0.3)', strokeWidth: 1 }}
-                        labelFormatter={d => new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} />
-                      <Area type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2.5} fill="url(#trendGrad)" dot={false} activeDot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <div style={{ height: 150 }}>
+                    <ResponsiveLine
+                      data={[{ id: 'bookings', data: overviewData.trend.map(d => ({ x: d.date, y: d.count })) }]}
+                      margin={{ top: 8, right: 8, bottom: 28, left: 36 }}
+                      xScale={{ type: 'point' }}
+                      yScale={{ type: 'linear', min: 0, nice: true }}
+                      curve="monotoneX"
+                      enableArea={true}
+                      areaOpacity={1}
+                      colors={['#6366f1']}
+                      lineWidth={2.5}
+                      enablePoints={false}
+                      enableGridX={false}
+                      gridYValues={4}
+                      enableCrosshair={true}
+                      crosshairType="x"
+                      theme={{
+                        grid: { line: { stroke: 'rgba(148,163,184,0.08)', strokeDasharray: '3 3' } },
+                        axis: { ticks: { text: { fontSize: 9, fill: 'rgba(148,163,184,0.55)', fontWeight: 700 } }, domain: { line: { strokeWidth: 0 } } },
+                        crosshair: { line: { stroke: 'rgba(99,102,241,0.35)', strokeWidth: 1 } },
+                      }}
+                      axisBottom={{
+                        tickSize: 0,
+                        tickPadding: 8,
+                        tickValues: overviewData.trend.filter((_, i) => i % Math.ceil(overviewData.trend.length / 6) === 0).map(d => d.date),
+                        format: (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+                      }}
+                      axisLeft={{
+                        tickSize: 0,
+                        tickPadding: 8,
+                        tickValues: 4,
+                        format: (v: number) => Number.isInteger(v) ? String(v) : '',
+                      }}
+                      useMesh={true}
+                      tooltip={({ point }) => (
+                        <div style={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                          {new Date(String(point.data.x)).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} · {String(point.data.y)} bookings
+                        </div>
+                      )}
+                      defs={[{ id: 'trendGrad', type: 'linearGradient', colors: [{ offset: 0, color: '#6366f1', opacity: 0.22 }, { offset: 100, color: '#6366f1', opacity: 0 }] }]}
+                      fill={[{ match: '*', id: 'trendGrad' }]}
+                    />
+                  </div>
                 </div>
 
-                <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"
+                <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5 flex flex-col"
                   style={{ background: 'var(--ds-bg-surface)' }}>
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] mb-1">Status</p>
-                  <p className="text-[11px] font-black text-[var(--ds-text-2)] mb-4">Breakdown</p>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <PieChart>
-                      <Pie data={overviewData.status_breakdown} dataKey="count" nameKey="status"
-                        innerRadius={42} outerRadius={62} paddingAngle={4} strokeWidth={0}>
-                        {overviewData.status_breakdown.map((entry, i) => (
-                          <Cell key={i} fill={entry.status === 'confirmed' ? '#adee2b' : entry.status === 'tentative' ? '#f59e0b' : '#ef4444'} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex flex-col gap-1.5 mt-1">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Status</p>
+                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">Breakdown</p>
+                    </div>
+                    <SectionPill value={statusPeriod} onChange={setStatusPeriod} />
+                  </div>
+                  <div style={{ height: 130 }}>
+                    <ResponsivePie
+                      data={overviewData.status_breakdown.length ? overviewData.status_breakdown.map(s => ({
+                        id: s.status,
+                        label: s.status,
+                        value: s.count,
+                        color: s.status === 'confirmed' ? '#adee2b' : s.status === 'tentative' ? '#f59e0b' : '#ef4444',
+                      })) : [{ id: 'empty', label: 'No data', value: 1, color: 'rgba(148,163,184,0.1)' }]}
+                      margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                      innerRadius={0.68}
+                      padAngle={3}
+                      cornerRadius={2}
+                      colors={{ datum: 'data.color' }}
+                      borderWidth={0}
+                      enableArcLabels={false}
+                      enableArcLinkLabels={false}
+                      activeOuterRadiusOffset={5}
+                      tooltip={({ datum }) => datum.id === 'empty' ? <></> : (
+                        <div style={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                          <span style={{ color: datum.color }}>{datum.label}</span>: {datum.value}
+                        </div>
+                      )}
+                      layers={['arcs', 'arcLabels', 'arcLinkLabels', 'legends', ({ centerX, centerY }) => {
+                        const total = overviewData.status_breakdown.reduce((s, d) => s + d.count, 0)
+                        return total > 0 ? (
+                          <text x={centerX} y={centerY} textAnchor="middle" dominantBaseline="central" style={{ fontSize: 18, fontWeight: 900, fill: 'var(--ds-text-1)' }}>{total}</text>
+                        ) : <></>
+                      }]}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5 mt-2">
                     {overviewData.status_breakdown.map(s => (
                       <div key={s.status} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -4055,57 +4148,156 @@ export default function AdminPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"
                   style={{ background: 'var(--ds-bg-surface)' }}>
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] mb-1">Top Rooms</p>
-                  <p className="text-[11px] font-black text-[var(--ds-text-2)] mb-4">Most booked</p>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <BarChart data={overviewData.top_rooms} layout="vertical" margin={{ top: 0, right: 32, bottom: 0, left: 0 }}>
-                      <defs>
-                        <linearGradient id="roomGrad" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
-                          <stop offset="100%" stopColor="#818cf8" stopOpacity={1} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }} allowDecimals={false} />
-                      <YAxis type="category" dataKey="room" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-2)', fontWeight: 700 }} width={100} />
-                      <Tooltip
-                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }}
-                        cursor={{ fill: 'rgba(99,102,241,0.05)' }} />
-                      <Bar dataKey="count" fill="url(#roomGrad)" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 10, fontWeight: 700, fill: 'var(--ds-text-3)' }} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Top Rooms</p>
+                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">Most booked</p>
+                    </div>
+                    <SectionPill value={roomsPeriod} onChange={setRoomsPeriod} />
+                  </div>
+                  <div style={{ height: 150 }}>
+                    <ResponsiveBar
+                      data={overviewData.top_rooms}
+                      keys={['count']}
+                      indexBy="room"
+                      layout="horizontal"
+                      margin={{ top: 0, right: 8, bottom: 4, left: 100 }}
+                      colors={['#6366f1']}
+                      borderRadius={6}
+                      enableGridX={false}
+                      enableGridY={false}
+                      axisTop={null}
+                      axisRight={null}
+                      axisBottom={null}
+                      axisLeft={{ tickSize: 0, tickPadding: 8 }}
+                      enableLabel={true}
+                      label={d => `${d.value}`}
+                      labelSkipWidth={18}
+                      labelTextColor="#fff"
+                      theme={{
+                        axis: { ticks: { text: { fontSize: 9, fill: 'rgba(148,163,184,0.7)', fontWeight: 700 } }, domain: { line: { strokeWidth: 0 } } },
+                        labels: { text: { fontSize: 9, fontWeight: 700 } },
+                      }}
+                      tooltip={({ indexValue, value }) => (
+                        <div style={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                          {indexValue}: {value}
+                        </div>
+                      )}
+                      defs={[{ id: 'roomGrad', type: 'linearGradient', x1: '0%', y1: '0%', x2: '100%', y2: '0%', colors: [{ offset: 0, color: '#6366f1' }, { offset: 100, color: '#818cf8' }] }]}
+                      fill={[{ match: '*', id: 'roomGrad' }]}
+                    />
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5 overflow-hidden relative"
                   style={{ background: 'linear-gradient(135deg, rgba(173,238,43,0.06) 0%, var(--ds-bg-surface) 60%)' }}>
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] mb-1">Peak Hours</p>
-                  <p className="text-[11px] font-black text-[var(--ds-text-2)] mb-4">Busiest booking times</p>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <BarChart data={peakHoursFull} margin={{ top: 0, right: 4, bottom: 0, left: -28 }} barCategoryGap="20%">
-                      <defs>
-                        <linearGradient id="peakGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#adee2b" stopOpacity={1} />
-                          <stop offset="100%" stopColor="#84cc16" stopOpacity={0.8} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
-                      <XAxis dataKey="hour" axisLine={false} tickLine={false}
-                        tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }}
-                        tickFormatter={h => `${h}:00`} interval={3} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }} allowDecimals={false} />
-                      <Tooltip
-                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }}
-                        cursor={{ fill: 'rgba(173,238,43,0.06)' }}
-                        labelFormatter={h => `${h}:00`} />
-                      <Bar dataKey="count" fill="url(#peakGrad)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Peak Hours</p>
+                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">Busiest booking times</p>
+                    </div>
+                    <SectionPill value={hoursPeriod} onChange={setHoursPeriod} />
+                  </div>
+                  <div style={{ height: 150 }}>
+                    <ResponsiveBar
+                      data={peakHoursFull}
+                      keys={['count']}
+                      indexBy="hour"
+                      margin={{ top: 4, right: 4, bottom: 28, left: 36 }}
+                      colors={['#adee2b']}
+                      borderRadius={4}
+                      padding={0.2}
+                      enableGridX={false}
+                      gridYValues={4}
+                      axisTop={null}
+                      axisRight={null}
+                      axisBottom={{
+                        tickSize: 0,
+                        tickPadding: 8,
+                        tickValues: [0, 3, 6, 9, 12, 15, 18, 21],
+                        format: (h: number) => `${h}:00`,
+                      }}
+                      axisLeft={{
+                        tickSize: 0,
+                        tickPadding: 8,
+                        tickValues: 4,
+                        format: (v: number) => Number.isInteger(v) ? String(v) : '',
+                      }}
+                      enableLabel={false}
+                      theme={{
+                        grid: { line: { stroke: 'rgba(148,163,184,0.08)', strokeDasharray: '3 3' } },
+                        axis: { ticks: { text: { fontSize: 9, fill: 'rgba(148,163,184,0.55)', fontWeight: 700 } }, domain: { line: { strokeWidth: 0 } } },
+                      }}
+                      tooltip={({ indexValue, value }) => (
+                        <div style={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                          {indexValue}:00 · {value} bookings
+                        </div>
+                      )}
+                      defs={[{ id: 'peakGrad', type: 'linearGradient', x1: '0%', y1: '0%', x2: '0%', y2: '100%', colors: [{ offset: 0, color: '#adee2b', opacity: 1 }, { offset: 100, color: '#84cc16', opacity: 0.8 }] }]}
+                      fill={[{ match: '*', id: 'peakGrad' }]}
+                    />
+                  </div>
                 </div>
               </div>
             </>)}
           </div>
         )}
 
+        {/* Export Modal */}
+        {exportModal && (
+          <ModalPortal>
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)' }} onClick={() => setExportModal(false)}>
+            <div className="rounded-3xl shadow-2xl w-[360px] p-7 space-y-5" style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }} onClick={e => e.stopPropagation()}>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Analytics</p>
+                <h3 className="text-base font-black uppercase tracking-tight mt-0.5 text-[var(--ds-text-1)]">Export Bookings</h3>
+              </div>
 
+              <div className="space-y-3">
+                {/* All time toggle */}
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="relative shrink-0" onClick={() => setExportAllTime(v => !v)}>
+                    <div className="w-9 h-5 rounded-full transition-colors" style={{ background: exportAllTime ? '#adee2b' : 'var(--ds-bg-surface-2)', border: '1px solid var(--ds-border)' }} />
+                    <div className="absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform shadow-sm" style={{ transform: exportAllTime ? 'translateX(16px)' : 'translateX(0)' }} />
+                  </div>
+                  <span className="text-[11px] font-bold text-[var(--ds-text-2)]">Export all time</span>
+                </label>
+
+                {/* Month picker */}
+                {!exportAllTime && (
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">Month</label>
+                    <input
+                      type="month"
+                      value={exportMonth}
+                      max={new Date().toISOString().slice(0, 7)}
+                      onChange={e => setExportMonth(e.target.value)}
+                      className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]"
+                    />
+                  </div>
+                )}
+
+                {exportAllTime && (
+                  <p className="text-[10px] text-[var(--ds-text-3)] font-bold">Exports all bookings with no date filter.</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setExportModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleExport} disabled={exporting}
+                  className="flex-1 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
+                  {exporting
+                    ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>Exporting…</>
+                    : <><span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download XLSX</>}
+                </button>
+              </div>
+            </div>
+          </div>
+          </ModalPortal>
+        )}
 
         {tab === 'buildings' && <div className="admin-tab-in"><BuildingsTab /></div>}
 
