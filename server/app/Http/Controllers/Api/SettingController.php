@@ -92,15 +92,37 @@ class SettingController extends Controller
         return $this->generalSettings();
     }
 
-    public function afterHoursContacts(): JsonResponse
+    private function resolveContacts(string $settingKey, ?int $buildingId): \Illuminate\Support\Collection
     {
-        $raw = Setting::where('key', 'after_hours_contacts')->value('value') ?? '[]';
+        $raw = Setting::where('key', $settingKey)->value('value') ?? '[]';
         $ids = json_decode($raw, true) ?? [];
 
-        $users = empty($ids)
-            ? User::with('department')->where('role', 'receptionist')->where('on_duty', true)->get()
-            : User::with('department')->whereIn('id', $ids)->get();
+        if (!empty($ids)) {
+            $pool = User::with('department', 'adminBuildings')->whereIn('id', $ids);
+            if ($buildingId) {
+                // Include contacts assigned to this building OR with no building assignments (global)
+                $filtered = (clone $pool)->where(function ($q) use ($buildingId) {
+                    $q->whereHas('adminBuildings', fn ($q2) => $q2->where('building_id', $buildingId))
+                      ->orWhereDoesntHave('adminBuildings');
+                })->get();
+                if ($filtered->isNotEmpty()) return $filtered;
+            }
+            return $pool->get();
+        }
 
+        $pool = User::with('department', 'adminBuildings')->where('role', 'receptionist')->where('on_duty', true);
+        if ($buildingId) {
+            $filtered = (clone $pool)->where(function ($q) use ($buildingId) {
+                $q->whereHas('adminBuildings', fn ($q2) => $q2->where('building_id', $buildingId))
+                  ->orWhereDoesntHave('adminBuildings');
+            })->get();
+            if ($filtered->isNotEmpty()) return $filtered;
+        }
+        return $pool->get();
+    }
+
+    private function mapContacts(\Illuminate\Support\Collection $users): JsonResponse
+    {
         return response()->json($users->map(fn ($u) => [
             'id'         => $u->id,
             'name'       => $u->name,
@@ -110,7 +132,41 @@ class SettingController extends Controller
             'avatar'     => $u->avatar,
             'on_duty'    => (bool) $u->on_duty,
             'department' => $u->department?->name ?? null,
+            'buildings'  => $u->adminBuildings->map(fn ($b) => [
+                'id'   => $b->id,
+                'name' => $b->name,
+                'code' => $b->code,
+            ])->values(),
         ])->values());
+    }
+
+    public function afterHoursContacts(Request $request): JsonResponse
+    {
+        $raw = $request->query('building_id');
+        $buildingId = (is_string($raw) && ctype_digit($raw)) ? (int) $raw : null;
+        return $this->mapContacts($this->resolveContacts('after_hours_contacts', $buildingId));
+    }
+
+    public function specialRoomContacts(Request $request): JsonResponse
+    {
+        $raw = $request->query('building_id');
+        $buildingId = (is_string($raw) && ctype_digit($raw)) ? (int) $raw : null;
+        return $this->mapContacts($this->resolveContacts('special_room_contacts', $buildingId));
+    }
+
+    public function updateSpecialRoomContacts(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'user_ids'   => 'required|array',
+            'user_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        Setting::updateOrCreate(
+            ['key' => 'special_room_contacts'],
+            ['value' => json_encode($data['user_ids'])]
+        );
+
+        return $this->mapContacts($this->resolveContacts('special_room_contacts', null));
     }
 
     public function updateAfterHoursContacts(Request $request): JsonResponse
@@ -125,7 +181,7 @@ class SettingController extends Controller
             ['value' => json_encode($data['user_ids'])]
         );
 
-        return $this->afterHoursContacts();
+        return $this->mapContacts($this->resolveContacts('after_hours_contacts', null));
     }
 
     public function updateBookingHours(Request $request): JsonResponse

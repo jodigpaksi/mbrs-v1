@@ -12,7 +12,6 @@ import { useBookingHours } from '../../hooks/useBookingHours'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
-import AfterHoursModal from './AfterHoursModal'
 
 function fmtFieldDate(iso: string): string {
   if (!iso) return 'Select date'
@@ -49,9 +48,10 @@ interface BookingPanelProps {
   buildingId?: number | null
   onSubmit?: () => void
   onCancel?: (booking: Booking) => void
+  onAfterHoursOpen?: (data: { buildingId?: number | null; workingHoursEnd: string }) => void
 }
 
-export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, prefillVersion, buildingId, onSubmit, onCancel }: BookingPanelProps) {
+export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, prefillVersion, buildingId, onSubmit, onCancel, onAfterHoursOpen }: BookingPanelProps) {
   const { user } = useAuth()
   const { defaultType, defaultBuilding } = useSettings()
   const { start: bsStr, end: beStr } = useBookingHours()
@@ -120,7 +120,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // cancel series modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   // after-hours restriction modal
-  const [afterHoursOpen, setAfterHoursOpen] = useState(false)
 
   const isEdit = !!editBooking
   const [glowActive, setGlowActive] = useState(false)
@@ -1837,7 +1836,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 {/* After-hours overlay — covers the Confirm Booking button */}
                 {restrictAfterHours && startTime >= workingHoursEnd && !showReceptionistNotice && (
                   <button
-                    onClick={() => setAfterHoursOpen(true)}
+                    onClick={() => { saveDraft(); onClose(); onAfterHoursOpen?.({ buildingId: selectedRoom?.building_id ?? null, workingHoursEnd }) }}
                     className="absolute inset-0 w-full rounded-full flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-[0.1em] transition-all hover:brightness-110 active:scale-[0.98]"
                     style={{
                       background: 'rgba(99,102,241,0.15)',
@@ -1866,11 +1865,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         </div>
       </div>
 
-      <AfterHoursModal
-        open={afterHoursOpen}
-        onClose={() => setAfterHoursOpen(false)}
-        workingHoursEnd={workingHoursEnd}
-      />
     </>
   )
 }

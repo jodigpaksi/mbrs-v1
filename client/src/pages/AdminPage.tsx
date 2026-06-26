@@ -1,4 +1,6 @@
 ﻿import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { getAnalyticsOverview } from '../api/analytics'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
@@ -22,9 +24,7 @@ import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 import KioskTab from '../components/admin/KioskTab'
 
-type Tab = 'overview' | 'bookings' | 'users' | 'buildings' | 'assets' | 'settings' | 'archive' | 'kiosk'
-type SortKey = 'start_at' | 'title' | 'room' | 'user' | 'status'
-type SortDir = 'asc' | 'desc'
+type Tab = 'overview' | 'users' | 'buildings' | 'assets' | 'settings' | 'archive' | 'kiosk'
 
 function ModalPortal({ children }: { children: ReactNode }) {
   return <>{createPortal(children, document.body)}</>
@@ -32,10 +32,10 @@ function ModalPortal({ children }: { children: ReactNode }) {
 
 function StatCard({ label, value, sub, dark }: { label: string; value: string; sub: string; dark?: boolean }) {
   return (
-    <div className={`p-5 rounded-2xl ${dark ? 'bg-black' : 'bg-white border border-slate-100'}`}>
-      <p className={`text-[8px] font-black uppercase tracking-widest ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{label}</p>
-      <p className={`text-4xl font-black italic mt-1 ${dark ? 'text-[#adee2b]' : 'text-slate-800'}`}>{value}</p>
-      <p className={`text-[9px] font-bold mt-0.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{sub}</p>
+    <div className={`p-5 rounded-2xl ${dark ? 'bg-black' : 'bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)]'}`}>
+      <p className={`text-[8px] font-black uppercase tracking-widest ${dark ? 'text-slate-500' : 'text-[var(--ds-text-3)]'}`}>{label}</p>
+      <p className={`text-4xl font-black italic mt-1 ${dark ? 'text-[#adee2b]' : 'text-[var(--ds-text-1)]'}`}>{value}</p>
+      <p className={`text-[9px] font-bold mt-0.5 ${dark ? 'text-slate-500' : 'text-[var(--ds-text-3)]'}`}>{sub}</p>
     </div>
   )
 }
@@ -325,7 +325,7 @@ function RoomModal({
               {/* ── Basic ── */}
               {activeTab === 'basic' && (
                 <div className="px-7 py-5 space-y-4">
-                  {err && <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-3 rounded-xl"><span className="material-symbols-outlined" style={{ fontSize: 15 }}>error</span>{err}</div>}
+                  {err && <div className="flex items-center gap-2 text-[11px] font-bold px-4 py-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}><span className="material-symbols-outlined" style={{ fontSize: 15 }}>error</span>{err}</div>}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1.5">
                       <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Room Name *</label>
@@ -595,8 +595,8 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
               title={r.requires_contact ? 'Remove special access requirement' : 'Set as special room'}
               className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
                 ${r.requires_contact
-                  ? 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200'
-                  : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] border-[var(--ds-border)] hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'}`}
+                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30'
+                  : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] border-[var(--ds-border)] hover:bg-indigo-500/10 hover:text-indigo-400 hover:border-indigo-500/30'}`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: r.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>
               {togglingSpecial === r.id ? '...' : r.requires_contact ? 'Special' : 'Regular'}
@@ -687,7 +687,7 @@ function LocationsSection() {
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
               </button>
               <button onClick={() => { setDeleteErr(''); setDeleteLocConfirm(''); setDeleteTarget(loc) }}
-                className="size-6 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-all">
+                className="size-6 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-all">
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
               </button>
             </div>
@@ -715,12 +715,12 @@ function LocationsSection() {
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
-              <div className="size-11 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
+              <div className="size-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(239,68,68,0.15)' }}>
                 <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}>location_city</span>
               </div>
               <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-500">Danger Zone</p>
                 <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete City?</h3>
               </div>
             </div>
@@ -748,7 +748,7 @@ function LocationsSection() {
                 />
               </div>
               {deleteErr && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-3 py-2.5 rounded-xl">
+                <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
                   <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>{deleteErr}
                 </div>
               )}
@@ -952,7 +952,7 @@ function BuildingsTab() {
                       <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[10px] font-black uppercase text-blue-500">{b.location.name}</span>
                     )}
                     {!b.is_active && (
-                      <span className="px-2 py-0.5 rounded-full bg-red-50 text-[10px] font-black uppercase text-red-400">Inactive</span>
+                      <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-[10px] font-black uppercase text-red-400">Inactive</span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-1">
@@ -983,7 +983,7 @@ function BuildingsTab() {
                   </button>
                   <button
                     onClick={() => { setDeleteErr(''); setConfirmBuildingInput(''); setDeleteTarget(b) }}
-                    className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-red-50 hover:text-red-500 transition-all"
+                    className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-red-500/10 hover:text-red-400 transition-all"
                     title="Delete building"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
@@ -1062,12 +1062,12 @@ function BuildingsTab() {
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
-              <div className="size-11 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
+              <div className="size-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(239,68,68,0.15)' }}>
                 <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}>domain</span>
               </div>
               <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-500">Danger Zone</p>
                 <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete Building?</h3>
               </div>
             </div>
@@ -1095,7 +1095,7 @@ function BuildingsTab() {
                 />
               </div>
               {deleteErr && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-3 py-2.5 rounded-xl">
+                <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
                   <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>{deleteErr}
                 </div>
               )}
@@ -1125,12 +1125,12 @@ function BuildingsTab() {
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
-              <div className="size-11 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
+              <div className="size-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(239,68,68,0.15)' }}>
                 <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}>meeting_room</span>
               </div>
               <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-500">Danger Zone</p>
                 <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete Room?</h3>
               </div>
             </div>
@@ -1161,7 +1161,7 @@ function BuildingsTab() {
                 />
               </div>
               {deleteRoomErr && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-3 py-2.5 rounded-xl">
+                <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
                   <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>
                   {deleteRoomErr}
                 </div>
@@ -1195,10 +1195,10 @@ function BuildingsTab() {
 // ── Assets / Inventory Tab ───────────────────────────────────────────────────
 
 const STATUS_META: Record<AssetStatus, { label: string; bg: string; text: string; dot: string }> = {
-  active:  { label: 'Active',  bg: 'bg-green-100',  text: 'text-green-700',  dot: 'bg-green-500' },
-  rusak:   { label: 'Rusak',   bg: 'bg-red-100',    text: 'text-red-600',    dot: 'bg-red-500' },
-  service: { label: 'Service', bg: 'bg-orange-100', text: 'text-orange-600', dot: 'bg-orange-500' },
-  hilang:  { label: 'Hilang',  bg: 'bg-slate-100',  text: 'text-slate-500',  dot: 'bg-slate-400' },
+  active:  { label: 'Active',  bg: 'bg-green-500/10',  text: 'text-green-400',  dot: 'bg-green-500' },
+  rusak:   { label: 'Rusak',   bg: 'bg-red-500/10',    text: 'text-red-400',    dot: 'bg-red-500' },
+  service: { label: 'Service', bg: 'bg-orange-500/10', text: 'text-orange-400', dot: 'bg-orange-500' },
+  hilang:  { label: 'Hilang',  bg: 'bg-[var(--ds-bg-raised)]',  text: 'text-[var(--ds-text-3)]',  dot: 'bg-slate-400' },
   indent:  { label: 'Indent',  bg: 'bg-blue-100',   text: 'text-blue-600',   dot: 'bg-blue-500' },
 }
 const ASSET_STATUSES: AssetStatus[] = ['active', 'rusak', 'service', 'hilang', 'indent']
@@ -1565,7 +1565,7 @@ function AssetsTab() {
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>edit</span>
                     </button>
                     <button onClick={() => setDeleteAssetTarget(asset)}
-                      className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors">
+                      className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
                     </button>
                   </div>
@@ -1622,7 +1622,7 @@ function AssetsTab() {
                                     <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
                                   </button>
                                   <button onClick={() => setDeleteUnitTarget({ asset, unit })}
-                                    className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors">
+                                    className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
                                     <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
                                   </button>
                                 </div>
@@ -1697,9 +1697,9 @@ function AssetsTab() {
 
 const ROLE_META: Record<UserRole, { label: string; bg: string; text: string }> = {
   admin:          { label: 'Super Admin',    bg: 'bg-black',       text: 'text-[#adee2b]' },
-  building_admin: { label: 'Building Admin', bg: 'bg-blue-100',    text: 'text-blue-700' },
-  receptionist:   { label: 'Receptionist',  bg: 'bg-purple-100',  text: 'text-purple-700' },
-  user:           { label: 'User',           bg: 'bg-slate-100',   text: 'text-slate-500' },
+  building_admin: { label: 'Building Admin', bg: 'bg-blue-500/10',    text: 'text-blue-400' },
+  receptionist:   { label: 'Receptionist',  bg: 'bg-purple-500/10',  text: 'text-purple-400' },
+  user:           { label: 'User',           bg: 'bg-[var(--ds-bg-raised)]',   text: 'text-[var(--ds-text-3)]' },
 }
 const ALL_ROLES: UserRole[] = ['admin', 'building_admin', 'receptionist', 'user']
 
@@ -1722,7 +1722,7 @@ function BuildingPicker({ role, bldIds, buildings, locations, onToggle }: {
     return (
       <button onClick={() => onToggle(b.id)}
         className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border mb-1 transition-all text-left
-          ${checked ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[var(--ds-text-3)]'}`}>
+          ${checked ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[var(--ds-text-3)]'}`}>
         <span className={`size-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-blue-500 border-blue-500' : 'border-[var(--ds-border)]'}`}>
           {checked && <span className="material-symbols-outlined text-white" style={{ fontSize: 11 }}>check</span>}
         </span>
@@ -1844,7 +1844,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
 
           {/* Error banner */}
           {err && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-4 py-3 rounded-xl">
+            <div className="flex items-center gap-2 text-[11px] font-bold px-4 py-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
               <span className="material-symbols-outlined" style={{ fontSize: 15 }}>error</span>
               {err}
             </div>
@@ -2471,7 +2471,7 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
       {!collapsed && (
         <div className="border-t border-[var(--ds-border-sub)] px-5 py-4 space-y-3">
           {delErr && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-3 py-2 rounded-xl">
+            <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
               <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>error</span>{delErr}
             </div>
           )}
@@ -2506,7 +2506,7 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
                         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
                       </button>
                       <button onClick={() => handleDelete(d)}
-                        className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                        className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
                         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
                       </button>
                     </div>
@@ -2758,7 +2758,7 @@ function UsersTab() {
                             </td>
                             <td className="px-2 py-3.5">
                               <button onClick={() => { setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('') }}
-                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors">
+                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
                               </button>
                             </td>
@@ -2811,7 +2811,7 @@ function UsersTab() {
                             if (isLastAdmin) { setDeleteBlockedUser(u); return }
                             setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('')
                           }}
-                          className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-50 hover:text-red-500 transition-colors shrink-0">
+                          className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
                         </button>
                       </div>
@@ -2883,12 +2883,12 @@ function UsersTab() {
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
               <div className="size-11 rounded-2xl bg-red-100 flex items-center justify-center shrink-0 overflow-hidden">
                 <UserAvatar name={deleteUserTarget.name} avatar={deleteUserTarget.avatar} size={40} />
               </div>
               <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-400">Danger Zone</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-500">Danger Zone</p>
                 <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Delete User?</h3>
               </div>
             </div>
@@ -2922,7 +2922,7 @@ function UsersTab() {
                 />
               </div>
               {deleteUserErr && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-3 py-2.5 rounded-xl">
+                <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
                   <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>
                   {deleteUserErr}
                 </div>
@@ -2984,7 +2984,7 @@ function UsersTab() {
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto px-7 py-5 space-y-4" style={{ scrollbarWidth: 'thin' }}>
 
-            {editErr && <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold px-3 py-2.5 rounded-xl"><span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>{editErr}</div>}
+            {editErr && <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}><span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>{editErr}</div>}
 
             {/* Avatar picker */}
             {(() => {
@@ -3316,7 +3316,7 @@ function ArchiveTab() {
   const statusColor: Record<string, string> = {
     confirmed: 'bg-green-50 text-green-700',
     pending:   'bg-amber-50 text-amber-700',
-    cancelled: 'bg-red-50 text-red-500',
+    cancelled: 'bg-red-500/10 text-red-400',
     tentative: 'bg-blue-50 text-blue-600',
   }
 
@@ -3371,7 +3371,7 @@ function ArchiveTab() {
 
           {/* destructive */}
           <button onClick={() => setPurgeConfirm(true)}
-            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-red-200 bg-red-50 text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
+            className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl text-red-400 text-[10px] font-black uppercase transition-colors" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }} onMouseEnter={e => (e.currentTarget.style.background='rgba(239,68,68,0.15)')} onMouseLeave={e => (e.currentTarget.style.background='rgba(239,68,68,0.08)')}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete_sweep</span>Purge
           </button>
         </div>
@@ -3468,7 +3468,7 @@ function ArchiveTab() {
                     onClick={() => doRestore(b.id)}
                     disabled={restoringId === b.id}
                     title="Restore to active"
-                    className="size-8 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-100 disabled:opacity-40 transition-all"
+                    className="size-8 flex items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-40 transition-all"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 15 }}>restore</span>
                   </button>
@@ -3536,9 +3536,9 @@ function ArchiveTab() {
 
         {/* Danger zone */}
         {exports.length > 0 && (
-          <div className="mx-6 mb-6 mt-2 rounded-2xl border border-red-200 bg-red-50 p-4 flex items-center justify-between gap-4">
+          <div className="mx-6 mb-6 mt-2 rounded-2xl p-4 flex items-center justify-between gap-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
             <div>
-              <p className="text-[11px] font-black text-red-600 uppercase tracking-wider">Danger Zone</p>
+              <p className="text-[11px] font-black text-red-500 uppercase tracking-wider">Danger Zone</p>
               <p className="text-[10px] text-red-400 mt-0.5">Delete all {exports.length} export batch{exports.length !== 1 ? 'es' : ''} and their files permanently.</p>
             </div>
             <button onClick={() => { setDeleteExportsConfirm(true); setDeleteExportsInput('') }}
@@ -3558,7 +3558,7 @@ function ArchiveTab() {
           <div className="w-[420px] rounded-[2rem] overflow-hidden shadow-2xl"
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}>
-            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
               <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
               </div>
@@ -3609,7 +3609,7 @@ function ArchiveTab() {
           <div className="w-[400px] rounded-[2rem] overflow-hidden shadow-2xl"
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}>
-            <div className="px-7 pt-7 pb-5 bg-red-50 border-b border-red-100 flex items-center gap-3">
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
               <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center">
                 <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
               </div>
@@ -3807,7 +3807,7 @@ function SettingsTab() {
           <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Booking Hours</p>
           <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Set the global time window during which rooms can be booked.</p>
         </div>
-        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-700 font-semibold leading-relaxed">
+        <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(217,119,6,0.10)', border: '1px solid rgba(217,119,6,0.25)', color: '#f59e0b' }}>
           <span className="font-black">Warning:</span> Tightening these hours will automatically trim or cancel existing future bookings that fall outside the new window.
         </div>
         <div className="flex items-end gap-4">
@@ -3861,8 +3861,8 @@ function SettingsTab() {
                   </div>
                 </div>
                 <button type="button" onClick={toggle} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-                  <div className="absolute inset-0 rounded-full transition-colors" style={{ background: val ? '#ef4444' : '#e2e8f0' }} />
-                  <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: val ? 24 : 4 }} />
+                  <div className="absolute inset-0 rounded-full transition-colors" style={{ background: val ? '#ef4444' : 'var(--ds-bg-raised)' }} />
+                  <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, left: val ? 24 : 4, background: 'var(--ds-bg-surface)' }} />
                 </button>
               </div>
             </div>
@@ -3910,8 +3910,8 @@ function SettingsTab() {
             </div>
           </div>
           <button type="button" onClick={toggleAllowBookFor} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowBookFor ? '#adee2b' : '#e2e8f0' }} />
-            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: allowBookFor ? 24 : 4 }} />
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowBookFor ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowBookFor ? 24 : 4 }} />
           </button>
         </div>
 
@@ -3929,8 +3929,8 @@ function SettingsTab() {
             </div>
           </div>
           <button type="button" onClick={toggleAllowPasswordChange} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowPasswordChange ? '#adee2b' : '#e2e8f0' }} />
-            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: allowPasswordChange ? 24 : 4 }} />
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowPasswordChange ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowPasswordChange ? 24 : 4 }} />
           </button>
         </div>
 
@@ -3981,8 +3981,8 @@ function SettingsTab() {
             </div>
           </div>
           <button type="button" onClick={toggleAiChat} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: aiChat ? '#adee2b' : '#e2e8f0' }} />
-            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: aiChat ? 24 : 4 }} />
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: aiChat ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: aiChat ? 24 : 4 }} />
           </button>
         </div>
 
@@ -4090,8 +4090,8 @@ function SettingsTab() {
             </div>
           </div>
           <button type="button" onClick={toggleExportEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: exportEnabled ? '#adee2b' : '#e2e8f0' }} />
-            <div className="absolute top-1 transition-all rounded-full bg-white shadow-sm" style={{ width: 16, height: 16, left: exportEnabled ? 24 : 4 }} />
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: exportEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: exportEnabled ? 24 : 4 }} />
           </button>
         </div>
 
@@ -4242,50 +4242,29 @@ export default function AdminPage() {
   const isAdmin = user?.role === 'admin'
   const [tab, setTab] = useState<Tab>('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [sortKey, setSortKey] = useState<SortKey>('start_at')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('desc') }
-  }
+  // Overview
+  const [overviewPeriod, setOverviewPeriod] = useState<7 | 30>(7)
+  const { data: overviewData, isLoading: overviewLoading } = useQuery({
+    queryKey: ['analytics-overview', overviewPeriod],
+    queryFn: () => getAnalyticsOverview(overviewPeriod),
+    staleTime: 60_000,
+    enabled: tab === 'overview',
+  })
 
-  const now = new Date()
-
-  const sortedBookings = useMemo(() => {
-    const upcoming = mockBookings.filter(b => new Date(b.end_at) >= now)
-    const past = mockBookings.filter(b => new Date(b.end_at) < now)
-    function sortFn(a: typeof mockBookings[0], b: typeof mockBookings[0]) {
-      let va = '', vb = ''
-      if (sortKey === 'start_at') return sortDir === 'desc'
-        ? new Date(b.start_at).getTime() - new Date(a.start_at).getTime()
-        : new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
-      if (sortKey === 'title') { va = a.title; vb = b.title }
-      else if (sortKey === 'room') { va = a.room?.name ?? ''; vb = b.room?.name ?? '' }
-      else if (sortKey === 'user') { va = a.user?.name ?? ''; vb = b.user?.name ?? '' }
-      else if (sortKey === 'status') { va = a.status; vb = b.status }
-      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
-    }
-    return [...upcoming.sort(sortFn), ...past.sort(sortFn)]
-  }, [sortKey, sortDir])
-
-  const recentBookings = useMemo(() =>
-    [...mockBookings].sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime()).slice(0, 5)
-  , [])
-
-  const totalBookings = mockBookings.length
-  const confirmedBookings = mockBookings.filter(b => b.status === 'confirmed').length
-  const totalRooms = mockRooms.filter(r => r.is_active).length
-  const totalUsers = mockUsers.length
+  // Fill peak hours array with 0s for missing hours
+  const peakHoursFull = useMemo(() => {
+    const map = new Map((overviewData?.peak_hours ?? []).map(h => [h.hour, h.count]))
+    return Array.from({ length: 24 }, (_, i) => ({ hour: i, count: map.get(i) ?? 0 }))
+  }, [overviewData?.peak_hours])
 
   const mainTabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'overview',  label: 'Overview',  icon: 'dashboard' },
-    { key: 'bookings',  label: 'Bookings',  icon: 'event' },
-    { key: 'buildings', label: 'Buildings', icon: 'domain' },
-    { key: 'assets',    label: 'Assets',    icon: 'inventory_2' },
-    { key: 'users',     label: 'Users',     icon: 'group' },
-    { key: 'archive',   label: 'Archive',   icon: 'archive' },
-    { key: 'kiosk',     label: 'Kiosk',     icon: 'tablet' },
+    { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
+    { key: 'buildings',  label: 'Buildings',  icon: 'domain' },
+    { key: 'assets',     label: 'Assets',     icon: 'inventory_2' },
+    { key: 'users',      label: 'Users',      icon: 'group' },
+    { key: 'archive',    label: 'Archive',    icon: 'archive' },
+    { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
   ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
@@ -4385,132 +4364,151 @@ export default function AdminPage() {
       <div className="flex-1 overflow-y-auto p-8" style={{ scrollbarWidth: 'thin', willChange: 'scroll-position' }}>
 
         {tab === 'overview' && (
-          <div className="max-w-4xl space-y-6 admin-tab-in">
+          <div className="max-w-5xl space-y-6 admin-tab-in">
             <div>
               <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
               <h1 className="text-3xl font-black italic tracking-tighter uppercase">Overview</h1>
             </div>
-            <div className="grid grid-cols-4 gap-4">
-              <StatCard label="Total Bookings" value={String(totalBookings)} sub="all time" dark />
-              <StatCard label="Confirmed" value={String(confirmedBookings)} sub="active bookings" />
-              <StatCard label="Active Rooms" value={String(totalRooms)} sub="available" />
-              <StatCard label="Users" value={String(totalUsers)} sub="registered" />
-            </div>
-            <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
-              <div className="px-6 py-4 border-b border-[var(--ds-border-sub)] flex items-center justify-between">
-                <h3 className="text-sm font-black uppercase text-[var(--ds-text-1)]">Recent Bookings</h3>
-                <button onClick={() => setTab('bookings')} className="text-[9px] font-black uppercase text-[#adee2b] bg-black px-3 py-1.5 rounded-lg hover:opacity-80">View All</button>
+
+            {overviewLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <span className="material-symbols-outlined animate-spin text-[var(--ds-text-4)]" style={{ fontSize: 32 }}>progress_activity</span>
               </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[var(--ds-border-sub)]">
-                    {['Title', 'Room', 'User', 'Date', 'Status'].map(h => (
-                      <th key={h} className="px-6 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentBookings.map(b => (
-                    <tr key={b.id} className="border-b border-[var(--ds-border-sub)] hover:bg-[var(--ds-bg-raised)] transition-colors">
-                      <td className="px-6 py-3 text-xs font-bold text-[var(--ds-text-1)]">{b.title}</td>
-                      <td className="px-6 py-3 text-xs text-[var(--ds-text-2)]">{b.room?.name}</td>
-                      <td className="px-6 py-3">
+            ) : overviewData && (<>
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-4">
+                <StatCard label="Total Bookings" value={String(overviewData.stats.total_bookings)} sub="all time" dark />
+                <StatCard label="Confirmed" value={String(overviewData.stats.confirmed)} sub="bookings" />
+                <StatCard label="Active Rooms" value={String(overviewData.stats.active_rooms)} sub="available" />
+                <StatCard label="Users" value={String(overviewData.stats.total_users)} sub="registered" />
+              </div>
+
+              {/* Trend + Status */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2 rounded-2xl border border-[var(--ds-border-sub)] p-5 overflow-hidden relative"
+                  style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, var(--ds-bg-surface) 60%)' }}>
+                  <div className="flex items-center justify-between mb-5">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Booking Trend</p>
+                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">Last {overviewPeriod} days</p>
+                    </div>
+                    <div className="flex gap-1 p-0.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
+                      {([7, 30] as const).map(p => (
+                        <button key={p} onClick={() => setOverviewPeriod(p)}
+                          className="text-[9px] font-black px-3 py-1.5 rounded-[10px] transition-all"
+                          style={{ background: overviewPeriod === p ? '#6366f1' : 'transparent', color: overviewPeriod === p ? '#fff' : 'var(--ds-text-3)' }}>
+                          {p}D
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <AreaChart data={overviewData.trend} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
+                      <defs>
+                        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false}
+                        tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }}
+                        tickFormatter={d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }}
+                        cursor={{ stroke: 'rgba(99,102,241,0.3)', strokeWidth: 1 }}
+                        labelFormatter={d => new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} />
+                      <Area type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2.5} fill="url(#trendGrad)" dot={false} activeDot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"
+                  style={{ background: 'var(--ds-bg-surface)' }}>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] mb-1">Status</p>
+                  <p className="text-[11px] font-black text-[var(--ds-text-2)] mb-4">Breakdown</p>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <PieChart>
+                      <Pie data={overviewData.status_breakdown} dataKey="count" nameKey="status"
+                        innerRadius={42} outerRadius={62} paddingAngle={4} strokeWidth={0}>
+                        {overviewData.status_breakdown.map((entry, i) => (
+                          <Cell key={i} fill={entry.status === 'confirmed' ? '#adee2b' : entry.status === 'tentative' ? '#f59e0b' : '#ef4444'} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    {overviewData.status_breakdown.map(s => (
+                      <div key={s.status} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <UserAvatar name={b.user?.name ?? '?'} avatar={b.user?.avatar} size={24} />
-                          <div>
-                            <p className="text-xs text-[var(--ds-text-2)]">{b.user?.name}</p>
-                            {b.booked_for && <p className="text-[9px] text-[var(--ds-text-3)] font-bold flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>for {b.booked_for}</p>}
-                          </div>
+                          <span className="size-2 rounded-full shrink-0" style={{ background: s.status === 'confirmed' ? '#adee2b' : s.status === 'tentative' ? '#f59e0b' : '#ef4444' }} />
+                          <span className="text-[10px] font-bold capitalize text-[var(--ds-text-2)]">{s.status}</span>
                         </div>
-                      </td>
-                      <td className="px-6 py-3 text-xs text-[var(--ds-text-2)]">
-                        {new Date(b.start_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full
-                          ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : b.status === 'tentative' ? 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)]' : 'bg-red-100 text-red-500'}`}>
-                          {b.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <span className="text-[10px] font-black text-[var(--ds-text-1)]">{s.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Rooms + Peak Hours */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"
+                  style={{ background: 'var(--ds-bg-surface)' }}>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] mb-1">Top Rooms</p>
+                  <p className="text-[11px] font-black text-[var(--ds-text-2)] mb-4">Most booked</p>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <BarChart data={overviewData.top_rooms} layout="vertical" margin={{ top: 0, right: 32, bottom: 0, left: 0 }}>
+                      <defs>
+                        <linearGradient id="roomGrad" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#818cf8" stopOpacity={1} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }} allowDecimals={false} />
+                      <YAxis type="category" dataKey="room" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-2)', fontWeight: 700 }} width={100} />
+                      <Tooltip
+                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }}
+                        cursor={{ fill: 'rgba(99,102,241,0.05)' }} />
+                      <Bar dataKey="count" fill="url(#roomGrad)" radius={[0, 6, 6, 0]} label={{ position: 'right', fontSize: 10, fontWeight: 700, fill: 'var(--ds-text-3)' }} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5 overflow-hidden relative"
+                  style={{ background: 'linear-gradient(135deg, rgba(173,238,43,0.06) 0%, var(--ds-bg-surface) 60%)' }}>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)] mb-1">Peak Hours</p>
+                  <p className="text-[11px] font-black text-[var(--ds-text-2)] mb-4">Busiest booking times</p>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <BarChart data={peakHoursFull} margin={{ top: 0, right: 4, bottom: 0, left: -28 }} barCategoryGap="20%">
+                      <defs>
+                        <linearGradient id="peakGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#adee2b" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#84cc16" stopOpacity={0.8} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" vertical={false} />
+                      <XAxis dataKey="hour" axisLine={false} tickLine={false}
+                        tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }}
+                        tickFormatter={h => `${h}:00`} interval={3} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: 'var(--ds-text-4)', fontWeight: 700 }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{ background: 'rgba(15,20,45,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, fontSize: 11, color: '#fff', fontWeight: 700, padding: '8px 12px' }}
+                        cursor={{ fill: 'rgba(173,238,43,0.06)' }}
+                        labelFormatter={h => `${h}:00`} />
+                      <Bar dataKey="count" fill="url(#peakGrad)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </>)}
           </div>
         )}
 
-        {tab === 'bookings' && (
-          <div className="max-w-5xl space-y-4 admin-tab-in">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
-                <h1 className="text-3xl font-black italic tracking-tighter uppercase">All Bookings</h1>
-              </div>
-              <p className="text-[9px] font-bold text-[var(--ds-text-3)]">Upcoming first · Past at bottom</p>
-            </div>
-            <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[var(--ds-border-sub)] bg-[var(--ds-bg-raised)]">
-                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">#</th>
-                    {([
-                      { label: 'Title', key: 'title' },
-                      { label: 'Room', key: 'room' },
-                      { label: 'User / Dept', key: 'user' },
-                      { label: 'Start', key: 'start_at' },
-                      { label: 'Status', key: 'status' },
-                    ] as { label: string; key: SortKey }[]).map(h => (
-                      <th key={h.key} className="px-4 py-3 text-left">
-                        <button onClick={() => toggleSort(h.key)}
-                          className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest hover:text-[var(--ds-text-1)] transition-colors"
-                          style={{ color: sortKey === h.key ? 'var(--ds-text-1)' : '' }}>
-                          <span className={sortKey === h.key ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}>{h.label}</span>
-                          <span className="material-symbols-outlined text-[10px] leading-none" style={{ color: sortKey === h.key ? 'var(--ds-text-1)' : '#cbd5e1' }}>
-                            {sortKey === h.key ? (sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}
-                          </span>
-                        </button>
-                      </th>
-                    ))}
-                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">End</th>
-                    <th className="px-4 py-3 text-left text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-widest">Type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedBookings.map(b => {
-                    const isPast = new Date(b.end_at) < now
-                    return (
-                      <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] transition-colors ${isPast ? 'opacity-40 hover:opacity-60' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
-                        <td className="px-4 py-3 text-[10px] font-black text-[var(--ds-text-3)]">{b.id}</td>
-                        <td className="px-4 py-3 text-xs font-bold text-[var(--ds-text-1)]">{b.title}</td>
-                        <td className="px-4 py-3 text-xs text-[var(--ds-text-2)]">{b.room?.name}</td>
-                        <td className="px-4 py-3">
-                          <p className="text-xs font-bold text-[var(--ds-text-1)]">{b.user?.name}</p>
-                          <p className="text-[9px] text-[var(--ds-text-3)]">{b.user?.department_name ?? (typeof b.user?.department === 'string' ? b.user.department : '')}</p>
-                          {b.booked_for && <p className="text-[9px] text-[var(--ds-text-3)] font-bold flex items-center gap-0.5 mt-0.5"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_pin</span>for {b.booked_for}</p>}
-                        </td>
-                        <td className="px-4 py-3 text-[10px] text-[var(--ds-text-2)]">
-                          {new Date(b.start_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                          {' '}{new Date(b.start_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full
-                            ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : b.status === 'tentative' ? 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)]' : 'bg-red-100 text-red-500'}`}>
-                            {b.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-[10px] text-[var(--ds-text-2)]">
-                          {new Date(b.end_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="px-4 py-3 text-[9px] text-[var(--ds-text-3)] uppercase font-bold">{b.type}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+
 
         {tab === 'buildings' && <div className="admin-tab-in"><BuildingsTab /></div>}
 

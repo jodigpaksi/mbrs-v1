@@ -12,6 +12,7 @@ import { useSettings } from '../context/SettingsContext'
 import RoomDetailModal from '../components/room/RoomDetailModal'
 import BookingPanel from '../components/booking/BookingPanel'
 import ContactReceptionistModal from '../components/room/ContactReceptionistModal'
+import AfterHoursModal from '../components/booking/AfterHoursModal'
 
 function toLocalDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -67,6 +68,8 @@ export default function RoomsPage() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [vtId, setVtId] = useState<number | null>(null)
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false)
+  const [afterHoursOpen, setAfterHoursOpen] = useState(false)
+  const [afterHoursData, setAfterHoursData] = useState<{ buildingId?: number | null; workingHoursEnd: string } | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [contactOpen, setContactOpen] = useState(false)
   const [contactRoom, setContactRoom] = useState<Room | null>(null)
@@ -641,13 +644,30 @@ export default function RoomsPage() {
         prefillStart=""
         prefillEnd=""
         onSubmit={() => setBookingPanelOpen(false)}
+        onAfterHoursOpen={(data) => {
+          setBookingPanelOpen(false)
+          setAfterHoursData(data)
+          setAfterHoursOpen(true)
+        }}
       />
       {bookingPanelOpen && (
         <div className="fixed inset-0 z-[99] bg-black/30 backdrop-blur-sm" onClick={() => setBookingPanelOpen(false)} />
       )}
 
+      <AfterHoursModal
+        open={afterHoursOpen}
+        onClose={() => setAfterHoursOpen(false)}
+        workingHoursEnd={afterHoursData?.workingHoursEnd ?? '17:00'}
+        buildingId={afterHoursData?.buildingId}
+        onChangeTime={() => {
+          setAfterHoursOpen(false)
+          setSelectedRoom(null)
+          setBookingPanelOpen(true)
+        }}
+      />
+
       <RoomDetailModal room={detailRoom} open={detailOpen} onClose={() => setDetailOpen(false)} onBook={handleBook} bookings={todayBookings as Booking[]} />
-      <ContactReceptionistModal open={contactOpen} onClose={() => setContactOpen(false)} roomName={contactRoom?.name} />
+      <ContactReceptionistModal open={contactOpen} onClose={() => setContactOpen(false)} roomName={contactRoom?.name} buildingId={contactRoom?.building_id} />
 
       <style>{`
         @keyframes fadeSlideUp {

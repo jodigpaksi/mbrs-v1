@@ -64,14 +64,25 @@ export interface AfterHoursContact {
   avatar: string | null
   on_duty: boolean
   department: string | null
+  buildings: { id: number; name: string; code?: string | null }[]
 }
 
-export async function getAfterHoursContacts(): Promise<AfterHoursContact[]> {
-  const res = await api.get('/settings/after-hours-contacts')
+export async function getAfterHoursContacts(buildingId?: number): Promise<AfterHoursContact[]> {
+  const res = await api.get('/settings/after-hours-contacts', { params: buildingId ? { building_id: buildingId } : {} })
   return res.data
 }
 
 export async function updateAfterHoursContacts(userIds: number[]): Promise<AfterHoursContact[]> {
   const res = await api.patch('/settings/after-hours-contacts', { user_ids: userIds })
+  return res.data
+}
+
+export async function getSpecialRoomContacts(buildingId?: number): Promise<AfterHoursContact[]> {
+  const res = await api.get('/settings/special-room-contacts', { params: buildingId ? { building_id: buildingId } : {} })
+  return res.data
+}
+
+export async function updateSpecialRoomContacts(userIds: number[]): Promise<AfterHoursContact[]> {
+  const res = await api.patch('/settings/special-room-contacts', { user_ids: userIds })
   return res.data
 }

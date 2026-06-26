@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ArchiveController;
 use App\Http\Controllers\Api\KioskController;
 use App\Http\Controllers\Api\AuthController;
@@ -38,10 +39,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/settings/weekend', [SettingController::class, 'weekendSettings']);
     Route::get('/settings/general', [SettingController::class, 'generalSettings']);
     Route::get('/settings/after-hours-contacts', [SettingController::class, 'afterHoursContacts']);
+    Route::get('/settings/special-room-contacts', [SettingController::class, 'specialRoomContacts']);
 
     // Receptionist-level settings (admin + receptionist)
     Route::middleware('can:receptionist')->group(function () {
         Route::patch('/settings/after-hours-contacts', [SettingController::class, 'updateAfterHoursContacts']);
+        Route::patch('/settings/special-room-contacts', [SettingController::class, 'updateSpecialRoomContacts']);
     });
 
     // Locations (read: all auth)
@@ -118,6 +121,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/assets/{asset}/units/{unit}', [AssetController::class, 'updateUnit']);
         Route::delete('/assets/{asset}/units/{unit}', [AssetController::class, 'destroyUnit']);
     });
+
+    // Analytics (all authenticated)
+    Route::get('/analytics/overview', [AnalyticsController::class, 'overview']);
+    Route::get('/analytics/report',   [AnalyticsController::class, 'report']);
+    Route::get('/analytics/export',   [AnalyticsController::class, 'export']);
 
     // Super admin only: locations + buildings CRUD + user management + departments + settings
     Route::middleware('can:admin')->group(function () {

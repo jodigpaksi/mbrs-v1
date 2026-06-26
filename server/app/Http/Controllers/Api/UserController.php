@@ -37,7 +37,7 @@ class UserController extends Controller
 
     public function directory()
     {
-        return User::with('department')
+        return User::with('department', 'adminBuildings')
             ->orderBy('name')
             ->get()
             ->map(fn ($u) => [
@@ -45,7 +45,14 @@ class UserController extends Controller
                 'name'       => $u->name,
                 'email'      => $u->email,
                 'ext'        => $u->ext,
+                'role'       => $u->role,
+                'avatar'     => $u->avatar,
                 'department' => $u->department?->name ?? '',
+                'buildings'  => $u->adminBuildings->map(fn ($b) => [
+                    'id'   => $b->id,
+                    'name' => $b->name,
+                    'code' => $b->code,
+                ])->values(),
             ]);
     }
 

@@ -12,6 +12,7 @@ import BookingTooltip from '../components/booking/BookingTooltip'
 import BookingPanel from '../components/booking/BookingPanel'
 import RoomDetailModal from '../components/room/RoomDetailModal'
 import ContactReceptionistModal from '../components/room/ContactReceptionistModal'
+import AfterHoursModal from '../components/booking/AfterHoursModal'
 import GlassDatePicker from '../components/ui/GlassDatePicker'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
@@ -62,6 +63,8 @@ export default function TimelinePage() {
   const [locationOpen, setLocationOpen] = useState(false)
   const [deptOpen, setDeptOpen] = useState(false)
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false)
+  const [afterHoursOpen, setAfterHoursOpen] = useState(false)
+  const [afterHoursData, setAfterHoursData] = useState<{ buildingId?: number | null; workingHoursEnd: string } | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [editBooking, setEditBooking] = useState<Booking | null>(null)
   const [prefillStart, setPrefillStart] = useState('')
@@ -1643,6 +1646,25 @@ export default function TimelinePage() {
           toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
         }}
         onCancel={(b) => { setBookingPanelOpen(false); setCancelTarget(b) }}
+        onAfterHoursOpen={(data) => {
+          setBookingPanelOpen(false)
+          setAfterHoursData(data)
+          setAfterHoursOpen(true)
+        }}
+      />
+
+      <AfterHoursModal
+        open={afterHoursOpen}
+        onClose={() => setAfterHoursOpen(false)}
+        workingHoursEnd={afterHoursData?.workingHoursEnd ?? '17:00'}
+        buildingId={afterHoursData?.buildingId}
+        onChangeTime={() => {
+          setAfterHoursOpen(false)
+          setSelectedRoom(null)
+          setPrefillStart('')
+          setPrefillEnd('')
+          setBookingPanelOpen(true)
+        }}
       />
 
       {/* Contact Receptionist modal (requires_contact rooms) */}
@@ -1650,6 +1672,7 @@ export default function TimelinePage() {
         open={contactOpen}
         onClose={() => { setContactOpen(false); setContactRoom(null) }}
         roomName={contactRoom?.name}
+        buildingId={contactRoom?.building_id}
       />
 
       {/* Room Detail */}

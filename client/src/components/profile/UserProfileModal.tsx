@@ -196,7 +196,7 @@ export default function UserProfileModal({ open, onClose }: Props) {
         )}
 
         {/* Body */}
-        <div className="relative overflow-hidden" style={{ height: 340 }}>
+        <div className="relative overflow-hidden" style={{ height: 460 }}>
 
           {/* Profile tab */}
           <div className="absolute inset-0 px-6 py-4 overflow-y-auto space-y-2"
