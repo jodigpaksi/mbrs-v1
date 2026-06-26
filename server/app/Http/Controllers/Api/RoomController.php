@@ -9,6 +9,7 @@ use App\Models\RoomView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class RoomController extends Controller
 {
@@ -108,6 +109,31 @@ class RoomController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    public function uploadPhoto(Request $request, Room $room): JsonResponse
+    {
+        $request->validate(['photo' => 'required|image|max:5120']);
+        $path = $request->file('photo')->store('room-photos', 'public');
+        $url  = Storage::url($path);
+        $photos = $room->photos ?? [];
+        $photos[] = $url;
+        $room->update(['photos' => $photos]);
+        return response()->json(['url' => $url, 'photos' => $photos]);
+    }
+
+    public function deletePhoto(Request $request, Room $room): JsonResponse
+    {
+        $request->validate(['url' => 'required|string']);
+        $url    = $request->url;
+        $photos = array_values(array_filter($room->photos ?? [], fn ($p) => $p !== $url));
+        $room->update(['photos' => $photos]);
+        // Remove file from storage if it's a local upload
+        $path = str_replace('/storage/', '', parse_url($url, PHP_URL_PATH));
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+        return response()->json(['photos' => $photos]);
     }
 
     public function destroy(Room $room): JsonResponse

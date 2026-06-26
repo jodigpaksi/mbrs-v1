@@ -6,10 +6,9 @@ import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { mockBookings, mockRooms, mockUsers } from '../data/mockData'
-import type { Building, Room, Asset, AssetStatus, Location, User, Department } from '../types/index'
+import type { Building, Room, Location, User, Department } from '../types/index'
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '../api/buildings'
-import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms } from '../api/rooms'
-import { getAssets, createAsset, updateAsset, deleteAsset, createAssetUnit, updateAssetUnit, deleteAssetUnit } from '../api/assets'
+import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms, uploadRoomPhoto, deleteRoomPhoto } from '../api/rooms'
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
@@ -24,7 +23,7 @@ import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 import KioskTab from '../components/admin/KioskTab'
 
-type Tab = 'overview' | 'users' | 'buildings' | 'assets' | 'settings' | 'archive' | 'kiosk'
+type Tab = 'overview' | 'users' | 'buildings' | 'settings' | 'archive' | 'kiosk'
 
 function ModalPortal({ children }: { children: ReactNode }) {
   return <>{createPortal(children, document.body)}</>
@@ -188,6 +187,11 @@ function RoomModal({
   const [photos, setPhotos]             = useState<string[]>(initial?.photos ?? [])
   const [newUrl, setNewUrl]             = useState('')
   const [savingPhotos, setSavingPhotos] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [uploadErr, setUploadErr]           = useState('')
+  const [showUrlInput, setShowUrlInput]     = useState(false)
+  const photoFileRef = useRef<HTMLInputElement>(null)
+  const [dragOver, setDragOver] = useState(false)
 
   // Facilities
   const [facilities, setFacilities]         = useState<{ name: string; icon: string }[]>(initial?.facilities ?? [])
@@ -215,6 +219,26 @@ function RoomModal({
     setSavingPhotos(true)
     try { await updateRoom(initial.id, { photos }); qc.invalidateQueries({ queryKey: ['rooms'] }) }
     finally { setSavingPhotos(false) }
+  }
+  async function handlePhotoFiles(files: FileList | File[]) {
+    if (!initial?.id) return
+    setUploadErr(''); setUploadingPhoto(true)
+    try {
+      for (const file of Array.from(files)) {
+        const res = await uploadRoomPhoto(initial.id, file)
+        setPhotos(res.photos)
+      }
+      qc.invalidateQueries({ queryKey: ['rooms'] })
+    } catch { setUploadErr('Upload failed. Max 5MB per image.') }
+    finally { setUploadingPhoto(false); if (photoFileRef.current) photoFileRef.current.value = '' }
+  }
+  async function handleDeletePhoto(url: string) {
+    if (!initial?.id) return
+    try {
+      const res = await deleteRoomPhoto(initial.id, url)
+      setPhotos(res.photos)
+      qc.invalidateQueries({ queryKey: ['rooms'] })
+    } catch { /* silent */ }
   }
 
   function addPreset(f: { name: string; icon: string }) {
@@ -250,7 +274,7 @@ function RoomModal({
 
   // Unified footer action per tab
   const footerAction =
-    activeTab === 'photos'     ? { label: savingPhotos     ? 'Saving...' : 'Save Photos →',     fn: savePhotos,     busy: savingPhotos } :
+    activeTab === 'photos'     ? { label: 'Done',                                                fn: onClose,        busy: false } :
     activeTab === 'facilities' ? { label: savingFacilities ? 'Saving...' : 'Save Facilities →', fn: saveFacilities, busy: savingFacilities } :
                                  { label: saving           ? 'Saving...' : isEdit ? 'Save Changes →' : 'Create Room →', fn: handleSave, busy: saving }
 
@@ -374,20 +398,31 @@ function RoomModal({
               {/* ── Photos ── */}
               {activeTab === 'photos' && (
                 <div className="px-7 py-5 space-y-4">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{photos.length} photo{photos.length !== 1 ? 's' : ''} · first is cover</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{photos.length} photo{photos.length !== 1 ? 's' : ''} · first is cover</p>
+                    {photos.length > 0 && (
+                      <button onClick={savePhotos} disabled={savingPhotos}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase bg-[#adee2b]/15 text-[#3a6800] dark:text-[#adee2b] hover:bg-[#adee2b]/30 transition-colors disabled:opacity-40">
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>{savingPhotos ? 'progress_activity' : 'save'}</span>
+                        {savingPhotos ? 'Saving…' : 'Save Order'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Photo grid */}
                   {photos.length > 0 && (
                     <div className="grid grid-cols-3 gap-3">
                       {photos.map((url, i) => (
-                        <div key={i} className="relative group aspect-video rounded-xl overflow-hidden bg-slate-100">
+                        <div key={url + i} className="relative group aspect-video rounded-xl overflow-hidden bg-[var(--ds-bg-raised)]">
                           <img src={url} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
                             {i > 0 && (
                               <button onClick={() => setPhotos(prev => { const a = [...prev]; [a[i-1], a[i]] = [a[i], a[i-1]]; return a })}
                                 className="size-7 flex items-center justify-center rounded-lg bg-white/20 text-white hover:bg-white/40 transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
                               </button>
                             )}
-                            <button onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))}
+                            <button onClick={() => handleDeletePhoto(url)}
                               className="size-7 flex items-center justify-center rounded-lg bg-red-500/90 text-white hover:bg-red-600 transition-colors">
                               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
                             </button>
@@ -405,14 +440,56 @@ function RoomModal({
                       ))}
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <input value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPhoto()}
-                      placeholder="Paste image URL and press Enter..."
-                      className="flex-1 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
-                    <button onClick={addPhoto}
-                      className="px-4 py-2 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] flex items-center gap-1.5 transition-all shrink-0">
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add_photo_alternate</span>Add
+
+                  {/* Drop zone */}
+                  <div
+                    className={`relative border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-2 py-7 transition-all cursor-pointer
+                      ${dragOver ? 'border-[#adee2b] bg-[#adee2b]/8' : 'border-[var(--ds-border)] hover:border-[var(--ds-text-3)]'}`}
+                    onClick={() => photoFileRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) handlePhotoFiles(e.dataTransfer.files) }}
+                  >
+                    <input ref={photoFileRef} type="file" accept="image/*" multiple className="hidden"
+                      onChange={e => { if (e.target.files?.length) handlePhotoFiles(e.target.files) }} />
+                    {uploadingPhoto ? (
+                      <>
+                        <span className="material-symbols-outlined animate-spin text-[#adee2b]" style={{ fontSize: 28 }}>progress_activity</span>
+                        <p className="text-[10px] font-black uppercase text-[var(--ds-text-3)]">Uploading…</p>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 28 }}>add_a_photo</span>
+                        <p className="text-[11px] font-black text-[var(--ds-text-2)]">Click or drag photos here</p>
+                        <p className="text-[9px] font-bold text-[var(--ds-text-4)] uppercase tracking-wider">JPG · PNG · WEBP · max 5 MB each</p>
+                      </>
+                    )}
+                  </div>
+
+                  {uploadErr && (
+                    <p className="text-[10px] font-bold text-red-500 flex items-center gap-1">
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>error</span>{uploadErr}
+                    </p>
+                  )}
+
+                  {/* URL fallback */}
+                  <div>
+                    <button onClick={() => setShowUrlInput(v => !v)}
+                      className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-4)] hover:text-[var(--ds-text-2)] transition-colors">
+                      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{showUrlInput ? 'expand_less' : 'expand_more'}</span>
+                      Or paste image URL
                     </button>
+                    {showUrlInput && (
+                      <div className="flex gap-2 mt-2">
+                        <input value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && addPhoto()}
+                          placeholder="https://..."
+                          className="flex-1 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
+                        <button onClick={addPhoto}
+                          className="px-3 py-2 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] flex items-center gap-1 transition-all shrink-0">
+                          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add</span>Add
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1191,507 +1268,6 @@ function BuildingsTab() {
   )
 }
 
-
-// ── Assets / Inventory Tab ───────────────────────────────────────────────────
-
-const STATUS_META: Record<AssetStatus, { label: string; bg: string; text: string; dot: string }> = {
-  active:  { label: 'Active',  bg: 'bg-green-500/10',  text: 'text-green-400',  dot: 'bg-green-500' },
-  rusak:   { label: 'Rusak',   bg: 'bg-red-500/10',    text: 'text-red-400',    dot: 'bg-red-500' },
-  service: { label: 'Service', bg: 'bg-orange-500/10', text: 'text-orange-400', dot: 'bg-orange-500' },
-  hilang:  { label: 'Hilang',  bg: 'bg-[var(--ds-bg-raised)]',  text: 'text-[var(--ds-text-3)]',  dot: 'bg-slate-400' },
-  indent:  { label: 'Indent',  bg: 'bg-blue-100',   text: 'text-blue-600',   dot: 'bg-blue-500' },
-}
-const ASSET_STATUSES: AssetStatus[] = ['active', 'rusak', 'service', 'hilang', 'indent']
-
-function StatusBadge({ status, onChange }: { status: AssetStatus; onChange?: (s: AssetStatus) => void }) {
-  const m = STATUS_META[status]
-  if (!onChange) return (
-    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${m.bg} ${m.text}`}>
-      <span className={`size-1.5 rounded-full ${m.dot}`} />{m.label}
-    </span>
-  )
-  return (
-    <div className="relative group/sb">
-      <button className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase cursor-pointer ${m.bg} ${m.text}`}>
-        <span className={`size-1.5 rounded-full ${m.dot}`} />{m.label}
-        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>expand_more</span>
-      </button>
-      <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/sb:flex flex-col bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border-sub)] shadow-xl overflow-hidden min-w-[110px]">
-        {ASSET_STATUSES.filter(s => s !== status).map(s => {
-          const sm = STATUS_META[s]
-          return (
-            <button key={s} onClick={() => onChange(s)}
-              className={`flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] ${sm.text}`}>
-              <span className={`size-1.5 rounded-full ${sm.dot}`} />{sm.label}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// Modal: add/edit asset type
-function AssetTypeModal({ initial, onSave, onClose }: {
-  initial?: Partial<Asset>
-  onSave: (d: Partial<Asset>) => Promise<void>
-  onClose: () => void
-}) {
-  const [name, setName]         = useState(initial?.name ?? '')
-  const [category, setCategory] = useState(initial?.category ?? '')
-  const [icon, setIcon]         = useState(initial?.icon ?? '')
-  const [notes, setNotes]       = useState(initial?.notes ?? '')
-  const [saving, setSaving]     = useState(false)
-  const [err, setErr]           = useState('')
-
-  async function handleSave() {
-    if (!name.trim()) { setErr('Name is required'); return }
-    setSaving(true); setErr('')
-    try {
-      await onSave({ name: name.trim(), category: category.trim() || undefined, icon: icon.trim() || undefined, notes: notes.trim() || undefined })
-      onClose()
-    } catch { setErr('Failed to save.') } finally { setSaving(false) }
-  }
-
-  return (
-    <ModalPortal>
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[400px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-black uppercase tracking-tight text-[var(--ds-text-1)]">{initial?.id ? 'Edit Asset Type' : 'Register Asset Type'}</h3>
-        {err && <p className="text-xs text-red-500 font-bold">{err}</p>}
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Projector Epson EB"
-              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Category</label>
-              <input value={category} onChange={e => setCategory(e.target.value)} placeholder="e.g. AV, IT, Furniture"
-                className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Icon</label>
-              <div className="relative">
-                {icon && <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 16 }}>{icon}</span>}
-                <input value={icon} onChange={e => setIcon(e.target.value)} placeholder="present_to_all"
-                  className={`w-full border border-[var(--ds-border)] rounded-xl py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)] ${icon ? 'pl-9 pr-3' : 'px-3'}`} />
-              </div>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Notes</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Brand, spec, dsb."
-              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-          </div>
-        </div>
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
-            {initial?.id ? 'Save' : 'Register'}
-          </button>
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
-  )
-}
-
-// Modal: add/edit asset unit
-function AssetUnitModal({ assetName, rooms, initial, onSave, onClose }: {
-  assetName: string
-  rooms: Room[]
-  initial?: Partial<AssetUnit>
-  onSave: (d: Partial<AssetUnit>) => Promise<void>
-  onClose: () => void
-}) {
-  const [roomId, setRoomId]     = useState<string>(initial?.room_id ? String(initial.room_id) : '')
-  const [unitCode, setUnitCode] = useState(initial?.unit_code ?? '')
-  const [status, setStatus]     = useState<AssetStatus>(initial?.status ?? 'active')
-  const [notes, setNotes]       = useState(initial?.notes ?? '')
-  const [saving, setSaving]     = useState(false)
-
-  async function handleSave() {
-    setSaving(true)
-    try {
-      await onSave({ room_id: roomId ? Number(roomId) : undefined, unit_code: unitCode.trim() || undefined, status, notes: notes.trim() || undefined })
-      onClose()
-    } finally { setSaving(false) }
-  }
-
-  return (
-    <ModalPortal>
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[380px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
-        <div>
-          <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{assetName}</p>
-          <h3 className="text-base font-black uppercase tracking-tight mt-0.5 text-[var(--ds-text-1)]">{initial?.id ? 'Edit Unit' : 'Add Unit'}</h3>
-        </div>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Unit Code / Serial</label>
-              <input value={unitCode} onChange={e => setUnitCode(e.target.value)} placeholder="e.g. PRJ-001"
-                className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Ruangan</label>
-              <select value={roomId} onChange={e => setRoomId(e.target.value)}
-                className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]">
-                <option value="">— Tidak ada / Gudang —</option>
-                {rooms.map(r => <option key={r.id} value={r.id}>{r.name}{r.floor ? ` (${r.floor})` : ''}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Status</label>
-            <div className="flex gap-2 flex-wrap">
-              {ASSET_STATUSES.map(s => {
-                const m = STATUS_META[s]
-                return (
-                  <button key={s} onClick={() => setStatus(s)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all border
-                      ${status === s ? `${m.bg} ${m.text} border-transparent` : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-text-3)]'}`}>
-                    <span className={`size-1.5 rounded-full ${m.dot}`} />{m.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Notes</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Kondisi, catatan, dsb."
-              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-          </div>
-        </div>
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
-            {initial?.id ? 'Save' : 'Add Unit'}
-          </button>
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
-  )
-}
-
-function AssetsTab() {
-  const qc = useQueryClient()
-  const { data: assets = [], isLoading } = useQuery<Asset[]>({ queryKey: ['assets'], queryFn: getAssets })
-  const { data: rooms = [] } = useQuery<Room[]>({ queryKey: ['rooms'], queryFn: getRooms })
-
-  const [search, setSearch]             = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [expanded, setExpanded]         = useState<Set<number>>(new Set())
-  const [typeModal, setTypeModal]       = useState<{ open: boolean; target: Asset | null }>({ open: false, target: null })
-  const [unitModal, setUnitModal]       = useState<{ open: boolean; asset: Asset | null; unit: AssetUnit | null }>({ open: false, asset: null, unit: null })
-  const [deleteAssetTarget, setDeleteAssetTarget] = useState<Asset | null>(null)
-  const [deleteUnitTarget, setDeleteUnitTarget]   = useState<{ asset: Asset; unit: AssetUnit } | null>(null)
-  const [deleting, setDeleting] = useState(false)
-
-  function toggleExpand(id: number) {
-    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
-
-  // Counts across all units
-  const unitCounts = useMemo(() => {
-    const c: Record<string, number> = { total: 0 }
-    ASSET_STATUSES.forEach(s => { c[s] = 0 })
-    ;(assets as Asset[]).forEach(a => (a.units ?? []).forEach(u => { c.total++; c[u.status] = (c[u.status] ?? 0) + 1 }))
-    return c
-  }, [assets])
-
-  const categories = useMemo(() =>
-    [...new Set((assets as Asset[]).map(a => a.category).filter(Boolean))].sort() as string[]
-  , [assets])
-
-  const filtered = useMemo(() => (assets as Asset[]).filter(a => {
-    if (categoryFilter && a.category !== categoryFilter) return false
-    if (search && !a.name.toLowerCase().includes(search.toLowerCase()) && !(a.category ?? '').toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  }), [assets, search, categoryFilter])
-
-  async function handleSaveType(data: Partial<Asset>) {
-    if (typeModal.target?.id) { await updateAsset(typeModal.target.id, data) }
-    else { const a = await createAsset(data); setExpanded(p => new Set(p).add(a.id)) }
-    qc.invalidateQueries({ queryKey: ['assets'] })
-  }
-
-  async function handleSaveUnit(asset: Asset, data: Partial<AssetUnit>, unitId?: number) {
-    if (unitId) await updateAssetUnit(asset.id, unitId, data)
-    else await createAssetUnit(asset.id, data)
-    qc.invalidateQueries({ queryKey: ['assets'] })
-  }
-
-  async function handleDeleteAsset() {
-    if (!deleteAssetTarget) return
-    setDeleting(true)
-    try { await deleteAsset(deleteAssetTarget.id); qc.invalidateQueries({ queryKey: ['assets'] }); setDeleteAssetTarget(null) }
-    finally { setDeleting(false) }
-  }
-
-  async function handleDeleteUnit() {
-    if (!deleteUnitTarget) return
-    setDeleting(true)
-    try { await deleteAssetUnit(deleteUnitTarget.asset.id, deleteUnitTarget.unit.id); qc.invalidateQueries({ queryKey: ['assets'] }); setDeleteUnitTarget(null) }
-    finally { setDeleting(false) }
-  }
-
-  async function quickUnitStatus(asset: Asset, unit: AssetUnit, status: AssetStatus) {
-    await updateAssetUnit(asset.id, unit.id, { status })
-    qc.invalidateQueries({ queryKey: ['assets'] })
-  }
-
-  return (
-    <div className="space-y-5 max-w-5xl">
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Inventory</p>
-          <h1 className="text-3xl font-black italic tracking-tighter uppercase">Assets</h1>
-        </div>
-        <button onClick={() => setTypeModal({ open: true, target: null })}
-          className="flex items-center gap-2 px-5 py-2.5 bg-black text-[#adee2b] rounded-2xl text-[10px] font-black uppercase hover:opacity-80 transition-all">
-          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>Register Asset
-        </button>
-      </div>
-
-      {/* Stat cards — unit-level counts */}
-      <div className="grid grid-cols-6 gap-3">
-        {([
-          { label: 'Total Units', value: unitCounts.total, cls: 'bg-black', valCls: 'text-[#adee2b]', subCls: 'text-[var(--ds-text-2)]' },
-          ...ASSET_STATUSES.map(s => { const m = STATUS_META[s]; return { label: m.label, value: unitCounts[s] ?? 0, cls: 'bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)]', valCls: m.text, subCls: 'text-[var(--ds-text-3)]' } }),
-        ] as { label: string; value: number; cls: string; valCls: string; subCls: string }[]).map(c => (
-          <div key={c.label} className={`${c.cls} rounded-2xl p-4`}>
-            <p className={`text-[8px] font-black uppercase tracking-widest ${c.subCls}`}>{c.label}</p>
-            <p className={`text-2xl font-black italic mt-0.5 ${c.valCls}`}>{c.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 15 }}>search</span>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search asset types..."
-            className="w-52 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
-        </div>
-        {categories.length > 0 && (
-          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
-            className="bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] text-[var(--ds-text-2)]">
-            <option value="">All Categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        )}
-        <span className="text-[10px] font-black text-[var(--ds-text-3)]">{filtered.length} types · {unitCounts.total} units</span>
-      </div>
-
-      {/* Asset list */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-3)]">progress_activity</span>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 48 }}>inventory_2</span>
-          <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">
-            {(assets as Asset[]).length === 0 ? 'No assets registered yet' : 'No assets match the filter'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map(asset => {
-            const units = asset.units ?? []
-            const isOpen = expanded.has(asset.id)
-            const unitStatusCounts = ASSET_STATUSES.map(s => ({ s, n: units.filter(u => u.status === s).length })).filter(x => x.n > 0)
-
-            return (
-              <div key={asset.id} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
-                {/* Asset type row */}
-                <div className="flex items-center gap-4 px-5 py-4 hover:bg-[var(--ds-bg-raised)] transition-colors cursor-pointer" onClick={() => toggleExpand(asset.id)}>
-                  {/* Expand chevron */}
-                  <span className={`material-symbols-outlined text-[var(--ds-text-3)] transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-90' : ''}`} style={{ fontSize: 18 }}>chevron_right</span>
-
-                  {/* Icon + name */}
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="size-9 rounded-xl bg-[var(--ds-bg-surface-2)] flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>{asset.icon || 'inventory_2'}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[12px] font-black text-[var(--ds-text-1)]">{asset.name}</p>
-                      {asset.notes && <p className="text-[9px] text-[var(--ds-text-3)] truncate">{asset.notes}</p>}
-                    </div>
-                  </div>
-
-                  {/* Category */}
-                  {asset.category && (
-                    <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] rounded-lg text-[9px] font-black uppercase text-[var(--ds-text-2)] shrink-0">{asset.category}</span>
-                  )}
-
-                  {/* Unit status summary */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {units.length === 0 ? (
-                      <span className="text-[9px] font-black text-[var(--ds-text-3)] uppercase">No units</span>
-                    ) : (
-                      <>
-                        <span className="text-[10px] font-black text-[var(--ds-text-3)]">{units.length} unit{units.length !== 1 ? 's' : ''}</span>
-                        <span className="text-[var(--ds-border)]">·</span>
-                        {unitStatusCounts.map(({ s, n }) => {
-                          const m = STATUS_META[s]
-                          return (
-                            <span key={s} className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase ${m.bg} ${m.text}`}>
-                              <span className={`size-1 rounded-full ${m.dot}`} />{n}
-                            </span>
-                          )
-                        })}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setUnitModal({ open: true, asset, unit: null })}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
-                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>add</span>Unit
-                    </button>
-                    <button onClick={() => setTypeModal({ open: true, target: asset })}
-                      className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] transition-colors">
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>edit</span>
-                    </button>
-                    <button onClick={() => setDeleteAssetTarget(asset)}
-                      className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sub-tree: units */}
-                {isOpen && (
-                  <div className="border-t border-[var(--ds-border-sub)]">
-                    {units.length === 0 ? (
-                      <div className="flex items-center gap-3 px-14 py-4 text-[var(--ds-text-3)]">
-                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>subdirectory_arrow_right</span>
-                        <span className="text-[10px] font-black uppercase tracking-wider">No units yet —</span>
-                        <button onClick={() => setUnitModal({ open: true, asset, unit: null })}
-                          className="text-[10px] font-black uppercase text-[var(--ds-text-2)] underline underline-offset-2 hover:text-black transition-colors">Add first unit</button>
-                      </div>
-                    ) : (
-                      <table className="w-full">
-                        <thead>
-                          <tr className="bg-[var(--ds-bg-raised)]/70">
-                            <th className="w-8" />
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Unit Code</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Room</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Building</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Status</th>
-                            <th className="text-left px-4 py-2.5 text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Notes</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {units.map((unit, i) => (
-                            <tr key={unit.id} className={`hover:bg-[var(--ds-bg-raised)] transition-colors ${i < units.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''}`}>
-                              <td className="pl-5 pr-1 py-3 text-[var(--ds-text-3)]">
-                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>subdirectory_arrow_right</span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="text-[11px] font-black text-[var(--ds-text-1)] font-mono">{unit.unit_code || <span className="text-[var(--ds-text-3)]">—</span>}</span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="text-[11px] font-bold text-[var(--ds-text-2)]">{unit.room?.name ?? <span className="text-[var(--ds-text-3)]">Gudang / Unassigned</span>}</span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="text-[10px] font-bold text-[var(--ds-text-3)]">{unit.room?.building?.name ?? '—'}</span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <StatusBadge status={unit.status} onChange={s => quickUnitStatus(asset, unit, s)} />
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="text-[10px] text-[var(--ds-text-3)] truncate max-w-[140px] block">{unit.notes || '—'}</span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-1 justify-end">
-                                  <button onClick={() => setUnitModal({ open: true, asset, unit })}
-                                    className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] transition-colors">
-                                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
-                                  </button>
-                                  <button onClick={() => setDeleteUnitTarget({ asset, unit })}
-                                    className="size-7 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
-                                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Modals */}
-      {typeModal.open && (
-        <AssetTypeModal initial={typeModal.target ?? undefined} onSave={handleSaveType} onClose={() => setTypeModal({ open: false, target: null })} />
-      )}
-      {unitModal.open && unitModal.asset && (
-        <AssetUnitModal
-          assetName={unitModal.asset.name}
-          rooms={rooms as Room[]}
-          initial={unitModal.unit ?? undefined}
-          onSave={d => handleSaveUnit(unitModal.asset!, d, unitModal.unit?.id)}
-          onClose={() => setUnitModal({ open: false, asset: null, unit: null })}
-        />
-      )}
-
-      {/* Delete asset confirm */}
-      {deleteAssetTarget && (
-        <ModalPortal>
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }} onClick={() => setDeleteAssetTarget(null)}>
-          <div className="bg-[var(--ds-bg-surface)] rounded-3xl p-7 w-80 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-black uppercase text-[var(--ds-text-1)]">Delete Asset Type?</p>
-            <p className="text-[11px] text-[var(--ds-text-2)]">Semua <span className="font-black text-[var(--ds-text-1)]">{deleteAssetTarget.units?.length ?? 0} unit</span> dari <span className="font-black text-[var(--ds-text-1)]">{deleteAssetTarget.name}</span> juga akan dihapus.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteAssetTarget(null)} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
-              <button onClick={handleDeleteAsset} disabled={deleting} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase hover:bg-red-600 disabled:opacity-50">
-                {deleting ? 'Deleting...' : 'Delete All'}
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
-
-      {/* Delete unit confirm */}
-      {deleteUnitTarget && (
-        <ModalPortal>
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }} onClick={() => setDeleteUnitTarget(null)}>
-          <div className="bg-[var(--ds-bg-surface)] rounded-3xl p-7 w-80 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-black uppercase text-[var(--ds-text-1)]">Remove Unit?</p>
-            <p className="text-[11px] text-[var(--ds-text-2)]">Unit <span className="font-black text-[var(--ds-text-1)]">{deleteUnitTarget.unit.unit_code || `#${deleteUnitTarget.unit.id}`}</span> dari {deleteUnitTarget.asset.name} akan dihapus.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteUnitTarget(null)} className="flex-1 py-2.5 rounded-xl border border-[var(--ds-border)] text-[10px] font-black uppercase text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]">Cancel</button>
-              <button onClick={handleDeleteUnit} disabled={deleting} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase hover:bg-red-600 disabled:opacity-50">
-                {deleting ? 'Deleting...' : 'Remove'}
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
-    </div>
-  )
-}
 
 // ── Users Tab ────────────────────────────────────────────────────────────────
 
@@ -3720,6 +3296,7 @@ function SettingsTab() {
   const [maxDays,      setMaxDays]      = useState(general?.max_advance_days ?? 30)
   const [allowBookFor,      setAllowBookFor]      = useState(general?.allow_book_for_others ?? true)
   const [allowPasswordChange, setAllowPasswordChange] = useState(general?.allow_password_change ?? true)
+  const [allowAvatarUpload,   setAllowAvatarUpload]   = useState(general?.allow_avatar_upload   ?? true)
   const [restrictAH,   setRestrictAH]   = useState(general?.restrict_after_hours ?? false)
   const [workEnd,      setWorkEnd]      = useState(general?.working_hours_end ?? '17:00')
   const [aiChat,       setAiChat]       = useState(general?.feature_ai_chat ?? true)
@@ -3738,6 +3315,7 @@ function SettingsTab() {
     if (general) {
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
       setAllowPasswordChange(general.allow_password_change ?? true)
+      setAllowAvatarUpload(general.allow_avatar_upload ?? true)
       setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
       setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
       setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
@@ -3758,6 +3336,7 @@ function SettingsTab() {
   }
   async function toggleAllowBookFor()        { const v = !allowBookFor;       setAllowBookFor(v);       await saveGeneral({ allow_book_for_others: v },    v ? 'Book for others enabled' : 'Book for others disabled') }
   async function toggleAllowPasswordChange() { const v = !allowPasswordChange; setAllowPasswordChange(v); await saveGeneral({ allow_password_change: v }, v ? 'Password change enabled' : 'Password change disabled') }
+  async function toggleAllowAvatarUpload()   { const v = !allowAvatarUpload;   setAllowAvatarUpload(v);   await saveGeneral({ allow_avatar_upload: v },   v ? 'Avatar upload enabled' : 'Avatar upload disabled') }
   async function toggleRestrictAH()  { const v = !restrictAH;   setRestrictAH(v);   await saveGeneral({ restrict_after_hours: v }, v ? 'After-hours restriction enabled' : 'After-hours restriction disabled') }
   async function toggleAiChat()      { const v = !aiChat;       setAiChat(v);       await saveGeneral({ feature_ai_chat: v }, v ? 'AI Chat enabled' : 'AI Chat disabled') }
   async function setRoomsGridCols(v: number) { setRoomsGrid(v); await saveGeneral({ rooms_grid_cols: v }, `Rooms grid set to ${v} columns`) }
@@ -3917,25 +3496,6 @@ function SettingsTab() {
 
         <div className="border-t border-[var(--ds-border-sub)]" />
 
-        {/* Allow password change */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: allowPasswordChange ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 20, color: allowPasswordChange ? '#4d7c00' : '#94a3b8' }}>lock_reset</span>
-            </div>
-            <div>
-              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Allow Password Change</p>
-              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowPasswordChange ? 'Users can change their own password' : 'Disabled — superadmin only'}</p>
-            </div>
-          </div>
-          <button type="button" onClick={toggleAllowPasswordChange} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowPasswordChange ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowPasswordChange ? 24 : 4 }} />
-          </button>
-        </div>
-
-        <div className="border-t border-[var(--ds-border-sub)]" />
-
         {/* After-hours restriction */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -3983,6 +3543,44 @@ function SettingsTab() {
           <button type="button" onClick={toggleAiChat} className="relative shrink-0" style={{ width: 44, height: 24 }}>
             <div className="absolute inset-0 rounded-full transition-colors" style={{ background: aiChat ? '#adee2b' : 'var(--ds-bg-raised)' }} />
             <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: aiChat ? 24 : 4 }} />
+          </button>
+        </div>
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Allow password change */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: allowPasswordChange ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: allowPasswordChange ? '#4d7c00' : '#94a3b8' }}>lock_reset</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Password Change</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowPasswordChange ? 'Users can change their own password' : 'Disabled — superadmin only'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleAllowPasswordChange} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowPasswordChange ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowPasswordChange ? 24 : 4 }} />
+          </button>
+        </div>
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Avatar upload toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: allowAvatarUpload ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: allowAvatarUpload ? '#4d7c00' : '#94a3b8' }}>add_a_photo</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Profile Photo Upload</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowAvatarUpload ? 'Users can upload & change their photo' : 'Disabled — photo upload locked'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleAllowAvatarUpload} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowAvatarUpload ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowAvatarUpload ? 24 : 4 }} />
           </button>
         </div>
 
@@ -4261,7 +3859,6 @@ export default function AdminPage() {
   const mainTabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
     { key: 'buildings',  label: 'Buildings',  icon: 'domain' },
-    { key: 'assets',     label: 'Assets',     icon: 'inventory_2' },
     { key: 'users',      label: 'Users',      icon: 'group' },
     { key: 'archive',    label: 'Archive',    icon: 'archive' },
     { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
@@ -4512,7 +4109,6 @@ export default function AdminPage() {
 
         {tab === 'buildings' && <div className="admin-tab-in"><BuildingsTab /></div>}
 
-        {tab === 'assets' && <div className="admin-tab-in"><AssetsTab /></div>}
 
         {tab === 'users' && <div className="admin-tab-in"><UsersTab /></div>}
 

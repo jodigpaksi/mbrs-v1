@@ -62,6 +62,20 @@ export async function updateRoomStatus(roomId: number, status: 'active' | 'maint
   return res.data
 }
 
+export async function uploadRoomPhoto(roomId: number, file: File): Promise<{ url: string; photos: string[] }> {
+  const form = new FormData()
+  form.append('photo', file)
+  const res = await api.post(`/rooms/${roomId}/photo`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return res.data
+}
+
+export async function deleteRoomPhoto(roomId: number, url: string): Promise<{ photos: string[] }> {
+  const res = await api.delete(`/rooms/${roomId}/photo`, { data: { url } })
+  return res.data
+}
+
 export async function getReceptionists() {
   const res = await api.get('/users/receptionists')
   return res.data as { id: number; name: string; department: string; ext: string; email: string; avatar?: string }[]

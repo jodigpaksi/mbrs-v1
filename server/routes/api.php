@@ -4,7 +4,6 @@ use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ArchiveController;
 use App\Http\Controllers\Api\KioskController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\BuildingController;
 use App\Http\Controllers\Api\DepartmentController;
@@ -105,21 +104,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/bookings/{booking}', [BookingController::class, 'update']);
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
 
-    // Assets (read scoped to managed buildings; write: building_admin+)
-    Route::get('/assets', [AssetController::class, 'index']);
-
-    // Building admin: manage rooms + assets within their buildings
+    // Building admin: manage rooms within their buildings
     Route::middleware('can:building_admin')->group(function () {
         Route::post('/rooms', [RoomController::class, 'store']);
         Route::post('/rooms/reorder', [RoomController::class, 'reorder']);
         Route::patch('/rooms/{room}', [RoomController::class, 'update']);
         Route::delete('/rooms/{room}', [RoomController::class, 'destroy']);
-        Route::post('/assets', [AssetController::class, 'store']);
-        Route::patch('/assets/{asset}', [AssetController::class, 'update']);
-        Route::delete('/assets/{asset}', [AssetController::class, 'destroy']);
-        Route::post('/assets/{asset}/units', [AssetController::class, 'storeUnit']);
-        Route::patch('/assets/{asset}/units/{unit}', [AssetController::class, 'updateUnit']);
-        Route::delete('/assets/{asset}/units/{unit}', [AssetController::class, 'destroyUnit']);
+        Route::post('/rooms/{room}/photo', [RoomController::class, 'uploadPhoto']);
+        Route::delete('/rooms/{room}/photo', [RoomController::class, 'deletePhoto']);
     });
 
     // Analytics (all authenticated)

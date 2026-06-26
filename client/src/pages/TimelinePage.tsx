@@ -1267,7 +1267,7 @@ export default function TimelinePage() {
                         {isMaintRoom
                           ? <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>construction</span>Maintenance</>
                           : room.requires_contact
-                            ? <SpecialRoomBadge size="xs" />
+                            ? <span onMouseEnter={() => setRoomHover(null)}><SpecialRoomBadge size="xs" /></span>
                             : <><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{room.capacity} &middot; {room.floor}</>
                         }
                       </span>

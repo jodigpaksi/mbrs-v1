@@ -102,26 +102,6 @@ export interface AppNotification {
   booking?: Booking
 }
 
-export type AssetStatus = 'active' | 'rusak' | 'service' | 'hilang' | 'indent'
-
-export interface AssetUnit {
-  id: number
-  asset_id: number
-  room_id?: number
-  room?: Room
-  unit_code?: string
-  status: AssetStatus
-  notes?: string
-}
-
-export interface Asset {
-  id: number
-  name: string
-  category?: string
-  icon?: string
-  notes?: string
-  units?: AssetUnit[]
-}
 
 export interface PantryItem {
   icon: string

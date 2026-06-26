@@ -90,9 +90,15 @@ class AuthController extends Controller
 
     public function updateAvatar(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if ($user->role !== 'superadmin') {
+            $allowed = \App\Models\Setting::where('key', 'allow_avatar_upload')->value('value') ?? 'true';
+            if ($allowed === 'false') {
+                return response()->json(['message' => 'Avatar upload is disabled by the administrator.'], 403);
+            }
+        }
         $request->validate(['avatar' => 'required|image|max:2048']);
         $path = $request->file('avatar')->store('avatars', 'public');
-        $user = $request->user();
         $user->update(['avatar' => Storage::url($path)]);
         return response()->json($user);
     }
