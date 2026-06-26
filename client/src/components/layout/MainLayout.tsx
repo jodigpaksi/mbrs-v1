@@ -21,6 +21,9 @@ function MainLayoutInner({ children }: MainLayoutProps) {
   const [prefillStart, setPrefillStart]   = useState('')
   const [prefillEnd, setPrefillEnd]       = useState('')
   const [prefillVersion, setPrefillVersion] = useState(0)
+  const [availPrefillDate, setAvailPrefillDate]   = useState<string | undefined>(undefined)
+  const [availPrefillStart, setAvailPrefillStart] = useState<string | undefined>(undefined)
+  const [availPrefillEnd, setAvailPrefillEnd]     = useState<string | undefined>(undefined)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -28,6 +31,18 @@ function MainLayoutInner({ children }: MainLayoutProps) {
     const fn = () => setAvailableOpen(o => !o)
     document.addEventListener('available-rooms-toggle', fn)
     return () => document.removeEventListener('available-rooms-toggle', fn)
+  }, [])
+
+  useEffect(() => {
+    const fn = (e: Event) => {
+      const { date, startTime, endTime } = (e as CustomEvent<{ date: string; startTime: string; endTime: string }>).detail
+      setAvailPrefillDate(date)
+      setAvailPrefillStart(startTime)
+      setAvailPrefillEnd(endTime)
+      setAvailableOpen(true)
+    }
+    document.addEventListener('available-rooms-prefill', fn)
+    return () => document.removeEventListener('available-rooms-prefill', fn)
   }, [])
 
   function handleRoomSelect(room: Room, date: string, st = '', et = '') {
@@ -64,8 +79,11 @@ function MainLayoutInner({ children }: MainLayoutProps) {
       <AvailableRoomsPanel
         open={availableOpen}
         bookingOpen={selectedRoom !== null}
-        onClose={() => { setAvailableOpen(false); setSelectedRoom(null) }}
+        onClose={() => { setAvailableOpen(false); setSelectedRoom(null); setAvailPrefillDate(undefined); setAvailPrefillStart(undefined); setAvailPrefillEnd(undefined) }}
         onRoomSelect={handleRoomSelect}
+        prefillDate={availPrefillDate}
+        prefillStartTime={availPrefillStart}
+        prefillEndTime={availPrefillEnd}
       />
       <BookingPanel
         open={selectedRoom !== null}

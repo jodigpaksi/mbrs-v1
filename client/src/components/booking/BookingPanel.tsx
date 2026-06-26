@@ -12,6 +12,7 @@ import { useBookingHours } from '../../hooks/useBookingHours'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
+import AfterHoursModal from './AfterHoursModal'
 
 function fmtFieldDate(iso: string): string {
   if (!iso) return 'Select date'
@@ -30,7 +31,7 @@ function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); retur
 function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
 const DOW_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-const DOW_LABELS: Record<string, string> = { mon: 'M', tue: 'T', wed: 'W', thu: 'T', fri: 'F', sat: 'S', sun: 'S' }
+const DOW_LABELS: Record<string, string> = { mon: 'Mo', tue: 'Tu', wed: 'We', thu: 'Th', fri: 'Fr', sat: 'Sa', sun: 'Su' }
 const DOW_FULL: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' }
 // JS getDay() returns 0=Sun,1=Mon,...,6=Sat; our array index in DOW_KEYS: mon=0,...,sun=6
 const JS_DOW_TO_KEY: Record<number, string> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
@@ -74,7 +75,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // repeat sub-state
   const [repeatMode, setRepeatMode] = useState<'count' | 'until'>('count')
   const [repeatCount, setRepeatCount] = useState(5)
+  const [repeatCountRaw, setRepeatCountRaw] = useState('5')
   const [repeatEndDate, setRepeatEndDate] = useState('')
+  const [untilDateText, setUntilDateText] = useState('')
   const [skipConflicts, setSkipConflicts] = useState(true)
   const [weeklyDays, setWeeklyDays] = useState<string[]>(['mon'])
   // pantry
@@ -88,7 +91,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [bookFor, setBookFor] = useState('')
   const [bookForUserId, setBookForUserId] = useState<number | null>(null)
   const [showBookForDrop, setShowBookForDrop] = useState(false)
-  const bookForRef = useRef<HTMLDivElement>(null)
+  const bookForRef     = useRef<HTMLDivElement>(null)
+  const panelBodyRef   = useRef<HTMLDivElement>(null)
+  const summaryRef     = useRef<HTMLDivElement>(null)
+  const calendarBtnRef = useRef<HTMLDivElement>(null)
+  const [draftRestored, setDraftRestored] = useState(false)
+
+  // Always-current snapshot of form values — updated every render, no closure staleness.
+  const draftSnapshotRef = useRef<Record<string, unknown>>({})
+  const openRef      = useRef(open)
+  const editModeRef  = useRef(!!editBooking)
+  openRef.current    = open
+  editModeRef.current = !!editBooking
   // room selector
   const [roomSearch, setRoomSearch] = useState('')
   const [showRoomDrop, setShowRoomDrop] = useState(false)
@@ -105,6 +119,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [skippedResult, setSkippedResult] = useState<{ skipped: string[]; created: number; total: number } | null>(null)
   // cancel series modal
   const [showCancelModal, setShowCancelModal] = useState(false)
+  // after-hours restriction modal
+  const [afterHoursOpen, setAfterHoursOpen] = useState(false)
 
   const isEdit = !!editBooking
   const [glowActive, setGlowActive] = useState(false)
@@ -131,6 +147,39 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   }
 
   const today = new Date().toISOString().split('T')[0]
+
+  // Update snapshot every render — guarantees saveDraft() always has current values.
+  const DRAFT_KEY = 'mbrs-booking-draft'
+  if (open && !editBooking) {
+    draftSnapshotRef.current = {
+      title, desc, date, startTime, endTime, status, type,
+      room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, building_id: selectedRoom.building_id, building: selectedRoom.building ? { id: selectedRoom.building.id, name: selectedRoom.building.name, code: selectedRoom.building.code } : undefined } : null,
+      repeat, repeatMode, repeatCount, repeatEndDate, weeklyDays, skipConflicts,
+      bookFor, bookForUserId, showBookFor,
+    }
+  }
+
+  function saveDraft() {
+    if (editModeRef.current) return
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draftSnapshotRef.current, savedAt: new Date().toISOString() }))
+    } catch {}
+  }
+
+  function clearDraft() {
+    draftSnapshotRef.current = {}
+    localStorage.removeItem(DRAFT_KEY)
+    setDraftRestored(false)
+  }
+
+  function hasMeaningfulDraft(): boolean {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (!raw) return false
+      const d = JSON.parse(raw)
+      return !!(d.title || d.room || (d.date && d.date !== today))
+    } catch { return false }
+  }
 
   const { data: rooms = [] } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: buildings = [] } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings })
@@ -163,6 +212,41 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       setShowBookFor(!!(editBooking.booked_for))
       setShowMiniPanel(false)
     } else {
+      // Try restoring a saved draft.
+      // prefillDate alone (without times) just means "current calendar date" — don't treat it as a
+      // specific slot click. Only prefillStart/End or initialRoom mean a specific slot was chosen.
+      const isPrefilled = !!(prefillStart || prefillEnd || initialRoom)
+      if (!isPrefilled && hasMeaningfulDraft()) {
+        try {
+          const d = JSON.parse(localStorage.getItem(DRAFT_KEY)!)
+          setTitle(d.title ?? '')
+          setDesc(d.desc ?? '')
+          // Honor prefillDate if set (e.g. user is viewing a future date in the timeline).
+          setDate(prefillDate || d.date || today)
+          setStartTime(d.startTime ?? '')
+          setEndTime(d.endTime ?? '')
+          setStatus(d.status ?? 'confirmed')
+          setType(d.type ?? 'internal')
+          setSelectedRoom(d.room ?? null)
+          setRepeat(d.repeat ?? 'none')
+          setRepeatMode(d.repeatMode ?? 'count')
+          setRepeatCount(d.repeatCount ?? 5)
+          setRepeatCountRaw(String(d.repeatCount ?? 5))
+          setRepeatEndDate(d.repeatEndDate ?? '')
+          setUntilDateText(d.repeatEndDate ? (() => { const [y, m, dd] = d.repeatEndDate.split('-'); return `${dd}/${m}/${y}` })() : '')
+          setWeeklyDays(d.weeklyDays ?? ['mon'])
+          setSkipConflicts(d.skipConflicts ?? true)
+          setBookFor(d.bookFor ?? '')
+          setBookForUserId(d.bookForUserId ?? null)
+          setShowBookFor(d.showBookFor ?? false)
+          setShowMiniPanel(false)
+          setPantrySaved(false)
+          setDraftRestored(true)
+          setActiveBuildingId(d.room?.building_id ?? buildingId ?? defaultBuilding ?? null)
+          setShowCancelModal(false); setError(''); setConflictInfo(null); setSkippedResult(null)
+          return
+        } catch {}
+      }
       setTitle('')
       setDesc('')
       setBookFor('')
@@ -177,11 +261,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       setRepeat('none')
       setRepeatMode('count')
       setRepeatCount(5)
+      setRepeatCountRaw('5')
       setRepeatEndDate('')
+      setUntilDateText('')
       setSkipConflicts(true)
       setWeeklyDays(['mon'])
       setSelectedRoom(initialRoom || null)
       setPantrySaved(false)
+      setDraftRestored(false)
     }
     setShowCancelModal(false)
     setError('')
@@ -251,6 +338,28 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     return () => { if (availTimer.current) clearTimeout(availTimer.current) }
   }, [open, selectedRoom?.id, date, startTime, endTime, editBooking?.id])
 
+  // Save draft after every render while panel is open (new booking mode).
+  // No deps array = runs after every render, so localStorage is always current.
+  // This is the most reliable approach — no closure staleness, no timing gaps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open && !editBooking) saveDraft() })
+
+  // Also save on unmount (navigating away while panel is open).
+  useEffect(() => {
+    return () => { if (openRef.current && !editModeRef.current) saveDraft() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Sync untilDateText when picker updates repeatEndDate
+  useEffect(() => {
+    if (repeatEndDate) {
+      const [y, m, d] = repeatEndDate.split('-')
+      setUntilDateText(`${d}/${m}/${y}`)
+    } else {
+      setUntilDateText('')
+    }
+  }, [repeatEndDate])
+
   function getDuration() {
     if (!startTime || !endTime) return '— min'
     const [h1, m1] = startTime.split(':').map(Number)
@@ -264,6 +373,27 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
   function toISO(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
+  // Parse typed date string → YYYY-MM-DD, accepts: DD/MM/YYYY, DD/MM/YY, DD/MM, YYYY-MM-DD
+  function parseTypedDate(raw: string): string | null {
+    const s = raw.trim().replace(/[.\-]/g, '/')
+    const parts = s.split('/')
+    if (parts.length >= 2) {
+      const d = parseInt(parts[0]), m = parseInt(parts[1])
+      const yearRaw = parts[2] ?? ''
+      const y = yearRaw.length === 2 ? 2000 + parseInt(yearRaw)
+              : yearRaw.length >= 4  ? parseInt(yearRaw)
+              : new Date().getFullYear()
+      if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 2020 && y <= 2099) {
+        // Validate the date actually exists
+        const dt = new Date(y, m - 1, d)
+        if (dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d) {
+          return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+        }
+      }
+    }
+    return null
   }
 
   // Generate all planned dates for a repeat series
@@ -369,24 +499,36 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       await updateBooking(editBooking.id, { ...base, start_at: `${date} ${startTime}:00`, end_at: `${date} ${endTime}:00` })
     } else {
       await createBooking({ ...base, start_at: `${date} ${startTime}:00`, end_at: `${date} ${endTime}:00` })
+      clearDraft()
     }
     onSubmit?.()
   }
 
-  async function doCreateBookings(datesToBook: string[], seriesId: string) {
+  // knownSkipped: dates already known to conflict (pre-checked), so they get stored on each booking
+  async function doCreateBookings(datesToBook: string[], seriesId: string, knownSkipped: string[] = []) {
     if (!selectedRoom) return
     const base = { room_id: selectedRoom.id, title, description: desc, status, type, booked_for: bookFor.trim() || undefined, booked_for_user_id: bookForUserId ?? undefined }
     let created = 0
-    const skippedDates: string[] = []
+    const runtimeSkipped: string[] = []
     for (const d of datesToBook) {
       try {
-        await createBooking({ ...base, start_at: `${d} ${startTime}:00`, end_at: `${d} ${endTime}:00`, series_id: seriesId })
+        await createBooking({
+          ...base,
+          start_at: `${d} ${startTime}:00`,
+          end_at: `${d} ${endTime}:00`,
+          series_id: seriesId,
+          series_skipped_dates: knownSkipped.length > 0 ? knownSkipped : undefined,
+        })
         created++
-      } catch { skippedDates.push(d) }
+      } catch { runtimeSkipped.push(d) }
     }
-    if (created === 0) { setError(`All ${datesToBook.length} slots had conflicts.`); return }
-    if (skippedDates.length > 0) {
-      setSkippedResult({ skipped: skippedDates, created, total: datesToBook.length })
+    const allSkipped = [...knownSkipped, ...runtimeSkipped]
+    if (created === 0) { setError(`All ${datesToBook.length + knownSkipped.length} slots had conflicts.`); return }
+    // If any runtime skips happened (race condition after pre-check), patch the stored skipped dates
+    // by including them in a final pass — simplest: just show combined result
+    clearDraft()
+    if (allSkipped.length > 0) {
+      setSkippedResult({ skipped: allSkipped, created, total: datesToBook.length + knownSkipped.length })
     } else {
       onSubmit?.()
     }
@@ -399,28 +541,29 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
     const seriesId = crypto.randomUUID()
 
-    if (!skipConflicts) {
-      // All-or-nothing: pre-check all slots first
-      const checks = await Promise.all(
-        dates.map(d =>
-          checkAvailability(selectedRoom.id, `${d} ${startTime}:00`, `${d} ${endTime}:00`)
-            .then(res => ({ date: d, available: !!res.available }))
-            .catch(() => ({ date: d, available: false }))
-        )
+    // Always pre-check all slots so we know the skipped dates upfront and can store them on each booking
+    const checks = await Promise.all(
+      dates.map(d =>
+        checkAvailability(selectedRoom.id, `${d} ${startTime}:00`, `${d} ${endTime}:00`)
+          .then(res => ({ date: d, available: !!res.available }))
+          .catch(() => ({ date: d, available: false }))
       )
-      const conflicting = checks.filter(c => !c.available).map(c => c.date)
+    )
+    const conflicting = checks.filter(c => !c.available).map(c => c.date)
+    const available   = checks.filter(c => c.available).map(c => c.date)
+
+    if (!skipConflicts) {
       if (conflicting.length > 0) {
-        const available = checks.filter(c => c.available).map(c => c.date)
         setConflictInfo({ conflicting, available, seriesId })
         return
       }
-      // No conflicts — create all
       await doCreateBookings(dates, seriesId)
       return
     }
 
-    // Skip mode: create all, skip conflicts
-    await doCreateBookings(dates, seriesId)
+    // Skip mode: create only available, pass conflicting as knownSkipped
+    if (available.length === 0) { setError('All selected slots are already booked.'); return }
+    await doCreateBookings(available, seriesId, conflicting)
   }
 
   async function handleSubmit() {
@@ -446,6 +589,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Save draft on close (belt-and-suspenders alongside the auto-save effect).
+  function handleClose() {
+    if (!editBooking) saveDraft()
+    onClose()
   }
 
   const filteredRooms = (rooms as Room[]).filter((r: Room) => {
@@ -484,12 +633,44 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           86%  { box-shadow: 0 0 0 1px rgba(173,238,43,0.4), 0 0 10px rgba(173,238,43,0.25); }
           100% { box-shadow: none; }
         }
+        @keyframes section-in {
+          from { opacity: 0; transform: translateY(-10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes drop-in {
+          from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes chip-pop {
+          0%   { opacity: 0; transform: scale(0.6); }
+          65%  { transform: scale(1.12); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes field-success {
+          0%   { box-shadow: 0 0 0 3px rgba(173,238,43,0.55); }
+          100% { box-shadow: 0 0 0 0px rgba(173,238,43,0); }
+        }
+        @keyframes dur-pop {
+          0%   { transform: scale(0.8) translateY(3px); opacity: 0.5; }
+          65%  { transform: scale(1.08) translateY(-1px); opacity: 1; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        @keyframes stat-pop {
+          0%   { transform: scale(0.65) translateY(6px); opacity: 0; }
+          60%  { transform: scale(1.1) translateY(-2px); opacity: 1; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        @keyframes chip-in {
+          0%   { opacity: 0; transform: scale(0.7) translateY(4px); }
+          70%  { transform: scale(1.07) translateY(-1px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
       `}</style>
 
       {/* Overlay */}
       <div
         className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] transition-opacity duration-300 ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       {/* Available times mini-panel — floating card to the left of main panel */}
@@ -594,9 +775,26 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         {/* Header */}
         <div className="p-7 pb-4 flex items-start justify-between shrink-0">
           <div>
-            <p className="text-[9px] font-black text-[var(--ds-text-3)] uppercase tracking-[0.25em] leading-none">
-              {isEdit ? 'Edit Booking' : 'Create Booking'}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[9px] font-black text-[var(--ds-text-3)] uppercase tracking-[0.25em] leading-none">
+                {isEdit ? 'Edit Booking' : 'Create Booking'}
+              </p>
+              {draftRestored && !isEdit && (
+                <div className="flex items-center gap-1">
+                  <span className="draft-blink flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-2 py-1 rounded-lg"
+                    style={{ background: 'rgba(251,191,36,0.15)', color: '#f59e0b', border: '1.5px solid rgba(251,191,36,0.45)' }}>
+                    <span className="inline-block size-1.5 rounded-full" style={{ background: '#f59e0b' }} />
+                    Draft
+                  </span>
+                  <button
+                    onClick={() => { clearDraft(); setTitle(''); setDesc(''); setDate(today); setStartTime(''); setEndTime(''); setSelectedRoom(null); setRepeat('none'); setBookFor(''); setBookForUserId(null); setShowBookFor(false); setDraftRestored(false) }}
+                    className="text-[var(--ds-text-4)] hover:text-red-400 transition-colors"
+                    title="Discard draft">
+                    <span className="material-symbols-outlined" style={{ fontSize: 12 }}>close</span>
+                  </button>
+                </div>
+              )}
+            </div>
             {/* Room selector */}
             <div className="relative mt-1">
               <button
@@ -698,7 +896,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="size-10 flex items-center justify-center rounded-full bg-[var(--ds-bg-surface-2)] hover:bg-slate-900 hover:text-[#adee2b] transition-all group"
           >
             <span className="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">close</span>
@@ -730,28 +928,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             </div>
           )}
 
-          {/* After-hours restriction notice */}
-          {restrictAfterHours && startTime >= workingHoursEnd && !showReceptionistNotice && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center gap-5 px-8"
-              style={{ background: 'var(--ds-bg-surface)' }}>
-              <div className="size-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 32, color: '#6366f1', fontVariationSettings: "'FILL' 1" }}>schedule</span>
-              </div>
-              <div>
-                <p className="text-[13px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-1)' }}>After Working Hours</p>
-                <p className="text-[11px] font-medium mt-2 leading-relaxed max-w-[260px] mx-auto" style={{ color: 'var(--ds-text-3)' }}>
-                  Bookings after {workingHoursEnd} must go through the receptionist. Please contact them to request an after-hours booking.
-                </p>
-              </div>
-              <button
-                onClick={() => setStartTime('')}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] transition-colors text-[10px] font-black uppercase text-[var(--ds-text-2)]"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
-                Change time
-              </button>
-            </div>
-          )}
 
           {/* Pantry pull tab — hidden until pantry feature is ready */}
           {/* <button
@@ -763,7 +939,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           </button> */}
 
           {/* Main form */}
-          <div className="flex-1 overflow-y-auto px-7 space-y-4 pb-4" style={{ scrollbarWidth: 'thin' }}>
+          <div ref={panelBodyRef} className="flex-1 overflow-y-auto px-7 space-y-4 pb-4" style={{ scrollbarWidth: 'thin' }}>
 
             {/* Maintenance warning */}
             {roomIsMaintenance && (
@@ -836,17 +1012,27 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 </div>
 
                 {/* Duration badge — same label+field structure for alignment */}
-                <div className="shrink-0 space-y-1">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Duration</label>
-                  <div className="px-3 py-2 rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center dark:bg-[#adee2b]/15 dark:text-[#adee2b]"
-                    style={{
-                      backgroundColor: '#d9faa0',
-                      color: '#2d5a00',
-                      ...(glowActive ? { animation: 'duration-glow-pulse 1.4s ease-in-out forwards' } : {}),
-                    }}>
-                    {getDuration()}
-                  </div>
-                </div>
+                {(() => {
+                  const dur = getDuration()
+                  return (
+                    <div className="shrink-0 space-y-1">
+                      <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Duration</label>
+                      <div
+                        key={dur}
+                        className="px-3 py-2 rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center dark:bg-[#adee2b]/15 dark:text-[#adee2b]"
+                        style={{
+                          backgroundColor: '#d9faa0',
+                          color: '#2d5a00',
+                          animation: glowActive
+                            ? 'duration-glow-pulse 1.4s ease-in-out forwards'
+                            : 'dur-pop 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+                        }}
+                      >
+                        {dur}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Show available time toggle */}
@@ -871,36 +1057,46 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
             {/* Details */}
             <div className="bg-[var(--ds-bg-raised)] p-5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-3">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Meeting Title *</label>
+              <div className="space-y-1.5 transition-transform duration-200 ease-out focus-within:scale-[1.015] origin-left">
+                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">Meeting Title *</label>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-                  placeholder="e.g. Brand Strategy 2026"
-                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none" />
+                  placeholder="Write title here..."
+                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 outline-none transition-all duration-200
+                    focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Description</label>
+              <div className="space-y-1.5 transition-transform duration-200 ease-out focus-within:scale-[1.015] origin-left">
+                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">Description</label>
                 <textarea rows={2} value={desc} onChange={e => setDesc(e.target.value)}
-                  placeholder="Agenda, notes..."
-                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none resize-none" />
+                  placeholder="Agenda, notes, or attendees..."
+                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium p-2.5 outline-none resize-none transition-all duration-200
+                    focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
               </div>
 
-              {/* Book for — accordion (hidden if disabled by admin) */}
+              {/* Booking for — accordion (hidden if disabled by admin) */}
               {allowBookForOthers && <div ref={bookForRef}>
                 <button
                   type="button"
-                  onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setShowBookForDrop(false) } }}
+                  onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setBookForUserId(null); setShowBookForDrop(false) } }}
                   className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider transition-colors"
                   style={{ color: showBookFor ? 'var(--ds-text-2)' : 'var(--ds-text-3)' }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
-                    {showBookFor ? 'remove' : 'add'}
+                  <span className="material-symbols-outlined transition-transform duration-200" style={{ fontSize: 13, transform: showBookFor ? 'rotate(45deg)' : 'rotate(0deg)' }}>
+                    add
                   </span>
-                  Book for (optional)
-                  {bookFor && <span className="ml-1 px-1.5 py-0.5 bg-[var(--ds-bg-surface-2)] rounded text-[var(--ds-text-2)] normal-case font-bold tracking-normal">{bookFor}</span>}
+                  Booking for (optional)
+                  {bookFor && (
+                    <span
+                      key={bookFor}
+                      className="ml-1 px-2 py-0.5 bg-[#adee2b] rounded-full text-black normal-case font-black tracking-normal text-[8px]"
+                      style={{ animation: 'chip-pop 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
+                    >
+                      {bookFor}
+                    </span>
+                  )}
                 </button>
 
                 {showBookFor && (
-                  <div className="relative mt-2">
+                  <div className="relative mt-2" style={{ animation: 'section-in 0.2s ease-out' }}>
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 15 }}>person</span>
                     <input
                       type="text"
@@ -909,10 +1105,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       onFocus={() => setShowBookForDrop(true)}
                       placeholder="Type name or pick from dept..."
                       autoFocus
-                      className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium pl-8 pr-8 py-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none"
+                      className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium pl-8 pr-8 py-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none transition-all"
+                      style={bookForUserId !== null ? { borderColor: '#adee2b', animation: 'field-success 0.5s ease-out' } : undefined}
                     />
                     {bookFor && (
-                      <button type="button" onClick={() => setBookFor('')}
+                      <button type="button" onClick={() => { setBookFor(''); setBookForUserId(null) }}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]">
                         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
                       </button>
@@ -923,15 +1120,19 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       const filtered = sameDept.filter(u => !q || u.name.toLowerCase().includes(q))
                       if (filtered.length === 0) return null
                       return (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl shadow-xl z-50 overflow-hidden" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                        <div
+                          className="absolute top-full left-0 right-0 mt-1 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl shadow-xl z-50 overflow-hidden"
+                          style={{ maxHeight: 200, overflowY: 'auto', animation: 'drop-in 0.18s ease-out' }}
+                        >
                           {filtered.map(u => (
                             <button key={u.id} type="button"
                               onMouseDown={e => { e.preventDefault(); setBookFor(u.name); setBookForUserId(u.id); setShowBookForDrop(false) }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#adee2b]/10 transition-colors text-left">
-                              <span className="size-6 rounded-full bg-[var(--ds-bg-surface-2)] flex items-center justify-center text-[10px] font-black text-[var(--ds-text-3)] shrink-0">
+                              className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b]/10 transition-colors text-left">
+                              <span className="size-7 rounded-full bg-[#adee2b]/20 flex items-center justify-center text-[11px] font-black text-[#2d5000] shrink-0">
                                 {u.name.charAt(0).toUpperCase()}
                               </span>
-                              <span className="text-sm font-bold text-[var(--ds-text-2)] truncate">{u.name}</span>
+                              <span className="text-sm font-bold text-[var(--ds-text-1)] truncate">{u.name}</span>
+                              <span className="ml-auto text-[9px] font-black text-[var(--ds-text-4)] uppercase">{u.department}</span>
                             </button>
                           ))}
                         </div>
@@ -955,26 +1156,32 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Type</label>
                   {isPrivileged ? (
-                    <div className="grid grid-cols-2 gap-1">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {([
-                        { value: 'internal', label: 'Internal', bg: '#1d4ed8', text: 'white' },
-                        { value: 'external', label: 'External', bg: '#f97316', text: 'white' },
-                        { value: 'maintenance', label: 'Maint.', bg: '#fb923c', text: '#7c2d12' },
-                        { value: 'repairment', label: 'Repair', bg: '#ef4444', text: 'white' },
-                      ] as const).map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setType(opt.value)}
-                          className="py-1.5 text-[10px] font-black uppercase rounded-full border transition-all duration-150"
-                          style={{
-                            background: type === opt.value ? opt.bg : 'transparent',
-                            color: type === opt.value ? opt.text : 'var(--ds-text-3)',
-                            borderColor: type === opt.value ? opt.bg : 'var(--ds-border)',
-                          }}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
+                        { value: 'internal',    label: 'Internal', bg: '#1d4ed8', text: 'white',   shadow: '0 4px 14px rgba(29,78,216,0.45)' },
+                        { value: 'external',    label: 'External', bg: '#f97316', text: 'white',   shadow: '0 4px 14px rgba(249,115,22,0.45)' },
+                        { value: 'maintenance', label: 'Maint.',   bg: '#fb923c', text: '#7c2d12', shadow: '0 4px 14px rgba(251,146,60,0.45)' },
+                        { value: 'repairment',  label: 'Repair',   bg: '#ef4444', text: 'white',   shadow: '0 4px 14px rgba(239,68,68,0.45)' },
+                      ] as const).map(opt => {
+                        const isActive = type === opt.value
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => setType(opt.value)}
+                            className="py-2 text-[10px] font-black uppercase rounded-xl border"
+                            style={{
+                              background: isActive ? opt.bg : 'transparent',
+                              color: isActive ? opt.text : 'var(--ds-text-3)',
+                              borderColor: isActive ? opt.bg : 'var(--ds-border)',
+                              transform: isActive ? 'scale(1.03)' : 'scale(0.97)',
+                              boxShadow: isActive ? opt.shadow : 'none',
+                              transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
                     </div>
                   ) : (
                     <div className="relative flex bg-[var(--ds-bg-surface-2)] p-1 rounded-full border border-[var(--ds-border-sub)]">
@@ -1031,10 +1238,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   </div>
 
                   {repeat !== 'none' && (
-                    <div className="space-y-2.5">
+                    <div className="space-y-2.5" style={{ animation: 'section-in 0.25s ease-out' }}>
                       {/* Weekly day picker */}
                       {repeat === 'weekly' && (
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5" style={{ animation: 'section-in 0.22s ease-out' }}>
                           <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Repeat Days</p>
                           <div className="flex gap-1">
                             {DOW_KEYS.map(key => {
@@ -1045,14 +1252,17 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                   type="button"
                                   title={DOW_FULL[key]}
                                   onClick={() => {
-                                    if (selected && weeklyDays.length === 1) return // must have at least 1
+                                    if (selected && weeklyDays.length === 1) return
                                     setWeeklyDays(selected ? weeklyDays.filter(d => d !== key) : [...weeklyDays, key])
                                   }}
-                                  className="flex-1 h-8 rounded-xl text-[9px] font-black uppercase transition-all duration-150"
+                                  className="flex-1 h-9 rounded-xl text-[10px] font-black uppercase"
                                   style={{
-                                    background: selected ? 'var(--ds-bg-raised)' : 'var(--ds-bg-surface-2)',
-                                    color: selected ? '#adee2b' : 'var(--ds-text-3)',
-                                    border: selected ? '1px solid var(--ds-border)' : '1px solid transparent',
+                                    background: selected ? '#adee2b' : 'var(--ds-bg-surface-2)',
+                                    color: selected ? '#1a3a00' : 'var(--ds-text-4)',
+                                    border: selected ? '1.5px solid #7cc000' : '1.5px solid transparent',
+                                    transform: selected ? 'scale(1.06)' : 'scale(1)',
+                                    boxShadow: selected ? '0 3px 10px rgba(173,238,43,0.4)' : 'none',
+                                    transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)',
                                   }}
                                 >
                                   {DOW_LABELS[key]}
@@ -1079,13 +1289,33 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           {repeatMode === 'count' && (
                             <div className="flex items-center gap-1.5 ml-auto">
                               <button type="button"
-                                onClick={() => setRepeatCount(c => Math.max(2, c - 1))}
+                                onClick={() => { const v = Math.max(2, repeatCount - 1); setRepeatCount(v); setRepeatCountRaw(String(v)) }}
                                 className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 15 }}>remove</span>
                               </button>
-                              <span className="text-[15px] font-black text-[var(--ds-text-1)] w-6 text-center tabular-nums">{repeatCount}</span>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={repeatCountRaw}
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/\D/g, '')
+                                  setRepeatCountRaw(raw)
+                                  const v = parseInt(raw)
+                                  if (!isNaN(v) && v >= 2) setRepeatCount(Math.min(repeat === 'daily' ? 90 : 52, v))
+                                }}
+                                onBlur={e => {
+                                  const v = parseInt(e.target.value)
+                                  const clamped = isNaN(v) ? 2 : Math.min(repeat === 'daily' ? 90 : 52, Math.max(2, v))
+                                  setRepeatCount(clamped)
+                                  setRepeatCountRaw(String(clamped))
+                                }}
+                                className="text-[15px] font-black text-[var(--ds-text-1)] text-center tabular-nums bg-transparent border-b-2 focus:outline-none transition-colors"
+                                style={{ width: 36, borderColor: 'var(--ds-border)', caretColor: '#adee2b' }}
+                                onFocus={e => { e.target.style.borderColor = '#adee2b'; e.target.select() }}
+                                onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
+                              />
                               <button type="button"
-                                onClick={() => setRepeatCount(c => Math.min(repeat === 'daily' ? 90 : 52, c + 1))}
+                                onClick={() => { const v = Math.min(repeat === 'daily' ? 90 : 52, repeatCount + 1); setRepeatCount(v); setRepeatCountRaw(String(v)) }}
                                 className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add</span>
                               </button>
@@ -1107,15 +1337,58 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             Until date
                           </span>
                           {repeatMode === 'until' && (
-                            <div className="ml-auto" onClick={e => e.stopPropagation()}>
-                              <GlassDatePicker value={repeatEndDate} onChange={setRepeatEndDate} min={date || today} align="right" panelWidth={260}>
-                                {() => (
-                                  <button type="button" className="flex items-center gap-1.5 bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] rounded-xl px-3 py-1.5 text-[10px] font-black transition-all">
-                                    <span className="text-[var(--ds-text-2)]">{repeatEndDate ? fmtShortDate(repeatEndDate) : 'Pick date'}</span>
-                                    <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>calendar_today</span>
-                                  </button>
-                                )}
-                              </GlassDatePicker>
+                            <div className="flex items-center gap-1.5 ml-auto" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="text"
+                                placeholder="DD/MM/YYYY"
+                                value={untilDateText}
+                                onChange={e => {
+                                  const raw = e.target.value
+                                  setUntilDateText(raw)
+                                  const parsed = parseTypedDate(raw)
+                                  if (parsed) setRepeatEndDate(parsed)
+                                }}
+                                onBlur={e => {
+                                  const parsed = parseTypedDate(e.target.value)
+                                  if (parsed) {
+                                    setRepeatEndDate(parsed)
+                                    const [y, m, d] = parsed.split('-')
+                                    setUntilDateText(`${d}/${m}/${y}`)
+                                  } else if (!e.target.value.trim()) {
+                                    setRepeatEndDate('')
+                                    setUntilDateText('')
+                                  } else {
+                                    // restore last valid value
+                                    if (repeatEndDate) {
+                                      const [y, m, d] = repeatEndDate.split('-')
+                                      setUntilDateText(`${d}/${m}/${y}`)
+                                    } else {
+                                      setUntilDateText('')
+                                    }
+                                  }
+                                }}
+                                className="text-[11px] font-black text-[var(--ds-text-1)] bg-transparent border-b-2 focus:outline-none transition-colors placeholder:text-[var(--ds-text-4)] tabular-nums"
+                                style={{ width: 88, borderColor: 'var(--ds-border)', caretColor: '#adee2b' }}
+                                onFocus={e => { e.target.style.borderColor = '#adee2b' }}
+                                onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
+                              />
+                              <div ref={calendarBtnRef}>
+                                <GlassDatePicker value={repeatEndDate} onChange={val => { setRepeatEndDate(val) }} min={date || today} align="right" panelWidth={260}>
+                                  {() => (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        // Scroll panel body so the datepicker panel becomes visible
+                                        setTimeout(() => {
+                                          calendarBtnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                        }, 30)
+                                      }}
+                                      className="size-7 flex items-center justify-center bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] rounded-lg transition-colors">
+                                      <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>calendar_today</span>
+                                    </button>
+                                  )}
+                                </GlassDatePicker>
+                              </div>
                             </div>
                           )}
                         </label>
@@ -1138,21 +1411,47 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
                       {/* Repeat preview summary */}
                       {repeatDates.length > 0 && (
-                        <div className="bg-[var(--ds-bg-surface-2)] rounded-2xl px-4 py-3 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>event_repeat</span>
-                            <span className="text-[10px] font-black text-[var(--ds-text-2)]">{repeatSummary}</span>
+                        <div
+                          ref={summaryRef}
+                          className="bg-[var(--ds-bg-surface-2)] rounded-2xl p-3 space-y-2.5"
+                          style={{ animation: 'section-in 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
+                        >
+                          {/* Two symmetric stat boxes */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-xl py-3 flex flex-col items-center justify-center gap-1 overflow-hidden">
+                              <span
+                                key={repeatDates.length}
+                                className="text-[28px] font-black text-[#adee2b] leading-none tabular-nums"
+                                style={{ animation: 'stat-pop 0.38s cubic-bezier(0.34,1.56,0.64,1)' }}
+                              >{repeatDates.length}</span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">occurrence{repeatDates.length !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-xl py-3 flex flex-col items-center justify-center gap-1 overflow-hidden">
+                              <span
+                                key={repeatDates[repeatDates.length - 1]}
+                                className="text-[18px] font-black text-[var(--ds-text-1)] leading-none"
+                                style={{ animation: 'stat-pop 0.38s cubic-bezier(0.34,1.56,0.64,1) 0.04s both' }}
+                              >{fmtShortDate(repeatDates[repeatDates.length - 1])}</span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">ends on</span>
+                            </div>
                           </div>
-                          {/* Preview first 6 dates */}
-                          <div className="flex flex-wrap gap-1">
-                            {repeatDates.slice(0, 6).map(d => (
-                              <span key={d} className="text-[8px] font-bold bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-lg px-2 py-0.5 text-[var(--ds-text-3)]">
+                          {/* Preview first 8 dates — stagger-animate when list changes */}
+                          <div key={repeatDates.slice(0, 8).join(',')} className="flex flex-wrap gap-1.5">
+                            {repeatDates.slice(0, 8).map((d, i) => (
+                              <span
+                                key={d}
+                                className="text-[10px] font-bold bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-lg px-2.5 py-1 text-[var(--ds-text-2)]"
+                                style={{ animation: `chip-in 0.28s cubic-bezier(0.34,1.56,0.64,1) ${i * 30}ms both` }}
+                              >
                                 {fmtShortDate(d)}
                               </span>
                             ))}
-                            {repeatDates.length > 6 && (
-                              <span className="text-[8px] font-bold bg-slate-900 text-[#adee2b] rounded-lg px-2 py-0.5">
-                                +{repeatDates.length - 6} more
+                            {repeatDates.length > 8 && (
+                              <span
+                                className="text-[10px] font-bold bg-black dark:bg-white/10 text-[#adee2b] rounded-lg px-2.5 py-1"
+                                style={{ animation: `chip-in 0.28s cubic-bezier(0.34,1.56,0.64,1) ${8 * 30}ms both` }}
+                              >
+                                +{repeatDates.length - 8} more
                               </span>
                             )}
                           </div>
@@ -1387,7 +1686,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         setSubmitting(true)
                         setError('')
                         try {
-                          await doCreateBookings(info.available, info.seriesId)
+                          await doCreateBookings(info.available, info.seriesId, info.conflicting)
                         } catch (err: unknown) {
                           const e = err as { response?: { status?: number; data?: { message?: string } } }
                           const status = e?.response?.status
@@ -1525,15 +1824,34 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           ) : (
             /* Normal (non-series) submit */
             <>
-              <button
-                onClick={handleSubmit}
-                disabled={!isValid() || submitting}
-                className="w-full py-5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all duration-200
-                  bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] shadow-lime-400/20
-                  disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none"
-              >
-                {submitting ? 'Saving...' : isEdit ? 'Save Changes' : repeat !== 'none' ? `Schedule ${repeatDates.length > 0 ? `(${repeatDates.length})` : ''} Bookings` : 'Confirm Booking'}
-              </button>
+              <div className="relative w-full">
+                <button
+                  onClick={handleSubmit}
+                  disabled={!isValid() || submitting || !!skippedResult}
+                  className="w-full py-5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all duration-200
+                    bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] shadow-lime-400/20
+                    disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none"
+                >
+                  {submitting ? 'Saving...' : isEdit ? 'Save Changes' : repeat !== 'none' ? `Schedule ${repeatDates.length > 0 ? `(${repeatDates.length})` : ''} Bookings` : 'Confirm Booking'}
+                </button>
+                {/* After-hours overlay — covers the Confirm Booking button */}
+                {restrictAfterHours && startTime >= workingHoursEnd && !showReceptionistNotice && (
+                  <button
+                    onClick={() => setAfterHoursOpen(true)}
+                    className="absolute inset-0 w-full rounded-full flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-[0.1em] transition-all hover:brightness-110 active:scale-[0.98]"
+                    style={{
+                      background: 'rgba(99,102,241,0.15)',
+                      border: '1.5px solid rgba(99,102,241,0.35)',
+                      color: '#6366f1',
+                      backdropFilter: 'blur(4px)',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}>schedule</span>
+                    After-working hours — contact receptionist
+                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>chevron_right</span>
+                  </button>
+                )}
+              </div>
               {isEdit && editBooking && onCancel && (
                 <button
                   type="button"
@@ -1547,6 +1865,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           )}
         </div>
       </div>
+
+      <AfterHoursModal
+        open={afterHoursOpen}
+        onClose={() => setAfterHoursOpen(false)}
+        workingHoursEnd={workingHoursEnd}
+      />
     </>
   )
 }

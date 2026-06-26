@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMyBookings } from '../../api/bookings'
-import type { Booking } from '../../types'
+import { getMyBookings, getBookings } from '../../api/bookings'
+import { getRooms } from '../../api/rooms'
+import type { Booking, Room } from '../../types'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
 import { useNotification } from '../../context/NotificationContext'
@@ -23,6 +24,11 @@ interface NavbarProps {
   onTodayClick?: () => void
 }
 
+function fmtSearchDate(iso: string) {
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -31,17 +37,8 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const queryClient = useQueryClient()
   const { openNotifications } = useNotification()
   const unreadCount = useNotificationUnreadCount()
-  const { data: myBookings = [] } = useQuery<Booking[]>({
-    queryKey: ['my-bookings'],
-    queryFn: getMyBookings,
-    staleTime: 10_000,
-  })
-  const todayCount = useMemo(() => {
-    const todayStr = new Date().toLocaleDateString('en-CA')
-    return myBookings.filter(b =>
-      b.status !== 'cancelled' && b.start_at.slice(0, 10) === todayStr
-    ).length
-  }, [myBookings])
+
+  // — all useState / useRef declarations first, before any useQuery that references them —
   const [q, setQ] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -52,6 +49,31 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const searchRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  // — queries (may reference state declared above) —
+  const { data: myBookings = [] } = useQuery<Booking[]>({
+    queryKey: ['my-bookings'],
+    queryFn: getMyBookings,
+    staleTime: 10_000,
+  })
+  const { data: rooms = [] } = useQuery<Room[]>({
+    queryKey: ['rooms'],
+    queryFn: getRooms,
+    staleTime: 5 * 60_000,
+  })
+  const todayStr = new Date().toLocaleDateString('en-CA')
+  const plus60Str = (() => { const d = new Date(); d.setDate(d.getDate() + 60); return d.toLocaleDateString('en-CA') })()
+  const { data: allBookings = [] } = useQuery<Booking[]>({
+    queryKey: ['bookings-global-search', todayStr],
+    queryFn: () => getBookings({ date_from: todayStr, date_to: plus60Str }),
+    staleTime: 60_000,
+    enabled: searchOpen,
+  })
+
+  const todayCount = useMemo(() => {
+    return myBookings.filter(b =>
+      b.status !== 'cancelled' && b.start_at.slice(0, 10) === todayStr
+    ).length
+  }, [myBookings, todayStr])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -71,19 +93,63 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     setTimeout(() => searchInputRef.current?.focus(), 50)
   }, [])
 
-  function dispatch(val: string) {
+  function dispatchTimeline(val: string) {
     onSearch?.(val)
     document.dispatchEvent(new CustomEvent('timeline-search', { detail: val }))
   }
 
-  function clear() { setQ(''); dispatch('') }
+  function clear() { setQ(''); dispatchTimeline('') }
+
+  function closeSearch() { setSearchOpen(false); setQ(''); dispatchTimeline('') }
+
+  // Global search results — rooms + all users' upcoming bookings
+  const searchResults = useMemo(() => {
+    const trimmed = q.trim().toLowerCase()
+    if (trimmed.length < 1) return null
+    const matchedRooms = (rooms as Room[]).filter(r =>
+      r.name.toLowerCase().includes(trimmed) ||
+      (r.type ?? '').toLowerCase().includes(trimmed) ||
+      (r.building?.name ?? '').toLowerCase().includes(trimmed) ||
+      (r.building?.code ?? '').toLowerCase().includes(trimmed)
+    ).slice(0, 4)
+    const matchedBookings = (allBookings as Booking[])
+      .filter(b =>
+        b.status !== 'cancelled' &&
+        (
+          b.title.toLowerCase().includes(trimmed) ||
+          (b.room?.name ?? '').toLowerCase().includes(trimmed) ||
+          (b.description ?? '').toLowerCase().includes(trimmed) ||
+          (b.user?.name ?? '').toLowerCase().includes(trimmed)
+        )
+      )
+      .sort((a, b) => a.start_at.localeCompare(b.start_at))
+      .slice(0, 5)
+    return { rooms: matchedRooms, bookings: matchedBookings }
+  }, [q, rooms, allBookings])
+
+  const hasResults = searchResults && (searchResults.rooms.length > 0 || searchResults.bookings.length > 0)
+
+  function goToRoom(r: Room) {
+    closeSearch()
+    navigate('/rooms')
+    setTimeout(() => document.dispatchEvent(new CustomEvent('rooms-highlight', { detail: r.id })), 120)
+  }
+
+  function goToBooking(b: Booking) {
+    closeSearch()
+    const date = b.start_at.slice(0, 10)
+    navigate(`/?date=${date}&highlight=${b.id}`)
+  }
 
   const isActive = (path: string) => location.pathname === path
 
   const NAV_ITEMS = NAV_PATHS.map(n => ({ ...n, label: t(n.key as Parameters<typeof t>[0]) }))
-  const allItems = user?.role === 'admin'
-    ? [...NAV_ITEMS, { path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }]
-    : NAV_ITEMS
+  const isReceptionist = user?.role === 'receptionist' || user?.role === 'admin'
+  const allItems = [
+    ...NAV_ITEMS,
+    ...(isReceptionist ? [{ path: '/receptionist', label: 'Receptionist', icon: 'support_agent' }] : []),
+    ...(user?.role === 'admin' ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
+  ]
 
   async function handleLogout() {
     setProfileOpen(false)
@@ -133,7 +199,8 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
         {/* Right actions */}
         <div className="flex items-center gap-2">
-          {/* Search icon → expandable dropdown */}
+
+          {/* Global search */}
           <div ref={searchRef} className="relative">
             <div className="group relative">
               <button
@@ -143,7 +210,6 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>search</span>
               </button>
-              {/* Tooltip */}
               <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-[51] transition-opacity duration-150 whitespace-nowrap ${searchOpen ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
                 <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-[var(--ds-text-2)]"
                   style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
@@ -154,7 +220,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
             {/* Search dropdown */}
             <div
-              className="absolute right-0 top-full mt-2 z-50"
+              className="absolute right-0 top-full mt-2 z-50 w-80"
               style={{
                 opacity: searchOpen ? 1 : 0,
                 transform: searchOpen ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.97)',
@@ -164,36 +230,114 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             >
               <div className="rounded-2xl shadow-xl overflow-hidden"
                 style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)' }}>
-                <form onSubmit={e => { e.preventDefault(); dispatch(q); setSearchOpen(false) }}
-                  className="flex items-center gap-1 p-1.5">
+
+                {/* Input */}
+                <div className="flex items-center gap-1 p-1.5">
                   <span className="material-symbols-outlined text-base ml-2 shrink-0" style={{ color: 'var(--ds-text-4)' }}>search</span>
                   <input
                     ref={searchInputRef}
                     type="text"
-                    placeholder={t('nav_search_placeholder')}
+                    placeholder="Search rooms, bookings..."
                     value={q}
-                    onChange={e => { setQ(e.target.value); dispatch(e.target.value) }}
-                    className="w-80 text-[13px] font-bold bg-transparent focus:outline-none"
+                    onChange={e => { setQ(e.target.value); dispatchTimeline(e.target.value) }}
+                    onKeyDown={e => e.key === 'Escape' && closeSearch()}
+                    className="flex-1 text-[13px] font-bold bg-transparent focus:outline-none"
                     style={{ color: 'var(--ds-text-1)' }}
                   />
                   {q && (
                     <button type="button" onClick={clear}
-                      className="size-6 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors shrink-0">
+                      className="size-6 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                      style={{ color: 'var(--ds-text-3)' }}>
                       <span className="material-symbols-outlined text-sm">close</span>
                     </button>
                   )}
-                </form>
-                <div className="border-t border-white/60 mx-2 mb-1.5">
+                </div>
+
+                {/* Live results */}
+                {searchResults && (
+                  <div style={{ borderTop: '1px solid var(--ds-border-sub)' }}>
+                    {searchResults.rooms.length > 0 && (
+                      <div className="px-2 pt-2 pb-1">
+                        <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>Rooms</p>
+                        {searchResults.rooms.map(r => (
+                          <button key={r.id} onClick={() => goToRoom(r)}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left"
+                            style={{ color: 'var(--ds-text-1)' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>meeting_room</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[12px] font-black truncate">{r.name}</p>
+                              <p className="text-[10px] font-bold truncate" style={{ color: 'var(--ds-text-3)' }}>
+                                {r.building?.code || r.building?.name}{r.floor ? ` · Lt ${r.floor}` : ''}{r.capacity ? ` · ${r.capacity} pax` : ''}
+                              </p>
+                            </div>
+                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0 ${r.status === 'active' ? 'bg-green-500/15 text-green-600' : 'bg-amber-500/15 text-amber-600'}`}>
+                              {r.status}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {searchResults.bookings.length > 0 && (
+                      <div className={`px-2 pt-2 pb-1 ${searchResults.rooms.length > 0 ? 'border-t' : ''}`} style={{ borderColor: 'var(--ds-border-sub)' }}>
+                        <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>Bookings</p>
+                        {searchResults.bookings.map(b => {
+                          const isOwn = b.user_id === user?.id
+                          return (
+                            <button key={b.id} onClick={() => goToBooking(b)}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left"
+                              style={{ color: 'var(--ds-text-1)' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              {b.user && !isOwn
+                                ? <UserAvatar name={b.user.name} avatar={b.user.avatar} size={22} style={{ shrink: 0 }} />
+                                : <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>event</span>
+                              }
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[12px] font-black truncate">{b.title}</p>
+                                <p className="text-[10px] font-bold truncate" style={{ color: 'var(--ds-text-3)' }}>
+                                  {b.room?.name} · {fmtSearchDate(b.start_at)}
+                                  {!isOwn && b.user && <span style={{ color: 'var(--ds-text-4)' }}> · {b.user.name}</span>}
+                                </p>
+                              </div>
+                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0 ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : 'bg-amber-500/15 text-amber-600'}`}>
+                                {b.status}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {!hasResults && (
+                      <div className="px-4 py-4 text-center">
+                        <p className="text-[11px] font-bold" style={{ color: 'var(--ds-text-3)' }}>No results for "{q}"</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Footer: Search Available Rooms shortcut */}
+                <div className="px-2 pb-2" style={{ borderTop: '1px solid var(--ds-border-sub)', paddingTop: 6, marginTop: searchResults ? 0 : 0 }}>
                   <button type="button"
                     onClick={() => {
                       document.dispatchEvent(new CustomEvent('available-rooms-toggle'))
-                      setSearchOpen(false)
+                      closeSearch()
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-black uppercase text-slate-500 hover:bg-slate-100 transition-colors mt-1">
-                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>meeting_room</span>
+                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-[11px] font-black uppercase transition-colors mt-1"
+                    style={{ color: 'var(--ds-text-3)' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>tune</span>
                     Search Available Rooms
                   </button>
                 </div>
+
               </div>
             </div>
           </div>

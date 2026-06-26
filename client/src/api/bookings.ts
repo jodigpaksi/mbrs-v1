@@ -19,6 +19,9 @@ export async function createBooking(data: {
   status?: string
   type?: string
   series_id?: string
+  series_skipped_dates?: string[]
+  booked_for?: string
+  booked_for_user_id?: number
 }) {
   const res = await api.post('/bookings', data)
   return res.data

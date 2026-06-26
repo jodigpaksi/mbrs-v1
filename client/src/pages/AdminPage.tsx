@@ -20,8 +20,9 @@ import UserAvatar from '../components/ui/UserAvatar'
 import GlassTimePicker from '../components/ui/GlassTimePicker'
 import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
+import KioskTab from '../components/admin/KioskTab'
 
-type Tab = 'overview' | 'bookings' | 'users' | 'buildings' | 'assets' | 'settings' | 'archive'
+type Tab = 'overview' | 'bookings' | 'users' | 'buildings' | 'assets' | 'settings' | 'archive' | 'kiosk'
 type SortKey = 'start_at' | 'title' | 'room' | 'user' | 'status'
 type SortDir = 'asc' | 'desc'
 
@@ -4284,6 +4285,7 @@ export default function AdminPage() {
     { key: 'assets',    label: 'Assets',    icon: 'inventory_2' },
     { key: 'users',     label: 'Users',     icon: 'group' },
     { key: 'archive',   label: 'Archive',   icon: 'archive' },
+    { key: 'kiosk',     label: 'Kiosk',     icon: 'tablet' },
   ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
@@ -4518,6 +4520,7 @@ export default function AdminPage() {
 
         {tab === 'archive'  && <div className="admin-tab-in"><ArchiveTab /></div>}
         {tab === 'settings' && <div className="admin-tab-in"><SettingsTab /></div>}
+        {tab === 'kiosk'    && <div className="admin-tab-in"><KioskTab /></div>}
       </div>
     </div>
   )

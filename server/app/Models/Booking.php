@@ -19,6 +19,7 @@ class Booking extends Model
         'type',
         'cancelled_at',
         'series_id',
+        'series_skipped_dates',
         'booked_for',
         'booked_for_user_id',
         'archived_at',
@@ -27,10 +28,11 @@ class Booking extends Model
     protected function casts(): array
     {
         return [
-            'start_at'     => 'datetime',
-            'end_at'       => 'datetime',
-            'cancelled_at' => 'datetime',
-            'archived_at'  => 'datetime',
+            'start_at'              => 'datetime',
+            'end_at'                => 'datetime',
+            'cancelled_at'          => 'datetime',
+            'archived_at'           => 'datetime',
+            'series_skipped_dates'  => 'array',
         ];
     }
 

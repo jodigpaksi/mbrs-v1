@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ArchiveController;
+use App\Http\Controllers\Api\KioskController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\BookingController;
@@ -16,6 +17,14 @@ use Illuminate\Support\Facades\Route;
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
 
+// Kiosk — public (no auth required)
+Route::prefix('kiosk')->group(function () {
+    Route::get('{id}/config', [KioskController::class, 'publicConfig']);
+    Route::post('{id}/verify', [KioskController::class, 'verifyPin']);
+    Route::get('{id}/status', [KioskController::class, 'publicStatus']);
+    Route::post('{id}/confirm', [KioskController::class, 'confirmPresence']);
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
@@ -28,6 +37,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/settings/booking-hours', [SettingController::class, 'bookingHours']);
     Route::get('/settings/weekend', [SettingController::class, 'weekendSettings']);
     Route::get('/settings/general', [SettingController::class, 'generalSettings']);
+    Route::get('/settings/after-hours-contacts', [SettingController::class, 'afterHoursContacts']);
+
+    // Receptionist-level settings (admin + receptionist)
+    Route::middleware('can:receptionist')->group(function () {
+        Route::patch('/settings/after-hours-contacts', [SettingController::class, 'updateAfterHoursContacts']);
+    });
 
     // Locations (read: all auth)
     Route::get('/locations', [LocationController::class, 'index']);
@@ -126,6 +141,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/locations', [LocationController::class, 'store']);
         Route::patch('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
+        // Kiosk CRUD (admin only)
+        Route::get('/kiosk-configs', [KioskController::class, 'index']);
+        Route::post('/kiosk-configs', [KioskController::class, 'store']);
+        Route::patch('/kiosk-configs/{id}', [KioskController::class, 'update']);
+        Route::delete('/kiosk-configs/{id}', [KioskController::class, 'destroy']);
+
         Route::post('/buildings', [BuildingController::class, 'store']);
         Route::patch('/buildings/{building}', [BuildingController::class, 'update']);
         Route::delete('/buildings/{building}', [BuildingController::class, 'destroy']);

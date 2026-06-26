@@ -12,7 +12,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::define('admin', fn ($user) => $user->role === 'admin');
-        // building_admin can access building-scoped management routes
         Gate::define('building_admin', fn ($user) => in_array($user->role, ['admin', 'building_admin']));
+        Gate::define('receptionist', fn ($user) => in_array($user->role, ['admin', 'receptionist']));
     }
 }

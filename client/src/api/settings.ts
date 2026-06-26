@@ -54,3 +54,24 @@ export async function toggleUserSpecialAccess(userId: number): Promise<{ can_boo
   const res = await api.patch(`/users/${userId}/special-access`)
   return res.data
 }
+
+export interface AfterHoursContact {
+  id: number
+  name: string
+  email: string
+  ext: string | null
+  role: string
+  avatar: string | null
+  on_duty: boolean
+  department: string | null
+}
+
+export async function getAfterHoursContacts(): Promise<AfterHoursContact[]> {
+  const res = await api.get('/settings/after-hours-contacts')
+  return res.data
+}
+
+export async function updateAfterHoursContacts(userIds: number[]): Promise<AfterHoursContact[]> {
+  const res = await api.patch('/settings/after-hours-contacts', { user_ids: userIds })
+  return res.data
+}

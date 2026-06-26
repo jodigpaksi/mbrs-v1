@@ -69,3 +69,28 @@
 .tp-scroll::-webkit-scrollbar-track  { background: transparent; }
 .tp-scroll::-webkit-scrollbar-thumb  { background: rgba(148,163,184,0.35); border-radius: 99px; }
 .tp-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.65); }
+
+/* ── Draft badge blink ── */
+@keyframes draft-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+  50%       { opacity: 0.65; box-shadow: 0 0 0 4px rgba(251,191,36,0.18); }
+}
+.draft-blink { animation: chip-pop 0.3s cubic-bezier(0.34,1.56,0.64,1), draft-blink 1.8s ease-in-out 0.3s infinite; }
+
+/* ── Table section animations (My Bookings / All Bookings tabs) ── */
+@keyframes tab-section-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tbl-group-enter {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes tbl-row-enter {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tbl-row-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}

@@ -86,6 +86,7 @@ export interface Booking {
   type: 'internal' | 'external' | 'maintenance' | 'repairment'
   cancelled_at?: string
   series_id?: string
+  series_skipped_dates?: string[] | null
   booked_for?: string
   booked_for_user_id?: number
   is_recipient?: boolean
@@ -126,6 +127,61 @@ export interface PantryItem {
   icon: string
   label: string
   quantity: number
+}
+
+export interface KioskTheme {
+  mode:    'dark' | 'light'
+  accent:  string
+  bg:      string
+  surface: string
+  text:    string
+}
+
+export interface KioskLayout {
+  show_clock:       boolean
+  show_bookings:    boolean
+  show_book_btn:    boolean
+  show_confirm_btn: boolean
+  orientation:      'landscape' | 'portrait'
+  book_btn_url:     string
+}
+
+export interface KioskResolution {
+  preset: 'ipad' | 'ipad-pro-11' | 'ipad-pro-13' | 'surface' | 'fullhd' | 'custom'
+  width:  number
+  height: number
+}
+
+export interface KioskConfig {
+  id:         number
+  name:       string
+  room_id:    number | null
+  room?:      { id: number; name: string; floor: string; building_id?: number }
+  has_pin:    boolean
+  pin?:       string
+  theme:      KioskTheme
+  layout:     KioskLayout
+  resolution: KioskResolution
+  active:     boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface KioskStatus {
+  room: { id: number; name: string; status: string; capacity: number; floor: string } | null
+  current: {
+    id: number; title: string; start_at: string; end_at: string
+    user: string | null; type: string; status: string
+    presence_confirmed_at: string | null
+  } | null
+  upcoming: Array<{
+    id: number; title: string; start_at: string; end_at: string
+    user: string | null; type: string; status: string
+    presence_confirmed_at: string | null
+  }>
+  free_until:  string | null
+  free_from:   string | null
+  server_time: string
 }
 
 export interface PantryOrder {

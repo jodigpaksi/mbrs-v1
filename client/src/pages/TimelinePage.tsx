@@ -291,6 +291,18 @@ export default function TimelinePage() {
     }
   }, [buildings])
 
+  // Re-sync highlight + date from URL params when navigating to this page while already mounted
+  // (e.g. from navbar global search when user is already on the timeline).
+  // Use searchParams.toString() — not searchParams itself — because React Router creates a new
+  // URLSearchParams object every render, which would cause an infinite loop with the object as dep.
+  useEffect(() => {
+    const h = searchParams.get('highlight')
+    const d = searchParams.get('date')
+    if (h) setHighlightId(parseInt(h))
+    if (d) { const [y, m, day] = d.split('-').map(Number); setCurrentDate(new Date(y, m - 1, day)) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.toString()])
+
   // Scroll to and flash highlight booking from notification click
   useEffect(() => {
     if (!highlightId || !highlightRef.current) return
@@ -829,7 +841,12 @@ export default function TimelinePage() {
                 return (
                   <div key={i}
                     className={`flex-1 flex flex-col items-center justify-center border-r border-[var(--ds-border-sub)] cursor-pointer transition-colors group/wh
-                      ${isTd ? 'bg-[#adee2b]/10' : 'hover:bg-[#adee2b]/5'}`}
+                      ${isTd
+                        ? 'bg-[#adee2b]/10'
+                        : isWeekend
+                          ? 'bg-[var(--ds-bg-surface-2)] hover:bg-[#adee2b]/5'
+                          : 'bg-[var(--ds-bg-surface)] hover:bg-[#adee2b]/5'
+                      }`}
                     style={{ height: CELL_H }}
                     onClick={() => { setCurrentDate(d); switchViewMode('day') }}
                   >
@@ -896,13 +913,20 @@ export default function TimelinePage() {
                   {/* 7 day cells */}
                   {weekDates.map((d, dayIdx) => {
                     const isTd = d.toDateString() === today.toDateString()
+                    const dow = d.getDay()
+                    const isWeekend = (dow === 6 && wkSat) || (dow === 0 && wkSun)
                     const dayBookings = (weekData[dayIdx] ?? []).filter(
                       (b: Booking) => b.room_id === room.id && b.status !== 'cancelled'
                     )
                     return (
                       <div key={dayIdx}
                         className={`flex-1 border-r border-[var(--ds-border-sub)] px-1.5 py-2 overflow-hidden cursor-pointer transition-colors relative flex flex-col
-                          ${isTd ? 'bg-[#f7fee7]/40' : 'hover:bg-[#f7fee7]/60'}`}
+                          ${isTd
+                            ? 'bg-[#adee2b]/10 dark:bg-[#adee2b]/6'
+                            : isWeekend
+                              ? 'bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-bg-raised)]'
+                              : 'bg-[var(--ds-bg-surface)] hover:bg-[var(--ds-bg-raised)]'
+                          }`}
                         style={{ height: WEEK_CELL_H }}
                         onClick={() => { setCurrentDate(d); switchViewMode('day') }}
                         onContextMenu={e => {
@@ -984,6 +1008,10 @@ export default function TimelinePage() {
         const DOW_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
+        const todayDateStr = toLocalDateStr(today)
+        const regularRooms = (rooms as Room[]).filter(r => r.status !== 'maintenance')
+        const totalCapacityMins = regularRooms.length * (HOUR_END - HOUR_START) * 60
+        const regularRoomIds = new Set(regularRooms.map(r => r.id))
         return (
           <main key={ganttKey} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] p-6" style={{ animation: ganttAnimCSS[ganttAnim] }}>
             {/* Month header */}
@@ -1012,7 +1040,7 @@ export default function TimelinePage() {
               {DOW.map(d => {
                 const isWkHeader = (d === 'Sat' && wkSat) || (d === 'Sun' && wkSun)
                 return (
-                  <div key={d} className={`text-center py-2 text-[9px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
+                  <div key={d} className={`text-center py-2 text-[11px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
                 )
               })}
             </div>
@@ -1033,6 +1061,25 @@ export default function TimelinePage() {
                 const overflow = dayBkgs.length - 6
                 const cellDow = cellDate.getDay()
                 const isCellWeekend = (cellDow === 6 && wkSat) || (cellDow === 0 && wkSun)
+                const isPast = cellStr < todayDateStr
+
+                // Usage % — only for today + future cells in current month
+                let usagePct = 0
+                if (isCurrentMonth && !isPast && totalCapacityMins > 0) {
+                  let totalBookedMins = 0
+                  dayBkgs.forEach(b => {
+                    if (!regularRoomIds.has(b.room_id)) return
+                    const s = new Date(b.start_at.replace('Z', ''))
+                    const e = new Date(b.end_at.replace('Z', ''))
+                    const sMins = Math.max(s.getHours() * 60 + s.getMinutes(), HOUR_START * 60)
+                    const eMins = Math.min(e.getHours() * 60 + e.getMinutes(), HOUR_END * 60)
+                    totalBookedMins += Math.max(0, eMins - sMins)
+                  })
+                  usagePct = Math.min(100, Math.round(totalBookedMins / totalCapacityMins * 100))
+                }
+
+                const usageColor = usagePct >= 80 ? '#ef4444' : usagePct >= 50 ? '#f59e0b' : '#adee2b'
+                const showUsage = isCurrentMonth && !isPast && totalCapacityMins > 0
 
                 return (
                   <div
@@ -1044,14 +1091,14 @@ export default function TimelinePage() {
                       e.stopPropagation()
                       setCellCtxMenu({ room: null, slot: 4, date: cellDate, x: e.clientX, y: e.clientY })
                     }}
-                    className={`min-h-[110px] border-r border-b border-[var(--ds-border-sub)] p-2 cursor-pointer transition-colors group
+                    className={`min-h-[110px] border-r border-b border-[var(--ds-border-sub)] p-2 cursor-pointer transition-colors group flex flex-col
                       ${isCurrentMonth ? 'bg-[var(--ds-bg-surface)] hover:bg-[#adee2b]/5' : 'bg-[var(--ds-bg-base)] hover:bg-[var(--ds-bg-surface-2)]'}
                       ${isTodayCell ? 'ring-2 ring-inset ring-[#adee2b]' : ''}`}
                   >
-                    {/* Date number */}
-                    <div className="flex items-center justify-between mb-1.5">
+                    {/* Date number + dots */}
+                    <div className="flex items-center justify-between mb-1">
                       <span
-                        className={`flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black transition-colors
+                        className={`flex items-center justify-center w-8 h-8 rounded-full text-[16px] font-black transition-colors
                           ${isTodayCell ? 'bg-black text-[#adee2b]' : isCurrentMonth ? (isCellWeekend ? 'text-red-500 group-hover:bg-red-50 dark:group-hover:bg-red-900/20' : 'text-[var(--ds-text-1)] group-hover:bg-[var(--ds-bg-raised)]') : (isCellWeekend ? 'text-red-300/50' : 'text-[var(--ds-text-4)]')}`}
                       >
                         {cellDate.getDate()}
@@ -1065,7 +1112,7 @@ export default function TimelinePage() {
                     </div>
 
                     {/* Booking bars — horizontal stack */}
-                    <div className="flex flex-row flex-wrap gap-0.5 mt-0.5">
+                    <div className="flex flex-row flex-wrap gap-0.5">
                       {visibleBkgs.map(b => {
                         const isMe = b.user_id === user?.id
                         const isTentative = b.status === 'tentative'
@@ -1096,6 +1143,43 @@ export default function TimelinePage() {
                       })}
                       {overflow > 0 && (
                         <p className="text-[7px] font-black text-[var(--ds-text-3)] leading-none self-end">+{overflow}</p>
+                      )}
+                    </div>
+
+                    {/* Usage bar — pinned to bottom, today + future only */}
+                    <div className="mt-auto pt-2">
+                      {showUsage && (
+                        <div className="relative group/usagebar" onClick={e => e.stopPropagation()}>
+                          {/* Fluent tooltip */}
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover/usagebar:opacity-100 transition-opacity duration-150 pointer-events-none z-50 whitespace-nowrap">
+                            <div style={{
+                              background: 'rgba(15,20,45,0.72)',
+                              backdropFilter: 'blur(28px) saturate(180%)',
+                              WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+                              border: '1px solid rgba(255,255,255,0.10)',
+                              borderRadius: 10,
+                              padding: '6px 10px',
+                              boxShadow: '0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.08)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}>
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: usageColor, display: 'inline-block', flexShrink: 0 }} />
+                              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 700 }}>Room usage</span>
+                              <span style={{ color: usageColor, fontSize: 12, fontWeight: 900 }}>{usagePct}%</span>
+                              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: 600 }}>· {regularRooms.length} rooms</span>
+                            </div>
+                            {/* Arrow */}
+                            <div style={{ width: 0, height: 0, margin: '0 auto', borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid rgba(15,20,45,0.72)' }} />
+                          </div>
+                          {/* Bar + inline % */}
+                          <div className="flex items-center gap-1">
+                            <div className="flex-1 h-[3px] rounded-full overflow-hidden" style={{ background: 'var(--ds-border)' }}>
+                              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${usagePct}%`, background: usageColor }} />
+                            </div>
+                            <span className="text-[8px] font-black shrink-0 tabular-nums" style={{ color: 'var(--ds-text-3)' }}>{usagePct}%</span>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1615,7 +1699,7 @@ export default function TimelinePage() {
                   if (toastTimer.current) clearTimeout(toastTimer.current)
                   toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>phone_in_talk</span>
                 <div className="flex-1 min-w-0">
@@ -1633,7 +1717,7 @@ export default function TimelinePage() {
                   if (toastTimer.current) clearTimeout(toastTimer.current)
                   toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>mail</span>
                 <div className="flex-1 min-w-0">
@@ -1651,7 +1735,7 @@ export default function TimelinePage() {
                   setDetailOpen(true)
                   setOtherCtxMenu(null)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
                 <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room Detail</span>
@@ -1703,7 +1787,7 @@ export default function TimelinePage() {
                   setBookingPanelOpen(true)
                   setCellCtxMenu(null)
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>add_circle</span>
                 <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">New Booking</span>
@@ -1713,7 +1797,7 @@ export default function TimelinePage() {
               {cellCtxMenu.room && (
                 <button
                   onClick={() => { setDetailRoom(cellCtxMenu.room); setDetailOpen(true); setCellCtxMenu(null) }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
                   <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room</span>
@@ -1756,7 +1840,7 @@ export default function TimelinePage() {
               {/* Edit */}
               <button
                 onClick={() => { openEdit(ctxMenu.booking); setCtxMenu(null) }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-white/[0.07]"
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>edit</span>
                 <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Edit</span>

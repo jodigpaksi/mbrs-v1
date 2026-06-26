@@ -146,8 +146,10 @@ class BookingController extends Controller
             'type'        => $isPrivileged
                 ? 'in:internal,external,maintenance,repairment'
                 : 'in:internal,external',
-            'series_id'          => 'nullable|string|max:36',
-            'booked_for'         => 'nullable|string|max:100',
+            'series_id'             => 'nullable|string|max:36',
+            'series_skipped_dates'  => 'nullable|array',
+            'series_skipped_dates.*'=> 'date_format:Y-m-d',
+            'booked_for'            => 'nullable|string|max:100',
             'booked_for_user_id' => 'nullable|exists:users,id',
         ]);
 
@@ -179,7 +181,8 @@ class BookingController extends Controller
             'user_id'   => $request->user()->id,
             'status'    => $data['status'] ?? 'confirmed',
             'type'      => $data['type'] ?? 'internal',
-            'series_id' => $data['series_id'] ?? null,
+            'series_id'            => $data['series_id'] ?? null,
+            'series_skipped_dates' => $data['series_skipped_dates'] ?? null,
         ]);
 
         if (!empty($data['booked_for_user_id'])) {

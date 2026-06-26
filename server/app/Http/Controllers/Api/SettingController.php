@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Setting;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -89,6 +90,42 @@ class SettingController extends Controller
         }
 
         return $this->generalSettings();
+    }
+
+    public function afterHoursContacts(): JsonResponse
+    {
+        $raw = Setting::where('key', 'after_hours_contacts')->value('value') ?? '[]';
+        $ids = json_decode($raw, true) ?? [];
+
+        $users = empty($ids)
+            ? User::with('department')->where('role', 'receptionist')->where('on_duty', true)->get()
+            : User::with('department')->whereIn('id', $ids)->get();
+
+        return response()->json($users->map(fn ($u) => [
+            'id'         => $u->id,
+            'name'       => $u->name,
+            'email'      => $u->email,
+            'ext'        => $u->ext,
+            'role'       => $u->role,
+            'avatar'     => $u->avatar,
+            'on_duty'    => (bool) $u->on_duty,
+            'department' => $u->department?->name ?? null,
+        ])->values());
+    }
+
+    public function updateAfterHoursContacts(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'user_ids'   => 'required|array',
+            'user_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        Setting::updateOrCreate(
+            ['key' => 'after_hours_contacts'],
+            ['value' => json_encode($data['user_ids'])]
+        );
+
+        return $this->afterHoursContacts();
     }
 
     public function updateBookingHours(Request $request): JsonResponse
