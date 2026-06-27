@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { flushSync } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Room, Building, Booking } from '../types/index'
 import { getRooms, updateRoomStatus, updateRoom, updateRoomSpecial } from '../api/rooms'
@@ -60,7 +61,11 @@ export default function RoomsPage() {
   const queryClient = useQueryClient()
 
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') ?? ''
+  function setSearch(v: string) {
+    setSearchParams(p => { v ? p.set('q', v) : p.delete('q'); return p }, { replace: true })
+  }
   const [buildingFilter, setBuildingFilter] = useState<number | null>(defaultBuilding)
   const [floorFilter, setFloorFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | 'maintenance'>('')

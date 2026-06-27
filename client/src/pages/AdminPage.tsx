@@ -84,8 +84,8 @@ function BuildingModal({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[440px] p-7 space-y-4" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[440px] p-7 space-y-4 admin-modal-in" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-black uppercase tracking-tight text-[var(--ds-text-1)]">{initial?.id ? 'Edit Building' : 'Add Building'}</h3>
         {err && <p className="text-xs text-red-500 font-bold">{err}</p>}
 
@@ -751,25 +751,30 @@ function LocationsSection() {
       </div>
 
       {locations.length === 0 ? (
-        <p className="text-[11px] text-[var(--ds-text-3)] font-medium py-2">No cities yet.</p>
+        <p className="text-[11px] text-[var(--ds-text-3)] font-medium py-3">No cities yet.</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-3 gap-3">
           {locations.map(loc => (
-            <div key={loc.id} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border-sub)]">
-              <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>location_city</span>
-              <div>
-                <p className="text-[11px] font-black text-[var(--ds-text-1)]">{loc.name}</p>
-                {loc.code && <p className="text-[9px] text-[var(--ds-text-3)] font-bold uppercase">{loc.code}</p>}
+            <div key={loc.id} className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border-sub)]">
+              <div className="size-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--ds-bg-surface)' }}>
+                <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 18 }}>location_city</span>
               </div>
-              <span className="text-[9px] text-[var(--ds-text-3)] font-medium">{loc.buildings_count ?? 0} bldg</span>
-              <button onClick={() => setModal({ open: true, initial: loc })}
-                className="size-6 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-all">
-                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>edit</span>
-              </button>
-              <button onClick={() => { setDeleteErr(''); setDeleteLocConfirm(''); setDeleteTarget(loc) }}
-                className="size-6 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-all">
-                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
-              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-black text-[var(--ds-text-1)] truncate">{loc.name}</p>
+                <p className="text-[10px] text-[var(--ds-text-3)] font-bold uppercase tracking-wide">
+                  {loc.code ? `${loc.code} · ` : ''}{loc.buildings_count ?? 0} building{(loc.buildings_count ?? 0) !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => setModal({ open: true, initial: loc })}
+                  className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface)] hover:text-[var(--ds-text-1)] transition-all">
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
+                </button>
+                <button onClick={() => { setDeleteErr(''); setDeleteLocConfirm(''); setDeleteTarget(loc) }}
+                  className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-all">
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -787,11 +792,11 @@ function LocationsSection() {
       {/* Delete city confirm */}
       {deleteTarget && (
         <ModalPortal>
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in"
           style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
           onClick={() => { setDeleteTarget(null); setDeleteLocConfirm('') }}>
           <div
-            className="w-[400px] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="w-[400px] rounded-[2rem] shadow-2xl overflow-hidden admin-modal-in"
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
@@ -979,30 +984,17 @@ function BuildingsTab() {
 
   return (
     <div className="max-w-4xl space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
-          <h1 className="text-3xl font-black italic tracking-tighter uppercase">Buildings</h1>
-        </div>
-        <button
-          onClick={() => setBuildingModal({ open: true })}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 transition-colors"
-        >
-          <span className="material-symbols-outlined text-sm">add</span>
-          Add Building
-        </button>
+      <div>
+        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
+        <h1 className="text-3xl font-black italic tracking-tighter uppercase">Buildings</h1>
       </div>
 
       <LocationsSection />
 
       {buildings.length === 0 && (
-        <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-12 text-center">
+        <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-10 text-center">
           <span className="material-symbols-outlined text-[var(--ds-text-3)] text-5xl">domain</span>
           <p className="text-[var(--ds-text-3)] font-bold mt-3">No buildings yet.</p>
-          <button onClick={() => setBuildingModal({ open: true })}
-            className="mt-4 px-4 py-2 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase">
-            Add First Building
-          </button>
         </div>
       )}
 
@@ -1079,7 +1071,7 @@ function BuildingsTab() {
 
               {/* Expanded rooms list */}
               {isExpanded && (
-                <div className="border-t border-[var(--ds-border)] bg-[var(--ds-bg-raised)] px-5 py-4 space-y-3">
+                <div className="border-t border-[var(--ds-border)] bg-[var(--ds-bg-raised)] px-5 py-4 space-y-3 admin-dropdown-in">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Rooms in {b.name}</p>
                     <button
@@ -1109,6 +1101,18 @@ function BuildingsTab() {
             </div>
           )
         })}
+
+        {/* Add Building — inline at bottom of list */}
+        <button
+          onClick={() => setBuildingModal({ open: true })}
+          className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-[11px] font-black uppercase tracking-wide transition-all"
+          style={{ background: 'rgba(0,0,0,0.85)', color: '#adee2b' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#000' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.85)' }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+          Add Building
+        </button>
       </div>
 
       {/* Building modal */}
@@ -1134,11 +1138,11 @@ function BuildingsTab() {
       {/* Delete building confirm */}
       {deleteTarget && (
         <ModalPortal>
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in"
           style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
           onClick={() => { setDeleteTarget(null); setConfirmBuildingInput('') }}>
           <div
-            className="w-[420px] rounded-[2rem] shadow-2xl overflow-hidden"
+            className="w-[420px] rounded-[2rem] shadow-2xl overflow-hidden admin-modal-in"
             style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
@@ -1274,42 +1278,74 @@ function BuildingsTab() {
 
 // ── Users Tab ────────────────────────────────────────────────────────────────
 
-const ROLE_META: Record<UserRole, { label: string; bg: string; text: string }> = {
-  admin:          { label: 'Super Admin',    bg: 'bg-black',       text: 'text-[#adee2b]' },
-  building_admin: { label: 'Building Admin', bg: 'bg-blue-500/10',    text: 'text-blue-400' },
-  receptionist:   { label: 'Receptionist',  bg: 'bg-purple-500/10',  text: 'text-purple-400' },
-  user:           { label: 'User',           bg: 'bg-[var(--ds-bg-raised)]',   text: 'text-[var(--ds-text-3)]' },
+const ROLE_META: Record<UserRole, { label: string; bg: string; text: string; desc: string; perms: string[] }> = {
+  admin: {
+    label: 'Super Admin', bg: 'bg-black', text: 'text-[#adee2b]',
+    desc: 'Unrestricted access to all system features.',
+    perms: ['Manage all users & roles', 'Manage buildings, rooms & locations', 'Access analytics & export', 'Change all system settings', 'Manage archive & export schedule'],
+  },
+  building_admin: {
+    label: 'Building Admin', bg: 'bg-blue-500/10', text: 'text-blue-400',
+    desc: 'Manages rooms within assigned buildings.',
+    perms: ['Add / edit / delete rooms', 'Upload room photos', 'Reorder rooms', 'Cannot change system settings', 'Cannot manage other users'],
+  },
+  receptionist: {
+    label: 'Receptionist', bg: 'bg-purple-500/10', text: 'text-purple-400',
+    desc: 'Manages bookings with elevated privileges.',
+    perms: ['Edit & delete any booking', 'Bypass after-hours restrictions', 'Access special rooms without extra permission', 'Cannot manage rooms or system settings'],
+  },
+  user: {
+    label: 'User', bg: 'bg-[var(--ds-bg-raised)]', text: 'text-[var(--ds-text-3)]',
+    desc: 'Standard user with basic booking access.',
+    perms: ['Create & manage own bookings', 'View room schedule & availability', 'Cannot manage users or rooms'],
+  },
 }
 const ALL_ROLES: UserRole[] = ['admin', 'building_admin', 'receptionist', 'user']
 
 // ── Shared building picker (used in Add + Edit modals) ───────────────────────
-function BuildingPicker({ role, bldIds, buildings, locations, onToggle }: {
+function BuildingPicker({ role, bldIds, buildings, locations, onToggle, defaultBuildingId, onSetDefault }: {
   role: UserRole
   bldIds: number[]
   buildings: Building[]
   locations: Location[]
   onToggle: (id: number) => void
+  defaultBuildingId?: number | null
+  onSetDefault?: (id: number | null) => void
 }) {
   const withLocation    = buildings.filter(b => b.location_id)
   const withoutLocation = buildings.filter(b => !b.location_id)
   const locGroups = locations
     .map(loc => ({ loc, buildings: withLocation.filter(b => b.location_id === loc.id) }))
     .filter(g => g.buildings.length > 0)
+  const showDefault = role === 'user' && !!onSetDefault
 
   function Row({ b }: { b: Building }) {
-    const checked = bldIds.includes(b.id)
+    const checked    = bldIds.includes(b.id)
+    const isDefault  = defaultBuildingId === b.id
     return (
-      <button onClick={() => onToggle(b.id)}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border mb-1 transition-all text-left
-          ${checked ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[var(--ds-text-3)]'}`}>
-        <span className={`size-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-blue-500 border-blue-500' : 'border-[var(--ds-border)]'}`}>
-          {checked && <span className="material-symbols-outlined text-white" style={{ fontSize: 11 }}>check</span>}
-        </span>
-        <div className="min-w-0">
-          <p className="text-[11px] font-black truncate">{b.name}</p>
-          {b.address && <p className="text-[9px] text-[var(--ds-text-3)] truncate">{b.address}</p>}
-        </div>
-      </button>
+      <div className={`flex items-center gap-2 mb-1 rounded-xl border transition-all
+        ${checked ? 'bg-blue-500/10 border-blue-500/30' : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)]'}`}>
+        <button onClick={() => onToggle(b.id)}
+          className="flex items-center gap-3 px-3 py-2 flex-1 min-w-0 text-left">
+          <span className={`size-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${checked ? 'bg-blue-500 border-blue-500' : 'border-[var(--ds-border)]'}`}>
+            {checked && <span className="material-symbols-outlined text-white" style={{ fontSize: 11 }}>check</span>}
+          </span>
+          <div className="min-w-0">
+            <p className={`text-[11px] font-black truncate ${checked ? 'text-blue-400' : 'text-[var(--ds-text-2)]'}`}>{b.name}</p>
+            {b.address && <p className="text-[9px] text-[var(--ds-text-3)] truncate">{b.address}</p>}
+          </div>
+        </button>
+        {showDefault && checked && (
+          <button onClick={() => onSetDefault!(isDefault ? null : b.id)}
+            className="shrink-0 mr-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wide transition-all"
+            style={isDefault
+              ? { background: 'rgba(173,238,43,0.15)', color: '#adee2b', border: '1px solid rgba(173,238,43,0.3)' }
+              : { background: 'var(--ds-bg-raised)', color: 'var(--ds-text-3)', border: '1px solid var(--ds-border)' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 10 }}>{isDefault ? 'home' : 'home'}</span>
+            {isDefault ? 'Default' : 'Set Default'}
+          </button>
+        )}
+      </div>
     )
   }
 
@@ -1349,7 +1385,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
   buildings: Building[]
   locations: Location[]
   departments: Department[]
-  onSave: (data: { name: string; email: string; password: string; department_id: number | null; role: UserRole; ext: string; building_ids: number[] }) => Promise<void>
+  onSave: (data: { name: string; email: string; password: string; department_id: number | null; role: UserRole; ext: string; building_ids: number[]; default_building_id: number | null }) => Promise<void>
   onClose: () => void
 }) {
   const [name, setName]         = useState('')
@@ -1362,11 +1398,20 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
   const [ext, setExt]           = useState('')
   const [role, setRole]         = useState<UserRole>('user')
   const [bldIds, setBldIds]     = useState<number[]>([])
+  const [defaultBldId, setDefaultBldId] = useState<number | null>(null)
   const [saving, setSaving]     = useState(false)
   const [err, setErr]           = useState('')
+  const scrollBodyRef = useRef<HTMLDivElement>(null)
 
   const pwTooShort  = password.length > 0 && password.length < 8
   const pwMismatch  = confirm.length > 0 && confirm !== password
+
+  function selectRole(r: UserRole) {
+    setRole(r)
+    if (r !== 'admin') {
+      setTimeout(() => scrollBodyRef.current?.scrollTo({ top: scrollBodyRef.current.scrollHeight, behavior: 'smooth' }), 50)
+    }
+  }
 
   function toggleBuilding(id: number) {
     setBldIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -1379,7 +1424,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
     if (role === 'building_admin' && bldIds.length === 0) { setErr('Assign at least one building for Building Admin'); return }
     setSaving(true); setErr('')
     try {
-      await onSave({ name: name.trim(), email: email.trim(), password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds })
+      await onSave({ name: name.trim(), email: email.trim(), password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds, default_building_id: defaultBldId })
       onClose()
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { errors?: { email?: string[] } } } })?.response?.data?.errors?.email?.[0]
@@ -1397,7 +1442,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[480px] flex flex-col rounded-[2rem] shadow-2xl overflow-hidden"
+        className="w-full max-w-[560px] flex flex-col rounded-[2rem] shadow-2xl overflow-hidden"
         style={{
           height: 640,
           background: 'var(--ds-bg-surface)',
@@ -1419,7 +1464,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
         </div>
 
         {/* ── Scrollable body ── */}
-        <div className="flex-1 overflow-y-auto px-7 py-5 space-y-5" style={{ scrollbarWidth: 'thin' }}>
+        <div ref={scrollBodyRef} className="flex-1 overflow-y-auto px-7 py-5 space-y-5" style={{ scrollbarWidth: 'thin' }}>
 
           {/* Error banner */}
           {err && (
@@ -1536,22 +1581,47 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
               {ALL_ROLES.map(r => {
                 const m = ROLE_META[r]
                 return (
-                  <button key={r} onClick={() => setRole(r)}
-                    className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border text-[10px] font-black uppercase tracking-wide transition-all
-                      ${role === r ? `${m.bg} ${m.text} border-transparent shadow-sm` : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)]'}`}>
-                    <span className={`size-2 rounded-full shrink-0 ${role === r ? 'bg-current' : 'bg-slate-200'}`} />
-                    {m.label}
-                  </button>
+                  <div key={r} className="relative group/role">
+                    <button onClick={() => selectRole(r)}
+                      className={`w-full flex items-center gap-2.5 px-3.5 py-3 rounded-xl border text-[10px] font-black uppercase tracking-wide transition-all
+                        ${role === r ? `${m.bg} ${m.text} border-transparent shadow-sm` : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)]'}`}>
+                      <span className={`size-2 rounded-full shrink-0 ${role === r ? 'bg-current' : 'bg-slate-200'}`} />
+                      <span className="flex-1 text-left">{m.label}</span>
+                      <span className="size-3.5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 opacity-50 group-hover/role:opacity-100 transition-opacity"
+                        style={{ background: 'rgba(128,128,128,0.15)', color: 'inherit' }}>i</span>
+                    </button>
+                    {/* Per-role tooltip */}
+                    <div className={`absolute bottom-[calc(100%+10px)] z-[300] w-[280px] pointer-events-none opacity-0 translate-y-1 group-hover/role:opacity-100 group-hover/role:translate-y-0 transition-all duration-200 ${ALL_ROLES.indexOf(r) % 2 === 0 ? 'left-0' : 'right-0'}`}>
+                      <div className="rounded-2xl p-4 shadow-2xl space-y-3"
+                        style={{ background: 'rgba(15,20,45,0.97)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)' }}>
+                        <div>
+                          <p className="text-[13px] font-black" style={{ color: '#fff' }}>{m.label}</p>
+                          <p className="text-[11px] leading-relaxed mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>{m.desc}</p>
+                        </div>
+                        <div className="space-y-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10 }}>
+                          {m.perms.map((p, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <span className="material-symbols-outlined mt-0.5 shrink-0" style={{ fontSize: 12, color: 'rgba(173,238,43,0.8)' }}>check</span>
+                              <span className="text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{p}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )
               })}
             </div>
           </div>
 
           {/* ── Section: Building ── */}
-          {(role === 'building_admin' || role === 'receptionist') && (
+          {role !== 'admin' && (
             <div className="space-y-3">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Buildings</p>
-              <BuildingPicker role={role} bldIds={bldIds} buildings={buildings} locations={locations} onToggle={toggleBuilding} />
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">
+                {role === 'user' ? 'Home Building' : 'Buildings'}
+              </p>
+              <BuildingPicker role={role} bldIds={bldIds} buildings={buildings} locations={locations} onToggle={toggleBuilding}
+                defaultBuildingId={defaultBldId} onSetDefault={role === 'user' ? setDefaultBldId : undefined} />
             </div>
           )}
 
@@ -1748,8 +1818,8 @@ function ImportExportModal({ users, onImport, onClose }: {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden admin-modal-in" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-[var(--ds-border)]">
@@ -2125,6 +2195,15 @@ function UsersTab() {
   const [roleValue, setRoleValue]       = useState<UserRole>('user')
   const [bldIds, setBldIds]             = useState<number[]>([])
   const [saving, setSaving]             = useState(false)
+  const editScrollBodyRef = useRef<HTMLDivElement>(null)
+
+  function selectEditRole(r: UserRole, blocked: boolean) {
+    if (blocked) return
+    setRoleValue(r)
+    if (r !== 'admin') {
+      setTimeout(() => editScrollBodyRef.current?.scrollTo({ top: editScrollBodyRef.current.scrollHeight, behavior: 'smooth' }), 50)
+    }
+  }
   const [search, setSearch]             = useState('')
   const [addModal, setAddModal]         = useState(false)
   const [importExportModal, setIEModal] = useState(false)
@@ -2142,11 +2221,13 @@ function UsersTab() {
   const [editShowPw, setEditShowPw]           = useState(false)
   const [editAvatar, setEditAvatar]           = useState('')
   const [editErr, setEditErr]                 = useState('')
+  const [editDefaultBldId, setEditDefaultBldId] = useState<number | null>(null)
 
   function openEdit(u: User) {
     setEditUser(u)
     setRoleValue(u.role)
     setBldIds((u.admin_buildings ?? []).map(b => b.id))
+    setEditDefaultBldId((u as unknown as { default_building_id?: number | null }).default_building_id ?? null)
     setEditName(u.name)
     setEditEmail(u.email)
     setEditDeptId(u.department_id ?? null)
@@ -2174,8 +2255,8 @@ function UsersTab() {
         ...(editAvatar !== (editUser.avatar ?? '') ? { avatar: editAvatar || null } : {}),
       })
       await updateUserRole(editUser.id, roleValue)
-      if (roleValue === 'building_admin' || roleValue === 'receptionist') {
-        await assignUserBuildings(editUser.id, bldIds)
+      if (roleValue !== 'admin') {
+        await assignUserBuildings(editUser.id, bldIds, editDefaultBldId)
       }
       qc.invalidateQueries({ queryKey: ['users'] })
       setEditUser(null)
@@ -2189,13 +2270,12 @@ function UsersTab() {
     setBldIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
-  async function handleAddUser(data: Parameters<typeof createUser>[0] & { building_ids: number[] }) {
-    const { building_ids, ...userData } = data
+  async function handleAddUser(data: Parameters<typeof createUser>[0] & { building_ids: number[]; default_building_id: number | null }) {
+    const { building_ids, default_building_id, ...userData } = data
     const user = await createUser(userData)
-    // always refresh list even if building assignment fails below
     qc.invalidateQueries({ queryKey: ['users'] })
-    if ((userData.role === 'building_admin' || userData.role === 'receptionist') && building_ids.length > 0) {
-      try { await assignUserBuildings(user.id, building_ids) } catch { /* non-fatal */ }
+    if (userData.role !== 'admin' && building_ids.length > 0) {
+      try { await assignUserBuildings(user.id, building_ids, default_building_id) } catch { /* non-fatal */ }
     }
   }
 
@@ -2546,8 +2626,8 @@ function UsersTab() {
       {/* Edit user modal */}
       {editUser && (
         <ModalPortal>
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={() => setEditUser(null)}>
-          <div className="w-[460px] flex flex-col rounded-3xl shadow-2xl overflow-hidden"
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={() => setEditUser(null)}>
+          <div className="w-[540px] flex flex-col rounded-3xl shadow-2xl overflow-hidden admin-modal-in"
             style={{ height: 680, background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
             onClick={e => e.stopPropagation()}>
             {/* Header */}
@@ -2561,7 +2641,7 @@ function UsersTab() {
             </div>
 
             {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-7 py-5 space-y-4" style={{ scrollbarWidth: 'thin' }}>
+            <div ref={editScrollBodyRef} className="flex-1 overflow-y-auto px-7 py-5 space-y-4" style={{ scrollbarWidth: 'thin' }}>
 
             {editErr && <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}><span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>{editErr}</div>}
 
@@ -2668,17 +2748,38 @@ function UsersTab() {
                       const m = ROLE_META[r]
                       const blocked = isLastAdmin && r !== 'admin'
                       return (
-                        <button key={r}
-                          onClick={() => !blocked && setRoleValue(r)}
-                          disabled={blocked}
-                          title={blocked ? 'Cannot demote the last Super Admin' : undefined}
-                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-[10px] font-black uppercase transition-all
-                            ${blocked ? 'opacity-30 cursor-not-allowed bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)]'
-                              : roleValue === r ? `${m.bg} ${m.text} border-transparent`
-                              : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-border)]'}`}>
-                          <span className={`size-2 rounded-full ${roleValue === r ? 'bg-current' : 'bg-slate-200'}`} />
-                          {m.label}
-                        </button>
+                        <div key={r} className="relative group/role">
+                          <button
+                            onClick={() => selectEditRole(r, blocked)}
+                            disabled={blocked}
+                            title={blocked ? 'Cannot demote the last Super Admin' : undefined}
+                            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-[10px] font-black uppercase transition-all
+                              ${blocked ? 'opacity-30 cursor-not-allowed bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)]'
+                                : roleValue === r ? `${m.bg} ${m.text} border-transparent`
+                                : 'bg-[var(--ds-bg-surface)] border-[var(--ds-border)] text-[var(--ds-text-3)] hover:border-[var(--ds-border)]'}`}>
+                            <span className={`size-2 rounded-full shrink-0 ${roleValue === r ? 'bg-current' : 'bg-slate-200'}`} />
+                            <span className="flex-1 text-left">{m.label}</span>
+                            {!blocked && <span className="size-3.5 rounded-full flex items-center justify-center text-[8px] font-black shrink-0 opacity-50 group-hover/role:opacity-100 transition-opacity"
+                              style={{ background: 'rgba(128,128,128,0.15)', color: 'inherit' }}>i</span>}
+                          </button>
+                          {!blocked && (
+                            <div className="absolute left-0 right-0 bottom-[calc(100%+8px)] z-[300] pointer-events-none opacity-0 translate-y-1 group-hover/role:opacity-100 group-hover/role:translate-y-0 transition-all duration-200">
+                              <div className="rounded-2xl p-3.5 shadow-2xl space-y-2"
+                                style={{ background: 'rgba(15,20,45,0.97)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)' }}>
+                                <p className="text-[10px] font-black" style={{ color: '#fff' }}>{m.label}</p>
+                                <p className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{m.desc}</p>
+                                <div className="pt-1.5 space-y-1" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                                  {m.perms.map((p, i) => (
+                                    <div key={i} className="flex items-start gap-1.5">
+                                      <span className="material-symbols-outlined mt-0.5 shrink-0" style={{ fontSize: 10, color: 'rgba(173,238,43,0.7)' }}>check</span>
+                                      <span className="text-[9px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>{p}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )
                     })}
                   </div>
@@ -2695,14 +2796,21 @@ function UsersTab() {
             })()}
 
             {/* Building assignment */}
-            {(roleValue === 'building_admin' || roleValue === 'receptionist') && (
-              <BuildingPicker
-                role={roleValue}
-                bldIds={bldIds}
-                buildings={buildings as Building[]}
-                locations={locations as Location[]}
-                onToggle={toggleBuilding}
-              />
+            {roleValue !== 'admin' && (
+              <div className="space-y-2">
+                <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">
+                  {roleValue === 'user' ? 'Home Building' : 'Buildings'}
+                </p>
+                <BuildingPicker
+                  role={roleValue}
+                  bldIds={bldIds}
+                  buildings={buildings as Building[]}
+                  locations={locations as Location[]}
+                  onToggle={toggleBuilding}
+                  defaultBuildingId={editDefaultBldId}
+                  onSetDefault={roleValue === 'user' ? setEditDefaultBldId : undefined}
+                />
+              </div>
             )}
 
             </div>{/* end scrollable body */}
@@ -3853,6 +3961,20 @@ export default function AdminPage() {
   const [exportMonth, setExportMonth]         = useState(() => new Date().toISOString().slice(0, 7))
   const [exportAllTime, setExportAllTime]     = useState(false)
   const [exporting, setExporting]             = useState(false)
+  const [chartSettingsOpen, setChartSettingsOpen] = useState(false)
+
+  const { data: chartGeneral } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 60_000 })
+  const parsedChartColors = useMemo(() => { try { return JSON.parse(chartGeneral?.chart_colors ?? '{}') } catch { return {} } }, [chartGeneral?.chart_colors])
+  const cc = {
+    trend:     (parsedChartColors.trend     ?? '#6366f1') as string,
+    confirmed: (parsedChartColors.confirmed ?? '#adee2b') as string,
+    tentative: (parsedChartColors.tentative ?? '#f59e0b') as string,
+    cancelled: (parsedChartColors.cancelled ?? '#ef4444') as string,
+    rooms:     (parsedChartColors.rooms     ?? '#6366f1') as string,
+    hours:     (parsedChartColors.hours     ?? '#adee2b') as string,
+  }
+  const peakFrom = chartGeneral?.chart_peak_hour_from ?? 0
+  const peakTo   = chartGeneral?.chart_peak_hour_to   ?? 23
 
   const { data: overviewData, isLoading: overviewLoading } = useQuery({
     queryKey: ['analytics-overview', overviewPeriod, statusPeriod, roomsPeriod, hoursPeriod],
@@ -3864,7 +3986,19 @@ export default function AdminPage() {
   const peakHoursFull = useMemo(() => {
     const map = new Map((overviewData?.peak_hours ?? []).map(h => [h.hour, h.count]))
     return Array.from({ length: 24 }, (_, i) => ({ hour: i, count: map.get(i) ?? 0 }))
-  }, [overviewData?.peak_hours])
+      .filter(h => h.hour >= peakFrom && h.hour <= peakTo)
+  }, [overviewData?.peak_hours, peakFrom, peakTo])
+
+  const qc = useQueryClient()
+  async function saveChartColor(key: string, value: string) {
+    const next = { ...parsedChartColors, [key]: value }
+    await updateGeneralSettings({ chart_colors: JSON.stringify(next) })
+    qc.invalidateQueries({ queryKey: ['settings-general'] })
+  }
+  async function saveChartPeakHour(from: number, to: number) {
+    await updateGeneralSettings({ chart_peak_hour_from: from, chart_peak_hour_to: to })
+    qc.invalidateQueries({ queryKey: ['settings-general'] })
+  }
 
   async function handleExport() {
     setExporting(true)
@@ -3906,6 +4040,21 @@ export default function AdminPage() {
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
 
+  // Sidebar sliding pill
+  const sidebarNavRef  = useRef<HTMLDivElement>(null)
+  const sidebarBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const [pillY, setPillY] = useState(0)
+  const [pillH, setPillH] = useState(36)
+  useEffect(() => {
+    const nav = sidebarNavRef.current
+    const btn = sidebarBtnRefs.current[tab]
+    if (!nav || !btn) return
+    const navRect = nav.getBoundingClientRect()
+    const btnRect = btn.getBoundingClientRect()
+    setPillY(btnRect.top - navRect.top)
+    setPillH(btnRect.height)
+  }, [tab, sidebarCollapsed])
+
   return (
     <div className="flex flex-1 overflow-hidden bg-[var(--ds-bg-surface)]">
       <style>{`
@@ -3914,6 +4063,30 @@ export default function AdminPage() {
           to   { opacity: 1; transform: translateY(0) }
         }
         .admin-tab-in { animation: admin-tab-in 0.22s cubic-bezier(0.4,0,0.2,1) both }
+
+        @keyframes admin-modal-in {
+          from { opacity: 0; transform: translateY(20px) scale(0.96) }
+          to   { opacity: 1; transform: translateY(0) scale(1) }
+        }
+        .admin-modal-in { animation: admin-modal-in 0.25s cubic-bezier(0.34,1.15,0.64,1) both }
+
+        @keyframes admin-backdrop-in {
+          from { opacity: 0 }
+          to   { opacity: 1 }
+        }
+        .admin-backdrop-in { animation: admin-backdrop-in 0.18s ease both }
+
+        @keyframes admin-dropdown-in {
+          from { opacity: 0; transform: translateY(-6px) }
+          to   { opacity: 1; transform: translateY(0) }
+        }
+        .admin-dropdown-in { animation: admin-dropdown-in 0.2s cubic-bezier(0.4,0,0.2,1) both }
+
+        @keyframes sidebar-indicator-in {
+          from { transform: translateY(-50%) scaleY(0) }
+          to   { transform: translateY(-50%) scaleY(1) }
+        }
+        .sidebar-indicator { animation: sidebar-indicator-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both }
       `}</style>
       {/* Sidebar */}
       <div className={`shrink-0 p-3 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${sidebarCollapsed ? 'w-[68px]' : 'w-[196px]'}`}>
@@ -3925,26 +4098,29 @@ export default function AdminPage() {
             <p className="text-[8px] font-black uppercase tracking-[0.35em] whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.2)' }}>Admin Panel</p>
           </div>
 
-          {/* Nav items */}
-          <div className="flex flex-col gap-0.5 flex-1">
+          {/* Nav items — all in one ref container for the sliding pill */}
+          <div ref={sidebarNavRef} className="relative flex flex-col gap-0.5 flex-1">
+            {/* Sliding pill */}
+            <div className="absolute inset-x-1 rounded-2xl pointer-events-none"
+              style={{ top: pillY, height: pillH, background: 'rgba(173,238,43,0.13)', transition: 'top 0.22s cubic-bezier(0.4,0,0.2,1), height 0.22s cubic-bezier(0.4,0,0.2,1)' }} />
+
             {mainTabs.map(t => {
               const active = tab === t.key
               return (
                 <div key={t.key} className="relative group">
-                  <button onClick={() => setTab(t.key)}
-                    className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 overflow-hidden relative
-                      ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}
-                    style={{ background: active ? 'rgba(173,238,43,0.13)' : 'transparent' }}>
-                    {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
-                    <span className="material-symbols-outlined shrink-0 transition-colors" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{t.icon}</span>
+                  <button ref={el => { sidebarBtnRefs.current[t.key] = el }} onClick={() => setTab(t.key)}
+                    className={`w-full flex items-center gap-3 rounded-2xl transition-colors duration-150 overflow-hidden relative
+                      ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}>
+                    {active && <span key={tab} className="sidebar-indicator absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
+                    <span className="material-symbols-outlined shrink-0 transition-colors duration-200" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{t.icon}</span>
                     {!sidebarCollapsed && (
-                      <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{t.label}</span>
+                      <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors duration-200" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{t.label}</span>
                     )}
                   </button>
                   {sidebarCollapsed && (
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
                       <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
-                        style={{ background: 'rgba(15,20,45,0.92)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+                        style={{ background: 'rgba(15,20,45,0.96)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
                         <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{t.label}</span>
                       </div>
                     </div>
@@ -3952,34 +4128,33 @@ export default function AdminPage() {
                 </div>
               )
             })}
-          </div>
 
-          {/* Settings — pinned at bottom */}
-          {settingsTabDef && (() => {
-            const active = tab === settingsTabDef.key
-            return (
-              <div className="relative group mt-1 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                <button onClick={() => setTab(settingsTabDef.key)}
-                  className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 overflow-hidden relative
-                    ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}
-                  style={{ background: active ? 'rgba(173,238,43,0.13)' : 'transparent' }}>
-                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
-                  <span className="material-symbols-outlined shrink-0 transition-colors" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{settingsTabDef.icon}</span>
-                  {!sidebarCollapsed && (
-                    <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{settingsTabDef.label}</span>
-                  )}
-                </button>
-                {sidebarCollapsed && (
-                  <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
-                    <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
-                      style={{ background: 'rgba(15,20,45,0.92)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
-                      <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{settingsTabDef.label}</span>
+            {/* Settings — pinned at bottom */}
+            {settingsTabDef && (() => {
+              const active = tab === settingsTabDef.key
+              return (
+                <div className="relative group mt-auto pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                  <button ref={el => { sidebarBtnRefs.current[settingsTabDef.key] = el }} onClick={() => setTab(settingsTabDef.key)}
+                    className={`w-full flex items-center gap-3 rounded-2xl transition-colors duration-150 overflow-hidden relative
+                      ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}>
+                    {active && <span key={tab} className="sidebar-indicator absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
+                    <span className="material-symbols-outlined shrink-0 transition-colors duration-200" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{settingsTabDef.icon}</span>
+                    {!sidebarCollapsed && (
+                      <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors duration-200" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{settingsTabDef.label}</span>
+                    )}
+                  </button>
+                  {sidebarCollapsed && (
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
+                      <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
+                        style={{ background: 'rgba(15,20,45,0.96)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
+                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{settingsTabDef.label}</span>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
+                  )}
+                </div>
+              )
+            })()}
+          </div>
 
           {/* Toggle */}
           <div className="pt-2 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
@@ -4007,11 +4182,18 @@ export default function AdminPage() {
                 <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
                 <h1 className="text-3xl font-black italic tracking-tighter uppercase">Overview</h1>
               </div>
-              <button onClick={() => setExportModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all hover:opacity-80"
-                style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)', color: 'var(--ds-text-2)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>download</span>Export XLSX
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setChartSettingsOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all hover:opacity-80"
+                  style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)', color: 'var(--ds-text-2)' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>palette</span>Chart
+                </button>
+                <button onClick={() => setExportModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all hover:opacity-80"
+                  style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)', color: 'var(--ds-text-2)' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>download</span>Export
+                </button>
+              </div>
             </div>
 
             {overviewLoading ? (
@@ -4034,14 +4216,14 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between mb-5">
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Booking Trend</p>
-                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">Last {overviewPeriod} days</p>
+                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">Last {overviewPeriod === 7 ? '7 days' : '30 days'}</p>
                     </div>
-                    <div className="flex gap-1 p-0.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
+                    <div className="flex gap-0.5 p-0.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
                       {([7, 30] as const).map(p => (
                         <button key={p} onClick={() => setOverviewPeriod(p)}
-                          className="text-[9px] font-black px-3 py-1.5 rounded-[10px] transition-all"
-                          style={{ background: overviewPeriod === p ? '#6366f1' : 'transparent', color: overviewPeriod === p ? '#fff' : 'var(--ds-text-3)' }}>
-                          {p}D
+                          className="text-[8px] font-black px-2.5 py-1 rounded-[9px] transition-all uppercase tracking-wide"
+                          style={{ background: overviewPeriod === p ? 'var(--ds-bg-surface)' : 'transparent', color: overviewPeriod === p ? 'var(--ds-text-1)' : 'var(--ds-text-4)', boxShadow: overviewPeriod === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+                          {p === 7 ? '7 Days' : '30 Days'}
                         </button>
                       ))}
                     </div>
@@ -4055,7 +4237,7 @@ export default function AdminPage() {
                       curve="monotoneX"
                       enableArea={true}
                       areaOpacity={1}
-                      colors={['#6366f1']}
+                      colors={[cc.trend]}
                       lineWidth={2.5}
                       enablePoints={false}
                       enableGridX={false}
@@ -4085,7 +4267,7 @@ export default function AdminPage() {
                           {new Date(String(point.data.x)).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} · {String(point.data.y)} bookings
                         </div>
                       )}
-                      defs={[{ id: 'trendGrad', type: 'linearGradient', colors: [{ offset: 0, color: '#6366f1', opacity: 0.22 }, { offset: 100, color: '#6366f1', opacity: 0 }] }]}
+                      defs={[{ id: 'trendGrad', type: 'linearGradient', colors: [{ offset: 0, color: cc.trend, opacity: 0.22 }, { offset: 100, color: cc.trend, opacity: 0 }] }]}
                       fill={[{ match: '*', id: 'trendGrad' }]}
                     />
                   </div>
@@ -4106,7 +4288,7 @@ export default function AdminPage() {
                         id: s.status,
                         label: s.status,
                         value: s.count,
-                        color: s.status === 'confirmed' ? '#adee2b' : s.status === 'tentative' ? '#f59e0b' : '#ef4444',
+                        color: s.status === 'confirmed' ? cc.confirmed : s.status === 'tentative' ? cc.tentative : cc.cancelled,
                       })) : [{ id: 'empty', label: 'No data', value: 1, color: 'rgba(148,163,184,0.1)' }]}
                       margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
                       innerRadius={0.68}
@@ -4134,7 +4316,7 @@ export default function AdminPage() {
                     {overviewData.status_breakdown.map(s => (
                       <div key={s.status} className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="size-2 rounded-full shrink-0" style={{ background: s.status === 'confirmed' ? '#adee2b' : s.status === 'tentative' ? '#f59e0b' : '#ef4444' }} />
+                          <span className="size-2 rounded-full shrink-0" style={{ background: s.status === 'confirmed' ? cc.confirmed : s.status === 'tentative' ? cc.tentative : cc.cancelled }} />
                           <span className="text-[10px] font-bold capitalize text-[var(--ds-text-2)]">{s.status}</span>
                         </div>
                         <span className="text-[10px] font-black text-[var(--ds-text-1)]">{s.count}</span>
@@ -4162,7 +4344,7 @@ export default function AdminPage() {
                       indexBy="room"
                       layout="horizontal"
                       margin={{ top: 0, right: 8, bottom: 4, left: 100 }}
-                      colors={['#6366f1']}
+                      colors={[cc.rooms]}
                       borderRadius={6}
                       enableGridX={false}
                       enableGridY={false}
@@ -4183,8 +4365,6 @@ export default function AdminPage() {
                           {indexValue}: {value}
                         </div>
                       )}
-                      defs={[{ id: 'roomGrad', type: 'linearGradient', x1: '0%', y1: '0%', x2: '100%', y2: '0%', colors: [{ offset: 0, color: '#6366f1' }, { offset: 100, color: '#818cf8' }] }]}
-                      fill={[{ match: '*', id: 'roomGrad' }]}
                     />
                   </div>
                 </div>
@@ -4204,7 +4384,7 @@ export default function AdminPage() {
                       keys={['count']}
                       indexBy="hour"
                       margin={{ top: 4, right: 4, bottom: 28, left: 36 }}
-                      colors={['#adee2b']}
+                      colors={[cc.hours]}
                       borderRadius={4}
                       padding={0.2}
                       enableGridX={false}
@@ -4214,7 +4394,7 @@ export default function AdminPage() {
                       axisBottom={{
                         tickSize: 0,
                         tickPadding: 8,
-                        tickValues: [0, 3, 6, 9, 12, 15, 18, 21],
+                        tickValues: Array.from({ length: 24 }, (_, i) => i).filter(h => h >= peakFrom && h <= peakTo && (h - peakFrom) % Math.max(1, Math.ceil((peakTo - peakFrom) / 6)) === 0),
                         format: (h: number) => `${h}:00`,
                       }}
                       axisLeft={{
@@ -4233,7 +4413,7 @@ export default function AdminPage() {
                           {indexValue}:00 · {value} bookings
                         </div>
                       )}
-                      defs={[{ id: 'peakGrad', type: 'linearGradient', x1: '0%', y1: '0%', x2: '0%', y2: '100%', colors: [{ offset: 0, color: '#adee2b', opacity: 1 }, { offset: 100, color: '#84cc16', opacity: 0.8 }] }]}
+                      defs={[{ id: 'peakGrad', type: 'linearGradient', x1: '0%', y1: '0%', x2: '0%', y2: '100%', colors: [{ offset: 0, color: cc.hours, opacity: 1 }, { offset: 100, color: cc.hours, opacity: 0.7 }] }]}
                       fill={[{ match: '*', id: 'peakGrad' }]}
                     />
                   </div>
@@ -4246,8 +4426,8 @@ export default function AdminPage() {
         {/* Export Modal */}
         {exportModal && (
           <ModalPortal>
-          <div className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)' }} onClick={() => setExportModal(false)}>
-            <div className="rounded-3xl shadow-2xl w-[360px] p-7 space-y-5" style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }} onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)' }} onClick={() => setExportModal(false)}>
+            <div className="rounded-3xl shadow-2xl w-[360px] p-7 space-y-5 admin-modal-in" style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }} onClick={e => e.stopPropagation()}>
               <div>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Analytics</p>
                 <h3 className="text-base font-black uppercase tracking-tight mt-0.5 text-[var(--ds-text-1)]">Export Bookings</h3>
@@ -4291,11 +4471,91 @@ export default function AdminPage() {
                   className="flex-1 py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
                   {exporting
                     ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>Exporting…</>
-                    : <><span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download XLSX</>}
+                    : <><span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Analytics</>}
                 </button>
               </div>
             </div>
           </div>
+          </ModalPortal>
+        )}
+
+        {/* Chart Settings Modal */}
+        {chartSettingsOpen && (
+          <ModalPortal>
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)' }} onClick={() => setChartSettingsOpen(false)}>
+              <div className="rounded-3xl shadow-2xl w-[400px] p-7 space-y-6 admin-modal-in" style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }} onClick={e => e.stopPropagation()}>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Overview</p>
+                  <h3 className="text-base font-black uppercase tracking-tight mt-0.5 text-[var(--ds-text-1)]">Chart Settings</h3>
+                </div>
+
+                {/* Colors */}
+                <div className="space-y-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Colors</p>
+                  {([
+                    { key: 'trend',     label: 'Booking Trend',    default: '#6366f1' },
+                    { key: 'confirmed', label: 'Confirmed',        default: '#adee2b' },
+                    { key: 'tentative', label: 'Tentative',        default: '#f59e0b' },
+                    { key: 'cancelled', label: 'Cancelled',        default: '#ef4444' },
+                    { key: 'rooms',     label: 'Top Rooms Bar',    default: '#6366f1' },
+                    { key: 'hours',     label: 'Peak Hours Bar',   default: '#adee2b' },
+                  ] as const).map(({ key, label, default: def }) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-[var(--ds-text-2)]">{label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-[var(--ds-text-3)]">{(parsedChartColors[key] ?? def).toUpperCase()}</span>
+                        <label className="relative cursor-pointer">
+                          <span className="size-7 rounded-xl border-2 border-[var(--ds-border)] block" style={{ background: parsedChartColors[key] ?? def }} />
+                          <input type="color" defaultValue={parsedChartColors[key] ?? def}
+                            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                            onChange={e => saveChartColor(key, e.target.value)} />
+                        </label>
+                        {parsedChartColors[key] && parsedChartColors[key] !== def && (
+                          <button onClick={() => saveChartColor(key, def)} title="Reset"
+                            className="text-[var(--ds-text-4)] hover:text-[var(--ds-text-2)] transition-colors">
+                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>refresh</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Peak Hours Range */}
+                <div className="space-y-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Peak Hours Range</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 space-y-1">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">From</p>
+                      <select value={peakFrom} onChange={e => saveChartPeakHour(Number(e.target.value), peakTo)}
+                        className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]">
+                        {Array.from({ length: 24 }, (_, h) => (
+                          <option key={h} value={h} disabled={h >= peakTo}>{String(h).padStart(2, '0')}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                    <span className="text-[var(--ds-text-3)] mt-4">→</span>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">To</p>
+                      <select value={peakTo} onChange={e => saveChartPeakHour(peakFrom, Number(e.target.value))}
+                        className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]">
+                        {Array.from({ length: 24 }, (_, h) => (
+                          <option key={h} value={h} disabled={h <= peakFrom}>{String(h).padStart(2, '0')}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-[var(--ds-text-3)] font-bold">
+                    Menampilkan jam {String(peakFrom).padStart(2,'0')}:00 – {String(peakTo).padStart(2,'0')}:59 · {peakTo - peakFrom + 1} jam
+                  </p>
+                </div>
+
+                <button onClick={() => setChartSettingsOpen(false)}
+                  className="w-full py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 transition-all">
+                  Done
+                </button>
+              </div>
+            </div>
           </ModalPortal>
         )}
 

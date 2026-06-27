@@ -2,6 +2,16 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { getMe, logout as apiLogout } from '../api/auth'
 import { queryClient } from '../main'
 
+export interface UserPreferences {
+  defaultView?: string
+  defaultType?: string
+  language?: string
+  darkMode?: boolean
+  startDay?: string
+  showBarTitle?: boolean
+  defaultBuilding?: number | null
+}
+
 interface User {
   id: number
   name: string
@@ -11,6 +21,9 @@ interface User {
   ext: string
   avatar: string
   on_duty?: boolean
+  buildings?: { id: number; name: string }[]
+  preferences?: UserPreferences
+  default_building_id?: number | null
 }
 
 interface AuthContextType {
@@ -33,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTimeout(() => reject(new Error('timeout')), 7000)
     )
     Promise.race([getMe(), timeoutRace])
-      .then(setUser)
+      .then((u: User) => setUser(u))
       .catch(() => localStorage.removeItem('token'))
       .finally(() => setLoading(false))
   }, [])

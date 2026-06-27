@@ -173,7 +173,7 @@ function LandscapeLayout({ now, theme, layout, room, status, current, isOccupied
         {/* Status info */}
         <div className="flex-1 flex flex-col justify-center gap-5" style={{ padding: '2vmin 3vmin' }}>
           <div className="flex items-center gap-3">
-            <div className="rounded-full shrink-0" style={{ width: '1.1vmin', height: '1.1vmin', background: ok, boxShadow: `0 0 0 0.4vmin ${ok}30, 0 0 1.5vmin ${ok}` }} />
+            <div className="rounded-full shrink-0" style={{ width: '1.1vmin', height: '1.1vmin', background: ok }} />
             <span className="font-black uppercase tracking-[0.18em]" style={{ fontSize: '1.2vmin', color: ok }}>
               {isOccupied ? 'Room Occupied' : 'Room Free'}
             </span>
@@ -333,16 +333,8 @@ function PortraitLayout({ now, theme, layout, room, status, current, isOccupied,
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden" style={{ color: 'var(--k-text)' }}>
-
-      {/* Full-height background tint */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: isOccupied
-          ? `linear-gradient(to bottom, rgba(239,68,68,0.10) 0%, transparent 55%)`
-          : `linear-gradient(to bottom, rgba(34,197,94,0.07) 0%, transparent 55%)`
-      }} />
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: `radial-gradient(ellipse 120% 35% at 50% 0%, ${ok}22 0%, transparent 70%)`
-      }} />
+      {/* Subtle top color strip */}
+      <div className="absolute top-0 inset-x-0 pointer-events-none" style={{ height: '0.5vmin', background: ok }} />
 
       {/* ── MAIN CONTENT — flex-1, centered flow ── */}
       <div className="relative z-10 flex-1 flex flex-col items-center text-center overflow-hidden" style={{ padding: '0 7vmin' }}>
@@ -359,7 +351,7 @@ function PortraitLayout({ now, theme, layout, room, status, current, isOccupied,
 
         {/* Status badge */}
         <div className="flex items-center justify-center gap-3" style={{ marginBottom: '3vmin' }}>
-          <div className="rounded-full shrink-0" style={{ width: '2.2vmin', height: '2.2vmin', background: ok, boxShadow: `0 0 0 0.7vmin ${ok}28, 0 0 3vmin ${ok}` }} />
+          <div className="rounded-full shrink-0" style={{ width: '2vmin', height: '2vmin', background: ok }} />
           <span className="font-black uppercase" style={{ fontSize: '8vmin', color: ok, lineHeight: 1, letterSpacing: '-0.02em' }}>
             {isOccupied ? 'In Use' : 'Available'}
           </span>
@@ -511,10 +503,6 @@ function KioskDisplay({ config, kioskId }: { config: KioskConfig & { room: any }
 
   return (
     <div className="fixed inset-0 overflow-hidden" style={{ background: theme.bg, ...cssVars }}>
-      {config.room?.photos?.[0] && (
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ backgroundImage: `url(${config.room.photos[0]})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.05 }} />
-      )}
       {isLandscape
         ? <LandscapeLayout {...layoutProps} />
         : <PortraitLayout  {...layoutProps} />

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
@@ -660,8 +661,15 @@ export default function SchedulePage() {
   const [descTooltip, setDescTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
   const [allSortKey, setAllSortKey] = useState<AllSortKey>('start_at')
   const [allSortDir, setAllSortDir] = useState<AllSortDir>('asc')
-  const [allSearch, setAllSearch] = useState('')
-  const [seriesSearch, setSeriesSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const allSearch = searchParams.get('q') ?? ''
+  const seriesSearch = searchParams.get('qs') ?? ''
+  function setAllSearch(v: string) {
+    setSearchParams(p => { v ? p.set('q', v) : p.delete('q'); return p }, { replace: true })
+  }
+  function setSeriesSearch(v: string) {
+    setSearchParams(p => { v ? p.set('qs', v) : p.delete('qs'); return p }, { replace: true })
+  }
   const [tentativeTarget, setTentativeTarget] = useState<Booking | null>(null)
   const [tentativeConfirming, setTentativeConfirming] = useState(false)
   const [buildingFilter, setBuildingFilter] = useState<number | null>(defaultBuilding)

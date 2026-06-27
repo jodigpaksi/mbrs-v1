@@ -50,6 +50,7 @@ class AuthController extends Controller
 
     private function userPayload(User $user): array
     {
+        $user->loadMissing('adminBuildings');
         return [
             'id'            => $user->id,
             'name'          => $user->name,
@@ -59,9 +60,27 @@ class AuthController extends Controller
             'department_id' => $user->department_id,
             'ext'           => $user->ext ?? '',
             'avatar'        => $user->avatar,
-            'on_duty'          => (bool) $user->on_duty,
-            'can_book_special' => (bool) $user->can_book_special,
+            'on_duty'             => (bool) $user->on_duty,
+            'can_book_special'    => (bool) $user->can_book_special,
+            'buildings'           => $user->adminBuildings->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->values(),
+            'preferences'         => $user->preferences ?? (object) [],
+            'default_building_id' => $user->default_building_id,
         ];
+    }
+
+    public function updatePreferences(Request $request): JsonResponse
+    {
+        $allowed = ['defaultView', 'defaultType', 'language', 'darkMode', 'startDay', 'showBarTitle', 'defaultBuilding'];
+        $data = $request->validate([
+            'preferences' => 'required|array',
+        ]);
+
+        $incoming = array_intersect_key($data['preferences'], array_flip($allowed));
+        $user = $request->user();
+        $merged = array_merge($user->preferences ?? [], $incoming);
+        $user->update(['preferences' => $merged]);
+
+        return response()->json(['preferences' => $merged]);
     }
 
     public function updatePassword(Request $request): JsonResponse

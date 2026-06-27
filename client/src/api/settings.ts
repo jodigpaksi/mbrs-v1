@@ -19,6 +19,9 @@ export interface GeneralSettings {
   export_day_of_week: number
   export_day_of_month: number
   export_formats: string
+  chart_peak_hour_from: number
+  chart_peak_hour_to: number
+  chart_colors: string
 }
 
 export async function getBookingHours(): Promise<BookingHours> {

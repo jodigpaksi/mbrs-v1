@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/me/avatar', [AuthController::class, 'removeAvatar']);
     Route::patch('/me/password', [AuthController::class, 'updatePassword']);
     Route::patch('/me/on-duty', [AuthController::class, 'updateOnDuty']);
+    Route::patch('/me/preferences', [AuthController::class, 'updatePreferences']);
 
     // Settings (read: all auth)
     Route::get('/settings/booking-hours', [SettingController::class, 'bookingHours']);

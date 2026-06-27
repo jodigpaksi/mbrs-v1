@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Booking extends Model
 {
@@ -51,8 +50,5 @@ class Booking extends Model
         return $this->belongsTo(User::class, 'booked_for_user_id');
     }
 
-    public function pantryOrder(): HasOne
-    {
-        return $this->hasOne(PantryOrder::class);
-    }
+
 }

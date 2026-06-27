@@ -72,8 +72,8 @@ class UserController extends Controller
             }
         }
 
-        // Clear building assignments when demoted to plain user
-        if ($data['role'] === 'user') {
+        // Clear building assignments only when promoted to Super Admin (unrestricted access)
+        if ($data['role'] === 'admin') {
             $user->adminBuildings()->detach();
         }
 
@@ -89,12 +89,18 @@ class UserController extends Controller
 
     public function assignBuildings(Request $request, User $user)
     {
-        $request->validate([
-            'building_ids'   => 'present|array',
-            'building_ids.*' => 'exists:buildings,id',
+        $data = $request->validate([
+            'building_ids'        => 'present|array',
+            'building_ids.*'      => 'exists:buildings,id',
+            'default_building_id' => 'sometimes|nullable|exists:buildings,id',
         ]);
 
-        $user->adminBuildings()->sync($request->building_ids);
+        $user->adminBuildings()->sync($data['building_ids']);
+
+        if (array_key_exists('default_building_id', $data)) {
+            $user->update(['default_building_id' => $data['default_building_id']]);
+        }
+
         return $user->load('adminBuildings');
     }
 

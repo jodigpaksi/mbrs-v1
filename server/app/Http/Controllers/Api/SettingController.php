@@ -62,6 +62,9 @@ class SettingController extends Controller
             'export_day_of_week'         => (int) $get('export_day_of_week', '1'),
             'export_day_of_month'        => (int) $get('export_day_of_month', '1'),
             'export_formats'             => $get('export_formats', 'excel,csv'),
+            'chart_peak_hour_from'       => (int) $get('chart_peak_hour_from', '0'),
+            'chart_peak_hour_to'         => (int) $get('chart_peak_hour_to', '23'),
+            'chart_colors'               => $get('chart_colors', '{}'),
         ]);
     }
 
@@ -84,6 +87,9 @@ class SettingController extends Controller
             'export_day_of_week'        => 'sometimes|integer|min:0|max:6',
             'export_day_of_month'       => 'sometimes|integer|min:1|max:31',
             'export_formats'            => 'sometimes|string',
+            'chart_peak_hour_from'      => 'sometimes|integer|min:0|max:23',
+            'chart_peak_hour_to'        => 'sometimes|integer|min:0|max:23',
+            'chart_colors'              => 'sometimes|string',
         ]);
 
         foreach ($data as $key => $value) {

@@ -26,6 +26,8 @@ class User extends Authenticatable
         'avatar',
         'on_duty',
         'can_book_special',
+        'preferences',
+        'default_building_id',
     ];
 
     protected $hidden = [
@@ -38,10 +40,11 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'on_duty'          => 'boolean',
-            'can_book_special' => 'boolean',
+            'email_verified_at'  => 'datetime',
+            'password'           => 'hashed',
+            'on_duty'            => 'boolean',
+            'can_book_special'   => 'boolean',
+            'preferences'        => 'array',
         ];
     }
 

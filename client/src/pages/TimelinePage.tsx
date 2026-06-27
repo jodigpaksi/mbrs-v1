@@ -212,7 +212,11 @@ export default function TimelinePage() {
       }
 
       const dStr = toLocalDateStr(currentDate)
-      const allBkgs: Booking[] = (queryClient.getQueryData(['bookings', dStr]) as Booking[]) ?? []
+      const allBkgs: Booking[] = await queryClient.fetchQuery({
+        queryKey: ['bookings', dStr],
+        queryFn: () => getBookings({ date: dStr }),
+        staleTime: 0,
+      })
 
       const bd = barDragRef.current
       if (bd && bd.deltaSlot !== 0) {
