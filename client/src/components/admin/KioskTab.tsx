@@ -1,27 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createPortal } from 'react-dom'
 import { getKioskConfigs, createKioskConfig, updateKioskConfig, deleteKioskConfig } from '../../api/kiosk'
 import { getRooms } from '../../api/rooms'
-import type { KioskConfig, KioskTheme, KioskLayout, KioskResolution } from '../../types'
+import type { KioskConfig, KioskTheme, KioskLayout } from '../../types'
 
 // ── Presets ───────────────────────────────────────────────────────────────────
 
 const THEME_PRESETS: { label: string; value: KioskTheme }[] = [
-  { label: 'Dark Lime (Default)',  value: { mode: 'dark',  accent: '#adee2b', bg: '#0a0e1a', surface: '#141826', text: '#ffffff' } },
-  { label: 'Dark Blue',           value: { mode: 'dark',  accent: '#60a5fa', bg: '#0c111d', surface: '#141d2e', text: '#ffffff' } },
-  { label: 'Dark Coral',          value: { mode: 'dark',  accent: '#fb923c', bg: '#1a0c0a', surface: '#2d1a14', text: '#ffffff' } },
-  { label: 'Carbon Cyan',         value: { mode: 'dark',  accent: '#22d3ee', bg: '#111111', surface: '#1e1e1e', text: '#ffffff' } },
-  { label: 'Light Clean',         value: { mode: 'light', accent: '#1d4ed8', bg: '#f1f5f9', surface: '#ffffff', text: '#1a2030' } },
-]
-
-const RESOLUTION_PRESETS: { label: string; value: KioskResolution }[] = [
-  { label: 'iPad (1024 × 768)',          value: { preset: 'ipad',         width: 1024, height: 768  } },
-  { label: 'iPad Pro 11" (1194 × 834)',  value: { preset: 'ipad-pro-11',  width: 1194, height: 834  } },
-  { label: 'iPad Pro 13" (1366 × 1024)', value: { preset: 'ipad-pro-13',  width: 1366, height: 1024 } },
-  { label: 'Surface Pro (1920 × 1280)', value: { preset: 'surface',       width: 1920, height: 1280 } },
-  { label: 'Full HD (1920 × 1080)',     value: { preset: 'fullhd',        width: 1920, height: 1080 } },
-  { label: 'Custom',                    value: { preset: 'custom',        width: 1024, height: 768  } },
+  { label: 'Dark',  value: { mode: 'dark',  accent: '#adee2b', bg: '#0a0e1a', surface: '#141826', text: '#ffffff' } },
+  { label: 'Light', value: { mode: 'light', accent: '#1d4ed8', bg: '#f1f5f9', surface: '#ffffff', text: '#1a2030' } },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,8 +40,164 @@ interface EditModalProps {
 }
 
 const DEFAULT_THEME: KioskTheme       = THEME_PRESETS[0].value
-const DEFAULT_LAYOUT: KioskLayout     = { show_clock: true, show_bookings: true, show_book_btn: true, show_confirm_btn: false, orientation: 'landscape', book_btn_url: '' }
-const DEFAULT_RES: KioskResolution    = RESOLUTION_PRESETS[0].value
+const DEFAULT_LAYOUT: KioskLayout     = { show_clock: true, show_bookings: true, show_book_btn: true, show_confirm_btn: false, orientation: 'landscape', book_btn_url: '', upcoming_count: 2 }
+
+// ── Live preview ──────────────────────────────────────────────────────────────
+// Faithful miniature of the real kiosk. Uses container-query units (cqmin) so it
+// scales to the preview box exactly like the real kiosk scales to the viewport
+// with vmin. Mock data + a live clock; reacts to theme / layout / orientation.
+
+const PREVIEW_UPCOMING = [
+  { id: 1, start: '10:30', end: '11:30', title: 'Design Review', user: 'Mark Lee', dept: 'Product' },
+  { id: 2, start: '13:00', end: '14:00', title: 'Client Sync',   user: 'Ana Putri', dept: 'Sales' },
+]
+const PREVIEW_CURRENT = { title: 'Daily Standup', start: '09:00', end: '10:00', user: 'Sarah Chen', dept: 'Engineering' }
+
+function KioskPreview({ theme, layout, roomName }: { theme: KioskTheme; layout: KioskLayout; roomName: string }) {
+  const [now, setNow] = useState(new Date())
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
+
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  const ss = String(now.getSeconds()).padStart(2, '0')
+  const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  const isPortrait = layout.orientation === 'portrait'
+  const isDark = theme.mode === 'dark'
+  const count = Math.min(2, Math.max(1, layout.upcoming_count ?? 2))
+  const upcoming = PREVIEW_UPCOMING.slice(0, count)
+  const ok = '#ef4444' // preview shows an "in use" room so every element is visible
+  const text2 = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)'
+  const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'
+  const meta = '8 seats'
+
+  const stage: React.CSSProperties = {
+    aspectRatio: isPortrait ? '3 / 4' : '4 / 3',
+    containerType: 'size',
+    background: theme.bg, color: theme.text,
+    borderRadius: 16, overflow: 'hidden', position: 'relative',
+    border: `1px solid ${border}`,
+    boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+  } as React.CSSProperties
+
+  // ── Portrait mini ──
+  const portrait = (
+    <div style={stage}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '0.6cqmin', background: ok }} />
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', textAlign: 'center', alignItems: 'center', padding: '0 7cqmin' }}>
+        {layout.show_clock && (
+          <div style={{ paddingTop: '6cqmin', paddingBottom: '3cqmin' }}>
+            <p style={{ fontWeight: 900, fontSize: '10.5cqmin', lineHeight: 1, letterSpacing: '-0.04em' }}>
+              {hh}:{mm}<span style={{ fontSize: '5cqmin', color: text2 }}>:{ss}</span>
+            </p>
+            <p style={{ fontWeight: 900, fontSize: '3.4cqmin', marginTop: '1.4cqmin' }}>{dateStr}</p>
+          </div>
+        )}
+        <p style={{ fontWeight: 900, fontSize: '7.5cqmin', lineHeight: 1.05, marginTop: '2cqmin' }}>{roomName}</p>
+        <p style={{ fontWeight: 600, fontSize: '3.3cqmin', color: text2, marginTop: '1cqmin' }}>{meta}</p>
+        <div style={{ width: '30%', height: 1, background: `${ok}55`, margin: '3.5cqmin 0' }} />
+        <div style={{ width: '100%', textAlign: 'left', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '3cqmin', padding: '3cqmin 3.6cqmin' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.6cqmin', marginBottom: '1.6cqmin' }}>
+            <span style={{ width: '1.6cqmin', height: '1.6cqmin', borderRadius: 99, background: '#ef4444' }} />
+            <p style={{ fontWeight: 900, fontSize: '2.4cqmin', color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.2em' }}>In Use</p>
+          </div>
+          <p style={{ fontWeight: 900, fontSize: '5cqmin', lineHeight: 1.15 }}>{PREVIEW_CURRENT.title}</p>
+          <p style={{ fontWeight: 700, fontSize: '3.4cqmin', marginTop: '1.2cqmin' }}>{PREVIEW_CURRENT.start} — {PREVIEW_CURRENT.end}</p>
+          <p style={{ fontWeight: 600, fontSize: '2.8cqmin', color: text2, marginTop: '0.7cqmin' }}>{PREVIEW_CURRENT.user} - {PREVIEW_CURRENT.dept}</p>
+        </div>
+        {layout.show_confirm_btn && (
+          <div style={{ width: '100%', marginTop: '2.6cqmin', textAlign: 'center', background: 'rgba(255,255,255,0.08)', border: `1px solid ${border}`, borderRadius: '3cqmin', padding: '3cqmin 0', fontWeight: 900, fontSize: '3cqmin', color: text2, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Confirm Presence</div>
+        )}
+        {layout.show_bookings && (
+          <div style={{ width: '100%', marginTop: 'auto', borderTop: `1px solid ${border}`, padding: '2.8cqmin 0', textAlign: 'left' }}>
+            <p style={{ fontWeight: 900, fontSize: '2.5cqmin', color: text2, textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: '2.4cqmin' }}>{count > 1 ? 'Next Up' : 'Upcoming'}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3cqmin' }}>
+              {upcoming.map(b => (
+                <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '2.8cqmin' }}>
+                  <div style={{ width: '15cqmin', textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{ fontWeight: 900, fontSize: '3.5cqmin', color: theme.accent, lineHeight: 1.1 }}>{b.start}</p>
+                    <p style={{ fontWeight: 600, fontSize: '2.5cqmin', color: text2 }}>{b.end}</p>
+                  </div>
+                  <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 99, background: border, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 900, fontSize: '3.5cqmin', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.title}</p>
+                    <p style={{ fontWeight: 600, fontSize: '2.5cqmin', color: text2 }}>{b.user} - {b.dept}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  // ── Landscape mini ──
+  const landscape = (
+    <div style={stage}>
+      <div style={{ height: '100%', display: 'flex' }}>
+        {/* Left status panel */}
+        <div style={{ width: '38%', flexShrink: 0, display: 'flex', flexDirection: 'column', background: isDark ? 'rgba(239,68,68,0.13)' : 'rgba(239,68,68,0.08)', borderRight: `1px solid ${ok}30` }}>
+          <div style={{ height: '0.7cqmin', background: ok }} />
+          <div style={{ padding: '3cqmin 3.2cqmin', borderBottom: `1px solid ${border}` }}>
+            <p style={{ fontWeight: 900, fontSize: '1.7cqmin', color: ok, textTransform: 'uppercase', letterSpacing: '0.2em' }}>In Use</p>
+            <p style={{ fontWeight: 900, fontSize: '4cqmin', lineHeight: 1.1, marginTop: '0.6cqmin' }}>{roomName}</p>
+            <p style={{ fontWeight: 600, fontSize: '1.9cqmin', color: text2, marginTop: '0.6cqmin' }}>{meta}</p>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '2cqmin 3.2cqmin', gap: '1.5cqmin' }}>
+            <p style={{ fontWeight: 900, fontSize: '4.6cqmin', lineHeight: 1.1, letterSpacing: '-0.03em' }}>{PREVIEW_CURRENT.title}</p>
+            <p style={{ fontWeight: 700, fontSize: '2.2cqmin', color: text2 }}>{PREVIEW_CURRENT.start} — {PREVIEW_CURRENT.end}</p>
+            <p style={{ fontWeight: 700, fontSize: '2.2cqmin', color: text2 }}>{PREVIEW_CURRENT.user} - {PREVIEW_CURRENT.dept}</p>
+          </div>
+          {layout.show_confirm_btn && (
+            <div style={{ margin: '0 3.2cqmin 3.2cqmin', textAlign: 'center', background: 'rgba(255,255,255,0.08)', border: `1px solid ${border}`, borderRadius: '2.4cqmin', padding: '2cqmin 0', fontWeight: 900, fontSize: '2cqmin', color: text2, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Confirm Presence</div>
+          )}
+        </div>
+        {/* Right schedule panel */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: theme.bg }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2.6cqmin 3.2cqmin', borderBottom: `1px solid ${border}` }}>
+            {layout.show_clock ? (
+              <>
+                <p style={{ fontWeight: 900, fontSize: '2.4cqmin' }}>{dateStr}</p>
+                <p style={{ fontWeight: 900, fontSize: '6cqmin', color: theme.accent, letterSpacing: '-0.04em', lineHeight: 1 }}>
+                  {hh}:{mm}<span style={{ fontSize: '2.6cqmin', color: text2 }}>:{ss}</span>
+                </p>
+              </>
+            ) : <p style={{ fontWeight: 900, fontSize: '2cqmin', color: text2, textTransform: 'uppercase', letterSpacing: '0.25em' }}>Today's Schedule</p>}
+          </div>
+          {layout.show_bookings && (
+            <div style={{ padding: '2.4cqmin 3.2cqmin', display: 'flex', flexDirection: 'column', gap: '2cqmin' }}>
+              {upcoming.map(b => (
+                <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '2.4cqmin' }}>
+                  <div style={{ width: '11cqmin', textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{ fontWeight: 900, fontSize: '2.4cqmin', color: theme.accent }}>{b.start}</p>
+                    <p style={{ fontWeight: 600, fontSize: '1.8cqmin', color: text2 }}>{b.end}</p>
+                  </div>
+                  <div style={{ width: 2, alignSelf: 'stretch', borderRadius: 99, background: border, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 900, fontSize: '2.4cqmin', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.title}</p>
+                    <p style={{ fontWeight: 600, fontSize: '1.8cqmin', color: text2 }}>{b.user} - {b.dept}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ width: '100%', maxWidth: isPortrait ? 300 : 480, margin: '0 auto' }}>
+        {isPortrait ? portrait : landscape}
+      </div>
+      <p className="text-center text-[10px] font-bold text-[var(--ds-text-4)] mt-3 uppercase tracking-wider">
+        {isPortrait ? 'Portrait' : 'Landscape'} · live preview · sample data
+      </p>
+    </div>
+  )
+}
 
 function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
   const [name,     setName]     = useState(initial?.name ?? '')
@@ -61,17 +205,13 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
   const [pin,      setPin]      = useState(initial?.pin ?? '')
   const [active,   setActive]   = useState(initial?.active ?? true)
   const [theme,    setTheme]    = useState<KioskTheme>(initial?.theme    ?? DEFAULT_THEME)
-  const [layout,   setLayout]   = useState<KioskLayout>(initial?.layout  ?? DEFAULT_LAYOUT)
-  const [res,      setRes]      = useState<KioskResolution>(initial?.resolution ?? DEFAULT_RES)
+  const [layout,   setLayout]   = useState<KioskLayout>({ ...DEFAULT_LAYOUT, ...(initial?.layout ?? {}) })
   const [saving,   setSaving]   = useState(false)
   const [err,      setErr]      = useState('')
 
-  function applyThemePreset(p: KioskTheme) { setTheme(p) }
+  const selectedRoomName = roomId === '' ? 'Meeting Room' : (rooms.find(r => r.id === roomId)?.name ?? 'Meeting Room')
 
-  function applyResPreset(p: KioskResolution) {
-    if (p.preset !== 'custom') setRes(p)
-    else setRes(r => ({ ...r, preset: 'custom' }))
-  }
+  function applyThemePreset(p: KioskTheme) { setTheme(p) }
 
   async function handleSave() {
     if (!name.trim()) { setErr('Name is required'); return }
@@ -81,7 +221,7 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
         name: name.trim(),
         room_id: roomId === '' ? null : roomId,
         pin: pin || null as any,
-        theme, layout, resolution: res, active,
+        theme, layout, active,
       })
       onClose()
     } catch (e: any) {
@@ -190,45 +330,12 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
             </div>
           </section>
 
-          {/* Resolution */}
-          <section>
-            <p className={sectionHd}>Resolution</p>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {RESOLUTION_PRESETS.map(p => (
-                <button key={p.label} onClick={() => applyResPreset(p.value)}
-                  className="px-3 py-1.5 rounded-xl text-[10px] font-black transition-all"
-                  style={{
-                    background: res.preset === p.value.preset ? '#adee2b' : 'var(--ds-bg-raised)',
-                    color: res.preset === p.value.preset ? '#1a3a00' : 'var(--ds-text-2)',
-                    border: '1px solid var(--ds-border)',
-                  }}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {res.preset === 'custom' && (
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className={labelCls}>Width (px)</label>
-                  <input className={inputCls} type="number" min={320} max={3840} value={res.width} onChange={e => setRes(r => ({ ...r, width: Number(e.target.value) }))} />
-                </div>
-                <div className="flex-1">
-                  <label className={labelCls}>Height (px)</label>
-                  <input className={inputCls} type="number" min={240} max={2160} value={res.height} onChange={e => setRes(r => ({ ...r, height: Number(e.target.value) }))} />
-                </div>
-              </div>
-            )}
-            {res.preset !== 'custom' && (
-              <p className="text-[11px] text-[var(--ds-text-3)] font-bold">{res.width} × {res.height} px</p>
-            )}
-          </section>
-
           {/* Layout */}
           <section>
             <p className={sectionHd}>Layout</p>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Orientation</label>
+              <div className="col-span-2">
+                <label className={labelCls}>Preview Orientation <span className="text-[var(--ds-text-4)] normal-case">(live kiosk auto-fits the screen)</span></label>
                 <div className="flex gap-2">
                   {(['landscape','portrait'] as const).map(o => (
                     <button key={o} onClick={() => setLayout(l => ({ ...l, orientation: o }))}
@@ -243,14 +350,9 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className={labelCls}>Book Button URL</label>
-                <input className={inputCls} value={layout.book_btn_url} onChange={e => setLayout(l => ({ ...l, book_btn_url: e.target.value }))} placeholder="https://…" />
-              </div>
               {([
                 ['show_clock',       'Show Clock'],
                 ['show_bookings',    'Show Bookings List'],
-                ['show_book_btn',    'Show Book Button'],
                 ['show_confirm_btn', 'Show Confirm Presence Button'],
               ] as [keyof KioskLayout, string][]).map(([k, lbl]) => (
                 <div key={k} className="flex items-center gap-3">
@@ -262,7 +364,34 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
                   <p className="text-[11px] font-black text-[var(--ds-text-2)]">{lbl}</p>
                 </div>
               ))}
+              {layout.show_bookings && (
+                <div className="col-span-2">
+                  <label className={labelCls}>Next Bookings to Show</label>
+                  <div className="flex gap-2">
+                    {[1, 2].map(n => {
+                      const sel = (layout.upcoming_count ?? 2) === n
+                      return (
+                        <button key={n} onClick={() => setLayout(l => ({ ...l, upcoming_count: n }))}
+                          className="flex-1 px-3 py-2 rounded-xl text-[12px] font-black transition-all"
+                          style={{
+                            background: sel ? '#adee2b' : 'var(--ds-bg-raised)',
+                            color: sel ? '#1a3a00' : 'var(--ds-text-2)',
+                            border: '1px solid var(--ds-border)',
+                          }}>
+                          {n} {n === 1 ? 'booking' : 'bookings'}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
+          </section>
+
+          {/* Live preview */}
+          <section>
+            <p className={sectionHd}>Live Preview</p>
+            <KioskPreview theme={theme} layout={layout} roomName={selectedRoomName} />
           </section>
 
         </div>
@@ -371,8 +500,6 @@ export default function KioskTab() {
                 <p className="font-black text-[14px] text-[var(--ds-text-1)] truncate">{k.name}</p>
                 <p className="text-[11px] text-[var(--ds-text-3)] font-bold">
                   {k.room ? `${k.room.name}${k.room.floor ? ` · Floor ${k.room.floor}` : ''}` : 'No room assigned'}
-                  {' · '}
-                  {k.resolution.width}×{k.resolution.height}
                   {' · '}
                   <span className="capitalize">{k.layout?.orientation ?? 'landscape'}</span>
                   {k.has_pin ? ' · PIN locked' : ''}

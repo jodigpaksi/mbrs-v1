@@ -123,6 +123,7 @@ export interface KioskLayout {
   show_confirm_btn: boolean
   orientation:      'landscape' | 'portrait'
   book_btn_url:     string
+  upcoming_count:   number
 }
 
 export interface KioskResolution {
@@ -150,12 +151,12 @@ export interface KioskStatus {
   room: { id: number; name: string; status: string; capacity: number; floor: string } | null
   current: {
     id: number; title: string; start_at: string; end_at: string
-    user: string | null; type: string; status: string
+    user: string | null; department: string | null; type: string; status: string
     presence_confirmed_at: string | null
   } | null
   upcoming: Array<{
     id: number; title: string; start_at: string; end_at: string
-    user: string | null; type: string; status: string
+    user: string | null; department: string | null; type: string; status: string
     presence_confirmed_at: string | null
   }>
   free_until:  string | null

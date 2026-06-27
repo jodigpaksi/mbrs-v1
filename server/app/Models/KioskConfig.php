@@ -43,6 +43,7 @@ class KioskConfig extends Model
             'show_confirm_btn' => false,
             'orientation'      => 'landscape',
             'book_btn_url'     => '',
+            'upcoming_count'   => 2,
         ], $v ?? []);
     }
 

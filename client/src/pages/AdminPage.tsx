@@ -4042,13 +4042,20 @@ export default function AdminPage() {
   const [pillY, setPillY] = useState(0)
   const [pillH, setPillH] = useState(36)
   useEffect(() => {
-    const nav = sidebarNavRef.current
-    const btn = sidebarBtnRefs.current[tab]
-    if (!nav || !btn) return
-    const navRect = nav.getBoundingClientRect()
-    const btnRect = btn.getBoundingClientRect()
-    setPillY(btnRect.top - navRect.top)
-    setPillH(btnRect.height)
+    const measure = () => {
+      const nav = sidebarNavRef.current
+      const btn = sidebarBtnRefs.current[tab]
+      if (!nav || !btn) return
+      const navRect = nav.getBoundingClientRect()
+      const btnRect = btn.getBoundingClientRect()
+      setPillY(btnRect.top - navRect.top)
+      setPillH(btnRect.height)
+    }
+    measure()
+    // Re-measure after layout settles (fonts / collapse transition) and on resize
+    const raf = requestAnimationFrame(measure)
+    window.addEventListener('resize', measure)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure) }
   }, [tab, sidebarCollapsed])
 
   return (
@@ -4077,12 +4084,6 @@ export default function AdminPage() {
           to   { opacity: 1; transform: translateY(0) }
         }
         .admin-dropdown-in { animation: admin-dropdown-in 0.2s cubic-bezier(0.4,0,0.2,1) both }
-
-        @keyframes sidebar-indicator-in {
-          from { transform: translateY(-50%) scaleY(0) }
-          to   { transform: translateY(-50%) scaleY(1) }
-        }
-        .sidebar-indicator { animation: sidebar-indicator-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both }
       `}</style>
       {/* Sidebar */}
       <div className={`shrink-0 p-3 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${sidebarCollapsed ? 'w-[68px]' : 'w-[196px]'}`}>
@@ -4098,7 +4099,7 @@ export default function AdminPage() {
           <div ref={sidebarNavRef} className="relative flex flex-col gap-0.5 flex-1">
             {/* Sliding pill */}
             <div className="absolute inset-x-1 rounded-2xl pointer-events-none"
-              style={{ top: pillY, height: pillH, background: 'rgba(173,238,43,0.13)', transition: 'top 0.22s cubic-bezier(0.4,0,0.2,1), height 0.22s cubic-bezier(0.4,0,0.2,1)' }} />
+              style={{ top: pillY, height: pillH, background: 'rgba(173,238,43,0.12)', border: '1px solid rgba(173,238,43,0.22)', boxShadow: 'inset 0 0 0 1px rgba(173,238,43,0.04)', transition: 'top 0.24s cubic-bezier(0.34,1.3,0.64,1), height 0.24s cubic-bezier(0.34,1.3,0.64,1)' }} />
 
             {mainTabs.map(t => {
               const active = tab === t.key
@@ -4107,7 +4108,6 @@ export default function AdminPage() {
                   <button ref={el => { sidebarBtnRefs.current[t.key] = el }} onClick={() => setTab(t.key)}
                     className={`w-full flex items-center gap-3 rounded-2xl transition-colors duration-150 overflow-hidden relative
                       ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}>
-                    {active && <span key={tab} className="sidebar-indicator absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
                     <span className="material-symbols-outlined shrink-0 transition-colors duration-200" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{t.icon}</span>
                     {!sidebarCollapsed && (
                       <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors duration-200" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{t.label}</span>
@@ -4133,7 +4133,6 @@ export default function AdminPage() {
                   <button ref={el => { sidebarBtnRefs.current[settingsTabDef.key] = el }} onClick={() => setTab(settingsTabDef.key)}
                     className={`w-full flex items-center gap-3 rounded-2xl transition-colors duration-150 overflow-hidden relative
                       ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}>
-                    {active && <span key={tab} className="sidebar-indicator absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: '#adee2b' }} />}
                     <span className="material-symbols-outlined shrink-0 transition-colors duration-200" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{settingsTabDef.icon}</span>
                     {!sidebarCollapsed && (
                       <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors duration-200" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{settingsTabDef.label}</span>
