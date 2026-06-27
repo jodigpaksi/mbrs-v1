@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class KioskConfig extends Model
 {
-    protected $fillable = ['name', 'room_id', 'pin', 'theme', 'layout', 'resolution', 'active'];
+    protected $fillable = ['name', 'slug', 'room_id', 'pin', 'theme', 'layout', 'resolution', 'active'];
 
     protected $casts = [
         'theme'      => 'array',

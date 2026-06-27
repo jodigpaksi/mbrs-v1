@@ -77,7 +77,18 @@ class UserController extends Controller
             $user->adminBuildings()->detach();
         }
 
+        $oldRole = $user->role;
         $user->update($data);
+
+        if ($oldRole !== $data['role']) {
+            \App\Models\ActivityLog::record(
+                'user.role_changed',
+                "Changed role of {$user->name} from {$oldRole} to {$data['role']}",
+                $user,
+                ['old' => $oldRole, 'new' => $data['role']],
+            );
+        }
+
         return $user->load('adminBuildings.location');
     }
 
@@ -138,6 +149,13 @@ class UserController extends Controller
             ...$data,
             'role' => $data['role'] ?? 'user',
         ]);
+
+        \App\Models\ActivityLog::record(
+            'user.created',
+            "Created user {$user->name} ({$user->email}) as {$user->role}",
+            $user,
+            ['email' => $user->email, 'role' => $user->role],
+        );
 
         return $user->load('adminBuildings.location', 'department');
     }
@@ -226,6 +244,13 @@ class UserController extends Controller
                 ], 422);
             }
         }
+
+        \App\Models\ActivityLog::record(
+            'user.deleted',
+            "Deleted user {$user->name} ({$user->email}, {$user->role})",
+            $user,
+            ['email' => $user->email, 'role' => $user->role],
+        );
 
         $user->adminBuildings()->detach();
         $user->delete();

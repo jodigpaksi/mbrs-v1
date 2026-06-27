@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createPortal } from 'react-dom'
 import { getKioskConfigs, createKioskConfig, updateKioskConfig, deleteKioskConfig } from '../../api/kiosk'
@@ -30,11 +30,91 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   )
 }
 
+// Derive light/dark mode from a background hex (so the kiosk's secondary colors adapt).
+function modeFromBg(hex: string): 'dark' | 'light' {
+  const h = hex.replace('#', '')
+  if (h.length < 6) return 'dark'
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5 ? 'dark' : 'light'
+}
+
+// ── Searchable, building-grouped room picker ────────────────────────────────────
+interface PickerRoom { id: number; name: string; floor: string; building: string }
+
+function RoomPicker({ rooms, value, onChange }: { rooms: PickerRoom[]; value: number | ''; onChange: (id: number | '') => void }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const selected = rooms.find(r => r.id === value)
+  const q = search.trim().toLowerCase()
+  const filtered = q
+    ? rooms.filter(r => r.name.toLowerCase().includes(q) || r.building.toLowerCase().includes(q) || (r.floor ?? '').toLowerCase().includes(q))
+    : rooms
+  const groups = filtered.reduce<Record<string, PickerRoom[]>>((acc, r) => { (acc[r.building] ??= []).push(r); return acc }, {})
+
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-[12px] font-bold bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-1)] hover:border-[#adee2b]/40 transition-colors">
+        <span className="truncate flex items-center gap-2">
+          {selected
+            ? <><span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>meeting_room</span>{selected.name}{selected.floor ? ` · Fl ${selected.floor}` : ''}</>
+            : <span className="text-[var(--ds-text-4)]">— No room —</span>}
+        </span>
+        <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 18 }}>{open ? 'expand_less' : 'expand_more'}</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1.5 w-full rounded-2xl overflow-hidden shadow-2xl" style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)' }}>
+          <div className="p-2 border-b border-[var(--ds-border)]">
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--ds-bg-raised)]">
+              <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 16 }}>search</span>
+              <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search room or building…"
+                className="flex-1 bg-transparent text-[12px] font-medium text-[var(--ds-text-1)] focus:outline-none placeholder:text-[var(--ds-text-4)]" />
+            </div>
+          </div>
+          <div className="max-h-[240px] overflow-y-auto p-1.5" style={{ scrollbarWidth: 'thin' }}>
+            <button type="button" onClick={() => { onChange(''); setOpen(false); setSearch('') }}
+              className="w-full text-left px-3 py-2 rounded-lg text-[12px] font-bold text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] transition-colors">— No room —</button>
+            {Object.entries(groups).map(([building, list]) => (
+              <div key={building} className="mt-1">
+                <p className="px-3 pt-2 pb-1 text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-4)]">{building}</p>
+                {list.map(r => {
+                  const sel = r.id === value
+                  return (
+                    <button key={r.id} type="button" onClick={() => { onChange(r.id); setOpen(false); setSearch('') }}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left hover:bg-[var(--ds-bg-raised)] transition-colors"
+                      style={{ background: sel ? 'rgba(173,238,43,0.12)' : undefined }}>
+                      <span className="text-[12px] font-bold text-[var(--ds-text-1)] truncate flex items-center gap-1.5">
+                        {sel && <span className="material-symbols-outlined text-[#7aa81e]" style={{ fontSize: 14 }}>check</span>}
+                        {r.name}
+                      </span>
+                      <span className="text-[10px] font-bold text-[var(--ds-text-4)] shrink-0">{r.floor ? `Fl ${r.floor}` : ''}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+            {filtered.length === 0 && <p className="px-3 py-5 text-center text-[11px] text-[var(--ds-text-4)]">No rooms found</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Edit/Create modal ─────────────────────────────────────────────────────────
 
 interface EditModalProps {
   initial?: KioskConfig
-  rooms: { id: number; name: string; floor: string }[]
+  rooms: PickerRoom[]
   onSave: (data: Partial<KioskConfig>) => Promise<void>
   onClose: () => void
 }
@@ -201,6 +281,7 @@ function KioskPreview({ theme, layout, roomName }: { theme: KioskTheme; layout: 
 
 function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
   const [name,     setName]     = useState(initial?.name ?? '')
+  const [slug,     setSlug]     = useState(initial?.slug ?? '')
   const [roomId,   setRoomId]   = useState<number | ''>(initial?.room_id ?? '')
   const [pin,      setPin]      = useState(initial?.pin ?? '')
   const [active,   setActive]   = useState(initial?.active ?? true)
@@ -213,14 +294,19 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
 
   function applyThemePreset(p: KioskTheme) { setTheme(p) }
 
+  const isCustomTheme = !THEME_PRESETS.some(p => JSON.stringify(p.value) === JSON.stringify(theme))
+
   async function handleSave() {
     if (!name.trim()) { setErr('Name is required'); return }
+    if (pin && !/^\d{4}$/.test(pin)) { setErr('PIN must be exactly 4 digits'); return }
+    if (slug.trim() && !/^[a-z0-9][a-z0-9-]*$/.test(slug.trim())) { setErr('Custom ID: lowercase letters, numbers and hyphens only'); return }
     setSaving(true); setErr('')
     try {
       await onSave({
         name: name.trim(),
+        slug: slug.trim() || null,
         room_id: roomId === '' ? null : roomId,
-        pin: pin || null as any,
+        pin: pin.trim() || null as any,
         theme, layout, active,
       })
       onClose()
@@ -263,26 +349,36 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
                 <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Lobby Kiosk" />
               </div>
               <div>
-                <label className={labelCls}>Room</label>
-                <select className={inputCls} value={roomId} onChange={e => setRoomId(e.target.value === '' ? '' : Number(e.target.value))}>
-                  <option value="">— No room —</option>
-                  {rooms.map(r => <option key={r.id} value={r.id}>{r.name}{r.floor ? ` · Floor ${r.floor}` : ''}</option>)}
-                </select>
+                <label className={labelCls}>Custom ID <span className="normal-case text-[var(--ds-text-4)]">(for the link)</span></label>
+                <input className={inputCls} value={slug} maxLength={40}
+                  onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="e.g. lobby-1" />
+                <p className="text-[9px] text-[var(--ds-text-4)] font-mono mt-1 truncate">/kiosk/{slug.trim() || (initial?.id ?? 'auto')}</p>
               </div>
               <div>
-                <label className={labelCls}>PIN (optional)</label>
-                <input className={inputCls} type="text" maxLength={20} value={pin} onChange={e => setPin(e.target.value)} placeholder="Leave blank for no PIN" />
+                <label className={labelCls}>Room</label>
+                <RoomPicker rooms={rooms} value={roomId} onChange={setRoomId} />
               </div>
-              <div className="flex items-center gap-3 pt-4">
-                <button onClick={() => setActive(a => !a)}
-                  className="relative rounded-full transition-colors shrink-0"
-                  style={{ width: 44, height: 24, background: active ? '#adee2b' : 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
-                  <span className="absolute top-0.5 rounded-full transition-all" style={{ width: 20, height: 20, background: active ? '#1a3a00' : 'var(--ds-text-3)', left: active ? 22 : 2 }} />
-                </button>
-                <div>
-                  <p className="text-[11px] font-black text-[var(--ds-text-1)]">{active ? 'Active' : 'Inactive'}</p>
-                  <p className="text-[9px] text-[var(--ds-text-3)]">{active ? 'Kiosk is publicly accessible' : 'Kiosk returns 404'}</p>
+              <div>
+                <label className={labelCls}>PIN <span className="normal-case text-[var(--ds-text-4)]">(optional · 4 digits)</span></label>
+                <input className={`${inputCls} tracking-[0.4em] font-mono`} inputMode="numeric" maxLength={4} value={pin}
+                  onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="••••" />
+              </div>
+              {/* Active toggle — full-width row */}
+              <div className="col-span-2 flex items-center justify-between px-4 py-3 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
+                <div className="flex items-center gap-2.5">
+                  <span className="size-2 rounded-full" style={{ background: active ? '#22c55e' : 'var(--ds-text-4)', boxShadow: active ? '0 0 6px #22c55e88' : 'none' }} />
+                  <div>
+                    <p className="text-[12px] font-black text-[var(--ds-text-1)]">{active ? 'Active' : 'Inactive'}</p>
+                    <p className="text-[10px] text-[var(--ds-text-3)]">{active ? 'Kiosk is publicly accessible' : 'Kiosk returns 404'}</p>
+                  </div>
                 </div>
+                <button onClick={() => setActive(a => !a)} type="button"
+                  className="relative rounded-full transition-colors shrink-0"
+                  style={{ width: 46, height: 26, background: active ? '#adee2b' : 'var(--ds-bg-surface-2)', border: '1px solid var(--ds-border)' }}>
+                  <span className="absolute top-[3px] rounded-full transition-all" style={{ width: 18, height: 18, background: active ? '#1a3a00' : 'var(--ds-text-3)', left: active ? 24 : 3 }} />
+                </button>
               </div>
             </div>
           </section>
@@ -290,12 +386,12 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
           {/* Theme */}
           <section>
             <p className={sectionHd}>Theme</p>
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
               {THEME_PRESETS.map(p => {
                 const active = JSON.stringify(theme) === JSON.stringify(p.value)
                 return (
                   <button key={p.label} onClick={() => applyThemePreset(p.value)}
-                    className="px-3 py-1.5 rounded-xl text-[10px] font-black transition-all"
+                    className="px-4 py-1.5 rounded-xl text-[10px] font-black transition-all"
                     style={{
                       background: active ? '#adee2b' : 'var(--ds-bg-raised)',
                       color: active ? '#1a3a00' : 'var(--ds-text-2)',
@@ -305,28 +401,20 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
                   </button>
                 )
               })}
+              <span className="px-4 py-1.5 rounded-xl text-[10px] font-black" title="Edit any colour below to make a custom theme"
+                style={{
+                  background: isCustomTheme ? '#adee2b' : 'transparent',
+                  color: isCustomTheme ? '#1a3a00' : 'var(--ds-text-4)',
+                  border: '1px dashed var(--ds-border)',
+                }}>
+                Custom
+              </span>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <ColorField label="Background"  value={theme.bg}      onChange={v => setTheme(t => ({ ...t, bg: v }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <ColorField label="Background"  value={theme.bg}      onChange={v => setTheme(t => ({ ...t, bg: v, mode: modeFromBg(v) }))} />
               <ColorField label="Surface"     value={theme.surface} onChange={v => setTheme(t => ({ ...t, surface: v }))} />
               <ColorField label="Accent"      value={theme.accent}  onChange={v => setTheme(t => ({ ...t, accent: v }))} />
               <ColorField label="Text"        value={theme.text}    onChange={v => setTheme(t => ({ ...t, text: v }))} />
-              <div className="col-span-2 flex items-center gap-3">
-                <p className={labelCls}>Mode</p>
-                <div className="flex gap-2">
-                  {(['dark','light'] as const).map(m => (
-                    <button key={m} onClick={() => setTheme(t => ({ ...t, mode: m }))}
-                      className="px-3 py-1.5 rounded-xl text-[10px] font-black transition-all capitalize"
-                      style={{
-                        background: theme.mode === m ? '#adee2b' : 'var(--ds-bg-raised)',
-                        color: theme.mode === m ? '#1a3a00' : 'var(--ds-text-2)',
-                        border: '1px solid var(--ds-border)',
-                      }}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </section>
 
@@ -441,17 +529,17 @@ export default function KioskTab() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['kiosk-configs'] }); setDeleteTarget(null) },
   })
 
-  function kioskUrl(id: number) {
-    return `${window.location.origin}/kiosk/${id}`
+  function kioskUrl(k: { id: number; slug: string | null }) {
+    return `${window.location.origin}/kiosk/${k.slug || k.id}`
   }
 
-  function copyUrl(id: number) {
-    navigator.clipboard.writeText(kioskUrl(id))
-    setCopied(id)
+  function copyUrl(k: { id: number; slug: string | null }) {
+    navigator.clipboard.writeText(kioskUrl(k))
+    setCopied(k.id)
     setTimeout(() => setCopied(null), 1500)
   }
 
-  const flatRooms = rooms.map((r: any) => ({ id: r.id, name: r.name, floor: r.floor ?? '' }))
+  const flatRooms = rooms.map((r: any) => ({ id: r.id, name: r.name, floor: r.floor ?? '', building: r.building?.name ?? r.building?.code ?? 'Unassigned' }))
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -464,7 +552,7 @@ export default function KioskTab() {
         <div>
           <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Panel</p>
           <h1 className="text-3xl font-black italic tracking-tighter uppercase">Kiosk Displays</h1>
-          <p className="text-[12px] text-[var(--ds-text-3)] mt-1">Tablet kiosks for room status displays — server-configurable theme &amp; resolution.</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-1">Tablet kiosks for room status displays — auto-responsive, custom theme &amp; link.</p>
         </div>
         <button onClick={() => setEditTarget('new')}
           className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[11px] font-black transition-all hover:brightness-110 active:scale-95"
@@ -500,10 +588,9 @@ export default function KioskTab() {
                 <p className="font-black text-[14px] text-[var(--ds-text-1)] truncate">{k.name}</p>
                 <p className="text-[11px] text-[var(--ds-text-3)] font-bold">
                   {k.room ? `${k.room.name}${k.room.floor ? ` · Floor ${k.room.floor}` : ''}` : 'No room assigned'}
-                  {' · '}
-                  <span className="capitalize">{k.layout?.orientation ?? 'landscape'}</span>
                   {k.has_pin ? ' · PIN locked' : ''}
                 </p>
+                <p className="text-[10px] text-[var(--ds-text-4)] font-mono mt-0.5 truncate">/kiosk/{k.slug || k.id}</p>
               </div>
 
               {/* Theme preview chips */}
@@ -515,12 +602,12 @@ export default function KioskTab() {
 
               {/* Actions */}
               <div className="flex items-center gap-1 shrink-0">
-                <a href={kioskUrl(k.id)} target="_blank" rel="noopener noreferrer"
+                <a href={kioskUrl(k)} target="_blank" rel="noopener noreferrer"
                   className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors"
                   title="Open kiosk">
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>open_in_new</span>
                 </a>
-                <button onClick={() => copyUrl(k.id)}
+                <button onClick={() => copyUrl(k)}
                   className="size-8 flex items-center justify-center rounded-xl transition-colors"
                   style={{ color: copied === k.id ? '#adee2b' : 'var(--ds-text-3)' }}
                   title="Copy URL">

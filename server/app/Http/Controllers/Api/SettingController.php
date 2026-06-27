@@ -92,9 +92,23 @@ class SettingController extends Controller
             'chart_colors'              => 'sometimes|string',
         ]);
 
+        $changes = [];
         foreach ($data as $key => $value) {
             $stored = is_bool($value) ? ($value ? 'true' : 'false') : (string) $value;
+            $old = Setting::where('key', $key)->value('value');
+            if ($old !== $stored) {
+                $changes[$key] = ['old' => $old, 'new' => $stored];
+            }
             Setting::updateOrCreate(['key' => $key], ['value' => $stored]);
+        }
+
+        if ($changes) {
+            \App\Models\ActivityLog::record(
+                'settings.updated',
+                'Updated settings: ' . implode(', ', array_keys($changes)),
+                null,
+                ['changes' => $changes],
+            );
         }
 
         return $this->generalSettings();

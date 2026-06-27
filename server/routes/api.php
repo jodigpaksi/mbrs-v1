@@ -142,6 +142,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/locations', [LocationController::class, 'store']);
         Route::patch('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
+        // Activity log (admin only)
+        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
+
         // Kiosk CRUD (admin only)
         Route::get('/kiosk-configs', [KioskController::class, 'index']);
         Route::post('/kiosk-configs', [KioskController::class, 'store']);
@@ -152,19 +155,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/buildings/{building}', [BuildingController::class, 'update']);
         Route::delete('/buildings/{building}', [BuildingController::class, 'destroy']);
         Route::get('/users', [UserController::class, 'index']);
-        Route::get('/users/export', fn () =>
-            response()->json(
-                \App\Models\User::with('department')->orderBy('role')->orderBy('name')->get()
-                    ->map(fn ($u) => [
-                        'name'       => $u->name,
-                        'email'      => $u->email,
-                        'password'   => $u->password,
-                        'department' => $u->department?->name ?? '',
-                        'role'       => $u->role,
-                        'ext'        => $u->ext ?? '',
-                    ])
-            )
-        );
+        Route::get('/users/export', function () {
+            $rows = \App\Models\User::with('department')->orderBy('role')->orderBy('name')->get();
+            \App\Models\ActivityLog::record(
+                'data.exported',
+                "Exported {$rows->count()} user records (incl. credentials)",
+                null,
+                ['type' => 'users', 'count' => $rows->count()],
+            );
+            return response()->json(
+                $rows->map(fn ($u) => [
+                    'name'       => $u->name,
+                    'email'      => $u->email,
+                    'password'   => $u->password,
+                    'department' => $u->department?->name ?? '',
+                    'role'       => $u->role,
+                    'ext'        => $u->ext ?? '',
+                ])
+            );
+        });
         Route::post('/users', [UserController::class, 'store']);
         Route::post('/users/import', [UserController::class, 'importUsers']);
         Route::patch('/users/{user}', [UserController::class, 'update']);

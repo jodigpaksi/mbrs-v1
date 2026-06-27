@@ -135,6 +135,7 @@ export interface KioskResolution {
 export interface KioskConfig {
   id:         number
   name:       string
+  slug:       string | null
   room_id:    number | null
   room?:      { id: number; name: string; floor: string; building_id?: number }
   has_pin:    boolean

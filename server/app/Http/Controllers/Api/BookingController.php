@@ -26,6 +26,17 @@ class BookingController extends Controller
         }
     }
 
+    private function logCancellation(Booking $booking): void
+    {
+        $room = $booking->room?->name ?? $booking->load('room')->room?->name ?? 'a room';
+        \App\Models\ActivityLog::record(
+            'booking.cancelled',
+            "Cancelled \"{$booking->title}\" in {$room} (" . Carbon::parse($booking->start_at)->format('d M, H:i') . ')',
+            $booking,
+            ['room' => $room, 'title' => $booking->title, 'start_at' => (string) $booking->start_at],
+        );
+    }
+
     private function notifyCancelRecipient(Booking $booking, Request $request): void
     {
         if (!$booking->booked_for_user_id) return;
@@ -208,6 +219,14 @@ class BookingController extends Controller
                 'message'    => $request->user()->name . ' booked ' . $room->name . ' for you on '
                                 . Carbon::parse($booking->start_at)->format('d M, H:i'),
             ]);
+
+            $forName = \App\Models\User::find($data['booked_for_user_id'])?->name ?? ('user #' . $data['booked_for_user_id']);
+            \App\Models\ActivityLog::record(
+                'booking.created_for',
+                "Booked {$room->name} for {$forName} — \"{$booking->title}\"",
+                $booking,
+                ['room' => $room->name, 'booked_for' => $forName, 'start_at' => (string) $booking->start_at],
+            );
         }
 
         $this->broadcastChange('created', $booking);
@@ -274,6 +293,7 @@ class BookingController extends Controller
 
         if ($becomingCancelled) {
             $this->notifyCancelRecipient($booking, $request);
+            $this->logCancellation($booking);
         }
 
         $this->broadcastChange('updated', $booking);
@@ -289,6 +309,7 @@ class BookingController extends Controller
 
         $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
         $this->notifyCancelRecipient($booking, $request);
+        $this->logCancellation($booking);
         $this->broadcastChange('updated', $booking);
         return response()->json(['message' => 'Booking cancelled']);
     }
@@ -349,6 +370,13 @@ class BookingController extends Controller
             $booking->update(['status' => 'cancelled', 'cancelled_at' => $now]);
             $this->notifyCancelRecipient($booking, $request);
         }
+
+        \App\Models\ActivityLog::record(
+            'booking.cancelled',
+            "Cancelled recurring series \"{$first->title}\" ({$bookings->count()} bookings)",
+            $first,
+            ['series_id' => $seriesId, 'count' => $bookings->count(), 'title' => $first->title],
+        );
 
         $this->broadcastChange('updated');
 

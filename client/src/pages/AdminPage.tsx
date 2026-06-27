@@ -25,8 +25,9 @@ import GlassTimePicker from '../components/ui/GlassTimePicker'
 import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 import KioskTab from '../components/admin/KioskTab'
+import ActivityLogTab from '../components/admin/ActivityLogTab'
 
-type Tab = 'overview' | 'users' | 'buildings' | 'settings' | 'archive' | 'kiosk'
+type Tab = 'overview' | 'users' | 'buildings' | 'settings' | 'archive' | 'kiosk' | 'activity'
 
 function ModalPortal({ children }: { children: ReactNode }) {
   return <>{createPortal(children, document.body)}</>
@@ -4032,6 +4033,7 @@ export default function AdminPage() {
     { key: 'users',      label: 'Users',      icon: 'group' },
     { key: 'archive',    label: 'Archive',    icon: 'archive' },
     { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
+    { key: 'activity',   label: 'Activity',   icon: 'history' },
   ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
@@ -4562,6 +4564,7 @@ export default function AdminPage() {
         {tab === 'archive'  && <div className="admin-tab-in"><ArchiveTab /></div>}
         {tab === 'settings' && <div className="admin-tab-in"><SettingsTab /></div>}
         {tab === 'kiosk'    && <div className="admin-tab-in"><KioskTab /></div>}
+        {tab === 'activity' && <div className="admin-tab-in"><ActivityLogTab /></div>}
       </div>
     </div>
   )
