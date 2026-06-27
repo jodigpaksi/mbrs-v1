@@ -109,7 +109,7 @@ function SlotRoomCard({
             )}
           </div>
           <div className="flex items-center gap-2 text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">
-            <span>Floor {room.floor}</span>
+            <span>{room.floor}</span>
             <span className="text-[var(--ds-border)]">·</span>
             <span className="flex items-center gap-0.5">
               <span className="material-symbols-outlined" style={{ fontSize: 11 }}>group</span>
@@ -634,7 +634,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">
-                              <span>Floor {room.floor}</span>
+                              <span>{room.floor}</span>
                               <span className="text-[var(--ds-border)]">·</span>
                               <span className="flex items-center gap-0.5">
                                 <span className="material-symbols-outlined" style={{ fontSize: 11 }}>group</span>

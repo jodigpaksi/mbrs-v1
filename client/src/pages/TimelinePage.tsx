@@ -1633,7 +1633,7 @@ export default function TimelinePage() {
                     <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 12 }}>groups</span>
                     {roomHover.room.capacity} seats
                   </span>
-                  <span className="text-[11px] font-bold text-[var(--ds-text-3)]">Floor {roomHover.room.floor}</span>
+                  <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{roomHover.room.floor}</span>
                 </div>
                 <div className="flex flex-wrap gap-1 mt-3">
                   {(roomHover.room.facilities ?? []).slice(0, 5).map(f => (

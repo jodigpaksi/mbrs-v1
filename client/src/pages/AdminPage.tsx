@@ -3330,6 +3330,7 @@ const SETTINGS_SECTIONS = [
   { key: 'hours',    label: 'Booking Hours',  icon: 'schedule' },
   { key: 'weekend',  label: 'Weekend',        icon: 'calendar_today' },
   { key: 'rules',    label: 'Booking Rules',  icon: 'rule' },
+  { key: 'ghost',    label: 'Anti-Ghost',     icon: 'person_off' },
   { key: 'features', label: 'Features',       icon: 'tune' },
   { key: 'archive',  label: 'Archive',         icon: 'inventory_2' },
   { key: 'export',   label: 'Export Schedule', icon: 'schedule_send' },
@@ -3342,7 +3343,7 @@ function SettingsTab() {
   const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, features: null, archive: null, export: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, ghost: null, features: null, archive: null, export: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
@@ -3417,6 +3418,8 @@ function SettingsTab() {
   const [exportDow,        setExportDow]        = useState(general?.export_day_of_week ?? 1)
   const [exportDom,        setExportDom]        = useState(general?.export_day_of_month ?? 1)
   const [exportFormats,    setExportFormats]    = useState<string[]>((general?.export_formats ?? 'excel,csv').split(',').filter(Boolean))
+  const [antiGhostEnabled, setAntiGhostEnabled] = useState(general?.anti_ghost_enabled ?? false)
+  const [antiGhostMode,    setAntiGhostMode]    = useState(general?.anti_ghost_mode ?? 'kiosk')
   const archiveDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
   const deleteDaysDebounce  = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
@@ -3431,8 +3434,10 @@ function SettingsTab() {
       setExportTime(general.export_time); setExportDow(general.export_day_of_week)
       setExportDom(general.export_day_of_month)
       setExportFormats((general.export_formats ?? 'excel,csv').split(',').filter(Boolean))
+      setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
+      setAntiGhostMode(general.anti_ghost_mode ?? 'kiosk')
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -3475,6 +3480,8 @@ function SettingsTab() {
     clearTimeout(maxDaysDebounce.current)
     maxDaysDebounce.current = setTimeout(() => saveGeneral({ max_advance_days: v }, `Max advance booking set to ${v} days`), 800)
   }
+  async function toggleAntiGhost() { const v = !antiGhostEnabled; setAntiGhostEnabled(v); await saveGeneral({ anti_ghost_enabled: v }, v ? 'Anti-ghost booking enabled' : 'Anti-ghost booking disabled') }
+  async function setAntiGhostModeVal(v: string) { setAntiGhostMode(v); await saveGeneral({ anti_ghost_mode: v }, `Anti-ghost mode: ${v}`) }
 
   return (
     <div className="space-y-6">
@@ -3630,6 +3637,75 @@ function SettingsTab() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Anti-Ghost Booking */}
+      <div ref={el => { secRefs.current.ghost = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Anti-Ghost Booking</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Auto-cancel bookings where no one shows up. Requires presence confirmation on the kiosk within 10 minutes of start time.</p>
+        </div>
+
+        {/* Master toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: antiGhostEnabled ? 'rgba(173,238,43,0.12)' : 'var(--ds-bg-raised)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: antiGhostEnabled ? '#4d7c00' : '#94a3b8' }}>person_off</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Enable Anti-Ghost</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">
+                {antiGhostEnabled ? 'Unconfirmed bookings are auto-cancelled after +10 min' : 'No-show detection is off'}
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleAntiGhost} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: antiGhostEnabled ? '#adee2b' : 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }} />
+            <div className="absolute top-[3px] transition-all rounded-full" style={{ width: 18, height: 18, background: antiGhostEnabled ? '#1a3a00' : 'var(--ds-text-3)', left: antiGhostEnabled ? 22 : 3 }} />
+          </button>
+        </div>
+
+        {antiGhostEnabled && (
+          <>
+            <div className="border-t border-[var(--ds-border-sub)]" />
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-3">Detection Method</p>
+              <div className="flex gap-2">
+                {([
+                  { key: 'kiosk',  label: 'Kiosk',  icon: 'tablet',        desc: 'User must tap Confirm on the room kiosk', badge: null },
+                  { key: 'sensor', label: 'Sensor', icon: 'sensors',       desc: 'Motion/occupancy sensor via ESP32', badge: 'Coming Soon' },
+                ] as const).map(opt => {
+                  const sel = antiGhostMode === opt.key
+                  const disabled = opt.key === 'sensor'
+                  return (
+                    <button key={opt.key} type="button"
+                      disabled={disabled}
+                      onClick={() => !disabled && setAntiGhostModeVal(opt.key)}
+                      className="flex-1 flex flex-col gap-1.5 p-3.5 rounded-xl text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        background: sel ? 'rgba(173,238,43,0.08)' : 'var(--ds-bg-raised)',
+                        border: sel ? '1.5px solid rgba(173,238,43,0.5)' : '1.5px solid var(--ds-border)',
+                      }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined" style={{ fontSize: 16, color: sel ? '#4d7c00' : '#94a3b8' }}>{opt.icon}</span>
+                          <span className="text-[12px] font-black" style={{ color: sel ? 'var(--ds-text-1)' : 'var(--ds-text-2)' }}>{opt.label}</span>
+                        </div>
+                        {opt.badge && (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)' }}>{opt.badge}</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-medium text-[var(--ds-text-4)]">{opt.desc}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', color: '#818cf8' }}>
+              <span className="font-black">How it works:</span> Every minute, the system checks for bookings that started more than 10 minutes ago with no presence confirmed. Those bookings are auto-cancelled and logged in Activity Log. The kiosk display updates immediately.
+            </div>
+          </>
+        )}
       </div>
 
       {/* Features — auto-save */}

@@ -22,6 +22,8 @@ export interface GeneralSettings {
   chart_peak_hour_from: number
   chart_peak_hour_to: number
   chart_colors: string
+  anti_ghost_enabled: boolean
+  anti_ghost_mode: string
 }
 
 export async function getBookingHours(): Promise<BookingHours> {

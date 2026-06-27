@@ -65,6 +65,8 @@ class SettingController extends Controller
             'chart_peak_hour_from'       => (int) $get('chart_peak_hour_from', '0'),
             'chart_peak_hour_to'         => (int) $get('chart_peak_hour_to', '23'),
             'chart_colors'               => $get('chart_colors', '{}'),
+            'anti_ghost_enabled'         => $get('anti_ghost_enabled', 'false') === 'true',
+            'anti_ghost_mode'            => $get('anti_ghost_mode', 'kiosk'),
         ]);
     }
 
@@ -90,6 +92,8 @@ class SettingController extends Controller
             'chart_peak_hour_from'      => 'sometimes|integer|min:0|max:23',
             'chart_peak_hour_to'        => 'sometimes|integer|min:0|max:23',
             'chart_colors'              => 'sometimes|string',
+            'anti_ghost_enabled'        => 'sometimes|boolean',
+            'anti_ghost_mode'           => 'sometimes|in:kiosk,sensor',
         ]);
 
         $changes = [];

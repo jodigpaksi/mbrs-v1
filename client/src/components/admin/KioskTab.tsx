@@ -18,9 +18,9 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   return (
     <div className="flex items-center gap-2">
       <div className="relative size-8 rounded-lg overflow-hidden shrink-0 border border-[var(--ds-border)] cursor-pointer">
+        <div className="absolute inset-0 rounded-lg" style={{ background: value, pointerEvents: 'none' }} />
         <input type="color" value={value} onChange={e => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
-        <div className="absolute inset-0 rounded-lg" style={{ background: value }} />
+          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" style={{ zIndex: 1 }} />
       </div>
       <div className="flex-1">
         <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">{label}</p>
@@ -587,7 +587,7 @@ export default function KioskTab() {
               <div className="flex-1 min-w-0">
                 <p className="font-black text-[14px] text-[var(--ds-text-1)] truncate">{k.name}</p>
                 <p className="text-[11px] text-[var(--ds-text-3)] font-bold">
-                  {k.room ? `${k.room.name}${k.room.floor ? ` · Floor ${k.room.floor}` : ''}` : 'No room assigned'}
+                  {k.room ? `${k.room.name}${k.room.floor ? ` · ${k.room.floor}` : ''}` : 'No room assigned'}
                   {k.has_pin ? ' · PIN locked' : ''}
                 </p>
                 <p className="text-[10px] text-[var(--ds-text-4)] font-mono mt-0.5 truncate">/kiosk/{k.slug || k.id}</p>

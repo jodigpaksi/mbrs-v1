@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('bookings:archive')->dailyAt('02:00');
 Schedule::command('bookings:export-archive')->everyMinute();
+Schedule::command('bookings:release-ghosts')->everyMinute();

@@ -140,7 +140,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                   <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#adee2b' }}>groups</span>
                   {room.capacity} seats
                 </p>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', margin: 0 }}>Floor {room.floor}{room.building?.name ? ` · ${room.building.name}` : ''}</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', margin: 0 }}>{room.floor}{room.building?.name ? ` · ${room.building.name}` : ''}</p>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, marginLeft: 'auto' }} />
               </div>
 
