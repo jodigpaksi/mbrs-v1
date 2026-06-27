@@ -600,6 +600,11 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
         <p style={{ fontSize: 17, fontWeight: 900, color: 'var(--ds-text-1)', lineHeight: 1.25, marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, overflow: 'hidden' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--ds-text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{b.room?.name ?? '—'}</p>
+          {b.room?.building && (
+            <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 900, color: 'var(--ds-text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', background: 'var(--ds-bg-raised)', borderRadius: 6, padding: '2px 6px' }}>
+              {b.room.building.code || b.room.building.name}
+            </span>
+          )}
           {b.room?.requires_contact && (
             <span className="material-symbols-outlined shrink-0" style={{ fontSize: 12, color: '#d97706' }} title="Special room">star</span>
           )}

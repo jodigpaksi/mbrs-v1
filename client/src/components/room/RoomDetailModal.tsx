@@ -30,7 +30,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
 
   if (!room) return null
 
-  const dotColor = room.type === 'Ballroom' ? '#c084fc' : room.type === 'Executive' ? '#60a5fa' : '#4ade80'
+  const dotColor = room.status === 'maintenance' ? '#fb923c' : '#4ade80'
   const photos = (room.photos ?? []).slice(0, 5)
 
   const now = new Date()
@@ -124,7 +124,6 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
               {/* Room name + badge */}
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                 <div>
-                  <p style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.45)', marginBottom: 3, marginTop: 0 }}>{room.type}</p>
                   <h2 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', color: 'white', textTransform: 'uppercase', lineHeight: 1, margin: 0 }}>{room.name}</h2>
                 </div>
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>

@@ -159,7 +159,13 @@ export default function TimelinePage() {
 
   // Document-level drag handlers
   useEffect(() => {
-    function onMove(e: MouseEvent) {
+    // Coalesce mousemove → at most one re-render + one layout read per animation
+    // frame. Mouse events fire faster than the screen paints, so without this the
+    // whole gantt re-renders 100+×/s during a drag, making move/resize feel stiff.
+    let rafId: number | null = null
+    let lastEvent: MouseEvent | null = null
+
+    function applyMove(e: MouseEvent) {
       let changed = false
       if (cellDragRef.current) {
         cellDragRef.current.endSlot = getSlotFromClientX(e.clientX)
@@ -188,6 +194,15 @@ export default function TimelinePage() {
         changed = true
       }
       if (changed) setDragTick(t => t + 1)
+    }
+
+    function onMove(e: MouseEvent) {
+      lastEvent = e
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (lastEvent) applyMove(lastEvent)
+      })
     }
 
     async function onUp() {
@@ -289,6 +304,7 @@ export default function TimelinePage() {
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
     }
@@ -436,7 +452,7 @@ export default function TimelinePage() {
   const filteredRooms = (rooms as Room[]).filter((r: Room) => {
     if (location && r.building_id !== location.id) return false
     if (search) {
-      const roomMatch = r.name.toLowerCase().includes(search.toLowerCase()) || (r.type?.toLowerCase() ?? '').includes(search.toLowerCase())
+      const roomMatch = r.name.toLowerCase().includes(search.toLowerCase())
       const bookingMatch = allVisibleBookings.filter((b: Booking) => b.room_id === r.id && b.status !== 'cancelled')
         .some(b => bookingMatchesSearch(b, search))
       if (!roomMatch && !bookingMatch) return false
@@ -1243,7 +1259,7 @@ export default function TimelinePage() {
           {/* Room rows */}
           {filteredRooms.map((room: Room) => {
             const roomBookings = getBookingsForRoom(room.id)
-            const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : room.type === 'Ballroom' ? 'bg-purple-400' : room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'
+            const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : 'bg-green-400'
             const occupied  = isRoomOccupied(room)
             const isMaintRoom = room.status === 'maintenance'
 
@@ -1611,10 +1627,6 @@ export default function TimelinePage() {
                 </div>
               )}
               <div style={{ padding: '14px 16px 16px' }}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className={`size-1.5 rounded-full shrink-0 ${roomHover.room.type === 'Ballroom' ? 'bg-purple-400' : roomHover.room.type === 'Executive' ? 'bg-blue-400' : 'bg-green-400'}`} />
-                  <span className="text-[8px] font-black uppercase text-[var(--ds-text-3)]">{roomHover.room.type}</span>
-                </div>
                 <p className="text-[17px] font-black text-[var(--ds-text-1)] leading-tight">{roomHover.room.name}</p>
                 <div className="flex items-center gap-3 mt-2">
                   <span className="text-[11px] font-bold text-[var(--ds-text-2)] flex items-center gap-1">

@@ -29,7 +29,6 @@ class RoomController extends Controller
         $data = $request->validate([
             'building_id'      => 'nullable|exists:buildings,id',
             'name'             => 'required|string',
-            'type'             => 'nullable|string|max:20',
             'capacity'         => 'required|integer|min:1',
             'floor'            => 'required|string',
             'facilities'       => 'nullable|array',
@@ -51,7 +50,6 @@ class RoomController extends Controller
         $data = $request->validate([
             'building_id'      => 'nullable|exists:buildings,id',
             'name'             => 'sometimes|string',
-            'type'             => 'nullable|string|max:20',
             'capacity'         => 'sometimes|integer|min:1',
             'floor'            => 'sometimes|string',
             'facilities'       => 'nullable|array',

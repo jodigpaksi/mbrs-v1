@@ -108,7 +108,6 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     if (trimmed.length < 1) return null
     const matchedRooms = (rooms as Room[]).filter(r =>
       r.name.toLowerCase().includes(trimmed) ||
-      (r.type ?? '').toLowerCase().includes(trimmed) ||
       (r.building?.name ?? '').toLowerCase().includes(trimmed) ||
       (r.building?.code ?? '').toLowerCase().includes(trimmed)
     ).slice(0, 4)

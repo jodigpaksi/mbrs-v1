@@ -59,7 +59,7 @@ class DatabaseSeeder extends Seeder
         // ── Rooms: Head Office ───────────────────────────────────────────────
         $b1 = Room::create([
             'building_id' => $ho->id,
-            'name' => 'Ballroom 101', 'type' => 'Ballroom', 'capacity' => 100, 'floor' => 'B1',
+            'name' => 'Ballroom 101', 'capacity' => 100, 'floor' => 'B1',
             'facilities' => [['name'=>'Sound','icon'=>'volume_up'],['name'=>'Stage','icon'=>'layers'],['name'=>'Projector','icon'=>'videocam'],['name'=>'AC','icon'=>'ac_unit']],
             'photos' => ['https://images.unsplash.com/photo-1517457373958-b7bdd4587205?q=80&w=800','https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=800'],
             'notes' => 'Suitable for large-scale events. Coordinate with GA team 48hrs before for stage/AV setup.',
@@ -67,7 +67,7 @@ class DatabaseSeeder extends Seeder
 
         $b2 = Room::create([
             'building_id' => $ho->id,
-            'name' => 'Ballroom 102', 'type' => 'Ballroom', 'capacity' => 100, 'floor' => 'B1',
+            'name' => 'Ballroom 102', 'capacity' => 100, 'floor' => 'B1',
             'facilities' => [['name'=>'Sound','icon'=>'volume_up'],['name'=>'Stage','icon'=>'layers'],['name'=>'AC','icon'=>'ac_unit']],
             'photos' => ['https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=800'],
             'notes' => 'Suitable for large-scale events.',
@@ -75,7 +75,7 @@ class DatabaseSeeder extends Seeder
 
         $e1 = Room::create([
             'building_id' => $ho->id,
-            'name' => 'Executive 101', 'type' => 'Executive', 'capacity' => 12, 'floor' => '5F',
+            'name' => 'Executive 101', 'capacity' => 12, 'floor' => '5F',
             'facilities' => [['name'=>'4K TV','icon'=>'tv'],['name'=>'Webcam','icon'=>'photo_camera'],['name'=>'Wifi','icon'=>'wifi'],['name'=>'Whiteboard','icon'=>'border_color']],
             'photos' => ['https://images.unsplash.com/photo-1497366811353-6870744d04b2?q=80&w=800','https://images.unsplash.com/photo-1462826303086-329426d1aef5?q=80&w=800'],
             'notes' => 'For senior leadership and external meetings. Video conferencing pre-configured.',
@@ -83,7 +83,7 @@ class DatabaseSeeder extends Seeder
 
         $e2 = Room::create([
             'building_id' => $ho->id,
-            'name' => 'Executive 102', 'type' => 'Executive', 'capacity' => 12, 'floor' => '5F',
+            'name' => 'Executive 102', 'capacity' => 12, 'floor' => '5F',
             'facilities' => [['name'=>'4K TV','icon'=>'tv'],['name'=>'Wifi','icon'=>'wifi'],['name'=>'Whiteboard','icon'=>'border_color']],
             'photos' => ['https://images.unsplash.com/photo-1560472354-b33ff0c44a43?q=80&w=800'],
             'notes' => 'Executive suite with full AV setup.',
@@ -91,7 +91,7 @@ class DatabaseSeeder extends Seeder
 
         $f1 = Room::create([
             'building_id' => $ho->id,
-            'name' => 'Focus 101', 'type' => 'Focus', 'capacity' => 4, 'floor' => '3F',
+            'name' => 'Focus 101', 'capacity' => 4, 'floor' => '3F',
             'facilities' => [['name'=>'AC','icon'=>'ac_unit'],['name'=>'Wifi','icon'=>'wifi']],
             'photos' => ['https://images.unsplash.com/photo-1505409859467-3a799be57c8f?q=80&w=800','https://images.unsplash.com/photo-1521737711867-e3b97375f902?q=80&w=800'],
             'notes' => 'Quiet zone - no phone calls. Max 4 pax strictly enforced.',
@@ -99,7 +99,7 @@ class DatabaseSeeder extends Seeder
 
         Room::create([
             'building_id' => $ho->id,
-            'name' => 'Focus 102', 'type' => 'Focus', 'capacity' => 4, 'floor' => '3F',
+            'name' => 'Focus 102', 'capacity' => 4, 'floor' => '3F',
             'facilities' => [['name'=>'AC','icon'=>'ac_unit'],['name'=>'Wifi','icon'=>'wifi']],
             'photos' => ['https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=800'],
             'notes' => 'Quiet zone for focused work.',
@@ -108,7 +108,7 @@ class DatabaseSeeder extends Seeder
         // ── Rooms: Creative Tower ────────────────────────────────────────────
         Room::create([
             'building_id' => $ct->id,
-            'name' => 'Ballroom 201', 'type' => 'Ballroom', 'capacity' => 80, 'floor' => 'B1',
+            'name' => 'Ballroom 201', 'capacity' => 80, 'floor' => 'B1',
             'facilities' => [['name'=>'Projector','icon'=>'videocam'],['name'=>'AC','icon'=>'ac_unit'],['name'=>'Sound','icon'=>'volume_up']],
             'photos' => ['https://images.unsplash.com/photo-1517457373958-b7bdd4587205?q=80&w=800'],
             'notes' => 'Medium ballroom for events up to 80 pax.',
@@ -116,7 +116,7 @@ class DatabaseSeeder extends Seeder
 
         $e3 = Room::create([
             'building_id' => $ct->id,
-            'name' => 'Executive 201', 'type' => 'Executive', 'capacity' => 8, 'floor' => '4F',
+            'name' => 'Executive 201', 'capacity' => 8, 'floor' => '4F',
             'facilities' => [['name'=>'TV','icon'=>'tv'],['name'=>'Wifi','icon'=>'wifi'],['name'=>'Whiteboard','icon'=>'border_color']],
             'photos' => ['https://images.unsplash.com/photo-1497366811353-6870744d04b2?q=80&w=800'],
             'notes' => 'Smaller executive room for focused discussions.',
@@ -124,7 +124,7 @@ class DatabaseSeeder extends Seeder
 
         Room::create([
             'building_id' => $ct->id,
-            'name' => 'Focus 201', 'type' => 'Focus', 'capacity' => 6, 'floor' => '2F',
+            'name' => 'Focus 201', 'capacity' => 6, 'floor' => '2F',
             'facilities' => [['name'=>'Whiteboard','icon'=>'border_color'],['name'=>'Wifi','icon'=>'wifi']],
             'photos' => ['https://images.unsplash.com/photo-1505409859467-3a799be57c8f?q=80&w=800'],
             'notes' => 'Small meeting room for quick discussions.',
@@ -132,7 +132,7 @@ class DatabaseSeeder extends Seeder
 
         Room::create([
             'building_id' => $ct->id,
-            'name' => 'Focus 202', 'type' => 'Focus', 'capacity' => 4, 'floor' => '2F',
+            'name' => 'Focus 202', 'capacity' => 4, 'floor' => '2F',
             'facilities' => [['name'=>'AC','icon'=>'ac_unit'],['name'=>'Wifi','icon'=>'wifi']],
             'photos' => ['https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=800'],
             'notes' => 'Creative quiet pod.',
@@ -141,7 +141,7 @@ class DatabaseSeeder extends Seeder
         // ── Rooms: South Hub ─────────────────────────────────────────────────
         $b3 = Room::create([
             'building_id' => $sh->id,
-            'name' => 'Ballroom 301', 'type' => 'Ballroom', 'capacity' => 60, 'floor' => 'B1',
+            'name' => 'Ballroom 301', 'capacity' => 60, 'floor' => 'B1',
             'facilities' => [['name'=>'Projector','icon'=>'videocam'],['name'=>'AC','icon'=>'ac_unit'],['name'=>'Sound','icon'=>'volume_up']],
             'photos' => ['https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=800'],
             'notes' => 'Regional event space.',
@@ -149,7 +149,7 @@ class DatabaseSeeder extends Seeder
 
         Room::create([
             'building_id' => $sh->id,
-            'name' => 'Executive 301', 'type' => 'Executive', 'capacity' => 10, 'floor' => '3F',
+            'name' => 'Executive 301', 'capacity' => 10, 'floor' => '3F',
             'facilities' => [['name'=>'4K TV','icon'=>'tv'],['name'=>'Webcam','icon'=>'photo_camera'],['name'=>'Wifi','icon'=>'wifi']],
             'photos' => ['https://images.unsplash.com/photo-1560472354-b33ff0c44a43?q=80&w=800'],
             'notes' => 'Surabaya leadership room.',
@@ -157,7 +157,7 @@ class DatabaseSeeder extends Seeder
 
         Room::create([
             'building_id' => $sh->id,
-            'name' => 'Focus 301', 'type' => 'Focus', 'capacity' => 4, 'floor' => '2F',
+            'name' => 'Focus 301', 'capacity' => 4, 'floor' => '2F',
             'facilities' => [['name'=>'Whiteboard','icon'=>'border_color'],['name'=>'Wifi','icon'=>'wifi']],
             'photos' => ['https://images.unsplash.com/photo-1521737711867-e3b97375f902?q=80&w=800'],
             'notes' => 'Quiet pod for remote work.',

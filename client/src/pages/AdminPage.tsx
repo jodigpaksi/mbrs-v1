@@ -42,9 +42,6 @@ function StatCard({ label, value, sub, dark }: { label: string; value: string; s
   )
 }
 
-const ROOM_TYPE_COLOR: Record<string, string> = {
-  Ballroom: 'bg-purple-400', Executive: 'bg-blue-400', Focus: 'bg-green-400',
-}
 
 // ── Building form modal ──────────────────────────────────────────────────────
 function BuildingModal({
@@ -650,7 +647,6 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
               <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{r.capacity} pax</span>
               {' · '}
               <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>layers</span>{r.floor}</span>
-              {r.type ? ` · ${r.type}` : ''}
             </p>
           </div>
           {/* Status toggles */}

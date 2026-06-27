@@ -59,7 +59,6 @@ export interface Room {
   building?: Building
   sort_order?: number
   name: string
-  type?: string
   capacity: number
   floor: string
   facilities: Facility[]

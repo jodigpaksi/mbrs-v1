@@ -12,7 +12,6 @@ class Room extends Model
         'building_id',
         'sort_order',
         'name',
-        'type',
         'capacity',
         'floor',
         'facilities',

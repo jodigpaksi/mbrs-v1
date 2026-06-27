@@ -72,7 +72,7 @@ export default function BookingBar({
       {isMe && (
         <div
           onMouseDown={e => { e.stopPropagation(); onResizeMouseDown?.(e, 'left') }}
-          className="absolute left-0 inset-y-0 w-2.5 cursor-col-resize z-20 opacity-0 group-hover/bar:opacity-100 bg-white/25 rounded-l-xl transition-opacity flex items-center justify-center"
+          className="absolute left-0 inset-y-0 w-3.5 cursor-col-resize z-20 opacity-0 group-hover/bar:opacity-100 bg-white/25 rounded-l-xl transition-opacity flex items-center justify-center"
           title="Drag to resize"
         >
           <div className="w-0.5 h-3 bg-white/50 rounded-full" />
@@ -121,7 +121,7 @@ export default function BookingBar({
       {isMe && (
         <div
           onMouseDown={e => { e.stopPropagation(); onResizeMouseDown?.(e, 'right') }}
-          className="absolute right-0 inset-y-0 w-2.5 cursor-col-resize z-20 opacity-0 group-hover/bar:opacity-100 bg-white/25 rounded-r-xl transition-opacity flex items-center justify-center"
+          className="absolute right-0 inset-y-0 w-3.5 cursor-col-resize z-20 opacity-0 group-hover/bar:opacity-100 bg-white/25 rounded-r-xl transition-opacity flex items-center justify-center"
           title="Drag to resize"
         >
           <div className="w-0.5 h-3 bg-white/50 rounded-full" />

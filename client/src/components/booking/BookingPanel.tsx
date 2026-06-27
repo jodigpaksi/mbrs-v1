@@ -599,7 +599,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const filteredRooms = (rooms as Room[]).filter((r: Room) => {
     if (activeBuildingId && r.building_id !== activeBuildingId) return false
     const q = roomSearch.toLowerCase()
-    return r.name.toLowerCase().includes(q) || (r.type?.toLowerCase() ?? '').includes(q)
+    return r.name.toLowerCase().includes(q)
   })
 
   const repeatDates = generateRepeatDates()
