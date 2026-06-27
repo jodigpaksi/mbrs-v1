@@ -90,7 +90,7 @@ export default function TimelinePage() {
   const seriesCancelTimerRef = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => defaultView)
   const [ganttKey, setGanttKey] = useState(0)
-  const [ganttAnim, setGanttAnim] = useState<'left' | 'right' | 'up' | 'fade'>('fade')
+  const [ganttAnim, setGanttAnim] = useState<'left' | 'right' | 'up' | 'fade' | 'none'>('none')
 
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
@@ -104,6 +104,14 @@ export default function TimelinePage() {
   const barResizeRef = useRef<BarResize | null>(null)
   const [dragTick, setDragTick] = useState(0)
   const mainRef = useRef<HTMLElement>(null)
+
+  // Clear animation after it plays so background re-renders don't replay it
+  useEffect(() => {
+    if (ganttAnim === 'none') return
+    const durations: Record<string, number> = { left: 220, right: 220, up: 240, fade: 200 }
+    const t = setTimeout(() => setGanttAnim('none'), durations[ganttAnim] ?? 250)
+    return () => clearTimeout(t)
+  }, [ganttKey, ganttAnim])
 
   // Dropdown click-outside refs
   const locationRef = useRef<HTMLDivElement>(null)
@@ -212,13 +220,13 @@ export default function TimelinePage() {
       }
 
       const dStr = toLocalDateStr(currentDate)
-      const allBkgs: Booking[] = await queryClient.fetchQuery({
-        queryKey: ['bookings', dStr],
-        queryFn: () => getBookings({ date: dStr }),
-        staleTime: 0,
-      })
-
       const bd = barDragRef.current
+      const br = barResizeRef.current
+      const needsCheck = (bd && bd.deltaSlot !== 0) || (br && br.deltaSlot !== 0)
+      const allBkgs: Booking[] = needsCheck
+        ? await queryClient.fetchQuery({ queryKey: ['bookings', dStr], queryFn: () => getBookings({ date: dStr }), staleTime: 0 })
+        : (queryClient.getQueryData(['bookings', dStr]) as Booking[]) ?? []
+
       if (bd && bd.deltaSlot !== 0) {
         const newStart = bd.origStartSlot + bd.deltaSlot
         const newEnd   = newStart + bd.origSpan
@@ -246,7 +254,6 @@ export default function TimelinePage() {
       }
       if (bd) { barDragRef.current = null; setDragTick(t => t + 1) }
 
-      const br = barResizeRef.current
       if (br && br.deltaSlot !== 0) {
         let newStart = br.origStartSlot
         let newEnd   = br.origStartSlot + br.origSpan
@@ -339,7 +346,6 @@ export default function TimelinePage() {
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ['bookings', dateStr],
     queryFn: () => getBookings({ date: dateStr }),
-    refetchInterval: 5_000,
     staleTime: 3_000,
   })
 
@@ -363,7 +369,6 @@ export default function TimelinePage() {
       queryKey: ['bookings', toLocalDateStr(d)],
       queryFn: () => getBookings({ date: toLocalDateStr(d) }),
       enabled: viewMode === 'week',
-      refetchInterval: 15_000,
       staleTime: 10_000,
     }))
   })
@@ -376,7 +381,6 @@ export default function TimelinePage() {
     queryKey: ['bookings-month', monthFrom, monthTo],
     queryFn: () => getBookings({ date_from: monthFrom, date_to: monthTo }),
     enabled: viewMode === 'month',
-    refetchInterval: 5_000,
     staleTime: 3_000,
   })
 
@@ -548,12 +552,13 @@ export default function TimelinePage() {
   }
 
   const VIEW_ORDER = { day: 0, week: 1, month: 2 } as const
-  const ganttAnimCSS = {
+  const ganttAnimCSS: Record<string, string> = {
     left:  'gantt-enter-left 0.2s cubic-bezier(0.4,0,0.2,1) both',
     right: 'gantt-enter-right 0.2s cubic-bezier(0.4,0,0.2,1) both',
     up:    'gantt-enter-up 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
     fade:  'gantt-enter-fade 0.18s ease both',
-  } as const
+    none:  '',
+  }
 
   function switchViewMode(mode: 'day' | 'week' | 'month') {
     if (mode === viewMode) return

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react'
 import { getMe, logout as apiLogout } from '../api/auth'
 import { queryClient } from '../main'
 
@@ -51,14 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
-  async function logout() {
+  const logout = useCallback(async () => {
     try { await apiLogout() } catch {}
     queryClient.clear()
     setUser(null)
-  }
+  }, [])
+
+  const value = useMemo(() => ({ user, loading, setUser, logout }), [user, loading, logout])
 
   return (
-    <AuthContext.Provider value={{ user, loading, setUser, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

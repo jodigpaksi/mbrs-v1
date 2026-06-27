@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -92,12 +92,13 @@ interface CardSharedProps {
   activeTab: Tab
   pendingCancelIds: Set<number>
   exitingCancelIds: Set<number>
+  animate: boolean
   onEdit: (b: Booking) => void
   onCancel: (b: Booking) => void
   onTentativeAction?: (b: Booking) => void
 }
 
-function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -132,7 +133,7 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
       className={`rounded-2xl px-5 pt-5 group relative overflow-hidden ${canEdit ? 'pb-12' : 'pb-5'} ${isTentative ? 't-hatch' : ''} ${cardBg} ${canEdit ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
       style={{
         ...baseCardStyle,
-        animation: `card-in 0.25s cubic-bezier(0.4,0,0.2,1) ${index * 45}ms both`,
+        animation: animate ? `card-in 0.25s cubic-bezier(0.4,0,0.2,1) ${index * 45}ms both` : undefined,
         opacity: isExiting ? 0 : isPending ? 0.3 : 1,
         transform: isExiting ? 'scale(0.95)' : isPending ? 'scale(0.98)' : undefined,
         outline: isPending ? '2px solid #fca5a5' : 'none',
@@ -221,7 +222,7 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
   )
 }
 
-function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+function BookingListItem({ b, index = 0, animate, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -244,7 +245,7 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
       className={`flex items-center gap-4 px-4 py-3 rounded-2xl border ${isTentative ? 't-hatch' : ''} ${rowBg} ${canEdit ? 'cursor-pointer hover:shadow-sm' : ''}`}
       style={{
         ...(isTentative ? { backgroundColor: 'var(--ds-bg-surface-2)', borderColor: 'var(--ds-border)' } : !isCancelled && !isConf ? { backgroundColor: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border-sub)' } : {}),
-        animation: `card-in 0.22s cubic-bezier(0.4,0,0.2,1) ${index * 35}ms both`,
+        animation: animate ? `card-in 0.22s cubic-bezier(0.4,0,0.2,1) ${index * 35}ms both` : undefined,
         opacity: isExiting ? 0 : isPending ? 0.3 : 1,
         transform: isExiting ? 'scale(0.97) translateY(4px)' : undefined,
         outline: isPending ? '2px solid #fca5a5' : 'none',
@@ -655,6 +656,9 @@ export default function SchedulePage() {
   const [clearConfirm, setClearConfirm] = useState(false)
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
   const [viewAnimKey, setViewAnimKey] = useState(0)
+  // Entrance animation only plays on user navigation (tab/view/filter change),
+  // never on background poll refetches — prevents the grid "blinking" every 15s.
+  const [animateCards, setAnimateCards] = useState(true)
   const [overviewOpen, setOverviewOpen] = useState(false)
   const overviewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { pendingCancelIds, exitingCancelIds, addCancelToast, addInfoToast, undoCancel, confirmSeriesCancel, undoSeriesCancel } = useCancelToast()
@@ -752,16 +756,16 @@ export default function SchedulePage() {
   const { data: myBookings = [], isLoading } = useQuery({
     queryKey: ['my-bookings'],
     queryFn: getMyBookings,
-    refetchInterval: 15_000,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
 
   const { data: allMyBookings = [], isLoading: loadingAll } = useQuery({
     queryKey: ['all-my-bookings', user?.id],
     queryFn: () => getBookings({ user_id: user?.id }),
     enabled: !!user?.id,
-    refetchInterval: 15_000,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
 
   const isReceptionist = user?.role === 'receptionist'
@@ -769,8 +773,8 @@ export default function SchedulePage() {
     queryKey: ['special-bookings'],
     queryFn: () => getBookings({ special_rooms: true, date_from: toDateStr(past90), date_to: toDateStr(future90) }),
     enabled: isReceptionist,
-    refetchInterval: 15_000,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
   const [spShowPast, setSpShowPast]           = useState(true)
   const [spShowCancelled, setSpShowCancelled] = useState(false)
@@ -1222,6 +1226,14 @@ export default function SchedulePage() {
 
   useEffect(() => { setBuildingFilter(defaultBuilding) }, [activeTab])
 
+  // Replay entrance animation only when the user navigates (tab / view / building filter),
+  // then switch it off so background poll refetches don't re-trigger it.
+  useEffect(() => {
+    setAnimateCards(true)
+    const id = setTimeout(() => setAnimateCards(false), 1200)
+    return () => clearTimeout(id)
+  }, [activeTab, viewMode, buildingFilter])
+
   const displayList = buildingFilter
     ? activeList.filter((b: Booking) => b.room?.building_id === buildingFilter)
     : activeList
@@ -1251,6 +1263,7 @@ export default function SchedulePage() {
     activeTab,
     pendingCancelIds,
     exitingCancelIds,
+    animate: animateCards,
     onEdit: (b) => { setEditBooking(b); setPanelOpen(true) },
     onCancel: handleCancel,
     onTentativeAction: (b) => setTentativeTarget(b),
@@ -1424,7 +1437,7 @@ export default function SchedulePage() {
 
         {/* Main content */}
         <div className="flex-1 overflow-y-auto px-8 py-6 bg-[var(--ds-bg-base)]" style={{ scrollbarWidth: 'thin' }}>
-          {(isLoading || loadingAll) ? (
+          {(isLoading || loadingAll) && myBookings.length === 0 && allMyBookings.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
             </div>
@@ -1569,7 +1582,7 @@ export default function SchedulePage() {
                           </div>
                         </div>
 
-                        {loadingSpecial && (
+                        {loadingSpecial && specialBookings.length === 0 && (
                           <div className="flex items-center justify-center py-16">
                             <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-4)]">progress_activity</span>
                           </div>

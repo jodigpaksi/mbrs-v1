@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import { en, id, type TranslationKey } from '../i18n/translations'
 import { useAuth } from './AuthContext'
 import { updatePreferences } from '../api/auth'
@@ -113,8 +113,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const dict = language === 'id' ? id : en
   const t = useCallback((key: TranslationKey): string => dict[key] ?? key, [dict])
 
+  const value = useMemo(() => ({
+    defaultView, defaultType, language, darkMode, startDay, defaultBuilding, showBarTitle,
+    setDefaultView, setDefaultType, setLanguage, setDarkMode, setStartDay, setDefaultBuilding, setShowBarTitle, t,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [defaultView, defaultType, language, darkMode, startDay, defaultBuilding, showBarTitle, t])
+
   return (
-    <SettingsContext.Provider value={{ defaultView, defaultType, language, darkMode, startDay, defaultBuilding, showBarTitle, setDefaultView, setDefaultType, setLanguage, setDarkMode, setStartDay, setDefaultBuilding, setShowBarTitle, t }}>
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   )

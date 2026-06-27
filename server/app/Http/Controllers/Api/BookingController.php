@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\BookingChanged;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Notification;
@@ -11,6 +12,20 @@ use Illuminate\Http\Request;
 
 class BookingController extends Controller
 {
+    /**
+     * Broadcast a booking change to connected clients. Wrapped so a Reverb
+     * outage never breaks the booking request itself.
+     */
+    private function broadcastChange(string $action, ?Booking $booking = null): void
+    {
+        try {
+            $date = $booking ? Carbon::parse($booking->start_at)->format('Y-m-d') : null;
+            BookingChanged::dispatch($action, $booking?->id, $date);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
     private function notifyCancelRecipient(Booking $booking, Request $request): void
     {
         if (!$booking->booked_for_user_id) return;
@@ -81,7 +96,7 @@ class BookingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Booking::with(['user.department', 'room.building', 'pantryOrder'])
+        $query = Booking::with(['user.department', 'room.building'])
             ->whereNull('archived_at')
             ->orderBy('start_at');
 
@@ -195,12 +210,14 @@ class BookingController extends Controller
             ]);
         }
 
+        $this->broadcastChange('created', $booking);
+
         return response()->json($booking->load(['user', 'room']), 201);
     }
 
     public function show(Booking $booking): JsonResponse
     {
-        return response()->json($booking->load(['user', 'room', 'pantryOrder']));
+        return response()->json($booking->load(['user', 'room']));
     }
 
     public function update(Request $request, Booking $booking): JsonResponse
@@ -259,6 +276,8 @@ class BookingController extends Controller
             $this->notifyCancelRecipient($booking, $request);
         }
 
+        $this->broadcastChange('updated', $booking);
+
         return response()->json($booking->load(['user', 'room']));
     }
 
@@ -270,6 +289,7 @@ class BookingController extends Controller
 
         $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
         $this->notifyCancelRecipient($booking, $request);
+        $this->broadcastChange('updated', $booking);
         return response()->json(['message' => 'Booking cancelled']);
     }
 
@@ -304,6 +324,8 @@ class BookingController extends Controller
             $booking->update($data);
         }
 
+        $this->broadcastChange('updated');
+
         return response()->json(['updated' => $bookings->count()]);
     }
 
@@ -328,6 +350,8 @@ class BookingController extends Controller
             $this->notifyCancelRecipient($booking, $request);
         }
 
+        $this->broadcastChange('updated');
+
         return response()->json(['cancelled' => $bookings->count()]);
     }
 
@@ -336,6 +360,8 @@ class BookingController extends Controller
         Booking::where('user_id', $request->user()->id)
             ->where('status', 'cancelled')
             ->delete();
+
+        $this->broadcastChange('cleared');
 
         return response()->json(['message' => 'Cleared successfully']);
     }
