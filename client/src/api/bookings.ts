@@ -10,6 +10,11 @@ export async function getMyBookings() {
   return res.data
 }
 
+export async function confirmPresenceWeb(bookingId: number): Promise<{ presence_confirmed_at: string }> {
+  const res = await api.post(`/bookings/${bookingId}/confirm-presence`)
+  return res.data
+}
+
 export async function createBooking(data: {
   room_id: number
   title: string

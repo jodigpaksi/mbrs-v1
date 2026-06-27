@@ -14,8 +14,7 @@ class ReleaseGhostBookings extends Command
     protected $signature   = 'bookings:release-ghosts';
     protected $description = 'Auto-cancel bookings that missed the kiosk presence-confirmation window';
 
-    private const BUSINESS_TZ     = 'Asia/Jakarta';
-    private const WINDOW_MINUTES  = 10; // minutes after start_at before auto-cancel
+    private const BUSINESS_TZ = 'Asia/Jakarta';
 
     private function localNow(): Carbon
     {
@@ -27,8 +26,10 @@ class ReleaseGhostBookings extends Command
         if (Setting::where('key', 'anti_ghost_enabled')->value('value') !== 'true') return;
         if (Setting::where('key', 'anti_ghost_mode')->value('value') !== 'kiosk')   return;
 
+        $windowAfter = (int) (Setting::where('key', 'anti_ghost_window_after')->value('value') ?? 10);
+
         $now      = $this->localNow();
-        $cutoff   = $now->copy()->subMinutes(self::WINDOW_MINUTES);
+        $cutoff   = $now->copy()->subMinutes($windowAfter);
         $today    = $now->toDateString();
 
         $ghosts = Booking::whereIn('status', ['confirmed', 'tentative'])

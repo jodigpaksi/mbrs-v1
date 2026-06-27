@@ -3418,8 +3418,13 @@ function SettingsTab() {
   const [exportDow,        setExportDow]        = useState(general?.export_day_of_week ?? 1)
   const [exportDom,        setExportDom]        = useState(general?.export_day_of_month ?? 1)
   const [exportFormats,    setExportFormats]    = useState<string[]>((general?.export_formats ?? 'excel,csv').split(',').filter(Boolean))
-  const [antiGhostEnabled, setAntiGhostEnabled] = useState(general?.anti_ghost_enabled ?? false)
-  const [antiGhostMode,    setAntiGhostMode]    = useState(general?.anti_ghost_mode ?? 'kiosk')
+  const [antiGhostEnabled,      setAntiGhostEnabled]      = useState(general?.anti_ghost_enabled ?? false)
+  const [antiGhostMode,         setAntiGhostMode]         = useState(general?.anti_ghost_mode ?? 'kiosk')
+  const [ghostWindowBefore,     setGhostWindowBefore]     = useState(general?.anti_ghost_window_before ?? 5)
+  const [ghostWindowAfter,      setGhostWindowAfter]      = useState(general?.anti_ghost_window_after ?? 10)
+  const [webConfirmEnabled,     setWebConfirmEnabled]      = useState(general?.web_confirm_enabled ?? false)
+  const ghostWindowBeforeDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const ghostWindowAfterDebounce  = useRef<ReturnType<typeof setTimeout>>()
   const archiveDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
   const deleteDaysDebounce  = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
@@ -3436,8 +3441,11 @@ function SettingsTab() {
       setExportFormats((general.export_formats ?? 'excel,csv').split(',').filter(Boolean))
       setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
       setAntiGhostMode(general.anti_ghost_mode ?? 'kiosk')
+      setGhostWindowBefore(general.anti_ghost_window_before ?? 5)
+      setGhostWindowAfter(general.anti_ghost_window_after ?? 10)
+      setWebConfirmEnabled(general.web_confirm_enabled ?? false)
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -3482,6 +3490,19 @@ function SettingsTab() {
   }
   async function toggleAntiGhost() { const v = !antiGhostEnabled; setAntiGhostEnabled(v); await saveGeneral({ anti_ghost_enabled: v }, v ? 'Anti-ghost booking enabled' : 'Anti-ghost booking disabled') }
   async function setAntiGhostModeVal(v: string) { setAntiGhostMode(v); await saveGeneral({ anti_ghost_mode: v }, `Anti-ghost mode: ${v}`) }
+  function onGhostWindowBeforeChange(v: number) {
+    const clamped = Math.max(0, Math.min(20, v))
+    setGhostWindowBefore(clamped)
+    clearTimeout(ghostWindowBeforeDebounce.current)
+    ghostWindowBeforeDebounce.current = setTimeout(() => saveGeneral({ anti_ghost_window_before: clamped }, `Confirm window: opens ${clamped}min before start`), 800)
+  }
+  function onGhostWindowAfterChange(v: number) {
+    const clamped = Math.max(0, Math.min(20, v))
+    setGhostWindowAfter(clamped)
+    clearTimeout(ghostWindowAfterDebounce.current)
+    ghostWindowAfterDebounce.current = setTimeout(() => saveGeneral({ anti_ghost_window_after: clamped }, `Confirm window: closes ${clamped}min after start`), 800)
+  }
+  async function toggleWebConfirm() { const v = !webConfirmEnabled; setWebConfirmEnabled(v); await saveGeneral({ web_confirm_enabled: v }, v ? 'Web presence confirm enabled' : 'Web presence confirm disabled') }
 
   return (
     <div className="space-y-6">
@@ -3665,6 +3686,27 @@ function SettingsTab() {
           </button>
         </div>
 
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Web confirm presence */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: webConfirmEnabled ? 'rgba(99,102,241,0.12)' : 'var(--ds-bg-raised)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: webConfirmEnabled ? '#6366f1' : '#94a3b8' }}>how_to_reg</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Web Confirm Presence</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">
+                {webConfirmEnabled ? 'Users can confirm via My Schedule in the header' : 'Confirm only via kiosk'}
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleWebConfirm} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: webConfirmEnabled ? '#6366f1' : 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }} />
+            <div className="absolute top-[3px] transition-all rounded-full" style={{ width: 18, height: 18, background: webConfirmEnabled ? '#fff' : 'var(--ds-text-3)', left: webConfirmEnabled ? 22 : 3 }} />
+          </button>
+        </div>
+
         {antiGhostEnabled && (
           <>
             <div className="border-t border-[var(--ds-border-sub)]" />
@@ -3701,8 +3743,83 @@ function SettingsTab() {
                 })}
               </div>
             </div>
+            {/* Confirmation time window */}
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-3">Confirmation Window</p>
+              <p className="text-[10px] text-[var(--ds-text-4)] font-medium mb-4">
+                How many minutes before/after the booking start time the confirm button is available. Auto-cancel fires when the window closes with no confirmation.
+              </p>
+
+              {/* Visual timeline */}
+              <div className="relative h-8 mb-4 flex items-center">
+                <div className="absolute inset-x-0 h-px bg-[var(--ds-border)]" />
+                {/* Window highlight */}
+                <div className="absolute h-2.5 rounded-full" style={{
+                  left:  `${50 - (ghostWindowBefore / 20) * 50}%`,
+                  right: `${50 - (ghostWindowAfter  / 20) * 50}%`,
+                  background: 'rgba(99,102,241,0.25)',
+                  border: '1px solid rgba(99,102,241,0.5)',
+                  minWidth: 4,
+                }} />
+                {/* Start marker */}
+                <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
+                  <div className="w-px h-4 bg-[#adee2b]" />
+                  <span className="text-[8px] font-black uppercase tracking-wider text-[#adee2b]">Start</span>
+                </div>
+                {/* Before label */}
+                <span className="absolute left-0 text-[9px] font-black text-[#6366f1]">-{ghostWindowBefore}m</span>
+                {/* After label */}
+                <span className="absolute right-0 text-[9px] font-black text-[#6366f1]">+{ghostWindowAfter}m</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] block mb-1.5">
+                    Opens before start <span className="text-[var(--ds-text-4)] normal-case">(0–20 min)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => onGhostWindowBeforeChange(ghostWindowBefore - 1)} disabled={ghostWindowBefore <= 0}
+                      className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-2)] disabled:opacity-30 transition-colors"
+                      style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>remove</span>
+                    </button>
+                    <input type="number" min={0} max={20} value={ghostWindowBefore}
+                      onChange={e => onGhostWindowBeforeChange(Number(e.target.value))}
+                      className="w-14 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#6366f1] focus:outline-none text-[var(--ds-text-1)]" />
+                    <button type="button" onClick={() => onGhostWindowBeforeChange(ghostWindowBefore + 1)} disabled={ghostWindowBefore >= 20}
+                      className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-2)] disabled:opacity-30 transition-colors"
+                      style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add</span>
+                    </button>
+                    <span className="text-[11px] font-bold text-[var(--ds-text-3)]">min</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] block mb-1.5">
+                    Closes after start <span className="text-[var(--ds-text-4)] normal-case">(0–20 min)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => onGhostWindowAfterChange(ghostWindowAfter - 1)} disabled={ghostWindowAfter <= 0}
+                      className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-2)] disabled:opacity-30 transition-colors"
+                      style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>remove</span>
+                    </button>
+                    <input type="number" min={0} max={20} value={ghostWindowAfter}
+                      onChange={e => onGhostWindowAfterChange(Number(e.target.value))}
+                      className="w-14 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#6366f1] focus:outline-none text-[var(--ds-text-1)]" />
+                    <button type="button" onClick={() => onGhostWindowAfterChange(ghostWindowAfter + 1)} disabled={ghostWindowAfter >= 20}
+                      className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-2)] disabled:opacity-30 transition-colors"
+                      style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add</span>
+                    </button>
+                    <span className="text-[11px] font-bold text-[var(--ds-text-3)]">min</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', color: '#818cf8' }}>
-              <span className="font-black">How it works:</span> Every minute, the system checks for bookings that started more than 10 minutes ago with no presence confirmed. Those bookings are auto-cancelled and logged in Activity Log. The kiosk display updates immediately.
+              <span className="font-black">How it works:</span> Every minute, the system checks for bookings past the window close with no presence confirmed. Those bookings are auto-cancelled and logged in Activity Log. The kiosk display updates immediately.
             </div>
           </>
         )}

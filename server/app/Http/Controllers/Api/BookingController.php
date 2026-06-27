@@ -157,6 +157,32 @@ class BookingController extends Controller
         return response()->json($bookings);
     }
 
+    public function confirmPresenceWeb(Request $request, Booking $booking): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Confirm target: the booked_for user if set, else the creator
+        $confirmerId = $booking->booked_for_user_id ?? $booking->user_id;
+        if ($confirmerId !== $userId) {
+            return response()->json(['error' => 'You are not the presence-confirmation target for this booking'], 403);
+        }
+
+        $now = Carbon::parse(Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s'));
+        if (Carbon::parse($booking->start_at) > $now) {
+            return response()->json(['error' => 'Booking has not started yet'], 422);
+        }
+        if (Carbon::parse($booking->end_at) <= $now) {
+            return response()->json(['error' => 'Booking has already ended'], 422);
+        }
+
+        if (! $booking->presence_confirmed_at) {
+            $booking->update(['presence_confirmed_at' => $now]);
+            $this->broadcastChange('presence_confirmed', $booking);
+        }
+
+        return response()->json(['presence_confirmed_at' => $booking->presence_confirmed_at]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $role = $request->user()->role;

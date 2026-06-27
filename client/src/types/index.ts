@@ -89,6 +89,7 @@ export interface Booking {
   booked_for?: string
   booked_for_user_id?: number
   is_recipient?: boolean
+  presence_confirmed_at?: string | null
 }
 
 export interface AppNotification {

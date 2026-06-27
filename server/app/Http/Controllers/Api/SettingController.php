@@ -67,6 +67,9 @@ class SettingController extends Controller
             'chart_colors'               => $get('chart_colors', '{}'),
             'anti_ghost_enabled'         => $get('anti_ghost_enabled', 'false') === 'true',
             'anti_ghost_mode'            => $get('anti_ghost_mode', 'kiosk'),
+            'anti_ghost_window_before'   => (int) $get('anti_ghost_window_before', '5'),
+            'anti_ghost_window_after'    => (int) $get('anti_ghost_window_after', '10'),
+            'web_confirm_enabled'        => $get('web_confirm_enabled', 'false') === 'true',
         ]);
     }
 
@@ -92,8 +95,11 @@ class SettingController extends Controller
             'chart_peak_hour_from'      => 'sometimes|integer|min:0|max:23',
             'chart_peak_hour_to'        => 'sometimes|integer|min:0|max:23',
             'chart_colors'              => 'sometimes|string',
-            'anti_ghost_enabled'        => 'sometimes|boolean',
-            'anti_ghost_mode'           => 'sometimes|in:kiosk,sensor',
+            'anti_ghost_enabled'          => 'sometimes|boolean',
+            'anti_ghost_mode'            => 'sometimes|in:kiosk,sensor',
+            'anti_ghost_window_before'   => 'sometimes|integer|min:0|max:20',
+            'anti_ghost_window_after'    => 'sometimes|integer|min:0|max:20',
+            'web_confirm_enabled'        => 'sometimes|boolean',
         ]);
 
         $changes = [];

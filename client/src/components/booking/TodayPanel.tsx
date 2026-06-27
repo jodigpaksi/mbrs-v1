@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { getMyBookings } from '../../api/bookings'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getMyBookings, confirmPresenceWeb } from '../../api/bookings'
+import { getGeneralSettings } from '../../api/settings'
 import type { Booking } from '../../types'
 
 function parseLocal(s: string): Date {
@@ -16,9 +17,11 @@ function fmtTime(s: string): string {
 }
 
 export default function TodayPanel() {
+  const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [visible, setVisible] = useState(false)
   const [now, setNow] = useState(() => new Date())
+  const [confirming, setConfirming] = useState<number | null>(null)
 
   useEffect(() => {
     function onToggle() { setOpen(o => !o) }
@@ -47,12 +50,31 @@ export default function TodayPanel() {
     staleTime: 30_000,
   })
 
+  const { data: generalSettings } = useQuery({
+    queryKey: ['settings-general'],
+    queryFn: getGeneralSettings,
+    staleTime: 5 * 60_000,
+    enabled: open,
+  })
+  const webConfirmEnabled  = generalSettings?.web_confirm_enabled       ?? false
+  const windowBefore       = generalSettings?.anti_ghost_window_before  ?? 5
+  const windowAfter        = generalSettings?.anti_ghost_window_after   ?? 10
+
   const today = new Date()
   const todayList = (myBookings as Booking[])
     .filter(b => parseLocal(b.start_at).toDateString() === today.toDateString())
     .sort((a, b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
 
   const todayLabel = today.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+
+  async function handleConfirm(b: Booking) {
+    setConfirming(b.id)
+    try {
+      await confirmPresenceWeb(b.id)
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+    } catch { /* ignore */ }
+    finally { setConfirming(null) }
+  }
 
   return (
     <>
@@ -108,10 +130,20 @@ export default function TodayPanel() {
             const past   = todayList.filter(b => parseLocal(b.end_at) <= now)
 
             const renderCard = (b: Booking) => {
-              const ongoing = parseLocal(b.start_at) <= now && parseLocal(b.end_at) > now
-              const isPast  = parseLocal(b.end_at) <= now
+              const start       = parseLocal(b.start_at)
+              const end         = parseLocal(b.end_at)
+              const ongoing     = start <= now && end > now
+              const isPast      = end <= now
               const isCancelled = b.status === 'cancelled'
               const isTentative = b.status === 'tentative'
+
+              // Show confirm if: web confirm on, within the configured time window around start,
+              // not yet confirmed, and current user is the confirmation target
+              const windowOpen  = new Date(start.getTime() - windowBefore * 60_000)
+              const windowClose = new Date(start.getTime() + windowAfter  * 60_000)
+              const inWindow        = now >= windowOpen && now <= windowClose
+              const isConfirmTarget = !b.booked_for_user_id || b.is_recipient === true
+              const needsConfirm    = webConfirmEnabled && inWindow && !b.presence_confirmed_at && isConfirmTarget
 
               const cardStyle = ongoing
                 ? { background: 'rgba(173,238,43,0.12)', border: '2px solid #adee2b' }
@@ -156,6 +188,27 @@ export default function TodayPanel() {
                       <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>meeting_room</span>
                       <span className="truncate">{b.room.name}{b.room.building ? ` · ${b.room.building.code ?? b.room.building.name}` : ''}</span>
                     </div>
+                  )}
+
+                  {/* Confirmed presence badge */}
+                  {ongoing && b.presence_confirmed_at && (
+                    <div className="flex items-center gap-1.5 text-[10px] font-black" style={{ color: '#22c55e' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                      Presence confirmed
+                    </div>
+                  )}
+
+                  {/* Confirm presence button */}
+                  {needsConfirm && (
+                    <button
+                      onClick={() => handleConfirm(b)}
+                      disabled={confirming === b.id}
+                      className="w-full mt-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60"
+                      style={{ background: 'rgba(99,102,241,0.12)', border: '1.5px solid rgba(99,102,241,0.35)', color: '#6366f1' }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>how_to_reg</span>
+                      {confirming === b.id ? 'Confirming…' : 'Confirm Presence'}
+                    </button>
                   )}
                 </div>
               )

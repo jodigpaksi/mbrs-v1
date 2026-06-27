@@ -24,6 +24,9 @@ export interface GeneralSettings {
   chart_colors: string
   anti_ghost_enabled: boolean
   anti_ghost_mode: string
+  anti_ghost_window_before: number
+  anti_ghost_window_after: number
+  web_confirm_enabled: boolean
 }
 
 export async function getBookingHours(): Promise<BookingHours> {

@@ -104,6 +104,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bookings/{booking}', [BookingController::class, 'show']);
     Route::patch('/bookings/{booking}', [BookingController::class, 'update']);
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
+    Route::post('/bookings/{booking}/confirm-presence', [BookingController::class, 'confirmPresenceWeb']);
 
     // Building admin: manage rooms within their buildings
     Route::middleware('can:building_admin')->group(function () {
