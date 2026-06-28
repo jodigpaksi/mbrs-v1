@@ -12,21 +12,25 @@ class UserController extends Controller
 {
     public function index()
     {
-        return User::with('department', 'adminBuildings.location')
+        return User::with('department.location', 'adminBuildings.location')
             ->orderBy('role')
             ->orderBy('name')
             ->get()
             ->map(fn ($u) => [
-                'id'              => $u->id,
-                'name'            => $u->name,
-                'email'           => $u->email,
-                'department'      => $u->department?->name ?? '',
-                'department_id'   => $u->department_id,
-                'role'            => $u->role,
-                'ext'             => $u->ext,
-                'avatar'           => $u->avatar,
-                'can_book_special' => (bool) $u->can_book_special,
-                'admin_buildings'  => $u->adminBuildings->map(fn ($b) => [
+                'id'                   => $u->id,
+                'name'                 => $u->name,
+                'email'                => $u->email,
+                'department'           => $u->department?->name ?? '',
+                'department_id'        => $u->department_id,
+                'department_location'  => $u->department?->location
+                    ? ['id' => $u->department->location->id, 'name' => $u->department->location->name, 'code' => $u->department->location->code]
+                    : null,
+                'role'                 => $u->role,
+                'ext'                  => $u->ext,
+                'avatar'               => $u->avatar,
+                'can_book_special'     => (bool) $u->can_book_special,
+                'default_building_id'  => $u->default_building_id,
+                'admin_buildings'      => $u->adminBuildings->map(fn ($b) => [
                     'id'       => $b->id,
                     'name'     => $b->name,
                     'address'  => $b->address,

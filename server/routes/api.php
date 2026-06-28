@@ -10,12 +10,16 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\SensorController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
+
+// Sensor — ESP32 presence ping (no user auth, token validated in controller)
+Route::post('/sensor/ping', [SensorController::class, 'ping']);
 
 // Kiosk — public (no auth required)
 Route::prefix('kiosk')->group(function () {
@@ -119,6 +123,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/rooms/{room}', [RoomController::class, 'destroy']);
         Route::post('/rooms/{room}/photo', [RoomController::class, 'uploadPhoto']);
         Route::delete('/rooms/{room}/photo', [RoomController::class, 'deletePhoto']);
+        Route::post('/rooms/{room}/sensor-code/regenerate', [RoomController::class, 'regenerateSensorCode']);
     });
 
     // Analytics (all authenticated)
@@ -163,7 +168,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/buildings/{building}', [BuildingController::class, 'destroy']);
         Route::get('/users', [UserController::class, 'index']);
         Route::get('/users/export', function () {
-            $rows = \App\Models\User::with('department')->orderBy('role')->orderBy('name')->get();
+            $rows = \App\Models\User::with('department.location', 'defaultBuilding', 'adminBuildings')->orderBy('role')->orderBy('name')->get();
             \App\Models\ActivityLog::record(
                 'data.exported',
                 "Exported {$rows->count()} user records (incl. credentials)",
@@ -172,12 +177,15 @@ Route::middleware('auth:sanctum')->group(function () {
             );
             return response()->json(
                 $rows->map(fn ($u) => [
-                    'name'       => $u->name,
-                    'email'      => $u->email,
-                    'password'   => $u->password,
-                    'department' => $u->department?->name ?? '',
-                    'role'       => $u->role,
-                    'ext'        => $u->ext ?? '',
+                    'name'                => $u->name,
+                    'email'               => $u->email,
+                    'password'            => $u->password,
+                    'department'          => $u->department?->name ?? '',
+                    'department_location' => $u->department?->location?->name ?? '',
+                    'role'                => $u->role,
+                    'ext'                 => $u->ext ?? '',
+                    'default_building'    => $u->defaultBuilding?->name ?? '',
+                    'assigned_buildings'  => $u->adminBuildings->pluck('name')->implode(', '),
                 ])
             );
         });

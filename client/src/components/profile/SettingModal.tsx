@@ -68,7 +68,9 @@ function BuildingDropdown({ buildings, value, onChange, autoLabel }: {
   }, [open])
 
   const selected = value != null ? buildings.find(b => b.id === value) : null
-  const label = selected ? selected.name : autoLabel
+  const label = selected
+    ? [selected.name, selected.code && `(${selected.code})`, selected.location?.name && `— ${selected.location.name}`].filter(Boolean).join(' ')
+    : autoLabel
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -87,19 +89,21 @@ function BuildingDropdown({ buildings, value, onChange, autoLabel }: {
           className="absolute left-0 right-0 rounded-2xl overflow-hidden z-50"
           style={{
             top: 'calc(100% + 6px)',
-            background: 'rgba(255,255,255,0.97)',
+            background: 'var(--ds-bg-surface)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid rgba(0,0,0,0.08)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            border: '1px solid var(--ds-border)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
           }}
         >
           {/* Auto option */}
           <button
             type="button"
             onClick={() => { onChange(null); setOpen(false) }}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-[12px] font-black text-left transition-colors hover:bg-slate-50"
-            style={{ color: value == null ? '#6b8f00' : 'var(--ds-text-2)', background: value == null ? 'rgba(173,238,43,0.08)' : undefined }}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-[12px] font-black text-left transition-colors"
+            style={{ color: value == null ? '#6b8f00' : 'var(--ds-text-2)', background: value == null ? 'rgba(173,238,43,0.08)' : 'transparent' }}
+            onMouseEnter={e => { if (value != null) e.currentTarget.style.background = 'var(--ds-bg-surface-2)' }}
+            onMouseLeave={e => { if (value != null) e.currentTarget.style.background = 'transparent' }}
           >
             <span>{autoLabel}</span>
             {value == null && <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#6b8f00' }}>check</span>}
@@ -112,23 +116,25 @@ function BuildingDropdown({ buildings, value, onChange, autoLabel }: {
                 key={b.id}
                 type="button"
                 onClick={() => { onChange(b.id); setOpen(false) }}
-                className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-slate-50 border-t border-slate-50"
-                style={{ background: active ? 'rgba(173,238,43,0.08)' : undefined }}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors border-t border-[var(--ds-border)]"
+                style={{ background: active ? 'rgba(173,238,43,0.08)' : 'transparent' }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--ds-bg-surface-2)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[12px] font-black truncate" style={{ color: active ? '#6b8f00' : 'var(--ds-text-1)' }}>{b.name}</span>
                     {b.code && (
                       <>
-                        <span className="text-slate-300 text-[10px]">|</span>
-                        <span className="text-[10px] font-black text-slate-400 shrink-0">{b.code}</span>
+                        <span className="text-[10px]" style={{ color: 'var(--ds-text-3)' }}>|</span>
+                        <span className="text-[10px] font-black shrink-0" style={{ color: 'var(--ds-text-3)' }}>{b.code}</span>
                       </>
                     )}
                   </div>
                   {b.location && (
                     <div className="flex items-center gap-1 mt-0.5">
-                      <span className="material-symbols-outlined text-slate-300" style={{ fontSize: 10 }}>location_on</span>
-                      <span className="text-[9px] font-bold text-slate-400 truncate">{b.location.name}</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: 10, color: 'var(--ds-text-3)' }}>location_on</span>
+                      <span className="text-[9px] font-bold truncate" style={{ color: 'var(--ds-text-3)' }}>{b.location.name}</span>
                     </div>
                   )}
                 </div>

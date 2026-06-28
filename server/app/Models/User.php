@@ -63,6 +63,11 @@ class User extends Authenticatable
         return $this->hasMany(Booking::class);
     }
 
+    public function defaultBuilding(): BelongsTo
+    {
+        return $this->belongsTo(Building::class, 'default_building_id');
+    }
+
     public function adminBuildings(): BelongsToMany
     {
         return $this->belongsToMany(Building::class, 'admin_buildings');

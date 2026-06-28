@@ -4,6 +4,8 @@ export interface Department {
   id: number
   name: string
   code?: string
+  location_id?: number | null
+  location?: { id: number; name: string; code?: string }
   users_count?: number
 }
 
@@ -19,6 +21,8 @@ export interface User {
   ext?: string
   on_duty?: boolean
   can_book_special?: boolean
+  default_building_id?: number | null
+  department_location?: { id: number; name: string; code?: string } | null
   admin_buildings?: { id: number; name: string; address?: string; location?: { id: number; name: string } }[]
 }
 
@@ -67,6 +71,7 @@ export interface Room {
   is_active: boolean
   status: 'active' | 'maintenance'
   requires_contact: boolean
+  sensor_code?: string | null
   available_slots?: AvailableSlot[]
   is_fully_free?: boolean
 }

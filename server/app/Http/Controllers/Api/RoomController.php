@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class RoomController extends Controller
 {
@@ -39,7 +40,8 @@ class RoomController extends Controller
 
         // Auto-set sort_order to max within the building + 1
         $maxOrder = Room::where('building_id', $data['building_id'] ?? null)->max('sort_order') ?? 0;
-        $data['sort_order'] = $maxOrder + 1;
+        $data['sort_order']   = $maxOrder + 1;
+        $data['sensor_code']  = Str::random(16);
 
         $room = Room::create($data);
         return response()->json($room->load('building'), 201);
@@ -309,5 +311,12 @@ class RoomController extends Controller
             ->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    public function regenerateSensorCode(Room $room): JsonResponse
+    {
+        $code = Str::random(16);
+        $room->update(['sensor_code' => $code]);
+        return response()->json($room->fresh('building'));
     }
 }

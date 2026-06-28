@@ -70,6 +70,7 @@ class SettingController extends Controller
             'anti_ghost_window_before'   => (int) $get('anti_ghost_window_before', '5'),
             'anti_ghost_window_after'    => (int) $get('anti_ghost_window_after', '10'),
             'web_confirm_enabled'        => $get('web_confirm_enabled', 'false') === 'true',
+            'sensor_api_token'           => $this->getOrCreateSensorToken(),
         ]);
     }
 
@@ -105,6 +106,7 @@ class SettingController extends Controller
             'anti_ghost_window_before'   => 'sometimes|integer|min:0|max:20',
             'anti_ghost_window_after'    => 'sometimes|integer|min:0|max:20',
             'web_confirm_enabled'        => 'sometimes|boolean',
+            'sensor_api_token'           => 'sometimes|string|max:64',
         ]);
 
         $changes = [];
@@ -127,6 +129,16 @@ class SettingController extends Controller
         }
 
         return $this->generalSettings();
+    }
+
+    private function getOrCreateSensorToken(): string
+    {
+        $token = Setting::where('key', 'sensor_api_token')->value('value');
+        if (!$token) {
+            $token = \Illuminate\Support\Str::random(32);
+            Setting::updateOrCreate(['key' => 'sensor_api_token'], ['value' => $token]);
+        }
+        return $token;
     }
 
     private function resolveContacts(string $settingKey, ?int $buildingId): \Illuminate\Support\Collection

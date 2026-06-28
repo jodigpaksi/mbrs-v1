@@ -31,7 +31,9 @@ class AuthController extends Controller
         $user->load('department');
         $token = $user->createToken('auth-token')->plainTextToken;
 
-        ActivityLog::record('user.login', "User {$user->name} signed in", $user);
+        if (in_array($user->role, ['admin', 'superadmin'])) {
+            ActivityLog::record('user.login', "Admin {$user->name} signed in", $user);
+        }
 
         return response()->json([
             'user'  => $this->userPayload($user),
@@ -41,7 +43,11 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+        if (in_array($user->role, ['admin', 'superadmin'])) {
+            ActivityLog::record('user.logout', "Admin {$user->name} signed out", $user);
+        }
+        $user->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out']);
     }
 
@@ -81,7 +87,14 @@ class AuthController extends Controller
         $incoming = array_intersect_key($data['preferences'], array_flip($allowed));
         $user = $request->user();
         $merged = array_merge($user->preferences ?? [], $incoming);
-        $user->update(['preferences' => $merged]);
+
+        $update = ['preferences' => $merged];
+        if (array_key_exists('defaultBuilding', $incoming)) {
+            $buildingId = $incoming['defaultBuilding'];
+            $update['default_building_id'] = is_int($buildingId) ? $buildingId : null;
+        }
+
+        $user->update($update);
 
         return response()->json(['preferences' => $merged]);
     }

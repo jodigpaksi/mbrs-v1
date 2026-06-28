@@ -20,6 +20,7 @@ class Room extends Model
         'is_active',
         'status',
         'requires_contact',
+        'sensor_code',
     ];
 
     protected function casts(): array

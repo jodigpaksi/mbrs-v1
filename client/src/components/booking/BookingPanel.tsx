@@ -922,7 +922,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] transition-colors text-[10px] font-black uppercase text-[var(--ds-text-2)]"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
-                Pilih ruangan lain
+                Choose another room
               </button>
             </div>
           )}

@@ -76,6 +76,11 @@ export async function deleteRoomPhoto(roomId: number, url: string): Promise<{ ph
   return res.data
 }
 
+export async function regenerateSensorCode(roomId: number): Promise<import('../types').Room> {
+  const res = await api.post(`/rooms/${roomId}/sensor-code/regenerate`)
+  return res.data
+}
+
 export async function getReceptionists() {
   const res = await api.get('/users/receptionists')
   return res.data as { id: number; name: string; department: string; ext: string; email: string; avatar?: string }[]

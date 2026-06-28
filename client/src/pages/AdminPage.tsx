@@ -11,7 +11,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { mockBookings, mockRooms, mockUsers } from '../data/mockData'
 import type { Building, Room, Location, User, Department } from '../types/index'
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '../api/buildings'
-import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms, uploadRoomPhoto, deleteRoomPhoto } from '../api/rooms'
+import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms, uploadRoomPhoto, deleteRoomPhoto, regenerateSensorCode } from '../api/rooms'
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
@@ -29,7 +29,7 @@ import ActivityLogTab from '../components/admin/ActivityLogTab'
 import { getDisputes, resolveDispute } from '../api/bookings'
 import type { Booking } from '../types/index'
 
-type Tab = 'overview' | 'users' | 'buildings' | 'settings' | 'archive' | 'kiosk' | 'activity' | 'disputes'
+type Tab = 'overview' | 'users' | 'buildings' | 'settings' | 'archive' | 'kiosk' | 'sensor' | 'activity' | 'disputes'
 
 function ModalPortal({ children }: { children: ReactNode }) {
   return <>{createPortal(children, document.body)}</>
@@ -92,7 +92,7 @@ function BuildingModal({
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 space-y-1">
             <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Gedung Utama"
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Main Building"
               className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="space-y-1">
@@ -117,7 +117,7 @@ function BuildingModal({
           </div>
           <div className="col-span-2 space-y-1">
             <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Address</label>
-            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. Jl. Sudirman No. 1"
+            <input value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 123 Main Street"
               className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="col-span-2 space-y-1">
@@ -147,22 +147,204 @@ function BuildingModal({
 
 // ── Room form modal (within a building) ─────────────────────────────────────
 const PRESET_FACILITIES = [
-  { name: 'TV / Monitor',      icon: 'tv' },
-  { name: 'Projector',         icon: 'present_to_all' },
-  { name: 'Video Conference',  icon: 'video_call' },
-  { name: 'Whiteboard',        icon: 'edit_square' },
-  { name: 'Microphone',        icon: 'mic' },
-  { name: 'Speaker',           icon: 'speaker' },
-  { name: 'HDMI Cable',        icon: 'cable' },
-  { name: 'WiFi',              icon: 'wifi' },
-  { name: 'Air Conditioner',   icon: 'ac_unit' },
-  { name: 'Phone / Intercom',  icon: 'phone' },
-  { name: 'Laptop',            icon: 'laptop' },
-  { name: 'Printer',           icon: 'print' },
-  { name: 'Webcam',            icon: 'camera' },
-  { name: 'Power Strip',       icon: 'electrical_services' },
-  { name: 'Smart Display',     icon: 'smart_display' },
+  // AV / Display
+  { name: 'TV / Monitor',        icon: 'tv' },
+  { name: 'Projector',           icon: 'present_to_all' },
+  { name: 'Smart Display',       icon: 'smart_display' },
+  { name: 'Video Conference',    icon: 'video_call' },
+  { name: 'Webcam',              icon: 'camera_alt' },
+  { name: 'Document Camera',     icon: 'document_scanner' },
+  { name: 'Laser Pointer',       icon: 'highlight' },
+  // Audio
+  { name: 'Microphone',          icon: 'mic' },
+  { name: 'Speaker',             icon: 'speaker' },
+  { name: 'Headset',             icon: 'headset' },
+  { name: 'Speakerphone',        icon: 'record_voice_over' },
+  // Board / Writing
+  { name: 'Whiteboard',          icon: 'edit_square' },
+  { name: 'Flip Chart / Easel',  icon: 'draw' },
+  // Connectivity
+  { name: 'WiFi',                icon: 'wifi' },
+  { name: 'HDMI Cable',          icon: 'cable' },
+  { name: 'DP Cable',            icon: 'cable' },
+  { name: 'USB Hub',             icon: 'usb' },
+  { name: 'Adapter Kit',         icon: 'settings_input_component' },
+  { name: 'Power Strip',         icon: 'electrical_services' },
+  { name: 'Extension Cord',      icon: 'extension' },
+  // Devices
+  { name: 'Laptop',              icon: 'laptop' },
+  { name: 'Desktop PC',          icon: 'desktop_windows' },
+  { name: 'Tablet',              icon: 'tablet' },
+  // Office
+  { name: 'Printer',             icon: 'print' },
+  { name: 'Scanner',             icon: 'scanner' },
+  { name: 'Phone / Intercom',    icon: 'phone' },
+  // Climate
+  { name: 'Air Conditioner',     icon: 'ac_unit' },
+  { name: 'Ceiling Fan',         icon: 'mode_fan' },
+  { name: 'Air Purifier',        icon: 'air' },
+  // Food & Beverage
+  { name: 'Coffee Machine',      icon: 'coffee_maker' },
+  { name: 'Water Dispenser',     icon: 'water_drop' },
+  { name: 'Mini Refrigerator',   icon: 'kitchen' },
+  { name: 'Snack Station',       icon: 'restaurant' },
+  // Room
+  { name: 'Standing Desk',       icon: 'desk' },
+  { name: 'Locker / Storage',    icon: 'inventory_2' },
+  // Safety
+  { name: 'First Aid Kit',       icon: 'medical_services' },
+  { name: 'Fire Extinguisher',   icon: 'fire_extinguisher' },
+  // Accessibility
+  { name: 'Accessible Seating',  icon: 'accessible' },
 ]
+
+const ICON_CATEGORIES: Record<string, string[]> = {
+  'AV / Display': [
+    'tv', 'desktop_windows', 'laptop', 'laptop_chromebook', 'tablet', 'smartphone',
+    'smart_display', 'present_to_all', 'cast', 'screen_share', 'videocam',
+    'video_call', 'camera_alt', 'photo_camera', 'document_scanner',
+    'slideshow', 'movie', 'live_tv', 'highlight', 'airplay',
+  ],
+  'Audio': [
+    'mic', 'mic_none', 'speaker', 'speaker_group', 'volume_up',
+    'headset', 'headphones', 'earbuds', 'record_voice_over',
+    'surround_sound', 'hearing', 'graphic_eq', 'equalizer', 'music_note',
+  ],
+  'Connectivity': [
+    'wifi', 'wifi_off', 'bluetooth', 'bluetooth_connected',
+    'usb', 'cable', 'electrical_services', 'outlet', 'extension',
+    'lan', 'router', 'hub', 'device_hub', 'settings_input_component',
+    'settings_input_hdmi', 'cast_connected', 'nfc', 'signal_wifi_4_bar',
+  ],
+  'Office': [
+    'print', 'scanner', 'fax', 'edit', 'edit_square', 'draw',
+    'brush', 'format_paint', 'email', 'mail', 'description',
+    'article', 'inventory_2', 'folder', 'cloud', 'calculate',
+    'sticky_note_2', 'note', 'bookmark', 'label', 'content_copy',
+  ],
+  'Room / Furniture': [
+    'meeting_room', 'chair', 'desk', 'table_restaurant', 'weekend',
+    'door_open', 'window', 'king_bed', 'hotel', 'corporate_fare',
+    'apartment', 'home', 'local_parking', 'stairs', 'elevator',
+    'accessible', 'balcony', 'deck',
+  ],
+  'Climate': [
+    'ac_unit', 'thermostat', 'device_thermostat', 'air', 'mode_fan',
+    'ceiling_fan', 'humidity_high', 'water_drop', 'wb_sunny', 'wb_cloudy',
+    'wind_power',
+  ],
+  'Food / Beverage': [
+    'coffee', 'coffee_maker', 'local_cafe', 'restaurant', 'dining',
+    'kitchen', 'microwave', 'water_full', 'local_bar',
+    'emoji_food_beverage', 'lunch_dining', 'fastfood', 'cake',
+    'set_meal', 'bakery_dining', 'local_drink',
+  ],
+  'Safety': [
+    'lock', 'lock_open', 'security', 'fire_extinguisher',
+    'emergency', 'medical_services', 'health_and_safety', 'shield',
+    'gpp_good', 'verified_user', 'local_hospital', 'medication',
+  ],
+  'Tools & Misc': [
+    'build', 'handyman', 'construction', 'hardware', 'plumbing',
+    'cleaning_services', 'recycling', 'star', 'favorite', 'flag',
+    'notifications', 'alarm', 'schedule', 'timer', 'hourglass_empty',
+    'event', 'calendar_today', 'groups', 'people', 'person',
+    'local_florist', 'spa', 'fitness_center', 'sports', 'devices',
+    'phone', 'watch', 'key', 'badge',
+  ],
+}
+
+function IconPickerModal({ current, onSelect, onClose }: {
+  current: string
+  onSelect: (icon: string) => void
+  onClose: () => void
+}) {
+  const [search, setSearch]   = useState('')
+  const [cat, setCat]         = useState('All')
+  const allIcons               = Object.values(ICON_CATEGORIES).flat()
+  const cats                   = ['All', ...Object.keys(ICON_CATEGORIES)]
+  const baseIcons              = cat === 'All' ? allIcons : (ICON_CATEGORIES[cat] ?? [])
+  const query                  = search.toLowerCase().trim()
+  const filtered               = query
+    ? allIcons.filter(i => i.replace(/_/g, ' ').includes(query))
+    : baseIcons
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+        onClick={onClose}>
+        <div className="bg-[var(--ds-bg-surface)] rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden"
+          style={{ maxHeight: '80vh' }}
+          onClick={e => e.stopPropagation()}>
+
+          {/* Header */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--ds-border)] shrink-0">
+            <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 18 }}>emoji_symbols</span>
+            <span className="flex-1 text-[11px] font-black uppercase tracking-widest text-[var(--ds-text-1)]">Choose Icon</span>
+            <button onClick={onClose} className="size-8 flex items-center justify-center rounded-xl hover:bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] transition-colors">
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="px-5 pt-3 pb-2 shrink-0">
+            <div className="relative">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 16 }}>search</span>
+              <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search icons..."
+                className="w-full pl-9 pr-4 py-2.5 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] text-[var(--ds-text-1)]" />
+            </div>
+          </div>
+
+          {/* Category tabs */}
+          {!query && (
+            <div className="flex gap-1.5 px-5 pb-3 overflow-x-auto shrink-0" style={{ scrollbarWidth: 'none' }}>
+              {cats.map(c => (
+                <button key={c} onClick={() => setCat(c)}
+                  className={`shrink-0 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wide transition-all
+                    ${cat === c ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-surface-2)]'}`}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Icon grid */}
+          <div className="overflow-y-auto flex-1 px-5 pb-5 pt-1">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-[var(--ds-text-4)]">
+                <span className="material-symbols-outlined mb-2" style={{ fontSize: 32 }}>search_off</span>
+                <p className="text-[11px] font-bold">No icons found</p>
+              </div>
+            ) : (
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(68px, 1fr))' }}>
+                {filtered.map(icon => {
+                  const active = icon === current
+                  return (
+                    <button key={icon} onClick={() => { onSelect(icon); onClose() }}
+                      title={icon.replace(/_/g, ' ')}
+                      className={`flex flex-col items-center gap-1.5 px-1 py-3 rounded-xl transition-all
+                        ${active
+                          ? 'ring-2 ring-[#adee2b]'
+                          : 'hover:bg-[var(--ds-bg-raised)]'}`}
+                      style={{ background: active ? 'rgba(173,238,43,0.12)' : undefined }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 24, color: active ? '#4d7c00' : 'var(--ds-text-1)' }}>{icon}</span>
+                      <span className="text-[7.5px] font-bold text-[var(--ds-text-3)] text-center leading-tight w-full truncate px-1"
+                        style={{ fontVariantLigatures: 'none' }}>
+                        {icon.replace(/_/g, ' ')}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  )
+}
 
 function RoomModal({
   buildingId, initial, onSave, onClose,
@@ -201,6 +383,7 @@ function RoomModal({
   const [showPresets, setShowPresets]       = useState(false)
   const [customName, setCustomName]         = useState('')
   const [customIcon, setCustomIcon]         = useState('devices')
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
   const [savingFacilities, setSavingFacilities] = useState(false)
 
   async function handleSave() {
@@ -540,11 +723,12 @@ function RoomModal({
                         ${showPresets ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]'}`}>
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>bolt</span>Presets
                     </button>
-                    <div className="relative shrink-0">
-                      <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)] pointer-events-none" style={{ fontSize: 15 }}>{customIcon || 'devices'}</span>
-                      <input value={customIcon} onChange={e => setCustomIcon(e.target.value)} placeholder="icon"
-                        className="w-28 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl pl-8 pr-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
-                    </div>
+                    <button onClick={() => setIconPickerOpen(true)}
+                      className="flex items-center gap-2 px-3 py-2.5 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl hover:border-[#adee2b] transition-all shrink-0 group">
+                      <span className="material-symbols-outlined text-[var(--ds-text-1)]" style={{ fontSize: 18 }}>{customIcon || 'devices'}</span>
+                      <span className="text-[9px] font-bold text-[var(--ds-text-3)] uppercase group-hover:text-[var(--ds-text-1)] transition-colors">Icon</span>
+                      <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 13 }}>expand_more</span>
+                    </button>
                     <input value={customName} onChange={e => setCustomName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCustom()}
                       placeholder="Facility / asset name..."
                       className="flex-1 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
@@ -553,6 +737,9 @@ function RoomModal({
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>add</span>Add
                     </button>
                   </div>
+                  {iconPickerOpen && (
+                    <IconPickerModal current={customIcon} onSelect={setCustomIcon} onClose={() => setIconPickerOpen(false)} />
+                  )}
                 </div>
               )}
             </div>
@@ -575,20 +762,24 @@ function RoomModal({
 }
 
 // ── Drag & Drop Room List ─────────────────────────────────────────────────────
-function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusChange, onSpecialChange }: {
+function RoomList({ rooms, buildingId, sensorMode, onEdit, onDelete, onReordered, onStatusChange, onSpecialChange, onSensorCodeChange }: {
   rooms: Room[]
   buildingId: number
+  sensorMode: boolean
   onEdit: (r: Room) => void
   onDelete: (r: Room) => void
   onReordered: (rooms: Room[]) => void
   onStatusChange: (roomId: number, status: 'active' | 'maintenance') => void
   onSpecialChange: (roomId: number, special: boolean) => void
+  onSensorCodeChange: (roomId: number, code: string) => void
 }) {
+  const { addInfoToast } = useCancelToast()
   const dragIdx = useRef<number | null>(null)
   const [overIdx, setOverIdx] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [togglingStatus, setTogglingStatus] = useState<number | null>(null)
   const [togglingSpecial, setTogglingSpecial] = useState<number | null>(null)
+  const [regeneratingSensor, setRegeneratingSensor] = useState<number | null>(null)
 
   async function handleToggleStatus(r: Room) {
     const next = r.status === 'active' ? 'maintenance' : 'active'
@@ -602,6 +793,15 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
     setTogglingSpecial(r.id)
     try { await updateRoomSpecial(r.id, next); onSpecialChange(r.id, next) }
     finally { setTogglingSpecial(null) }
+  }
+
+  async function handleRegenerateSensorCode(r: Room) {
+    setRegeneratingSensor(r.id)
+    try {
+      const updated = await regenerateSensorCode(r.id)
+      if (updated.sensor_code) onSensorCodeChange(r.id, updated.sensor_code)
+      addInfoToast('Sensor code regenerated')
+    } finally { setRegeneratingSensor(null) }
   }
 
   function onDragStart(i: number) { dragIdx.current = i }
@@ -636,64 +836,92 @@ function RoomList({ rooms, buildingId, onEdit, onDelete, onReordered, onStatusCh
           onDragOver={e => onDragOver(e, i)}
           onDragLeave={onDragLeave}
           onDrop={e => onDrop(e, i)}
-          className={`flex items-center gap-3 bg-[var(--ds-bg-surface)] rounded-xl border px-3 py-2.5 transition-all select-none
+          className={`flex flex-col gap-0 bg-[var(--ds-bg-surface)] rounded-xl border transition-all select-none
             ${overIdx === i ? 'border-[#adee2b] bg-[#f7fee7] dark:bg-[#1a2a0a] scale-[1.01]' : 'border-[var(--ds-border)]'}`}
         >
-          {/* Drag handle */}
-          <span className="material-symbols-outlined text-[var(--ds-text-3)] cursor-grab active:cursor-grabbing shrink-0" style={{ fontSize: 20 }}>drag_indicator</span>
-          {/* Order number */}
-          <span className="text-xs font-black text-[var(--ds-text-3)] w-5 text-center shrink-0">{i + 1}</span>
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-[var(--ds-text-1)] leading-tight truncate">{r.name}</p>
-            <p className="text-[11px] text-[var(--ds-text-3)] font-bold mt-0.5">
-              <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{r.capacity} pax</span>
-              {' · '}
-              <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>layers</span>{r.floor}</span>
-            </p>
-          </div>
-          {/* Status toggles */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          {/* Main row */}
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <span className="material-symbols-outlined text-[var(--ds-text-3)] cursor-grab active:cursor-grabbing shrink-0" style={{ fontSize: 20 }}>drag_indicator</span>
+            <span className="text-xs font-black text-[var(--ds-text-3)] w-5 text-center shrink-0">{i + 1}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-[var(--ds-text-1)] leading-tight truncate">{r.name}</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold mt-0.5">
+                <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>groups</span>{r.capacity} pax</span>
+                {' · '}
+                <span className="inline-flex items-center gap-0.5"><span className="material-symbols-outlined" style={{ fontSize: 11 }}>layers</span>{r.floor}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => handleToggleStatus(r)}
+                disabled={togglingStatus === r.id}
+                title={r.status === 'active' ? 'Set to Maintenance' : 'Set to Active'}
+                className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
+                  ${r.status === 'maintenance'
+                    ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                    : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}>
+                  {r.status === 'maintenance' ? 'build' : 'check_circle'}
+                </span>
+                {togglingStatus === r.id ? '...' : r.status === 'maintenance' ? 'Maint.' : 'Active'}
+              </button>
+              <button
+                onClick={() => handleToggleSpecial(r)}
+                disabled={togglingSpecial === r.id}
+                title={r.requires_contact ? 'Remove special access requirement' : 'Set as special room'}
+                className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
+                  ${r.requires_contact
+                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30'
+                    : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] border-[var(--ds-border)] hover:bg-indigo-500/10 hover:text-indigo-400 hover:border-indigo-500/30'}`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: r.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                {togglingSpecial === r.id ? '...' : r.requires_contact ? 'Special' : 'Regular'}
+              </button>
+            </div>
             <button
-              onClick={() => handleToggleStatus(r)}
-              disabled={togglingStatus === r.id}
-              title={r.status === 'active' ? 'Set to Maintenance' : 'Set to Active'}
-              className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
-                ${r.status === 'maintenance'
-                  ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
-                  : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}
+              onClick={() => onEdit(r)}
+              className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-black hover:text-[#adee2b] transition-all shrink-0"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}>
-                {r.status === 'maintenance' ? 'build' : 'check_circle'}
-              </span>
-              {togglingStatus === r.id ? '...' : r.status === 'maintenance' ? 'Maint.' : 'Active'}
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
             </button>
             <button
-              onClick={() => handleToggleSpecial(r)}
-              disabled={togglingSpecial === r.id}
-              title={r.requires_contact ? 'Remove special access requirement' : 'Set as special room'}
-              className={`flex items-center gap-1 text-[9px] font-black px-2 py-1 rounded-full border transition-all disabled:opacity-50
-                ${r.requires_contact
-                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30'
-                  : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] border-[var(--ds-border)] hover:bg-indigo-500/10 hover:text-indigo-400 hover:border-indigo-500/30'}`}
+              onClick={() => onDelete(r)}
+              className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-red-500 hover:text-white transition-all shrink-0"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: r.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>
-              {togglingSpecial === r.id ? '...' : r.requires_contact ? 'Special' : 'Regular'}
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
             </button>
           </div>
-          {/* Actions */}
-          <button
-            onClick={() => onEdit(r)}
-            className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-black hover:text-[#adee2b] transition-all shrink-0"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>edit</span>
-          </button>
-          <button
-            onClick={() => onDelete(r)}
-            className="size-8 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-red-500 hover:text-white transition-all shrink-0"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
-          </button>
+
+          {/* Sensor code row — visible only when sensor mode is enabled */}
+          {sensorMode && (
+            <div className="flex items-center gap-2 px-3 pb-2.5 pt-0">
+              <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13, color: 'var(--ds-text-4)' }}>sensors</span>
+              <span className="text-[9px] font-black uppercase tracking-wider shrink-0" style={{ color: 'var(--ds-text-4)' }}>Sensor Code</span>
+              <code className="flex-1 min-w-0 text-[10px] font-mono truncate" style={{ color: 'var(--ds-text-3)' }}>{r.sensor_code ?? '—'}</code>
+              <button
+                type="button"
+                onClick={() => r.sensor_code && navigator.clipboard.writeText(r.sensor_code).then(() => addInfoToast('Sensor code copied'))}
+                className="shrink-0 size-5 flex items-center justify-center rounded transition-colors hover:bg-[var(--ds-bg-raised)]"
+                title="Copy sensor code"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 12, color: 'var(--ds-text-3)' }}>content_copy</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRegenerateSensorCode(r)}
+                disabled={regeneratingSensor === r.id}
+                className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black disabled:opacity-50 transition-colors"
+                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}
+                title="Regenerate — must reflash ESP32"
+              >
+                {regeneratingSensor === r.id
+                  ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 10 }}>progress_activity</span>
+                  : <span className="material-symbols-outlined" style={{ fontSize: 10 }}>refresh</span>}
+                Regen
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -910,6 +1138,8 @@ function BuildingsTab() {
   const { data: buildings = [], isLoading } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings })
   const { data: allRooms = [] } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ['locations'], queryFn: getLocations })
+  const { data: bldgGeneral } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 60_000 })
+  const sensorMode = (bldgGeneral?.anti_ghost_mode ?? '').split(',').includes('sensor')
 
   const [expanded, setExpanded] = useState<number | null>(null)
   const [buildingModal, setBuildingModal] = useState<{ open: boolean; initial?: Partial<Building> }>({ open: false })
@@ -1088,11 +1318,13 @@ function BuildingsTab() {
                     <RoomList
                       rooms={rooms}
                       buildingId={b.id}
+                      sensorMode={sensorMode}
                       onEdit={r => setRoomModal({ open: true, buildingId: b.id, initial: r })}
                       onDelete={r => { setDeleteRoomTarget(r); setDeleteRoomErr(''); setConfirmRoomInput('') }}
                       onReordered={reordered => handleRoomReorder(b.id, reordered)}
                       onStatusChange={(roomId, status) => setLocalRooms(prev => (prev ?? allRooms as Room[]).map(r => r.id === roomId ? { ...r, status } : r))}
                       onSpecialChange={(roomId, special) => setLocalRooms(prev => (prev ?? allRooms as Room[]).map(r => r.id === roomId ? { ...r, requires_contact: special } : r))}
+                      onSensorCodeChange={(roomId, code) => setLocalRooms(prev => (prev ?? allRooms as Room[]).map(r => r.id === roomId ? { ...r, sensor_code: code } : r))}
                     />
                   )}
                 </div>
@@ -1301,6 +1533,105 @@ const ROLE_META: Record<UserRole, { label: string; bg: string; text: string; des
 }
 const ALL_ROLES: UserRole[] = ['admin', 'building_admin', 'receptionist', 'user']
 
+// ── Default building dropdown (user role only) ────────────────────────────────
+function DefaultBuildingSelect({ buildings, value, onChange }: {
+  buildings: Building[]
+  value: number | null
+  onChange: (v: number | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = value != null ? buildings.find(b => b.id === value) : null
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  function label(b: Building) {
+    let s = b.name
+    if (b.code) s += ` (${b.code})`
+    if (b.location?.name) s += ` — ${b.location.name}`
+    return s
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">Default Building</p>
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-sm font-bold transition-all text-left"
+          style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: selected ? 'var(--ds-text-1)' : 'var(--ds-text-3)' }}
+        >
+          <span className="truncate">{selected ? label(selected) : '— None (auto) —'}</span>
+          <span className="material-symbols-outlined shrink-0 ml-2 transition-transform" style={{ fontSize: 16, color: 'var(--ds-text-3)', transform: open ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+        </button>
+
+        {open && (
+          <div
+            className="absolute left-0 right-0 z-[200] rounded-xl overflow-hidden mt-1"
+            style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+          >
+            {/* None option */}
+            <button
+              type="button"
+              onClick={() => { onChange(null); setOpen(false) }}
+              className="w-full px-3.5 py-2.5 text-left text-[11px] font-bold transition-colors flex items-center justify-between"
+              style={{ color: value == null ? '#6b8f00' : 'var(--ds-text-3)', background: value == null ? 'rgba(173,238,43,0.08)' : 'transparent' }}
+              onMouseEnter={e => { if (value != null) e.currentTarget.style.background = 'var(--ds-bg-surface-2)' }}
+              onMouseLeave={e => { if (value != null) e.currentTarget.style.background = 'transparent' }}
+            >
+              <span>— None (auto) —</span>
+              {value == null && <span className="material-symbols-outlined" style={{ fontSize: 13, color: '#6b8f00' }}>check</span>}
+            </button>
+
+            {buildings.map((b, i) => {
+              const active = b.id === value
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => { onChange(b.id); setOpen(false) }}
+                  className="w-full px-3.5 py-2.5 text-left transition-colors flex items-center justify-between gap-2"
+                  style={{
+                    background: active ? 'rgba(173,238,43,0.08)' : 'transparent',
+                    borderTop: i === 0 ? '1px solid var(--ds-border)' : '1px solid var(--ds-border-sub)',
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--ds-bg-surface-2)' }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = active ? 'rgba(173,238,43,0.08)' : 'transparent' }}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[12px] font-black truncate" style={{ color: active ? '#6b8f00' : 'var(--ds-text-1)' }}>{b.name}</span>
+                      {b.code && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md shrink-0" style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-3)' }}>{b.code}</span>
+                      )}
+                    </div>
+                    {b.location?.name && (
+                      <p className="text-[10px] font-medium mt-0.5 flex items-center gap-1" style={{ color: 'var(--ds-text-3)' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 10 }}>location_on</span>
+                        {b.location.name}
+                      </p>
+                    )}
+                  </div>
+                  {active && <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14, color: '#6b8f00' }}>check</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+      <p className="text-[9px] text-[var(--ds-text-3)] font-medium px-1">User can override this in their own Settings.</p>
+    </div>
+  )
+}
+
 // ── Shared building picker (used in Add + Edit modals) ───────────────────────
 function BuildingPicker({ role, bldIds, buildings, locations, onToggle, defaultBuildingId, onSetDefault }: {
   role: UserRole
@@ -1316,7 +1647,7 @@ function BuildingPicker({ role, bldIds, buildings, locations, onToggle, defaultB
   const locGroups = locations
     .map(loc => ({ loc, buildings: withLocation.filter(b => b.location_id === loc.id) }))
     .filter(g => g.buildings.length > 0)
-  const showDefault = role === 'user' && !!onSetDefault
+  const showDefault = !!onSetDefault
 
   function Row({ b }: { b: Building }) {
     const checked    = bldIds.includes(b.id)
@@ -1338,7 +1669,7 @@ function BuildingPicker({ role, bldIds, buildings, locations, onToggle, defaultB
           <button onClick={() => onSetDefault!(isDefault ? null : b.id)}
             className="shrink-0 mr-2 flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wide transition-all"
             style={isDefault
-              ? { background: 'rgba(173,238,43,0.15)', color: '#adee2b', border: '1px solid rgba(173,238,43,0.3)' }
+              ? { background: 'rgba(173,238,43,0.18)', color: '#4d7c00', border: '1px solid rgba(100,160,0,0.35)' }
               : { background: 'var(--ds-bg-raised)', color: 'var(--ds-text-3)', border: '1px solid var(--ds-border)' }}>
             <span className="material-symbols-outlined" style={{ fontSize: 10 }}>{isDefault ? 'home' : 'home'}</span>
             {isDefault ? 'Default' : 'Set Default'}
@@ -1614,13 +1945,14 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
           </div>
 
           {/* ── Section: Building ── */}
-          {role !== 'admin' && (
+          {role === 'user' && (
+            <DefaultBuildingSelect buildings={buildings} value={defaultBldId} onChange={setDefaultBldId} />
+          )}
+          {(role === 'building_admin' || role === 'receptionist') && (
             <div className="space-y-3">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">
-                {role === 'user' ? 'Home Building' : 'Buildings'}
-              </p>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Buildings</p>
               <BuildingPicker role={role} bldIds={bldIds} buildings={buildings} locations={locations} onToggle={toggleBuilding}
-                defaultBuildingId={defaultBldId} onSetDefault={role === 'user' ? setDefaultBldId : undefined} />
+                defaultBuildingId={defaultBldId} onSetDefault={setDefaultBldId} />
             </div>
           )}
 
@@ -1651,7 +1983,7 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
 type ImportTab = 'excel' | 'csv' | 'sql'
 
 const IMPORT_COLS = ['name', 'email', 'password', 'department', 'role', 'ext']
-const EXPORT_COLS = ['name', 'email', 'password', 'department', 'role', 'ext']
+const EXPORT_COLS = ['name', 'email', 'password', 'department', 'department_location', 'role', 'ext', 'default_building', 'assigned_buildings']
 
 type ImportRow = { name: string; email: string; password: string; department?: string; role?: string; ext?: string }
 
@@ -1691,7 +2023,9 @@ function ImportExportModal({ users, onImport, onClose }: {
     const data = await fetchExportData()
     const ws = XLSX.utils.json_to_sheet(data.map(u => ({
       name: u.name, email: u.email, password: u.password,
-      department: u.department, role: u.role, ext: u.ext,
+      department: u.department, department_location: u.department_location,
+      role: u.role, ext: u.ext,
+      default_building: u.default_building, assigned_buildings: u.assigned_buildings,
     })))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Users')
@@ -1701,11 +2035,11 @@ function ImportExportModal({ users, onImport, onClose }: {
   async function doExportSQL() {
     const data = await fetchExportData()
     const rows = data.map(u => {
-      const vals = [u.name, u.email, u.password, u.department, u.role, u.ext]
+      const vals = [u.name, u.email, u.password, u.department, u.department_location, u.role, u.ext, u.default_building, u.assigned_buildings]
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Password diekspor sebagai bcrypt hash. Saat diimpor kembali akan dikenali otomatis.\nINSERT INTO users (name, email, password, department, role, ext) VALUES\n${rows};`
+    const sql = `-- MBRS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
     download('users_export.sql', sql, 'text/plain')
   }
 
@@ -1821,39 +2155,57 @@ function ImportExportModal({ users, onImport, onClose }: {
       <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden admin-modal-in" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-[var(--ds-border)]">
+        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-[var(--ds-border)] shrink-0">
           <div>
-            <h3 className="text-lg font-black uppercase tracking-tight text-[var(--ds-text-1)]">Import / Export Users</h3>
-            <p className="text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">{users.length} users currently in system</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Admin · Users</p>
+            <h3 className="text-xl font-black uppercase tracking-tight text-[var(--ds-text-1)] mt-0.5">Import / Export</h3>
           </div>
           <button onClick={onClose} className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)]">
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
           </button>
         </div>
 
-        {/* Export strip */}
-        <div className="px-7 py-4 bg-[var(--ds-bg-raised)] border-b border-[var(--ds-border)]">
-          <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">Export Current Users</p>
-          <div className="flex gap-2">
-            <button onClick={doExportExcel} disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-              {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table</span>}Excel
-            </button>
-            <button onClick={doExportCSV} disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors">
-              {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>description</span>}CSV
-            </button>
-            <button onClick={doExportSQL} disabled={exporting}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 text-white text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-50 transition-colors">
-              {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>database</span>}SQL
-            </button>
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+
+        {/* ── EXPORT SECTION ── */}
+        <div className="px-7 pt-5 pb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.12)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#10b981' }}>upload</span>
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#10b981' }}>Export Users</p>
+            <span className="text-[10px] font-bold text-[var(--ds-text-3)]">— {users.length} users</span>
           </div>
-          <p className="text-[9px] text-[var(--ds-text-3)] mt-2">Password diekspor sebagai bcrypt hash — saat diimpor kembali akan dikenali otomatis.</p>
+          <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'rgba(16,185,129,0.04)', borderColor: 'rgba(16,185,129,0.18)' }}>
+            <p className="text-[10px] text-[var(--ds-text-2)] font-medium">Downloads all user records including hashed passwords and default building. Columns: <span className="font-mono text-[var(--ds-text-1)]">name, email, password, department, role, ext, default_building</span></p>
+            <div className="flex gap-2">
+              <button onClick={doExportExcel} disabled={exporting}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table</span>}Excel
+              </button>
+              <button onClick={doExportCSV} disabled={exporting}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>description</span>}CSV
+              </button>
+              <button onClick={doExportSQL} disabled={exporting}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700 text-white text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>database</span>}SQL
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Import section */}
-        <div className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
-          <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Import Users</p>
+        {/* Divider */}
+        <div className="mx-7 border-t border-[var(--ds-border)]" />
+
+        {/* ── IMPORT SECTION ── */}
+        <div className="px-7 pt-4 pb-6 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.12)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#6366f1' }}>download</span>
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#6366f1' }}>Import Users</p>
+          </div>
 
           {/* Format tabs */}
           <div className="flex gap-1 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 w-fit">
@@ -1893,17 +2245,17 @@ function ImportExportModal({ users, onImport, onClose }: {
                       </tr>
                       <tr className="bg-[var(--ds-bg-raised)]">
                         {['Siti Rahayu', 'siti@co.com', 'pass1234', 'HR', 'receptionist', ''].map((v, i) => (
-                          <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(kosong)'}</td>
+                          <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(empty)'}</td>
                         ))}
                       </tr>
                     </tbody>
                   </table>
                 </div>
                 <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
-                  <li>Baris pertama = header (wajib ada, boleh nama kolom apa saja — <em>urutan kolom yang menentukan</em>)</li>
-                  <li>Kolom A–C wajib; D–F opsional</li>
-                  <li>Role: <span className="font-mono bg-slate-200 px-1 rounded">user</span> · <span className="font-mono bg-slate-200 px-1 rounded">admin</span> · <span className="font-mono bg-slate-200 px-1 rounded">receptionist</span> · <span className="font-mono bg-slate-200 px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>)</li>
-                  <li>Password akan di-hash otomatis di server</li>
+                  <li>First row must be a header — column names can be anything, <em>column order determines mapping</em></li>
+                  <li>Columns A–C required; D–F optional</li>
+                  <li>Role: <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">user</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">admin</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">receptionist</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>)</li>
+                  <li>Password is hashed automatically on the server</li>
                 </ul>
                 <button onClick={() => downloadTemplate('xlsx')}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[9px] font-black uppercase hover:bg-emerald-700 transition-colors">
@@ -1921,9 +2273,9 @@ function ImportExportModal({ users, onImport, onClose }: {
                   <p>Siti Rahayu,siti@co.com,pass1234,HR,receptionist,</p>
                 </div>
                 <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
-                  <li>Separator: koma <span className="font-mono bg-slate-200 px-1 rounded">,</span> — jika nilai mengandung koma, bungkus dengan tanda kutip ganda</li>
-                  <li>Baris pertama = header (nama kolom dipakai untuk mapping, bukan urutan)</li>
-                  <li>Kolom <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> wajib</li>
+                  <li>Separator: comma <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">,</span> — wrap values containing commas in double quotes</li>
+                  <li>First row = header (column names used for mapping, order doesn't matter)</li>
+                  <li>Columns <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required</li>
                   <li>Encoding: UTF-8</li>
                 </ul>
                 <button onClick={() => downloadTemplate('csv')}
@@ -1937,17 +2289,17 @@ function ImportExportModal({ users, onImport, onClose }: {
               <>
                 <p className="font-black text-[var(--ds-text-1)]">Format SQL (.sql)</p>
                 <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5">
-                  <p className="text-[var(--ds-text-3)]">-- Urutan kolom wajib: name, email, password, department, role, ext</p>
+                  <p className="text-[var(--ds-text-3)]">-- Column order required: name, email, password, department, role, ext</p>
                   <p>INSERT INTO users (name, email, password, department, role, ext) VALUES</p>
                   <p className="pl-2">('Budi Santoso', 'budi@co.com', 'pass1234', 'IT', 'user', '1001'),</p>
                   <p className="pl-2">('Siti Rahayu', 'siti@co.com', 'pass1234', 'HR', 'receptionist', NULL);</p>
                 </div>
                 <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
-                  <li>Hanya satu blok <span className="font-mono">INSERT INTO ... VALUES (...)</span> yang diproses</li>
-                  <li>Urutan kolom dalam VALUES harus: <span className="font-mono">name, email, password, department, role, ext</span></li>
-                  <li>Gunakan <span className="font-mono">NULL</span> atau string kosong <span className="font-mono">''</span> untuk field opsional</li>
-                  <li>Password bisa plain text (akan di-hash) atau bcrypt hash dari hasil export (dikenali otomatis)</li>
-                  <li>Tidak support multi-statement atau subquery</li>
+                  <li>Only one <span className="font-mono">INSERT INTO ... VALUES (...)</span> block is processed</li>
+                  <li>Column order in VALUES must be: <span className="font-mono">name, email, password, department, role, ext</span></li>
+                  <li>Use <span className="font-mono">NULL</span> or empty string <span className="font-mono">''</span> for optional fields</li>
+                  <li>Password can be plain text (auto-hashed) or a bcrypt hash from an export (recognized automatically)</li>
+                  <li>Multi-statement and subqueries are not supported</li>
                 </ul>
               </>
             )}
@@ -1956,7 +2308,7 @@ function ImportExportModal({ users, onImport, onClose }: {
           {/* File input */}
           {!importResult && (
             <div>
-              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider block mb-2">Pilih File</label>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider block mb-2">Choose File</label>
               <input
                 ref={fileRef}
                 type="file"
@@ -2024,24 +2376,25 @@ function ImportExportModal({ users, onImport, onClose }: {
           {/* Import result */}
           {importResult && (
             <div className="space-y-3">
-              <div className={`rounded-2xl p-4 ${importResult.errors.length === 0 ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
-                <p className={`text-sm font-black ${importResult.errors.length === 0 ? 'text-green-700' : 'text-amber-700'}`}>
-                  {importResult.created} user{importResult.created !== 1 ? 's' : ''} berhasil dibuat
-                  {importResult.errors.length > 0 ? `, ${importResult.errors.length} baris gagal` : ' — semua berhasil!'}
+              <div className={`rounded-2xl p-4 ${importResult.errors.length === 0 ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+                <p className={`text-sm font-black ${importResult.errors.length === 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                  {importResult.created} user{importResult.created !== 1 ? 's' : ''} created successfully
+                  {importResult.errors.length > 0 ? ` — ${importResult.errors.length} row${importResult.errors.length !== 1 ? 's' : ''} failed` : ' — all done!'}
                 </p>
                 {importResult.errors.length > 0 && (
                   <ul className="mt-2 space-y-1">
                     {importResult.errors.map((e, i) => (
-                      <li key={i} className="text-[10px] text-amber-600 font-medium">• {e}</li>
+                      <li key={i} className="text-[10px] text-amber-400 font-medium">• {e}</li>
                     ))}
                   </ul>
                 )}
               </div>
               <button onClick={() => setImportResult(null)}
-                className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Import lagi</button>
+                className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Import more</button>
             </div>
           )}
-        </div>
+        </div>{/* end import section */}
+        </div>{/* end scrollable */}
       </div>
     </div>
     </ModalPortal>
@@ -2049,26 +2402,32 @@ function ImportExportModal({ users, onImport, onClose }: {
 }
 
 // ── Departments Section ──────────────────────────────────────────────────────
-function DepartmentsSection({ departments, qc }: { departments: Department[]; qc: ReturnType<typeof useQueryClient> }) {
-  const [collapsed, setCollapsed] = useState(true)
-  const [addName, setAddName]     = useState('')
-  const [addCode, setAddCode]     = useState('')
-  const [addSaving, setAddSaving] = useState(false)
-  const [addErr, setAddErr]       = useState('')
-  const [editId, setEditId]       = useState<number | null>(null)
-  const [editName, setEditName]   = useState('')
-  const [editCode, setEditCode]   = useState('')
+function DepartmentsSection({ departments, locations, qc }: {
+  departments: Department[]
+  locations: Location[]
+  qc: ReturnType<typeof useQueryClient>
+}) {
+  const [collapsed, setCollapsed]   = useState(true)
+  const [addName, setAddName]       = useState('')
+  const [addCode, setAddCode]       = useState('')
+  const [addLocId, setAddLocId]     = useState<number | null>(null)
+  const [addSaving, setAddSaving]   = useState(false)
+  const [addErr, setAddErr]         = useState('')
+  const [editId, setEditId]         = useState<number | null>(null)
+  const [editName, setEditName]     = useState('')
+  const [editCode, setEditCode]     = useState('')
+  const [editLocId, setEditLocId]   = useState<number | null>(null)
   const [editSaving, setEditSaving] = useState(false)
-  const [editErr, setEditErr]     = useState('')
-  const [delErr, setDelErr]       = useState('')
+  const [editErr, setEditErr]       = useState('')
+  const [delErr, setDelErr]         = useState('')
 
   async function handleAdd() {
     if (!addName.trim()) { setAddErr('Name is required'); return }
     setAddSaving(true); setAddErr('')
     try {
-      await createDepartment({ name: addName.trim(), code: addCode.trim() || undefined })
+      await createDepartment({ name: addName.trim(), code: addCode.trim() || undefined, location_id: addLocId })
       qc.invalidateQueries({ queryKey: ['departments'] })
-      setAddName(''); setAddCode('')
+      setAddName(''); setAddCode(''); setAddLocId(null)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
       setAddErr(msg ?? 'Failed to create department.')
@@ -2076,14 +2435,14 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
   }
 
   function openEdit(d: Department) {
-    setEditId(d.id); setEditName(d.name); setEditCode(d.code ?? ''); setEditErr('')
+    setEditId(d.id); setEditName(d.name); setEditCode(d.code ?? ''); setEditLocId(d.location_id ?? null); setEditErr('')
   }
 
   async function handleEdit() {
     if (!editId || !editName.trim()) return
     setEditSaving(true); setEditErr('')
     try {
-      await updateDepartment(editId, { name: editName.trim(), code: editCode.trim() || null })
+      await updateDepartment(editId, { name: editName.trim(), code: editCode.trim() || null, location_id: editLocId })
       qc.invalidateQueries({ queryKey: ['departments'] })
       setEditId(null)
     } catch (e: unknown) {
@@ -2104,10 +2463,10 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
   }
 
   const inputCls = 'border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]'
+  const selectCls = `${inputCls} cursor-pointer`
 
   return (
     <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
-      {/* Header row */}
       <button onClick={() => setCollapsed(v => !v)}
         className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[var(--ds-bg-raised)] transition-colors text-left">
         <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>corporate_fare</span>
@@ -2130,11 +2489,16 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
               {departments.map(d => (
                 <div key={d.id}>
                   {editId === d.id ? (
-                    <div className="flex items-center gap-2 bg-[var(--ds-bg-raised)] rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2 bg-[var(--ds-bg-raised)] rounded-xl px-3 py-2 flex-wrap">
                       <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Name"
-                        className={`flex-1 ${inputCls}`} />
+                        className={`flex-1 min-w-[120px] ${inputCls}`} />
                       <input value={editCode} onChange={e => setEditCode(e.target.value)} placeholder="Code" style={{ width: 72 }}
                         className={inputCls} />
+                      <select value={editLocId ?? ''} onChange={e => setEditLocId(e.target.value === '' ? null : Number(e.target.value))}
+                        style={{ width: 130 }} className={selectCls}>
+                        <option value="">No location</option>
+                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}{l.code ? ` (${l.code})` : ''}</option>)}
+                      </select>
                       {editErr && <span className="text-[9px] text-red-500 font-bold">{editErr}</span>}
                       <button onClick={handleEdit} disabled={editSaving}
                         className="px-3 py-2 rounded-xl bg-black text-[#adee2b] text-[9px] font-black uppercase disabled:opacity-40">
@@ -2148,6 +2512,12 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
                     <div className="flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-[var(--ds-bg-raised)] group">
                       <span className="flex-1 text-[12px] font-black text-[var(--ds-text-1)]">{d.name}</span>
                       {d.code && <span className="px-2 py-0.5 bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] rounded-lg text-[8px] font-black uppercase">{d.code}</span>}
+                      {d.location && (
+                        <span className="flex items-center gap-1 text-[9px] font-bold text-[var(--ds-text-3)]">
+                          <span className="material-symbols-outlined" style={{ fontSize: 10 }}>location_on</span>
+                          {d.location.name}{d.location.code ? ` (${d.location.code})` : ''}
+                        </span>
+                      )}
                       <span className="text-[9px] text-[var(--ds-text-3)] font-bold">{d.users_count ?? 0} user{(d.users_count ?? 0) !== 1 ? 's' : ''}</span>
                       <button onClick={() => openEdit(d)}
                         className="size-7 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] opacity-0 group-hover:opacity-100 transition-all">
@@ -2165,11 +2535,16 @@ function DepartmentsSection({ departments, qc }: { departments: Department[]; qc
           )}
 
           {/* Add row */}
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
             <input value={addName} onChange={e => setAddName(e.target.value)} placeholder="New department name"
-              className={`flex-1 ${inputCls}`} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+              className={`flex-1 min-w-[140px] ${inputCls}`} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
             <input value={addCode} onChange={e => setAddCode(e.target.value)} placeholder="Code" style={{ width: 80 }}
               className={inputCls} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+            <select value={addLocId ?? ''} onChange={e => setAddLocId(e.target.value === '' ? null : Number(e.target.value))}
+              style={{ width: 130 }} className={selectCls}>
+              <option value="">No location</option>
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}{l.code ? ` (${l.code})` : ''}</option>)}
+            </select>
             {addErr && <span className="text-[9px] text-red-500 font-bold">{addErr}</span>}
             <button onClick={handleAdd} disabled={addSaving}
               className="flex items-center gap-1 px-3 py-2 rounded-xl bg-black text-[#adee2b] text-[9px] font-black uppercase disabled:opacity-40">
@@ -2226,7 +2601,7 @@ function UsersTab() {
     setEditUser(u)
     setRoleValue(u.role)
     setBldIds((u.admin_buildings ?? []).map(b => b.id))
-    setEditDefaultBldId((u as unknown as { default_building_id?: number | null }).default_building_id ?? null)
+    setEditDefaultBldId(u.default_building_id ?? null)
     setEditName(u.name)
     setEditEmail(u.email)
     setEditDeptId(u.department_id ?? null)
@@ -2273,7 +2648,7 @@ function UsersTab() {
     const { building_ids, default_building_id, ...userData } = data
     const user = await createUser(userData)
     qc.invalidateQueries({ queryKey: ['users'] })
-    if (userData.role !== 'admin' && building_ids.length > 0) {
+    if (userData.role !== 'admin' && (building_ids.length > 0 || default_building_id != null)) {
       try { await assignUserBuildings(user.id, building_ids, default_building_id) } catch { /* non-fatal */ }
     }
   }
@@ -2335,7 +2710,7 @@ function UsersTab() {
       </div>
 
       {/* ── Departments section ── */}
-      <DepartmentsSection departments={departments as Department[]} qc={qc} />
+      <DepartmentsSection departments={departments as Department[]} locations={locations as Location[]} qc={qc} />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
@@ -2365,6 +2740,7 @@ function UsersTab() {
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Email</th>
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Department</th>
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-20">Ext</th>
+                          {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Default Building</th>}
                           {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Special Access</th>}
                           <th className="px-2 py-3 w-10"></th>
                           <th className="px-2 py-3 w-10"></th>
@@ -2381,8 +2757,34 @@ function UsersTab() {
                               </div>
                             </td>
                             <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium">{u.email}</td>
-                            <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-2)] font-bold uppercase">{u.department || '—'}</td>
+                            <td className="px-5 py-3.5">
+                              {u.department ? (
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-[12px] font-black text-[var(--ds-text-1)] uppercase">{u.department}</span>
+                                  {u.department_location && (
+                                    <span className="text-[10px] font-bold text-[var(--ds-text-3)]">
+                                      | {u.department_location.code ?? u.department_location.name}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : <span className="text-[var(--ds-text-4)]">—</span>}
+                            </td>
                             <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium">{u.ext || '—'}</td>
+                            {role === 'user' && (() => {
+                              const bld = u.default_building_id != null ? (buildings as Building[]).find(b => b.id === u.default_building_id) : null
+                              return (
+                                <td className="px-5 py-3.5">
+                                  {bld ? (
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="text-[11px] font-black text-[var(--ds-text-1)]">{bld.name}</span>
+                                      {bld.code && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md" style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-3)' }}>{bld.code}</span>}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-[var(--ds-text-4)] font-medium">—</span>
+                                  )}
+                                </td>
+                              )
+                            })()}
                             {role === 'user' && (
                               <td className="px-5 py-3.5">
                                 <button
@@ -2435,7 +2837,10 @@ function UsersTab() {
                           <p className="text-[14px] font-black text-[var(--ds-text-1)]">{u.name}</p>
                           <p className="text-[12px] text-[var(--ds-text-3)] font-bold">{u.email}</p>
                         </div>
-                        <span className="text-[11px] font-bold text-[var(--ds-text-3)] uppercase shrink-0">{u.department}</span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          {u.department && <span className="text-[11px] font-bold text-[var(--ds-text-3)] uppercase">{u.department}</span>}
+                          {u.department_location && <span className="text-[10px] font-bold text-[var(--ds-text-4)]">| {u.department_location.code ?? u.department_location.name}</span>}
+                        </span>
                         {/* Building tags */}
                         <div className="flex gap-1.5 flex-wrap max-w-[220px] justify-end">
                           {(u.admin_buildings ?? []).length === 0
@@ -2795,11 +3200,16 @@ function UsersTab() {
             })()}
 
             {/* Building assignment */}
-            {roleValue !== 'admin' && (
+            {roleValue === 'user' && (
+              <DefaultBuildingSelect
+                buildings={buildings as Building[]}
+                value={editDefaultBldId}
+                onChange={setEditDefaultBldId}
+              />
+            )}
+            {(roleValue === 'building_admin' || roleValue === 'receptionist') && (
               <div className="space-y-2">
-                <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">
-                  {roleValue === 'user' ? 'Home Building' : 'Buildings'}
-                </p>
+                <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">Buildings</p>
                 <BuildingPicker
                   role={roleValue}
                   bldIds={bldIds}
@@ -2807,7 +3217,7 @@ function UsersTab() {
                   locations={locations as Location[]}
                   onToggle={toggleBuilding}
                   defaultBuildingId={editDefaultBldId}
-                  onSetDefault={roleValue === 'user' ? setEditDefaultBldId : undefined}
+                  onSetDefault={setEditDefaultBldId}
                 />
               </div>
             )}
@@ -3714,27 +4124,6 @@ function SettingsTab() {
           </button>
         </div>
 
-        <div className="border-t border-[var(--ds-border-sub)]" />
-
-        {/* Web confirm presence */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: webConfirmEnabled ? 'rgba(99,102,241,0.12)' : 'var(--ds-bg-raised)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 20, color: webConfirmEnabled ? '#6366f1' : '#94a3b8' }}>how_to_reg</span>
-            </div>
-            <div>
-              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Web Confirm Presence</p>
-              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">
-                {webConfirmEnabled ? 'Users can confirm via My Schedule in the header' : 'Confirm only via kiosk'}
-              </p>
-            </div>
-          </div>
-          <button type="button" onClick={toggleWebConfirm} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: webConfirmEnabled ? '#6366f1' : 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }} />
-            <div className="absolute top-[3px] transition-all rounded-full" style={{ width: 18, height: 18, background: webConfirmEnabled ? '#fff' : 'var(--ds-text-3)', left: webConfirmEnabled ? 22 : 3 }} />
-          </button>
-        </div>
-
         {antiGhostEnabled && (
           <>
             <div className="border-t border-[var(--ds-border-sub)]" />
@@ -3743,36 +4132,26 @@ function SettingsTab() {
               <p className="text-[10px] font-medium text-[var(--ds-text-4)] mb-3">Select one or both — booking is confirmed if any of the selected methods detects presence.</p>
               <div className="flex gap-2">
                 {([
-                  { key: 'kiosk',  label: 'Kiosk',  icon: 'tablet',  desc: 'User taps Confirm on the room kiosk device', badge: null },
-                  { key: 'sensor', label: 'Sensor', icon: 'sensors', desc: 'Motion/occupancy sensor via ESP32 (coming soon)', badge: 'Coming Soon' },
+                  { key: 'kiosk',  label: 'Kiosk',  icon: 'tablet',  desc: 'User taps Confirm on the room kiosk device' },
+                  { key: 'sensor', label: 'Sensor', icon: 'sensors', desc: 'Motion/occupancy sensor auto-confirms via ESP32 ping' },
                 ] as const).map(opt => {
-                  const sel      = antiGhostModes.has(opt.key)
-                  const disabled = opt.key === 'sensor'
+                  const sel = antiGhostModes.has(opt.key)
                   return (
                     <button key={opt.key} type="button"
-                      onClick={() => !disabled && toggleAntiGhostMode(opt.key)}
+                      onClick={() => toggleAntiGhostMode(opt.key)}
                       className="flex-1 flex flex-col gap-2 p-4 rounded-xl text-left transition-all"
                       style={{
                         background: sel ? 'rgba(173,238,43,0.07)' : 'var(--ds-bg-raised)',
                         border: sel ? '2px solid rgba(173,238,43,0.55)' : '2px solid var(--ds-border)',
-                        opacity: disabled && !sel ? 0.5 : 1,
-                        cursor: disabled ? 'default' : 'pointer',
+                        cursor: 'pointer',
                       }}>
-                      {/* Checkbox + badge row */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          {/* Checkbox */}
-                          <div className="size-4 rounded-md flex items-center justify-center shrink-0 transition-all"
-                            style={{ background: sel ? '#adee2b' : 'var(--ds-bg-surface)', border: sel ? '2px solid #adee2b' : '2px solid var(--ds-border)' }}>
-                            {sel && <span className="material-symbols-outlined text-black" style={{ fontSize: 11, fontVariationSettings: "'wght' 900" }}>check</span>}
-                          </div>
-                          <span className="material-symbols-outlined" style={{ fontSize: 16, color: sel ? '#4d7c00' : 'var(--ds-text-3)' }}>{opt.icon}</span>
-                          <span className="text-[12px] font-black" style={{ color: sel ? 'var(--ds-text-1)' : 'var(--ds-text-2)' }}>{opt.label}</span>
+                      <div className="flex items-center gap-2.5">
+                        <div className="size-4 rounded-md flex items-center justify-center shrink-0 transition-all"
+                          style={{ background: sel ? '#adee2b' : 'var(--ds-bg-surface)', border: sel ? '2px solid #adee2b' : '2px solid var(--ds-border)' }}>
+                          {sel && <span className="material-symbols-outlined text-black" style={{ fontSize: 11, fontVariationSettings: "'wght' 900" }}>check</span>}
                         </div>
-                        {opt.badge && (
-                          <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0"
-                            style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)' }}>{opt.badge}</span>
-                        )}
+                        <span className="material-symbols-outlined" style={{ fontSize: 16, color: sel ? '#4d7c00' : 'var(--ds-text-3)' }}>{opt.icon}</span>
+                        <span className="text-[12px] font-black" style={{ color: sel ? 'var(--ds-text-1)' : 'var(--ds-text-2)' }}>{opt.label}</span>
                       </div>
                       <p className="text-[10px] font-medium leading-relaxed" style={{ color: sel ? 'var(--ds-text-3)' : 'var(--ds-text-4)' }}>{opt.desc}</p>
                     </button>
@@ -3853,6 +4232,61 @@ function SettingsTab() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Sensor API Token — only when sensor mode active */}
+            {antiGhostModes.has('sensor') && (
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-1">Sensor API Token</p>
+                <p className="text-[10px] font-medium text-[var(--ds-text-4)] mb-3">
+                  Flash this token into your ESP32 as the <code className="font-mono bg-[var(--ds-bg-raised)] px-1 py-0.5 rounded text-[9px]">X-Sensor-Token</code> header. Each room has its own <strong>Sensor Code</strong> visible in the Buildings tab.
+                </p>
+                <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                  <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>key</span>
+                  <code className="flex-1 text-[11px] font-mono text-[var(--ds-text-2)] truncate">{general?.sensor_api_token ?? '—'}</code>
+                  <button type="button"
+                    onClick={() => { if (general?.sensor_api_token) { navigator.clipboard.writeText(general.sensor_api_token).then(() => addInfoToast('Sensor token copied')) } }}
+                    className="shrink-0 size-7 flex items-center justify-center rounded-lg transition-colors"
+                    style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)' }}
+                    title="Copy token">
+                    <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--ds-text-3)' }}>content_copy</span>
+                  </button>
+                  <button type="button"
+                    onClick={async () => {
+                      const newToken = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('')
+                      await saveGeneral({ sensor_api_token: newToken }, 'Sensor API token regenerated')
+                    }}
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-colors"
+                    style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}
+                    title="Regenerate token — all ESP32s must be reflashed">
+                    <span className="material-symbols-outlined" style={{ fontSize: 12 }}>refresh</span>
+                    Regenerate
+                  </button>
+                </div>
+                <div className="mt-2 p-3 rounded-xl" style={{ background: 'rgba(15,20,45,0.55)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <p className="text-[9px] font-black uppercase tracking-wider mb-1.5" style={{ color: 'rgba(173,238,43,0.7)' }}>ESP32 Request Format</p>
+                  <pre className="text-[9px] font-mono leading-relaxed whitespace-pre-wrap break-all" style={{ color: 'rgba(255,255,255,0.6)' }}>{`POST /api/sensor/ping\nX-Sensor-Token: ${general?.sensor_api_token ?? '<token>'}\nContent-Type: application/json\n\n{ "sensor_code": "<room-sensor-code>" }`}</pre>
+                </div>
+              </div>
+            )}
+
+            {/* Web confirm presence */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: webConfirmEnabled ? 'rgba(99,102,241,0.12)' : 'var(--ds-bg-raised)' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: webConfirmEnabled ? '#6366f1' : '#94a3b8' }}>how_to_reg</span>
+                </div>
+                <div>
+                  <p className="text-[14px] font-black text-[var(--ds-text-1)]">Web Confirm Presence</p>
+                  <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">
+                    {webConfirmEnabled ? 'Users confirm via My Schedule panel in the header' : 'Web confirm off — kiosk / sensor only'}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={toggleWebConfirm} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+                <div className="absolute inset-0 rounded-full transition-colors" style={{ background: webConfirmEnabled ? '#6366f1' : 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }} />
+                <div className="absolute top-[3px] transition-all rounded-full" style={{ width: 18, height: 18, background: webConfirmEnabled ? '#fff' : 'var(--ds-text-3)', left: webConfirmEnabled ? 22 : 3 }} />
+              </button>
             </div>
 
             <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', color: '#818cf8' }}>
@@ -4233,6 +4667,300 @@ function SettingsTab() {
 }
 
 // ── Disputes Tab ─────────────────────────────────────────────────────────────
+// ── Sensor Tab ────────────────────────────────────────────────────────────────
+function SensorTab() {
+  const { addInfoToast } = useCancelToast()
+  const qc = useQueryClient()
+  const { data: general } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 60_000 })
+  const { data: rooms = [] } = useQuery<Room[]>({ queryKey: ['rooms'], queryFn: getRooms, staleTime: 60_000 })
+
+  const antiGhostEnabled = general?.anti_ghost_enabled ?? false
+  const sensorEnabled    = antiGhostEnabled && (general?.anti_ghost_mode ?? '').split(',').includes('sensor')
+  const token            = general?.sensor_api_token ?? ''
+
+  const { mutateAsync: doSaveGeneral } = useMutation({
+    mutationFn: (patch: Partial<import('../api/settings').GeneralSettings>) => updateGeneralSettings(patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings-general'] }),
+  })
+
+  const [regeneratingSensor, setRegeneratingSensor] = useState<number | null>(null)
+  const [regenTokenModal, setRegenTokenModal] = useState(false)
+  const [regenTokenInput, setRegenTokenInput] = useState('')
+  const [regenTokenLoading, setRegenTokenLoading] = useState(false)
+  const [sensorBuildingFilter, setSensorBuildingFilter] = useState<number | null>(null)
+
+  async function handleRegenToken() {
+    setRegenTokenLoading(true)
+    try {
+      const newToken = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('')
+      await doSaveGeneral({ sensor_api_token: newToken })
+      addInfoToast('Sensor API token regenerated — reflash all ESP32s')
+      setRegenTokenModal(false)
+      setRegenTokenInput('')
+    } finally { setRegenTokenLoading(false) }
+  }
+
+  async function handleRegenCode(room: Room) {
+    setRegeneratingSensor(room.id)
+    try {
+      const updated = await regenerateSensorCode(room.id)
+      qc.setQueryData(['rooms'], (old: Room[]) => old.map(r => r.id === room.id ? { ...r, sensor_code: updated.sensor_code } : r))
+      addInfoToast(`Sensor code regenerated for ${room.name}`)
+    } finally { setRegeneratingSensor(null) }
+  }
+
+  if (!sensorEnabled) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-5 text-center px-8">
+        <div className="size-24 rounded-3xl flex items-center justify-center" style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 48, color: 'var(--ds-text-4)' }}>sensors_off</span>
+        </div>
+        <div>
+          <p className="text-xl font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-2)' }}>Sensor Mode Disabled</p>
+          <p className="text-sm font-medium mt-2 leading-relaxed" style={{ color: 'var(--ds-text-4)' }}>
+            Enable it in <span className="font-black" style={{ color: 'var(--ds-text-3)' }}>Settings → Anti-Ghost Booking → Detection Method</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const { data: sensorBuildings = [] } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings, staleTime: 300_000 })
+  const allSensorRooms = (rooms as Room[]).filter(r => r.is_active).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  const sensorRooms = sensorBuildingFilter !== null
+    ? allSensorRooms.filter(r => r.building_id === sensorBuildingFilter)
+    : allSensorRooms
+
+  return (
+    <div className="space-y-6 pb-10">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-3 mb-1">
+          <span className="size-2.5 rounded-full bg-[#adee2b] animate-pulse shrink-0" />
+          <p className="text-sm font-black uppercase tracking-wider" style={{ color: '#4d7c00' }}>Sensor Mode Active</p>
+        </div>
+        <p className="text-sm font-medium" style={{ color: 'var(--ds-text-3)' }}>
+          ESP32 sensors auto-confirm presence by pinging this server. Configure tokens below, flash each device, and you're done.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-5">
+        {/* Left column — API Token + Request format + Response */}
+        <div className="space-y-5">
+          {/* API Token */}
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>API Token</p>
+            <p className="text-sm font-medium leading-relaxed" style={{ color: 'var(--ds-text-4)' }}>
+              Flash this into every ESP32 as the <code className="font-mono text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--ds-bg-raised)' }}>X-Sensor-Token</code> header. Shared across all rooms.
+            </p>
+            <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+              <span className="material-symbols-outlined shrink-0" style={{ fontSize: 18, color: 'var(--ds-text-3)' }}>key</span>
+              <code className="flex-1 min-w-0 text-sm font-mono truncate" style={{ color: 'var(--ds-text-2)' }}>{token || '—'}</code>
+              <button onClick={() => token && navigator.clipboard.writeText(token).then(() => addInfoToast('Token copied'))}
+                className="shrink-0 size-8 flex items-center justify-center rounded-lg transition-colors"
+                style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)' }} title="Copy">
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>content_copy</span>
+              </button>
+            </div>
+            {/* Danger zone */}
+            <div className="rounded-2xl p-4 space-y-3" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-500">Danger Zone</p>
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-xs font-medium leading-relaxed" style={{ color: '#f87171' }}>
+                  Regenerate token — all ESP32s must be reflashed afterwards.
+                </p>
+                <button onClick={() => { setRegenTokenModal(true); setRegenTokenInput('') }}
+                  className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black uppercase transition-colors"
+                  style={{ background: 'var(--ds-bg-surface)', border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>refresh</span>
+                  Regenerate
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Request format */}
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>ESP32 Request</p>
+            <div className="rounded-xl p-4" style={{ background: 'rgba(15,20,45,0.75)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-all" style={{ color: 'rgba(255,255,255,0.7)' }}>{`POST /api/sensor/ping\nX-Sensor-Token: ${token || '<token>'}\nContent-Type: application/json\n\n{ "sensor_code": "<room-sensor-code>" }`}</pre>
+            </div>
+            <button onClick={() => navigator.clipboard.writeText(`POST /api/sensor/ping\nX-Sensor-Token: ${token}\nContent-Type: application/json\n\n{ "sensor_code": "<room-sensor-code>" }`).then(() => addInfoToast('Request format copied'))}
+              className="flex items-center gap-1.5 text-xs font-black" style={{ color: 'var(--ds-text-3)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>content_copy</span>
+              Copy
+            </button>
+          </div>
+
+          {/* Response codes */}
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>Response Reference</p>
+            <div className="space-y-2">
+              {([
+                { resp: '{ "confirmed": true, "booking_id": 42 }', note: '200 — confirmed',           color: '#22c55e' },
+                { resp: '{ "confirmed": false }',                  note: '200 — no booking in window', color: 'var(--ds-text-3)' },
+                { resp: '401 Unauthorized',                        note: 'Wrong token',                color: '#ef4444' },
+                { resp: '403 Forbidden',                           note: 'Sensor mode off',            color: '#f59e0b' },
+                { resp: '404 Not Found',                           note: 'Unknown sensor_code',        color: '#f59e0b' },
+              ] as const).map((r, i) => (
+                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                  <code className="text-xs font-mono flex-1 min-w-0 break-all leading-relaxed" style={{ color: r.color }}>{r.resp}</code>
+                  <span className="text-xs font-bold shrink-0 text-right" style={{ color: 'var(--ds-text-4)', minWidth: 100 }}>{r.note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right column — Setup guide + Room codes */}
+        <div className="space-y-5">
+          {/* Setup guide */}
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>Setup Guide</p>
+            <div className="space-y-2">
+              {([
+                { n: '1', title: 'Enable sensor mode',   body: 'Settings → Anti-Ghost Booking → Detection Method → check Sensor.' },
+                { n: '2', title: 'Copy API token',        body: "Copy the token on the left. It's shared by all ESP32s in your system." },
+                { n: '3', title: 'Get the room code',     body: 'Each room below has a unique 16-char Sensor Code. Copy it for the matching ESP32.' },
+                { n: '4', title: 'Flash the ESP32',       body: 'Set SERVER_URL, API_TOKEN (from step 2), and SENSOR_CODE (from step 3) in your firmware, then flash.' },
+                { n: '5', title: 'Test the connection',   body: 'Power on the device. On motion it POSTs to /api/sensor/ping. If a booking is in the confirmation window, presence is auto-confirmed.' },
+                { n: '6', title: 'Configure the window',  body: 'Settings → Confirmation Window sets how many minutes before/after start time sensors can confirm.' },
+              ] as const).map(step => (
+                <div key={step.n} className="flex gap-3 p-3.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                  <div className="size-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: 'var(--ds-bg-surface-2)' }}>
+                    <span className="text-xs font-black" style={{ color: 'var(--ds-text-3)' }}>{step.n}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-black" style={{ color: 'var(--ds-text-1)' }}>{step.title}</p>
+                    <p className="text-xs font-medium leading-relaxed mt-0.5" style={{ color: 'var(--ds-text-4)' }}>{step.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Room sensor codes */}
+          <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>Room Sensor Codes</p>
+
+            {/* Building filter */}
+            {sensorBuildings.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap">
+                <button onClick={() => setSensorBuildingFilter(null)}
+                  className="px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
+                  style={{
+                    background: sensorBuildingFilter === null ? '#111827' : 'var(--ds-bg-raised)',
+                    color: sensorBuildingFilter === null ? '#adee2b' : 'var(--ds-text-3)',
+                    border: sensorBuildingFilter === null ? '1px solid transparent' : '1px solid var(--ds-border)',
+                  }}>All</button>
+                {sensorBuildings.map(b => (
+                  <button key={b.id} onClick={() => setSensorBuildingFilter(sensorBuildingFilter === b.id ? null : b.id)}
+                    className="px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wide transition-all"
+                    style={{
+                      background: sensorBuildingFilter === b.id ? '#111827' : 'var(--ds-bg-raised)',
+                      color: sensorBuildingFilter === b.id ? '#adee2b' : 'var(--ds-text-3)',
+                      border: sensorBuildingFilter === b.id ? '1px solid transparent' : '1px solid var(--ds-border)',
+                    }}>{b.code ?? b.name}</button>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+              {sensorRooms.length === 0 ? (
+                <p className="text-sm text-[var(--ds-text-4)] py-2">No active rooms found.</p>
+              ) : sensorRooms.map(room => {
+                const bldg = sensorBuildings.find(b => b.id === room.building_id)
+                return (
+                  <div key={room.id} className="flex items-center gap-2.5 p-3 rounded-xl" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-sm font-black truncate" style={{ color: 'var(--ds-text-1)' }}>{room.name}</p>
+                        {bldg && sensorBuildingFilter === null && (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md shrink-0"
+                            style={{ background: 'var(--ds-bg-surface-2)', color: 'var(--ds-text-4)' }}>
+                            {bldg.code ?? bldg.name}
+                          </span>
+                        )}
+                      </div>
+                      <code className="text-xs font-mono" style={{ color: 'var(--ds-text-3)' }}>{room.sensor_code ?? '—'}</code>
+                    </div>
+                    <button onClick={() => room.sensor_code && navigator.clipboard.writeText(room.sensor_code).then(() => addInfoToast(`Code copied: ${room.name}`))}
+                      className="size-8 flex items-center justify-center rounded-lg shrink-0 transition-colors hover:bg-[var(--ds-bg-surface)]"
+                      title="Copy sensor code">
+                      <span className="material-symbols-outlined" style={{ fontSize: 15, color: 'var(--ds-text-3)' }}>content_copy</span>
+                    </button>
+                    <button onClick={() => handleRegenCode(room)}
+                      disabled={regeneratingSensor === room.id}
+                      className="size-8 flex items-center justify-center rounded-lg shrink-0 transition-colors disabled:opacity-50"
+                      style={{ color: '#ef4444' }}
+                      title="Regenerate — must reflash ESP32">
+                      {regeneratingSensor === room.id
+                        ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 15 }}>progress_activity</span>
+                        : <span className="material-symbols-outlined" style={{ fontSize: 15 }}>refresh</span>}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Regenerate token confirm modal */}
+      {regenTokenModal && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
+          onClick={() => { setRegenTokenModal(false); setRegenTokenInput('') }}>
+          <div className="w-[420px] rounded-[2rem] overflow-hidden shadow-2xl"
+            style={{ background: 'var(--ds-bg-surface)', border: '1px solid rgba(128,128,128,0.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
+              <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>key_off</span>
+              </div>
+              <div>
+                <p className="text-base font-black text-[var(--ds-text-1)]">Regenerate Sensor API Token</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">All ESP32s will stop working until reflashed.</p>
+              </div>
+            </div>
+            <div className="px-7 py-6 space-y-5">
+              <p className="text-sm text-[var(--ds-text-2)] leading-relaxed">
+                The current token will be <span className="font-black text-red-500">immediately invalidated</span>. Every ESP32 in your system must be reflashed with the new token before presence detection resumes.
+              </p>
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-black text-[var(--ds-text-2)] uppercase tracking-wider">Confirm action</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">Type <span className="font-black text-red-500 font-mono">Regenerate</span> to confirm</p>
+                <input
+                  type="text"
+                  value={regenTokenInput}
+                  onChange={e => setRegenTokenInput(e.target.value)}
+                  placeholder="Regenerate"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter' && regenTokenInput === 'Regenerate') handleRegenToken() }}
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => { setRegenTokenModal(false); setRegenTokenInput('') }}
+                  className="px-5 py-2.5 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleRegenToken}
+                  disabled={regenTokenInput !== 'Regenerate' || regenTokenLoading}
+                  className="px-5 py-2.5 rounded-xl bg-red-500 text-white text-[11px] font-black uppercase hover:bg-red-600 disabled:opacity-40 transition-all flex items-center gap-2">
+                  {regenTokenLoading && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
+                  Regenerate Token
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 function DisputesTab() {
   const qc = useQueryClient()
   const [statusFilter, setStatusFilter] = useState<'pending' | 'resolved'>('pending')
@@ -4512,6 +5240,7 @@ export default function AdminPage() {
     { key: 'users',      label: 'Users',      icon: 'group' },
     { key: 'archive',    label: 'Archive',    icon: 'archive' },
     { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
+    { key: 'sensor',     label: 'Sensor',     icon: 'sensors' },
     { key: 'activity',   label: 'Activity',   icon: 'history' },
     ...(antiGhostActive ? [{ key: 'disputes' as Tab, label: 'Disputes', icon: 'gavel' }] : []),
   ]
@@ -5181,6 +5910,7 @@ export default function AdminPage() {
         {tab === 'archive'  && <div className="admin-tab-in"><ArchiveTab /></div>}
         {tab === 'settings' && <div className="admin-tab-in"><SettingsTab /></div>}
         {tab === 'kiosk'     && <div className="admin-tab-in"><KioskTab /></div>}
+        {tab === 'sensor'    && <div className="admin-tab-in"><SensorTab /></div>}
         {tab === 'activity'  && <div className="admin-tab-in"><ActivityLogTab /></div>}
         {tab === 'disputes'  && <div className="admin-tab-in"><DisputesTab /></div>}
       </div>

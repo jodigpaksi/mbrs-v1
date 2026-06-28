@@ -1,4 +1,10 @@
 @import "tailwindcss";
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/manrope/800.css";
+@import "material-symbols/outlined.css";
 
 /* Dark mode via .dark class on <html> */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -47,6 +53,11 @@
 
 * {
   font-family: 'Manrope', sans-serif;
+}
+
+/* Native select/input color-scheme in dark mode (only scoped to admin DS surface elements) */
+.dark select {
+  color-scheme: dark;
 }
 
 .material-symbols-outlined {

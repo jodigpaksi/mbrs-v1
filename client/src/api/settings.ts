@@ -30,6 +30,7 @@ export interface GeneralSettings {
   log_auto_export_enabled: boolean
   log_auto_export_interval: string
   log_auto_export_time: string
+  sensor_api_token: string
 }
 
 export async function getBookingHours(): Promise<BookingHours> {
