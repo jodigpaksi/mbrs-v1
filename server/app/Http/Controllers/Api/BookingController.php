@@ -139,7 +139,7 @@ class BookingController extends Controller
     {
         $userId = $request->user()->id;
 
-        $today = Carbon::now('Asia/Jakarta')->toDateString();
+        $today = Carbon::now(\App\Models\Setting::businessTz())->toDateString();
 
         $bookings = Booking::with(['room.building', 'user.department'])
             ->whereNull('archived_at')
@@ -177,7 +177,7 @@ class BookingController extends Controller
             return response()->json(['error' => 'You are not the presence-confirmation target for this booking'], 403);
         }
 
-        $now = Carbon::parse(Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s'));
+        $now = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
         if (Carbon::parse($booking->start_at) > $now) {
             return response()->json(['error' => 'Booking has not started yet'], 422);
         }
@@ -256,7 +256,7 @@ class BookingController extends Controller
         }
 
         $data = $request->validate(['note' => 'nullable|string|max:500']);
-        $now  = Carbon::parse(Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s'));
+        $now  = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
 
         $booking->update([
             'dispute_status' => 'pending',
@@ -285,7 +285,7 @@ class BookingController extends Controller
         }
 
         $data   = $request->validate(['action' => 'required|in:approve,reject']);
-        $now    = Carbon::parse(Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s'));
+        $now    = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
         $approve = $data['action'] === 'approve';
 
         $updates = [

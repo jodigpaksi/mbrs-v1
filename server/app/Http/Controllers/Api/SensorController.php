@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 
 class SensorController extends Controller
 {
-    private const BUSINESS_TZ = 'Asia/Jakarta';
+    private static function businessTz(): string { return \App\Models\Setting::businessTz(); }
 
     public function ping(Request $request): JsonResponse
     {
@@ -46,7 +46,7 @@ class SensorController extends Controller
         $windowBefore = (int) (Setting::where('key', 'anti_ghost_window_before')->value('value') ?? 5);
         $windowAfter  = (int) (Setting::where('key', 'anti_ghost_window_after')->value('value')  ?? 10);
 
-        $now      = Carbon::parse(Carbon::now(self::BUSINESS_TZ)->format('Y-m-d H:i:s'));
+        $now      = Carbon::parse(Carbon::now(self::businessTz())->format('Y-m-d H:i:s'));
         $winOpen  = $now->copy()->subMinutes($windowAfter);   // earliest start we care about
         $winClose = $now->copy()->addMinutes($windowBefore);  // latest start we care about
 

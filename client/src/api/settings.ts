@@ -31,6 +31,7 @@ export interface GeneralSettings {
   log_auto_export_interval: string
   log_auto_export_time: string
   sensor_api_token: string
+  business_timezone: string
 }
 
 export async function getBookingHours(): Promise<BookingHours> {

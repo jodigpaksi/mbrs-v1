@@ -33,7 +33,7 @@ class AnalyticsController extends Controller
         $hoursPeriod  = $request->query('hours_period',  'month');
         $buildingId   = $request->query('building_id') ? (int) $request->query('building_id') : null;
 
-        $tz    = 'Asia/Jakarta';
+        $tz    = \App\Models\Setting::businessTz();
         $today = now($tz)->toDateString();
         $weekStart  = now($tz)->startOfWeek()->toDateTimeString();
         $monthStart = now($tz)->startOfMonth()->toDateTimeString();

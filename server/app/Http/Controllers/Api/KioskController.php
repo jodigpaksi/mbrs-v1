@@ -18,11 +18,11 @@ class KioskController extends Controller
      * This returns "now" as the business-local wall-clock, reinterpreted in the
      * default tz so it lines up with the stored start_at/end_at values.
      */
-    private const BUSINESS_TZ = 'Asia/Jakarta';
+    private static function businessTz(): string { return \App\Models\Setting::businessTz(); }
 
     private function localNow(): Carbon
     {
-        return Carbon::parse(Carbon::now(self::BUSINESS_TZ)->format('Y-m-d H:i:s'));
+        return Carbon::parse(Carbon::now(self::businessTz())->format('Y-m-d H:i:s'));
     }
 
     /** Resolve a kiosk by its custom slug or numeric id (URL accepts either). */

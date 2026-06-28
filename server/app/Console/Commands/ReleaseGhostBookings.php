@@ -15,11 +15,11 @@ class ReleaseGhostBookings extends Command
     protected $signature   = 'bookings:release-ghosts';
     protected $description = 'Auto-cancel bookings that missed the kiosk presence-confirmation window';
 
-    private const BUSINESS_TZ = 'Asia/Jakarta';
+    private static function businessTz(): string { return \App\Models\Setting::businessTz(); }
 
     private function localNow(): Carbon
     {
-        return Carbon::parse(Carbon::now(self::BUSINESS_TZ)->format('Y-m-d H:i:s'));
+        return Carbon::parse(Carbon::now(self::businessTz())->format('Y-m-d H:i:s'));
     }
 
     public function handle(): void

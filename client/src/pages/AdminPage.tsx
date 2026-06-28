@@ -3740,6 +3740,7 @@ function ArchiveTab() {
 const SETTINGS_SECTIONS = [
   { key: 'hours',    label: 'Booking Hours',  icon: 'schedule' },
   { key: 'weekend',  label: 'Weekend',        icon: 'calendar_today' },
+  { key: 'system',   label: 'System',         icon: 'settings' },
   { key: 'rules',    label: 'Booking Rules',  icon: 'rule' },
   { key: 'ghost',    label: 'Anti-Ghost',     icon: 'person_off' },
   { key: 'features', label: 'Features',       icon: 'tune' },
@@ -3755,7 +3756,7 @@ function SettingsTab() {
   const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, ghost: null, features: null, archive: null, export: null, logexport: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, archive: null, export: null, logexport: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
@@ -3835,12 +3836,14 @@ function SettingsTab() {
   const [ghostWindowBefore,     setGhostWindowBefore]     = useState(general?.anti_ghost_window_before ?? 5)
   const [ghostWindowAfter,      setGhostWindowAfter]      = useState(general?.anti_ghost_window_after ?? 10)
   const [webConfirmEnabled,     setWebConfirmEnabled]      = useState(general?.web_confirm_enabled ?? false)
+  const [businessTz,            setBusinessTz]             = useState(general?.business_timezone ?? 'Asia/Jakarta')
   const ghostWindowBeforeDebounce = useRef<ReturnType<typeof setTimeout>>()
   const ghostWindowAfterDebounce  = useRef<ReturnType<typeof setTimeout>>()
   const archiveDaysDebounce    = useRef<ReturnType<typeof setTimeout>>()
   const deleteDaysDebounce     = useRef<ReturnType<typeof setTimeout>>()
   const logIntervalDebounce    = useRef<ReturnType<typeof setTimeout>>()
   const logTimeDebounce        = useRef<ReturnType<typeof setTimeout>>()
+  const tzDebounce             = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
     if (general) {
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
@@ -3858,8 +3861,9 @@ function SettingsTab() {
       setGhostWindowBefore(general.anti_ghost_window_before ?? 5)
       setGhostWindowAfter(general.anti_ghost_window_after ?? 10)
       setWebConfirmEnabled(general.web_confirm_enabled ?? false)
+      setBusinessTz(general.business_timezone ?? 'Asia/Jakarta')
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -3979,6 +3983,11 @@ function SettingsTab() {
     clearTimeout(logTimeDebounce.current)
     logTimeDebounce.current = setTimeout(() => saveGeneral({ log_auto_export_time: v }, `Log export time: ${v}`), 4000)
   }
+  function onBusinessTzChange(v: string) {
+    setBusinessTz(v)
+    clearTimeout(tzDebounce.current)
+    tzDebounce.current = setTimeout(() => saveGeneral({ business_timezone: v }, `Business timezone set to ${v}`), 800)
+  }
 
   return (
     <div className="space-y-6">
@@ -4058,6 +4067,64 @@ function SettingsTab() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* System — auto-save */}
+      <div ref={el => { secRefs.current.system = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">System</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Core runtime configuration for the application.</p>
+        </div>
+
+        {/* Business Timezone */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>schedule</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Business Timezone</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Used for booking logic, schedules &amp; exports</p>
+            </div>
+          </div>
+          <select value={businessTz} onChange={e => onBusinessTzChange(e.target.value)}
+            className="text-[13px] font-bold bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]">
+            <optgroup label="Asia — Indonesia">
+              <option value="Asia/Jakarta">Asia/Jakarta (WIB, UTC+7)</option>
+              <option value="Asia/Makassar">Asia/Makassar (WITA, UTC+8)</option>
+              <option value="Asia/Jayapura">Asia/Jayapura (WIT, UTC+9)</option>
+            </optgroup>
+            <optgroup label="Asia — Southeast">
+              <option value="Asia/Singapore">Asia/Singapore (SGT, UTC+8)</option>
+              <option value="Asia/Kuala_Lumpur">Asia/Kuala_Lumpur (MYT, UTC+8)</option>
+              <option value="Asia/Bangkok">Asia/Bangkok (ICT, UTC+7)</option>
+              <option value="Asia/Manila">Asia/Manila (PHT, UTC+8)</option>
+              <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (ICT, UTC+7)</option>
+            </optgroup>
+            <optgroup label="Asia — East">
+              <option value="Asia/Tokyo">Asia/Tokyo (JST, UTC+9)</option>
+              <option value="Asia/Seoul">Asia/Seoul (KST, UTC+9)</option>
+              <option value="Asia/Shanghai">Asia/Shanghai (CST, UTC+8)</option>
+              <option value="Asia/Hong_Kong">Asia/Hong_Kong (HKT, UTC+8)</option>
+            </optgroup>
+            <optgroup label="Asia — South &amp; West">
+              <option value="Asia/Kolkata">Asia/Kolkata (IST, UTC+5:30)</option>
+              <option value="Asia/Dubai">Asia/Dubai (GST, UTC+4)</option>
+              <option value="Asia/Riyadh">Asia/Riyadh (AST, UTC+3)</option>
+            </optgroup>
+            <optgroup label="Europe">
+              <option value="Europe/London">Europe/London (GMT/BST)</option>
+              <option value="Europe/Paris">Europe/Paris (CET, UTC+1)</option>
+            </optgroup>
+            <optgroup label="Americas">
+              <option value="America/New_York">America/New_York (EST, UTC-5)</option>
+              <option value="America/Los_Angeles">America/Los_Angeles (PST, UTC-8)</option>
+            </optgroup>
+            <optgroup label="Other">
+              <option value="UTC">UTC</option>
+            </optgroup>
+          </select>
         </div>
       </div>
 

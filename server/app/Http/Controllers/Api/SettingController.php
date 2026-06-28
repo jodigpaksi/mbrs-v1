@@ -74,6 +74,7 @@ class SettingController extends Controller
             'log_auto_export_enabled'    => $get('log_auto_export_enabled', 'false') === 'true',
             'log_auto_export_interval'   => $get('log_auto_export_interval', 'daily'),
             'log_auto_export_time'       => $get('log_auto_export_time', '00:00'),
+            'business_timezone'          => $get('business_timezone', config('app.business_timezone', 'Asia/Jakarta')),
         ]);
     }
 
@@ -113,6 +114,7 @@ class SettingController extends Controller
             'log_auto_export_enabled'    => 'sometimes|boolean',
             'log_auto_export_interval'   => 'sometimes|in:daily,weekly,monthly',
             'log_auto_export_time'       => 'sometimes|date_format:H:i',
+            'business_timezone'          => 'sometimes|string|timezone',
         ]);
 
         $changes = [];
