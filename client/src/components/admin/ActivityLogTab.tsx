@@ -17,6 +17,8 @@ const CAT_META: Record<string, { icon: string; color: string; bg: string }> = {
   data:     { icon: 'download',      color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
 }
 
+const PER_PAGE_OPTIONS = [25, 50, 100, 200, 500]
+
 function fmtWhen(iso: string) {
   const d = new Date(iso.replace('Z', ''))
   const now = new Date()
@@ -63,22 +65,69 @@ function LogRow({ log }: { log: ActivityLog }) {
   )
 }
 
+function PageButtons({ current, total, onChange }: { current: number; total: number; onChange: (p: number) => void }) {
+  if (total <= 1) return null
+
+  // Build page number sequence with ellipses
+  const pages: (number | '...')[] = []
+  const delta = 2
+  const left  = Math.max(2, current - delta)
+  const right = Math.min(total - 1, current + delta)
+
+  pages.push(1)
+  if (left > 2) pages.push('...')
+  for (let i = left; i <= right; i++) pages.push(i)
+  if (right < total - 1) pages.push('...')
+  if (total > 1) pages.push(total)
+
+  const btnBase = 'min-w-[32px] h-8 px-2 rounded-lg text-[11px] font-black transition-all'
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap justify-center">
+      <button disabled={current <= 1} onClick={() => onChange(current - 1)}
+        className={`${btnBase} bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] disabled:opacity-40 hover:text-[var(--ds-text-1)]`}>
+        ←
+      </button>
+      {pages.map((p, i) =>
+        p === '...'
+          ? <span key={`e${i}`} className="text-[11px] text-[var(--ds-text-4)] px-1">…</span>
+          : <button key={p} onClick={() => onChange(p as number)}
+              className={`${btnBase} ${p === current
+                ? 'bg-black text-[#adee2b]'
+                : 'bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:text-[var(--ds-text-1)]'}`}>
+              {p}
+            </button>
+      )}
+      <button disabled={current >= total} onClick={() => onChange(current + 1)}
+        className={`${btnBase} bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] disabled:opacity-40 hover:text-[var(--ds-text-1)]`}>
+        →
+      </button>
+    </div>
+  )
+}
+
 export default function ActivityLogTab() {
   const [category, setCategory] = useState('')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const [exporting, setExporting] = useState(false)
+  const [search, setSearch]     = useState('')
+  const [page, setPage]         = useState(1)
+  const [perPage, setPerPage]   = useState(25)
+  const [exporting, setExporting]   = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['activity-logs', category, search, page],
-    queryFn: () => getActivityLogs({ category: category || undefined, q: search || undefined, page }),
+    queryKey: ['activity-logs', category, search, page, perPage],
+    queryFn: () => getActivityLogs({ category: category || undefined, q: search || undefined, page, per_page: perPage }),
     placeholderData: keepPreviousData,
   })
 
   const logs = data?.data ?? []
   const meta = data?.meta
+
+  function changePage(p: number) {
+    setPage(p)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   async function handleExport(format: 'excel' | 'pdf' | 'txt') {
     setExportOpen(false)
@@ -88,6 +137,8 @@ export default function ActivityLogTab() {
     } catch { /* ignore */ }
     finally { setExporting(false) }
   }
+
+  const selectCls = 'px-3 py-1.5 rounded-xl text-[11px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] cursor-pointer'
 
   return (
     <div className="max-w-3xl">
@@ -125,7 +176,7 @@ export default function ActivityLogTab() {
               <button onClick={() => handleExport('txt')}
                 className="flex items-center gap-2 w-full px-4 py-3 text-[11px] font-black uppercase tracking-wide text-left transition-colors hover:bg-[var(--ds-bg-raised)]"
                 style={{ color: 'var(--ds-text-1)', borderTop: '1px solid var(--ds-border-sub)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#94a3b8' }}>text_snippet</span>Text (.txt) — All
+                <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#94a3b8' }}>text_snippet</span>Text (.txt)
               </button>
             </div>
           )}
@@ -155,7 +206,20 @@ export default function ActivityLogTab() {
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="Search…"
             className="flex-1 bg-transparent text-[12px] font-medium text-[var(--ds-text-1)] focus:outline-none placeholder:text-[var(--ds-text-4)]" />
         </div>
+        <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1) }} className={selectCls}>
+          {PER_PAGE_OPTIONS.map(n => <option key={n} value={n}>{n} / page</option>)}
+        </select>
       </div>
+
+      {/* Top pagination */}
+      {meta && meta.last_page > 1 && (
+        <div className="mb-4">
+          <PageButtons current={meta.current_page} total={meta.last_page} onChange={changePage} />
+          <p className="text-center text-[10px] text-[var(--ds-text-4)] font-bold mt-1.5">
+            {meta.total} entries · page {meta.current_page} of {meta.last_page}
+          </p>
+        </div>
+      )}
 
       {/* List */}
       {isLoading && logs.length === 0 ? (
@@ -173,18 +237,13 @@ export default function ActivityLogTab() {
         </div>
       )}
 
-      {/* Pagination */}
+      {/* Bottom pagination */}
       {meta && meta.last_page > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-5">
-          <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-            className="px-3 py-1.5 rounded-lg text-[11px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] disabled:opacity-40 hover:text-[var(--ds-text-1)] transition-colors">
-            ← Prev
-          </button>
-          <span className="text-[11px] font-bold text-[var(--ds-text-3)]">Page {meta.current_page} of {meta.last_page} · {meta.total} entries</span>
-          <button disabled={page >= meta.last_page} onClick={() => setPage(p => p + 1)}
-            className="px-3 py-1.5 rounded-lg text-[11px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] disabled:opacity-40 hover:text-[var(--ds-text-1)] transition-colors">
-            Next →
-          </button>
+        <div className="mt-5">
+          <PageButtons current={meta.current_page} total={meta.last_page} onChange={changePage} />
+          <p className="text-center text-[10px] text-[var(--ds-text-4)] font-bold mt-1.5">
+            {meta.total} entries · page {meta.current_page} of {meta.last_page}
+          </p>
         </div>
       )}
     </div>

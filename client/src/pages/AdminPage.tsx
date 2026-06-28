@@ -230,8 +230,7 @@ const ICON_CATEGORIES: Record<string, string[]> = {
   ],
   'Climate': [
     'ac_unit', 'thermostat', 'device_thermostat', 'air', 'mode_fan',
-    'ceiling_fan', 'humidity_high', 'water_drop', 'wb_sunny', 'wb_cloudy',
-    'wind_power',
+    'humidity_high', 'water_drop', 'wb_sunny', 'wb_cloudy', 'wind_power',
   ],
   'Food / Beverage': [
     'coffee', 'coffee_maker', 'local_cafe', 'restaurant', 'dining',
@@ -275,7 +274,7 @@ function IconPickerModal({ current, onSelect, onClose }: {
         style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
         onClick={onClose}>
         <div className="bg-[var(--ds-bg-surface)] rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden"
-          style={{ maxHeight: '80vh' }}
+          style={{ height: '80vh' }}
           onClick={e => e.stopPropagation()}>
 
           {/* Header */}
@@ -3838,8 +3837,10 @@ function SettingsTab() {
   const [webConfirmEnabled,     setWebConfirmEnabled]      = useState(general?.web_confirm_enabled ?? false)
   const ghostWindowBeforeDebounce = useRef<ReturnType<typeof setTimeout>>()
   const ghostWindowAfterDebounce  = useRef<ReturnType<typeof setTimeout>>()
-  const archiveDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
-  const deleteDaysDebounce  = useRef<ReturnType<typeof setTimeout>>()
+  const archiveDaysDebounce    = useRef<ReturnType<typeof setTimeout>>()
+  const deleteDaysDebounce     = useRef<ReturnType<typeof setTimeout>>()
+  const logIntervalDebounce    = useRef<ReturnType<typeof setTimeout>>()
+  const logTimeDebounce        = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
     if (general) {
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
@@ -3901,18 +3902,47 @@ function SettingsTab() {
     clearTimeout(maxDaysDebounce.current)
     maxDaysDebounce.current = setTimeout(() => saveGeneral({ max_advance_days: v }, `Max advance booking set to ${v} days`), 800)
   }
-  async function toggleAntiGhost() { const v = !antiGhostEnabled; setAntiGhostEnabled(v); await saveGeneral({ anti_ghost_enabled: v }, v ? 'Anti-ghost booking enabled' : 'Anti-ghost booking disabled') }
-  async function toggleAntiGhostMode(key: string) {
-    const next = new Set(antiGhostModes)
-    if (next.has(key)) {
-      if (next.size === 1) return // must keep at least one selected
-      next.delete(key)
+  async function toggleAntiGhost() {
+    const v = !antiGhostEnabled
+    setAntiGhostEnabled(v)
+    if (v) {
+      // Re-enabling: if no methods selected, auto-pick web confirm as safe default
+      const noMethods = antiGhostModes.size === 0 && !webConfirmEnabled
+      if (noMethods) {
+        setWebConfirmEnabled(true)
+        await saveGeneral({ anti_ghost_enabled: true, web_confirm_enabled: true }, 'Anti-ghost enabled (web confirm auto-selected)')
+      } else {
+        await saveGeneral({ anti_ghost_enabled: true }, 'Anti-ghost booking enabled')
+      }
     } else {
-      next.add(key)
+      await saveGeneral({ anti_ghost_enabled: false }, 'Anti-ghost booking disabled')
     }
-    setAntiGhostModes(next)
-    const val = [...next].sort().join(',')
-    await saveGeneral({ anti_ghost_mode: val }, `Anti-ghost mode: ${val}`)
+  }
+  async function toggleMethod(key: 'kiosk' | 'sensor' | 'web') {
+    if (key === 'web') {
+      const newVal = !webConfirmEnabled
+      const anyLeft = newVal || antiGhostModes.has('kiosk') || antiGhostModes.has('sensor')
+      if (!anyLeft) {
+        setWebConfirmEnabled(false)
+        setAntiGhostEnabled(false)
+        await saveGeneral({ web_confirm_enabled: false, anti_ghost_enabled: false }, 'Anti-ghost disabled (no method selected)')
+      } else {
+        setWebConfirmEnabled(newVal)
+        await saveGeneral({ web_confirm_enabled: newVal }, newVal ? 'Web confirm enabled' : 'Web confirm disabled')
+      }
+    } else {
+      const next = new Set(antiGhostModes)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      const anyLeft = next.size > 0 || webConfirmEnabled
+      if (!anyLeft) {
+        setAntiGhostModes(new Set())
+        setAntiGhostEnabled(false)
+        await saveGeneral({ anti_ghost_mode: '', anti_ghost_enabled: false }, 'Anti-ghost disabled (no method selected)')
+      } else {
+        setAntiGhostModes(next)
+        await saveGeneral({ anti_ghost_mode: [...next].sort().join(',') }, `Anti-ghost mode: ${[...next].sort().join(', ')}`)
+      }
+    }
   }
   function onGhostWindowBeforeChange(v: number) {
     const clamped = Math.max(0, Math.min(20, v))
@@ -3939,8 +3969,16 @@ function SettingsTab() {
     }
   }, [general?.log_auto_export_enabled, general?.log_auto_export_interval, general?.log_auto_export_time])
   async function toggleLogExport() { const v = !logExportEnabled; setLogExportEnabled(v); await saveGeneral({ log_auto_export_enabled: v }, v ? 'Log auto-export enabled' : 'Log auto-export disabled') }
-  async function onLogIntervalChange(v: string) { setLogExportInterval(v); await saveGeneral({ log_auto_export_interval: v }, `Log export interval: ${v}`) }
-  async function onLogTimeChange(v: string) { setLogExportTime(v); await saveGeneral({ log_auto_export_time: v }, `Log export time: ${v}`) }
+  function onLogIntervalChange(v: string) {
+    setLogExportInterval(v)
+    clearTimeout(logIntervalDebounce.current)
+    logIntervalDebounce.current = setTimeout(() => saveGeneral({ log_auto_export_interval: v }, `Log export interval: ${v}`), 4000)
+  }
+  function onLogTimeChange(v: string) {
+    setLogExportTime(v)
+    clearTimeout(logTimeDebounce.current)
+    logTimeDebounce.current = setTimeout(() => saveGeneral({ log_auto_export_time: v }, `Log export time: ${v}`), 4000)
+  }
 
   return (
     <div className="space-y-6">
@@ -4128,17 +4166,18 @@ function SettingsTab() {
           <>
             <div className="border-t border-[var(--ds-border-sub)]" />
             <div>
-              <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-1">Detection Method</p>
-              <p className="text-[10px] font-medium text-[var(--ds-text-4)] mb-3">Select one or both — booking is confirmed if any of the selected methods detects presence.</p>
+              <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-1">Confirmation Method</p>
+              <p className="text-[10px] font-medium text-[var(--ds-text-4)] mb-3">At least one must be selected — booking confirmed if any method detects presence. Deselecting all disables Anti-Ghost.</p>
               <div className="flex gap-2">
                 {([
-                  { key: 'kiosk',  label: 'Kiosk',  icon: 'tablet',  desc: 'User taps Confirm on the room kiosk device' },
-                  { key: 'sensor', label: 'Sensor', icon: 'sensors', desc: 'Motion/occupancy sensor auto-confirms via ESP32 ping' },
+                  { key: 'kiosk',  label: 'Kiosk',       icon: 'tablet',      desc: 'User taps Confirm on the room kiosk device' },
+                  { key: 'sensor', label: 'Sensor',       icon: 'sensors',     desc: 'Motion/occupancy sensor auto-confirms via ESP32 ping' },
+                  { key: 'web',    label: 'Web Confirm',  icon: 'how_to_reg',  desc: 'User confirms from My Schedule or notification in the app' },
                 ] as const).map(opt => {
-                  const sel = antiGhostModes.has(opt.key)
+                  const sel = opt.key === 'web' ? webConfirmEnabled : antiGhostModes.has(opt.key)
                   return (
                     <button key={opt.key} type="button"
-                      onClick={() => toggleAntiGhostMode(opt.key)}
+                      onClick={() => toggleMethod(opt.key)}
                       className="flex-1 flex flex-col gap-2 p-4 rounded-xl text-left transition-all"
                       style={{
                         background: sel ? 'rgba(173,238,43,0.07)' : 'var(--ds-bg-raised)',
@@ -4269,25 +4308,6 @@ function SettingsTab() {
                 </div>
               </div>
             )}
-
-            {/* Web confirm presence */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: webConfirmEnabled ? 'rgba(99,102,241,0.12)' : 'var(--ds-bg-raised)' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: webConfirmEnabled ? '#6366f1' : '#94a3b8' }}>how_to_reg</span>
-                </div>
-                <div>
-                  <p className="text-[14px] font-black text-[var(--ds-text-1)]">Web Confirm Presence</p>
-                  <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">
-                    {webConfirmEnabled ? 'Users confirm via My Schedule panel in the header' : 'Web confirm off — kiosk / sensor only'}
-                  </p>
-                </div>
-              </div>
-              <button type="button" onClick={toggleWebConfirm} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-                <div className="absolute inset-0 rounded-full transition-colors" style={{ background: webConfirmEnabled ? '#6366f1' : 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }} />
-                <div className="absolute top-[3px] transition-all rounded-full" style={{ width: 18, height: 18, background: webConfirmEnabled ? '#fff' : 'var(--ds-text-3)', left: webConfirmEnabled ? 22 : 3 }} />
-              </button>
-            </div>
 
             <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', color: '#818cf8' }}>
               <span className="font-black">How it works:</span> Every minute, the system checks for bookings past the window close with no presence confirmed. Those bookings are auto-cancelled and logged in Activity Log. The kiosk display updates immediately.

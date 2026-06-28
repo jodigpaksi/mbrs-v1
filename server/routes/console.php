@@ -15,7 +15,7 @@ Schedule::command('bookings:release-ghosts')->everyMinute();
 // Activity log auto-export — reads frequency/time from DB settings
 (function () {
     $enabled   = \App\Models\Setting::where('key', 'log_auto_export_enabled')->value('value');
-    if (!$enabled || $enabled === '0') return;
+    if ($enabled !== 'true') return;
 
     $frequency = \App\Models\Setting::where('key', 'log_auto_export_interval')->value('value') ?? 'daily';
     $time      = \App\Models\Setting::where('key', 'log_auto_export_time')->value('value')     ?? '00:00';

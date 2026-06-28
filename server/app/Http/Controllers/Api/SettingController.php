@@ -71,6 +71,9 @@ class SettingController extends Controller
             'anti_ghost_window_after'    => (int) $get('anti_ghost_window_after', '10'),
             'web_confirm_enabled'        => $get('web_confirm_enabled', 'false') === 'true',
             'sensor_api_token'           => $this->getOrCreateSensorToken(),
+            'log_auto_export_enabled'    => $get('log_auto_export_enabled', 'false') === 'true',
+            'log_auto_export_interval'   => $get('log_auto_export_interval', 'daily'),
+            'log_auto_export_time'       => $get('log_auto_export_time', '00:00'),
         ]);
     }
 
@@ -107,6 +110,9 @@ class SettingController extends Controller
             'anti_ghost_window_after'    => 'sometimes|integer|min:0|max:20',
             'web_confirm_enabled'        => 'sometimes|boolean',
             'sensor_api_token'           => 'sometimes|string|max:64',
+            'log_auto_export_enabled'    => 'sometimes|boolean',
+            'log_auto_export_interval'   => 'sometimes|in:daily,weekly,monthly',
+            'log_auto_export_time'       => 'sometimes|date_format:H:i',
         ]);
 
         $changes = [];

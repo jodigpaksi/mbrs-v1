@@ -29,7 +29,8 @@ class ActivityLogController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $logs = $this->buildQuery($request)->paginate(40);
+        $perPage = min(max((int) $request->query('per_page', 25), 10), 500);
+        $logs = $this->buildQuery($request)->paginate($perPage);
 
         return response()->json([
             'data' => $logs->getCollection()->map(fn (ActivityLog $l) => [

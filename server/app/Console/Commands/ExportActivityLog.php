@@ -15,7 +15,7 @@ class ExportActivityLog extends Command
     public function handle(): void
     {
         $enabled = Setting::where('key', 'log_auto_export_enabled')->value('value');
-        if (!$enabled || $enabled === '0') {
+        if ($enabled !== 'true') {
             $this->info('Activity log auto-export is disabled.');
             return;
         }

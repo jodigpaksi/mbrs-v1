@@ -20,6 +20,7 @@ export async function getActivityLogs(params: {
   category?: string
   q?: string
   page?: number
+  per_page?: number
 } = {}): Promise<ActivityLogPage> {
   const res = await api.get('/activity-logs', { params })
   return res.data
