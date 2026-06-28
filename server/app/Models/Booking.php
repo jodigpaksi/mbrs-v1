@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Booking extends Model
 {
@@ -18,7 +17,14 @@ class Booking extends Model
         'status',
         'type',
         'cancelled_at',
+        'cancel_reason',
+        'dispute_status',
+        'dispute_note',
+        'disputed_at',
+        'dispute_resolved_at',
+        'dispute_resolved_by',
         'series_id',
+        'series_skipped_dates',
         'booked_for',
         'booked_for_user_id',
         'archived_at',
@@ -27,10 +33,13 @@ class Booking extends Model
     protected function casts(): array
     {
         return [
-            'start_at'     => 'datetime',
-            'end_at'       => 'datetime',
-            'cancelled_at' => 'datetime',
-            'archived_at'  => 'datetime',
+            'start_at'              => 'datetime',
+            'end_at'                => 'datetime',
+            'cancelled_at'          => 'datetime',
+            'disputed_at'           => 'datetime',
+            'dispute_resolved_at'   => 'datetime',
+            'archived_at'           => 'datetime',
+            'series_skipped_dates'  => 'array',
         ];
     }
 
@@ -49,8 +58,5 @@ class Booking extends Model
         return $this->belongsTo(User::class, 'booked_for_user_id');
     }
 
-    public function pantryOrder(): HasOne
-    {
-        return $this->hasOne(PantryOrder::class);
-    }
+
 }

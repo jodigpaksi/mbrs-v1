@@ -43,6 +43,7 @@ export default function UserProfileModal({ open, onClose }: Props) {
 
   const isSuperAdmin = user.role === 'superadmin'
   const canChangePassword = isSuperAdmin || (generalSettings?.allow_password_change !== false)
+  const canUploadAvatar   = isSuperAdmin || (generalSettings?.allow_avatar_upload   !== false)
 
   function copyField(label: string, value: string) {
     navigator.clipboard.writeText(value).then(() => {
@@ -141,33 +142,43 @@ export default function UserProfileModal({ open, onClose }: Props) {
           <div className="relative group shrink-0">
             <UserAvatar name={user.name} avatar={user.avatar} size={72}
               style={{ border: '3px solid var(--ds-glass-border)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }} />
-            <button onClick={() => fileRef.current?.click()} disabled={uploading || removing}
-              className="absolute inset-0 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ background: 'rgba(0,0,0,0.50)' }}>
-              {uploading
-                ? <span className="material-symbols-outlined text-white animate-spin" style={{ fontSize: 20 }}>progress_activity</span>
-                : <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>photo_camera</span>
-              }
-            </button>
+            {canUploadAvatar && (
+              <button onClick={() => fileRef.current?.click()} disabled={uploading || removing}
+                className="absolute inset-0 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ background: 'rgba(0,0,0,0.50)' }}>
+                {uploading
+                  ? <span className="material-symbols-outlined text-white animate-spin" style={{ fontSize: 20 }}>progress_activity</span>
+                  : <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>photo_camera</span>
+                }
+              </button>
+            )}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[16px] font-black truncate" style={{ color: 'var(--ds-text-1)' }}>{user.name}</p>
             <p className="text-[12px] font-medium truncate" style={{ color: 'var(--ds-text-3)' }}>{user.email}</p>
-            <div className="flex items-center gap-2 mt-2">
-              <button onClick={() => fileRef.current?.click()} disabled={uploading || removing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-colors disabled:opacity-40"
-                style={{ background: 'var(--ds-bg-surface-2)', color: 'var(--ds-text-2)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>upload</span>
-                {uploading ? 'Uploading…' : 'Upload Photo'}
-              </button>
-              <button onClick={handleRemoveAvatar} disabled={removing || uploading || !hasRealAvatar}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-colors disabled:opacity-40"
-                style={{ background: hasRealAvatar ? 'rgba(239,68,68,0.08)' : 'var(--ds-bg-surface-2)', color: hasRealAvatar ? '#dc2626' : 'var(--ds-text-4)' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
-                {removing ? 'Removing…' : 'Remove Photo'}
-              </button>
-            </div>
+            {canUploadAvatar ? (
+              <div className="flex items-center gap-2 mt-2">
+                <button onClick={() => fileRef.current?.click()} disabled={uploading || removing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-colors disabled:opacity-40"
+                  style={{ background: 'var(--ds-bg-surface-2)', color: 'var(--ds-text-2)' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>upload</span>
+                  {uploading ? 'Uploading…' : 'Upload Photo'}
+                </button>
+                <button onClick={handleRemoveAvatar} disabled={removing || uploading || !hasRealAvatar}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-colors disabled:opacity-40"
+                  style={{ background: hasRealAvatar ? 'rgba(239,68,68,0.08)' : 'var(--ds-bg-surface-2)', color: hasRealAvatar ? '#dc2626' : 'var(--ds-text-4)' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>delete</span>
+                  {removing ? 'Removing…' : 'Remove Photo'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl w-fit"
+                style={{ background: 'var(--ds-bg-surface-2)', border: '1px solid var(--ds-border-sub)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 12, color: 'var(--ds-text-4)' }}>lock</span>
+                <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-4)' }}>Photo upload disabled by admin</span>
+              </div>
+            )}
             {error && <p className="text-[10px] font-bold text-red-500 mt-1.5">{error}</p>}
           </div>
         </div>
@@ -196,7 +207,7 @@ export default function UserProfileModal({ open, onClose }: Props) {
         )}
 
         {/* Body */}
-        <div className="relative overflow-hidden" style={{ height: 340 }}>
+        <div className="relative overflow-hidden" style={{ height: 460 }}>
 
           {/* Profile tab */}
           <div className="absolute inset-0 px-6 py-4 overflow-y-auto space-y-2"

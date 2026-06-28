@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { getMyBookings } from '../../api/bookings'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { getMyBookings, confirmPresenceWeb } from '../../api/bookings'
+import { getGeneralSettings } from '../../api/settings'
+import { useCancelToast } from '../../context/CancelToastContext'
+import { useSettings } from '../../context/SettingsContext'
 import type { Booking } from '../../types'
 
 function parseLocal(s: string): Date {
@@ -16,9 +19,14 @@ function fmtTime(s: string): string {
 }
 
 export default function TodayPanel() {
+  const qc = useQueryClient()
+  const { t, language } = useSettings()
+  const { addInfoToast } = useCancelToast()
   const [open, setOpen] = useState(false)
   const [visible, setVisible] = useState(false)
   const [now, setNow] = useState(() => new Date())
+  const [confirming, setConfirming] = useState<number | null>(null)
+  const notifiedWindowRef = useRef<Set<number>>(new Set())
 
   useEffect(() => {
     function onToggle() { setOpen(o => !o) }
@@ -47,12 +55,50 @@ export default function TodayPanel() {
     staleTime: 30_000,
   })
 
+  const { data: generalSettings } = useQuery({
+    queryKey: ['settings-general'],
+    queryFn: getGeneralSettings,
+    staleTime: 5 * 60_000,
+    enabled: open,
+  })
+  const webConfirmEnabled  = generalSettings?.web_confirm_enabled       ?? false
+  const windowBefore       = generalSettings?.anti_ghost_window_before  ?? 5
+  const windowAfter        = generalSettings?.anti_ghost_window_after   ?? 10
+
   const today = new Date()
   const todayList = (myBookings as Booking[])
     .filter(b => parseLocal(b.start_at).toDateString() === today.toDateString())
     .sort((a, b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
 
-  const todayLabel = today.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+  const todayLabel = today.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+
+  // Fire a warning toast the first time each booking enters its confirm window
+  useEffect(() => {
+    if (!webConfirmEnabled) return
+    for (const b of todayList) {
+      if (b.status === 'cancelled' || b.presence_confirmed_at) continue
+      const isConfirmTarget = !b.booked_for_user_id || b.is_recipient === true
+      if (!isConfirmTarget) continue
+      const start = parseLocal(b.start_at)
+      const windowOpen  = new Date(start.getTime() - windowBefore * 60_000)
+      const windowClose = new Date(start.getTime() + windowAfter  * 60_000)
+      if (now >= windowOpen && now <= windowClose && !notifiedWindowRef.current.has(b.id)) {
+        notifiedWindowRef.current.add(b.id)
+        addInfoToast(`Confirm your presence for "${b.title}" before it gets auto-released!`)
+      }
+    }
+  }, [now, todayList, webConfirmEnabled])
+
+  async function handleConfirm(b: Booking) {
+    setConfirming(b.id)
+    try {
+      await confirmPresenceWeb(b.id)
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+      setOpen(false)
+      addInfoToast(`Presence confirmed for "${b.title}"`)
+    } catch { /* ignore */ }
+    finally { setConfirming(null) }
+  }
 
   return (
     <>
@@ -82,7 +128,7 @@ export default function TodayPanel() {
               <span className="material-symbols-outlined text-[#adee2b]" style={{ fontSize: 18 }}>calendar_today</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--ds-text-3)' }}>My Schedule</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--ds-text-3)' }}>{t('label_my_schedule')}</p>
               <p className="text-[11px] font-black uppercase tracking-tight truncate" style={{ color: 'var(--ds-text-1)' }}>{todayLabel}</p>
             </div>
             <button onClick={() => setOpen(false)}
@@ -100,18 +146,27 @@ export default function TodayPanel() {
           {todayList.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
               <span className="material-symbols-outlined" style={{ fontSize: 52, color: 'var(--ds-text-4)' }}>event_available</span>
-              <p className="text-[12px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>No bookings today</p>
-              <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>Your schedule is clear for today.</p>
+              <p className="text-[12px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>{t('empty_today')}</p>
+              <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>{t('empty_today_clear')}</p>
             </div>
           ) : (() => {
-            const active = todayList.filter(b => parseLocal(b.end_at) > now)
-            const past   = todayList.filter(b => parseLocal(b.end_at) <= now)
+            // Cancelled bookings always go to past section regardless of end_at
+            const active = todayList.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) > now)
+            const past   = todayList.filter(b => b.status === 'cancelled' || parseLocal(b.end_at) <= now)
 
             const renderCard = (b: Booking) => {
-              const ongoing = parseLocal(b.start_at) <= now && parseLocal(b.end_at) > now
-              const isPast  = parseLocal(b.end_at) <= now
+              const start       = parseLocal(b.start_at)
+              const end         = parseLocal(b.end_at)
+              const ongoing     = start <= now && end > now && b.status !== 'cancelled'
+              const isPast      = b.status === 'cancelled' || end <= now
               const isCancelled = b.status === 'cancelled'
               const isTentative = b.status === 'tentative'
+
+              const windowOpen  = new Date(start.getTime() - windowBefore * 60_000)
+              const windowClose = new Date(start.getTime() + windowAfter  * 60_000)
+              const inWindow        = now >= windowOpen && now <= windowClose
+              const isConfirmTarget = !b.booked_for_user_id || b.is_recipient === true
+              const needsConfirm    = webConfirmEnabled && inWindow && !b.presence_confirmed_at && isConfirmTarget && !isCancelled
 
               const cardStyle = ongoing
                 ? { background: 'rgba(173,238,43,0.12)', border: '2px solid #adee2b' }
@@ -127,20 +182,32 @@ export default function TodayPanel() {
 
               return (
                 <div key={b.id} className="rounded-2xl px-4 py-3.5 space-y-2 transition-colors" style={cardStyle}>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-[12px] font-black leading-tight flex-1" style={{ color: 'var(--ds-text-1)' }}>{b.title}</p>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {ongoing && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-[#adee2b] text-black">
-                          <span className="size-1.5 rounded-full bg-black/40 animate-pulse inline-block" />
-                          On Going
-                        </span>
-                      )}
-                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${statusBadgeClass}`}>
-                        {b.status}
+                  {/* Title on its own line */}
+                  <p className="text-[12px] font-black leading-tight" style={{ color: 'var(--ds-text-1)' }}>{b.title}</p>
+
+                  {/* Badges row — wraps freely, never competes with title */}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {ongoing && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-[#adee2b] text-black">
+                        <span className="size-1.5 rounded-full bg-black/40 animate-pulse inline-block" />
+                        {t('label_on_going')}
                       </span>
-                    </div>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${statusBadgeClass}`}>
+                      {b.status}
+                    </span>
+                    {b.cancel_reason === 'ghost_release' && b.dispute_status !== 'approved' && (
+                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-orange-500/15 text-orange-600">
+                        <span className="material-symbols-outlined" style={{ fontSize: 9 }}>person_off</span>Auto-Released
+                      </span>
+                    )}
+                    {b.dispute_status === 'approved' && (
+                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-green-500/15 text-green-600">
+                        <span className="material-symbols-outlined" style={{ fontSize: 9 }}>gavel</span>Reinstated
+                      </span>
+                    )}
                   </div>
+
                   {b.booked_for && (
                     <div className="flex items-center gap-2 text-[10px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
                       <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>person_pin</span>
@@ -157,6 +224,25 @@ export default function TodayPanel() {
                       <span className="truncate">{b.room.name}{b.room.building ? ` · ${b.room.building.code ?? b.room.building.name}` : ''}</span>
                     </div>
                   )}
+
+                  {ongoing && b.presence_confirmed_at && (
+                    <div className="flex items-center gap-1.5 text-[10px] font-black" style={{ color: '#22c55e' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                      {t('presence_confirmed')}
+                    </div>
+                  )}
+
+                  {needsConfirm && (
+                    <button
+                      onClick={() => handleConfirm(b)}
+                      disabled={confirming === b.id}
+                      className="w-full mt-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60"
+                      style={{ background: 'rgba(99,102,241,0.12)', border: '1.5px solid rgba(99,102,241,0.35)', color: '#6366f1' }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>how_to_reg</span>
+                      {confirming === b.id ? t('confirming') : t('confirm_presence')}
+                    </button>
+                  )}
                 </div>
               )
             }
@@ -164,14 +250,14 @@ export default function TodayPanel() {
             return (
               <>
                 <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-3)' }}>
-                  {todayList.length} booking{todayList.length !== 1 ? 's' : ''} today
+                  {todayList.length} {t('label_bookings')} {t('label_today').toLowerCase()}
                 </p>
                 {active.map(renderCard)}
                 {past.length > 0 && (
                   <>
                     <div className="flex items-center gap-2 pt-1">
                       <div className="flex-1 h-px" style={{ background: 'var(--ds-border-sub)' }} />
-                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>Past</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>{t('label_past')}</span>
                       <div className="flex-1 h-px" style={{ background: 'var(--ds-border-sub)' }} />
                     </div>
                     {past.map(renderCard)}

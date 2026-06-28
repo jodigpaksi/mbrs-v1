@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +31,10 @@ class AuthController extends Controller
         $user->load('department');
         $token = $user->createToken('auth-token')->plainTextToken;
 
+        if (in_array($user->role, ['admin', 'superadmin'])) {
+            ActivityLog::record('user.login', "Admin {$user->name} signed in", $user);
+        }
+
         return response()->json([
             'user'  => $this->userPayload($user),
             'token' => $token,
@@ -38,7 +43,11 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+        if (in_array($user->role, ['admin', 'superadmin'])) {
+            ActivityLog::record('user.logout', "Admin {$user->name} signed out", $user);
+        }
+        $user->currentAccessToken()->delete();
         return response()->json(['message' => 'Logged out']);
     }
 
@@ -50,6 +59,7 @@ class AuthController extends Controller
 
     private function userPayload(User $user): array
     {
+        $user->loadMissing('adminBuildings');
         return [
             'id'            => $user->id,
             'name'          => $user->name,
@@ -59,9 +69,34 @@ class AuthController extends Controller
             'department_id' => $user->department_id,
             'ext'           => $user->ext ?? '',
             'avatar'        => $user->avatar,
-            'on_duty'          => (bool) $user->on_duty,
-            'can_book_special' => (bool) $user->can_book_special,
+            'on_duty'             => (bool) $user->on_duty,
+            'can_book_special'    => (bool) $user->can_book_special,
+            'buildings'           => $user->adminBuildings->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])->values(),
+            'preferences'         => $user->preferences ?? (object) [],
+            'default_building_id' => $user->default_building_id,
         ];
+    }
+
+    public function updatePreferences(Request $request): JsonResponse
+    {
+        $allowed = ['defaultView', 'defaultType', 'language', 'darkMode', 'startDay', 'showBarTitle', 'defaultBuilding'];
+        $data = $request->validate([
+            'preferences' => 'required|array',
+        ]);
+
+        $incoming = array_intersect_key($data['preferences'], array_flip($allowed));
+        $user = $request->user();
+        $merged = array_merge($user->preferences ?? [], $incoming);
+
+        $update = ['preferences' => $merged];
+        if (array_key_exists('defaultBuilding', $incoming)) {
+            $buildingId = $incoming['defaultBuilding'];
+            $update['default_building_id'] = is_int($buildingId) ? $buildingId : null;
+        }
+
+        $user->update($update);
+
+        return response()->json(['preferences' => $merged]);
     }
 
     public function updatePassword(Request $request): JsonResponse
@@ -90,9 +125,15 @@ class AuthController extends Controller
 
     public function updateAvatar(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if ($user->role !== 'superadmin') {
+            $allowed = \App\Models\Setting::where('key', 'allow_avatar_upload')->value('value') ?? 'true';
+            if ($allowed === 'false') {
+                return response()->json(['message' => 'Avatar upload is disabled by the administrator.'], 403);
+            }
+        }
         $request->validate(['avatar' => 'required|image|max:2048']);
         $path = $request->file('avatar')->store('avatars', 'public');
-        $user = $request->user();
         $user->update(['avatar' => Storage::url($path)]);
         return response()->json($user);
     }

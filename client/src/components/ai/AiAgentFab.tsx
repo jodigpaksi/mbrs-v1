@@ -122,7 +122,7 @@ export default function AiAgentFab() {
                 border: '1px solid rgba(255,255,255,0.10)',
               }}>
               <input
-                placeholder="Ketik pesan..."
+                placeholder="Type a message..."
                 className="flex-1 bg-transparent text-[12px] font-medium outline-none placeholder:font-medium"
                 style={{ color: 'rgba(255,255,255,0.85)', caretColor: '#adee2b' }}
                 onFocus={e => ((e.currentTarget.parentElement!.style.borderColor = 'rgba(173,238,43,0.35)'))}
@@ -138,7 +138,7 @@ export default function AiAgentFab() {
               </button>
             </div>
             <p className="text-center text-[9px] font-bold mt-2" style={{ color: 'rgba(255,255,255,0.18)' }}>
-              AI dapat membuat kesalahan. Verifikasi informasi penting.
+              AI can make mistakes. Verify important information.
             </p>
           </div>
         </div>

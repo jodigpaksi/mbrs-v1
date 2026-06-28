@@ -55,38 +55,47 @@ export function SpecialRoomBadge({ size = 'md', variant = 'light' }: Props) {
       </span>
 
       {visible && createPortal(
-        <div
-          style={{
-            position: 'fixed',
-            top: pos.top,
-            left: pos.left,
-            zIndex: 99999,
-            width: 240,
-            background: 'rgba(255,255,255,0.75)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.6)',
-            borderRadius: 16,
-            padding: '10px 14px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-            pointerEvents: 'none',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 14, color: '#d97706' }}
-            >
-              star
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#92400e' }}>
-              Special Room
-            </span>
+        <>
+          <style>{`
+            @keyframes srb-tooltip-in {
+              from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+              to   { opacity: 1; transform: translateY(0)   scale(1);    }
+            }
+          `}</style>
+          <div
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              zIndex: 99999,
+              width: 240,
+              background: 'rgba(255,255,255,0.75)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.6)',
+              borderRadius: 16,
+              padding: '10px 14px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+              pointerEvents: 'none',
+              animation: 'srb-tooltip-in 0.18s cubic-bezier(0.34,1.04,0.64,1) both',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 14, color: '#d97706' }}
+              >
+                star
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#92400e' }}>
+                Special Room
+              </span>
+            </div>
+            <p style={{ fontSize: 11, fontWeight: 600, color: '#374151', lineHeight: 1.55, margin: 0 }}>
+              {TOOLTIP}
+            </p>
           </div>
-          <p style={{ fontSize: 11, fontWeight: 600, color: '#374151', lineHeight: 1.55, margin: 0 }}>
-            {TOOLTIP}
-          </p>
-        </div>,
+        </>,
         document.body
       )}
     </>

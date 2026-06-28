@@ -6,6 +6,7 @@ export interface GeneralSettings {
   max_advance_days: number
   allow_book_for_others: boolean
   allow_password_change: boolean
+  allow_avatar_upload: boolean
   restrict_after_hours: boolean
   working_hours_end: string
   feature_ai_chat: boolean
@@ -18,6 +19,19 @@ export interface GeneralSettings {
   export_day_of_week: number
   export_day_of_month: number
   export_formats: string
+  chart_peak_hour_from: number
+  chart_peak_hour_to: number
+  chart_colors: string
+  anti_ghost_enabled: boolean
+  anti_ghost_mode: string
+  anti_ghost_window_before: number
+  anti_ghost_window_after: number
+  web_confirm_enabled: boolean
+  log_auto_export_enabled: boolean
+  log_auto_export_interval: string
+  log_auto_export_time: string
+  sensor_api_token: string
+  business_timezone: string
 }
 
 export async function getBookingHours(): Promise<BookingHours> {
@@ -52,5 +66,37 @@ export async function updateGeneralSettings(patch: Partial<GeneralSettings>): Pr
 
 export async function toggleUserSpecialAccess(userId: number): Promise<{ can_book_special: boolean }> {
   const res = await api.patch(`/users/${userId}/special-access`)
+  return res.data
+}
+
+export interface AfterHoursContact {
+  id: number
+  name: string
+  email: string
+  ext: string | null
+  role: string
+  avatar: string | null
+  on_duty: boolean
+  department: string | null
+  buildings: { id: number; name: string; code?: string | null }[]
+}
+
+export async function getAfterHoursContacts(buildingId?: number): Promise<AfterHoursContact[]> {
+  const res = await api.get('/settings/after-hours-contacts', { params: buildingId ? { building_id: buildingId } : {} })
+  return res.data
+}
+
+export async function updateAfterHoursContacts(userIds: number[]): Promise<AfterHoursContact[]> {
+  const res = await api.patch('/settings/after-hours-contacts', { user_ids: userIds })
+  return res.data
+}
+
+export async function getSpecialRoomContacts(buildingId?: number): Promise<AfterHoursContact[]> {
+  const res = await api.get('/settings/special-room-contacts', { params: buildingId ? { building_id: buildingId } : {} })
+  return res.data
+}
+
+export async function updateSpecialRoomContacts(userIds: number[]): Promise<AfterHoursContact[]> {
+  const res = await api.patch('/settings/special-room-contacts', { user_ids: userIds })
   return res.data
 }

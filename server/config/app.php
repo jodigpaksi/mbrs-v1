@@ -67,6 +67,8 @@ return [
 
     'timezone' => 'UTC',
 
+    'business_timezone' => env('BUSINESS_TZ', 'Asia/Jakarta'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

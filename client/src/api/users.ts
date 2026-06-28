@@ -34,8 +34,10 @@ export async function updateUserRole(id: number, role: UserRole): Promise<User> 
   return res.data
 }
 
-export async function assignUserBuildings(id: number, buildingIds: number[]): Promise<User> {
-  const res = await api.put(`/users/${id}/buildings`, { building_ids: buildingIds })
+export async function assignUserBuildings(id: number, buildingIds: number[], defaultBuildingId?: number | null): Promise<User> {
+  const body: Record<string, unknown> = { building_ids: buildingIds }
+  if (defaultBuildingId !== undefined) body.default_building_id = defaultBuildingId
+  const res = await api.put(`/users/${id}/buildings`, body)
   return res.data
 }
 
@@ -48,7 +50,7 @@ export async function getDirectory(): Promise<{ id: number; name: string; email:
   return res.data
 }
 
-export async function exportUsers(): Promise<{ name: string; email: string; password: string; department: string; role: string; ext: string }[]> {
+export async function exportUsers(): Promise<{ name: string; email: string; password: string; department: string; department_location: string; role: string; ext: string; default_building: string; assigned_buildings: string }[]> {
   const res = await api.get('/users/export')
   return res.data
 }

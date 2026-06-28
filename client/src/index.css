@@ -1,4 +1,10 @@
 @import "tailwindcss";
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/manrope/800.css";
+@import "material-symbols/outlined.css";
 
 /* Dark mode via .dark class on <html> */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -49,6 +55,11 @@
   font-family: 'Manrope', sans-serif;
 }
 
+/* Native select/input color-scheme in dark mode (only scoped to admin DS surface elements) */
+.dark select {
+  color-scheme: dark;
+}
+
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   display: inline-block;
@@ -69,3 +80,56 @@
 .tp-scroll::-webkit-scrollbar-track  { background: transparent; }
 .tp-scroll::-webkit-scrollbar-thumb  { background: rgba(148,163,184,0.35); border-radius: 99px; }
 .tp-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.65); }
+
+/* ── Modal scrollbar (white bg modals) ── */
+.modal-scroll { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.12) transparent; }
+.modal-scroll::-webkit-scrollbar       { width: 4px; }
+.modal-scroll::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
+.modal-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 99px; }
+.modal-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+
+/* ── Draft badge blink ── */
+@keyframes draft-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+  50%       { opacity: 0.65; box-shadow: 0 0 0 4px rgba(251,191,36,0.18); }
+}
+.draft-blink { animation: chip-pop 0.3s cubic-bezier(0.34,1.56,0.64,1), draft-blink 1.8s ease-in-out 0.3s infinite; }
+
+/* ── Table section animations (My Bookings / All Bookings tabs) ── */
+@keyframes tab-section-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tbl-group-enter {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes tbl-row-enter {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tbl-row-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+
+/* ── Receptionist page animations ── */
+@keyframes picker-slide-in {
+  from { opacity: 0; transform: translateY(-10px) scaleY(0.94); }
+  to   { opacity: 1; transform: translateY(0)     scaleY(1);    }
+}
+.picker-slide-in { animation: picker-slide-in 0.24s cubic-bezier(0.34,1.56,0.64,1) both; transform-origin: top; }
+
+@keyframes contact-enter {
+  0%   { opacity: 0; transform: scale(0.9) translateY(-8px); }
+  65%  { transform: scale(1.025) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.contact-enter { animation: contact-enter 0.32s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+@keyframes check-pop {
+  0%   { transform: scale(0.4); opacity: 0.5; }
+  60%  { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.check-pop { animation: check-pop 0.26s cubic-bezier(0.34,1.56,0.64,1) both; }

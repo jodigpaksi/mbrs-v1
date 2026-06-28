@@ -17,9 +17,9 @@ function todayISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-function fmtDate(iso: string) {
+function fmtDate(iso: string, lang = 'en') {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 function slotTime(iso: string) { return iso.split('T')[1]?.slice(0, 5) ?? '' }
 function slotDate(iso: string) { return iso.split('T')[0] ?? '' }
@@ -68,7 +68,7 @@ function splitSlotsByDay(
   return byDate
 }
 
-const fieldBtn = 'w-full flex items-center gap-2 bg-white border border-slate-200 rounded-xl text-[11px] font-bold px-3 py-2 hover:border-[#adee2b] hover:bg-[#fafff0] transition-all'
+const fieldBtn = 'w-full flex items-center gap-2 bg-[var(--ds-bg-surface)] dark:bg-white/[0.06] border border-[var(--ds-border)] rounded-xl text-[11px] font-bold px-3 py-2 hover:border-[#adee2b] hover:bg-[#fafff0] dark:hover:bg-[#adee2b]/10 transition-all'
 
 type GroupBy = 'room' | 'date' | 'session'
 
@@ -77,6 +77,9 @@ interface Props {
   bookingOpen: boolean
   onClose: () => void
   onRoomSelect: (room: Room, date: string, startTime?: string, endTime?: string) => void
+  prefillDate?: string
+  prefillStartTime?: string
+  prefillEndTime?: string
 }
 
 /* ── Shared room card (no date pills) ── */
@@ -88,26 +91,27 @@ function SlotRoomCard({
   showDate?: boolean
   onSelect: (room: Room, date: string, start: string, end: string) => void
 }) {
+  const { language, t: tr } = useSettings()
   if (slots.length === 0) return null
   return (
-    <div className="rounded-2xl overflow-hidden border border-slate-100">
-      <div className="flex items-center gap-3 px-4 py-3 bg-slate-50">
-        <div className="size-10 rounded-[10px] bg-slate-200 overflow-hidden shrink-0">
+    <div className="rounded-2xl overflow-hidden border border-[var(--ds-border-sub)]">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[var(--ds-bg-surface-2)]">
+        <div className="size-10 rounded-[10px] bg-[var(--ds-border)] overflow-hidden shrink-0">
           {(room.photos ?? [])[0]
             ? <img src={room.photos[0]} className="w-full h-full object-cover" />
-            : <span className="w-full h-full flex items-center justify-center material-symbols-outlined text-slate-400" style={{ fontSize: 18 }}>meeting_room</span>
+            : <span className="w-full h-full flex items-center justify-center material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 18 }}>meeting_room</span>
           }
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <p className="text-[12px] font-black text-slate-800 truncate">{room.name}</p>
+            <p className="text-[12px] font-black text-[var(--ds-text-1)] truncate">{room.name}</p>
             {room.requires_contact && (
               <span className="material-symbols-outlined text-amber-400 shrink-0" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>star</span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium mt-0.5">
-            <span>Floor {room.floor}</span>
-            <span className="text-slate-200">·</span>
+          <div className="flex items-center gap-2 text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">
+            <span>{room.floor}</span>
+            <span className="text-[var(--ds-border)]">·</span>
             <span className="flex items-center gap-0.5">
               <span className="material-symbols-outlined" style={{ fontSize: 11 }}>group</span>
               {room.capacity}
@@ -115,26 +119,26 @@ function SlotRoomCard({
           </div>
         </div>
         {room.is_fully_free && (
-          <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">Fully Free</span>
+          <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">{tr('fully_free')}</span>
         )}
       </div>
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-[var(--ds-border-sub)]">
         {slots.map((slot, i) => (
           <button
             key={i}
             type="button"
             onClick={() => onSelect(room, slotDate(slot.start), slotTime(slot.start), slotTime(slot.end))}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-[#f7fee7] active:bg-[#edfbb4] transition-colors text-left group"
+            className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--ds-bg-surface)] hover:bg-[#f7fee7] dark:hover:bg-[#adee2b]/[0.08] active:bg-[#edfbb4] dark:active:bg-[#adee2b]/[0.14] transition-colors text-left group"
           >
             <span className="material-symbols-outlined text-[#adee2b] shrink-0" style={{ fontSize: 14 }}>schedule</span>
-            <span className="text-[11px] font-black text-slate-700 tabular-nums flex-1">
+            <span className="text-[11px] font-black text-[var(--ds-text-1)] tabular-nums flex-1">
               {showDate && (
-                <span className="text-slate-400 font-bold mr-1.5">{fmtDate(slotDate(slot.start))} ·</span>
+                <span className="text-[var(--ds-text-3)] font-bold mr-1.5">{fmtDate(slotDate(slot.start), language)} ·</span>
               )}
               {slotTime(slot.start)} – {slotTime(slot.end)}
             </span>
-            <span className="text-[9px] font-bold text-slate-400 uppercase tabular-nums">{slotDuration(slot)}</span>
-            <span className="material-symbols-outlined text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" style={{ fontSize: 14 }}>arrow_forward</span>
+            <span className="text-[9px] font-bold text-[var(--ds-text-3)] uppercase tabular-nums">{slotDuration(slot)}</span>
+            <span className="material-symbols-outlined text-[var(--ds-text-4)] dark:text-white/20 group-hover:text-[var(--ds-text-2)] dark:group-hover:text-white/50 transition-colors shrink-0" style={{ fontSize: 14 }}>arrow_forward</span>
           </button>
         ))}
       </div>
@@ -142,8 +146,8 @@ function SlotRoomCard({
   )
 }
 
-export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoomSelect }: Props) {
-  const { defaultBuilding } = useSettings()
+export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoomSelect, prefillDate, prefillStartTime, prefillEndTime }: Props) {
+  const { defaultBuilding, t, language } = useSettings()
   const { user } = useAuth()
   const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
   const { start: bsStr, end: beStr } = useBookingHours()
@@ -183,6 +187,21 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
     return () => document.removeEventListener('mousedown', onDoc)
   }, [bDropOpen])
 
+  // When opened with prefill (e.g. "Find another slot" from series skipped dates)
+  useEffect(() => {
+    if (!open) return
+    if (prefillDate || prefillStartTime || prefillEndTime) {
+      setMode('day')
+      setDisplayMode('day')
+      if (prefillDate) { setStartDate(prefillDate); setEndDate(prefillDate) }
+      if (prefillStartTime) setStartTime(prefillStartTime)
+      if (prefillEndTime) setEndTime(prefillEndTime)
+      setSearched(false)
+      setFormVisible(true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillDate, prefillStartTime, prefillEndTime])
+
   function switchMode(next: 'day' | 'range') {
     if (next === mode) return
     setMode(next)
@@ -219,9 +238,9 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
   const modeIdx = mode === 'day' ? 0 : 1
 
   const groupByOptions: { value: GroupBy; label: string; icon: string }[] = [
-    { value: 'room',    label: 'By Room',    icon: 'meeting_room' },
-    { value: 'date',    label: 'By Date',    icon: 'calendar_today' },
-    { value: 'session', label: 'By Session', icon: 'wb_sunny' },
+    { value: 'room',    label: t('by_room'),    icon: 'meeting_room' },
+    { value: 'date',    label: t('by_date'),    icon: 'calendar_today' },
+    { value: 'session', label: t('by_session'), icon: 'wb_sunny' },
   ]
   const groupByIdx = groupByOptions.findIndex(o => o.value === groupBy)
 
@@ -230,61 +249,62 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
       {open && !bookingOpen && <div className="fixed inset-0 z-[106]" onClick={onClose} />}
 
       <div
-        className="fixed z-[108] flex flex-col rounded-[20px] overflow-hidden transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)]"
+        className="fixed z-[108] flex flex-col rounded-[20px] overflow-hidden transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)] bg-[rgba(252,252,252,0.98)] dark:bg-[rgba(15,18,30,0.97)]"
         style={{
           top: 12, right: 12, bottom: 12, width: 476,
           transform: !open ? 'translateX(calc(100% + 12px))' : bookingOpen ? 'translateX(-452px)' : 'translateX(0)',
-          background: 'rgba(252,252,252,0.98)',
           backdropFilter: 'blur(48px) saturate(180%)',
           WebkitBackdropFilter: 'blur(48px) saturate(180%)',
           boxShadow: '0 8px 64px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)',
         }}
       >
         {/* ── Header ── */}
-        <div className="px-5 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        <div className="px-5 pt-5 pb-4 shrink-0 border-b border-black/[0.06] dark:border-white/[0.08]">
           <div className="flex items-center gap-3">
             <div className="size-9 rounded-[10px] bg-[#adee2b] flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-black" style={{ fontSize: 18 }}>meeting_room</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Schedule</p>
-              <p className="text-[12px] font-black text-slate-800 uppercase tracking-tight leading-tight">Available Rooms</p>
+              <p className="text-[8px] font-black uppercase tracking-[0.22em] text-[var(--ds-text-3)]">{t('available_rooms_schedule')}</p>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)] uppercase tracking-tight leading-tight">{t('available_rooms')}</p>
             </div>
-            <button onClick={onClose} className="size-8 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 flex items-center justify-center transition-all shrink-0">
-              <span className="material-symbols-outlined text-slate-500" style={{ fontSize: 15 }}>close</span>
+            <button onClick={onClose} className="size-8 rounded-xl bg-slate-100 dark:bg-white/[0.08] hover:bg-slate-200 dark:hover:bg-white/[0.14] active:scale-95 flex items-center justify-center transition-all shrink-0">
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>close</span>
             </button>
           </div>
         </div>
 
         {/* ── Filters ── */}
-        <div className="relative z-20 px-5 py-4 shrink-0 space-y-3" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        <div className="relative z-20 px-5 py-4 shrink-0 space-y-3 border-b border-black/[0.06] dark:border-white/[0.08]">
 
           {/* Building dropdown */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Building</label>
+            <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('building')}</label>
             <div ref={bDropRef} className="relative">
               <button
                 type="button"
                 onClick={() => setBDropOpen(o => !o)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-[11px] font-bold transition-all
-                  ${bDropOpen ? 'bg-white border-[#adee2b] ring-2 ring-[#adee2b]/20' : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                  ${bDropOpen
+                    ? 'bg-[var(--ds-bg-surface)] dark:bg-white/[0.07] border-[#adee2b] ring-2 ring-[#adee2b]/20'
+                    : 'bg-[var(--ds-bg-surface)] dark:bg-white/[0.05] border-[var(--ds-border)] hover:border-[var(--ds-text-4)] dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/[0.08]'}`}
               >
-                <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 14 }}>
+                <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>
                   {selectedBuilding ? 'domain' : 'add_location_alt'}
                 </span>
-                <span className={`flex-1 text-left truncate ${selectedBuilding ? 'text-slate-800' : 'text-slate-400'}`}>
+                <span className={`flex-1 text-left truncate ${selectedBuilding ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>
                   {selectedBuilding
                     ? `${selectedBuilding.code || selectedBuilding.name}${(selectedBuilding as any).location?.name ? ' - ' + (selectedBuilding as any).location.name : selectedBuilding.address ? ' - ' + selectedBuilding.address : ''}`
                     : 'Select building…'}
                 </span>
-                <span className="material-symbols-outlined text-slate-400 shrink-0 transition-transform duration-200" style={{ fontSize: 14, transform: bDropOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0 transition-transform duration-200" style={{ fontSize: 14, transform: bDropOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                   expand_more
                 </span>
               </button>
               <div
-                className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden"
+                className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden bg-[rgba(255,255,255,0.98)] dark:bg-[rgba(20,23,40,0.98)]"
                 style={{
-                  background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(24px)',
+                  backdropFilter: 'blur(24px)',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.07)',
                   opacity: bDropOpen ? 1 : 0,
                   transform: bDropOpen ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.97)',
@@ -297,7 +317,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                   <button key={b.id} type="button"
                     onClick={() => { setBuildingId(b.id); setBDropOpen(false); setSearched(false) }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-[11px] font-bold transition-colors
-                      ${b.id === buildingId ? 'bg-[#adee2b] text-black' : 'text-slate-700 hover:bg-slate-50 active:bg-slate-100'}`}
+                      ${b.id === buildingId ? 'bg-[#adee2b] text-black' : 'text-[var(--ds-text-1)] hover:bg-[#adee2b]/25 dark:hover:bg-[#adee2b]/15'}`}
                   >
                     <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>
                       {b.id === buildingId ? 'check_circle' : 'domain'}
@@ -313,8 +333,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
 
           {/* Search Mode */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Search Mode</label>
-            <div className="relative flex items-center p-1 rounded-xl bg-slate-100">
+            <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('search_mode')}</label>
+            <div className="relative flex items-center p-1 rounded-xl bg-slate-100 dark:bg-white/[0.08]">
               <div
                 className="absolute top-1 bottom-1 rounded-[9px] bg-black shadow-sm pointer-events-none transition-transform duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                 style={{ left: 4, width: 'calc(50% - 4px)', transform: `translateX(${modeIdx * 100}%)` }}
@@ -322,9 +342,9 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               {(['day', 'range'] as const).map(m => (
                 <button key={m} type="button" onClick={() => switchMode(m)}
                   className={`relative z-10 flex-1 py-1.5 rounded-[9px] text-[11px] font-black uppercase tracking-wide transition-colors duration-200
-                    ${mode === m ? 'text-[#adee2b]' : 'text-slate-500 hover:text-slate-700'}`}
+                    ${mode === m ? 'text-[#adee2b]' : 'text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70'}`}
                 >
-                  {m === 'day' ? 'Single Day' : 'Date Range'}
+                  {m === 'day' ? t('single_day') : t('date_range')}
                 </button>
               ))}
             </div>
@@ -333,8 +353,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
           {/* Group By — range mode only, placed ABOVE form fields so date pickers can open freely below */}
           {mode === 'range' && (
             <div className="space-y-1">
-              <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Group Results By</label>
-              <div className="relative flex items-center p-1 rounded-xl bg-slate-100">
+              <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('group_by')}</label>
+              <div className="relative flex items-center p-1 rounded-xl bg-slate-100 dark:bg-white/[0.08]">
                 <div
                   className="absolute top-1 bottom-1 rounded-[9px] bg-black shadow-sm pointer-events-none transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
                   style={{ left: 4, width: 'calc((100% - 8px) / 3)', transform: `translateX(${groupByIdx * 100}%)` }}
@@ -342,7 +362,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 {groupByOptions.map(opt => (
                   <button key={opt.value} type="button" onClick={() => setGroupBy(opt.value)}
                     className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 rounded-[9px] text-[11px] font-black uppercase tracking-wide transition-colors duration-200
-                      ${groupBy === opt.value ? 'text-[#adee2b]' : 'text-slate-500 hover:text-slate-700'}`}
+                      ${groupBy === opt.value ? 'text-[#adee2b]' : 'text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70'}`}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{opt.icon}</span>
                     {opt.label}
@@ -357,36 +377,36 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             {displayMode === 'day' ? (
               <div className="space-y-2">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Date</label>
+                  <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Date</label>
                   <GlassDatePicker value={startDate} onChange={setStartDate} compact align="left">
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
-                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
-                        <span className="flex-1 text-left text-slate-700">{label || fmtDate(startDate)}</span>
-                        <span className="material-symbols-outlined text-slate-300" style={{ fontSize: 13 }}>expand_more</span>
+                        <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
+                        <span className="flex-1 text-left text-[var(--ds-text-1)]">{label || fmtDate(startDate, language)}</span>
+                        <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 13 }}>expand_more</span>
                       </button>
                     )}
                   </GlassDatePicker>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Start</label>
+                    <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')}</label>
                     <GlassTimePicker value={startTime} onChange={setStartTime} min={bsStr} max={fromMin(bookingEndMin - 30)}>
                       {() => (
                         <button type="button" className={fieldBtn}>
-                          <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>schedule</span>
-                          <span className="text-slate-700 tabular-nums">{startTime}</span>
+                          <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>schedule</span>
+                          <span className="text-[var(--ds-text-1)] tabular-nums">{startTime}</span>
                         </button>
                       )}
                     </GlassTimePicker>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">End</label>
+                    <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')}</label>
                     <GlassTimePicker value={endTime} onChange={setEndTime} min={fromMin(bookingStartMin + 30)} max={beStr} align="right">
                       {() => (
                         <button type="button" className={fieldBtn}>
-                          <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>schedule</span>
-                          <span className="text-slate-700 tabular-nums">{endTime}</span>
+                          <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>schedule</span>
+                          <span className="text-[var(--ds-text-1)] tabular-nums">{endTime}</span>
                         </button>
                       )}
                     </GlassTimePicker>
@@ -396,23 +416,23 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Start Date</label>
+                  <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')} {t('panel_date')}</label>
                   <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }} compact>
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
-                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
-                        <span className="flex-1 text-left text-slate-700 truncate">{label || fmtDate(startDate)}</span>
+                        <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
+                        <span className="flex-1 text-left text-[var(--ds-text-1)] truncate">{label || fmtDate(startDate, language)}</span>
                       </button>
                     )}
                   </GlassDatePicker>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">End Date</label>
+                  <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')} {t('panel_date')}</label>
                   <GlassDatePicker value={endDate} onChange={setEndDate} min={startDate} compact align="right">
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
-                        <span className="material-symbols-outlined text-slate-400 shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
-                        <span className="flex-1 text-left text-slate-700 truncate">{label || fmtDate(endDate)}</span>
+                        <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
+                        <span className="flex-1 text-left text-[var(--ds-text-1)] truncate">{label || fmtDate(endDate, language)}</span>
                       </button>
                     )}
                   </GlassDatePicker>
@@ -430,17 +450,21 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             .seat-slider::-moz-range-track { height: 6px; border-radius: 9999px; background: #e2e8f0; }
             .seat-slider::-moz-range-progress { height: 6px; border-radius: 9999px; background: #000; }
             .seat-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #000; cursor: pointer; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+            .dark .seat-slider::-webkit-slider-thumb { background: #fff; border-color: rgba(255,255,255,0.15); }
+            .dark .seat-slider::-moz-range-thumb { background: #fff; border-color: rgba(255,255,255,0.15); }
+            .dark .seat-slider::-moz-range-track { background: rgba(255,255,255,0.15); }
+            .dark .seat-slider::-moz-range-progress { background: #fff; }
           `}</style>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[8px] font-black uppercase text-slate-400 tracking-[0.15em]">Minimum Seats</label>
+              <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('minimum_seats')}</label>
               {minCapacity > 0 && (
                 <button
                   type="button"
                   onClick={() => setMinCapacity(0)}
-                  className="text-[8px] font-black uppercase text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-0.5"
+                  className="text-[8px] font-black uppercase text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors flex items-center gap-0.5"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 10 }}>close</span>Clear
+                  <span className="material-symbols-outlined" style={{ fontSize: 10 }}>close</span>{t('clear')}
                 </button>
               )}
             </div>
@@ -457,7 +481,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                     onChange={e => setMinCapacity(Number(e.target.value))}
                     className="seat-slider flex-1 cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, #000 ${pct}%, #e2e8f0 ${pct}%)`,
+                      background: `linear-gradient(to right, var(--ds-text-1) ${pct}%, var(--ds-border) ${pct}%)`,
                       height: 6,
                       borderRadius: 9999,
                     }}
@@ -474,12 +498,12 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                   const v = parseInt(e.target.value)
                   setMinCapacity(isNaN(v) || v < 0 ? 0 : v)
                 }}
-                className="w-14 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-center focus:outline-none focus:border-black transition-colors"
+                className="w-14 border border-[var(--ds-border)] rounded-lg px-2 py-1 text-[11px] font-bold text-center bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)] focus:outline-none focus:border-[var(--ds-text-1)] transition-colors"
               />
             </div>
             {minCapacity > 0 && (
-              <p className="text-[9px] font-bold text-slate-400">
-                Showing rooms with <span className="text-black font-black">{minCapacity}+</span> seats
+              <p className="text-[9px] font-bold text-[var(--ds-text-3)]">
+                {t('showing_rooms_with')} <span className="text-[var(--ds-text-1)] font-black">{minCapacity}+</span> {t('seats_suffix')}
               </p>
             )}
           </div>
@@ -489,14 +513,14 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             <button
               type="button"
               onClick={() => setSpecialOnly(v => !v)}
-              className="flex items-center gap-2 w-fit rounded-full px-3 py-1.5 transition-all text-[10px] font-black uppercase tracking-wide border"
-              style={specialOnly
-                ? { background: '#adee2b', borderColor: '#adee2b', color: '#000' }
-                : { background: 'transparent', borderColor: '#e2e8f0', color: '#94a3b8' }
-              }
+              className={`flex items-center gap-2 w-fit rounded-full px-3 py-1.5 transition-all text-[10px] font-black uppercase tracking-wide border
+                ${specialOnly
+                  ? 'bg-[#adee2b] border-[#adee2b] text-black'
+                  : 'bg-transparent border-[var(--ds-border)] dark:border-white/20 text-[var(--ds-text-3)]'
+                }`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 13 }}>star</span>
-              Special Rooms only
+              {t('special_rooms_only')}
             </button>
           )}
 
@@ -509,8 +533,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               flex items-center justify-center gap-2 transition-all"
           >
             {isFetching
-              ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span>Searching…</>
-              : <><span className="material-symbols-outlined" style={{ fontSize: 14 }}>search</span>Search</>}
+              ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span>{t('searching')}</>
+              : <><span className="material-symbols-outlined" style={{ fontSize: 14 }}>search</span>{t('search_btn')}</>}
           </button>
         </div>
 
@@ -519,23 +543,23 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
 
           {!buildingId && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
-              <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 44 }}>domain</span>
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-wide">Select a building first</p>
+              <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>domain</span>
+              <p className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">{t('select_building_first')}</p>
             </div>
           )}
 
           {buildingId && !searched && !isFetching && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
-              <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 44 }}>meeting_room</span>
-              <p className="text-[11px] font-bold text-slate-400">Pick a date and time, then tap Search</p>
+              <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>meeting_room</span>
+              <p className="text-[11px] font-bold text-[var(--ds-text-3)]">{t('pick_date_time')}</p>
             </div>
           )}
 
           {buildingId && searched && !isFetching && rooms.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
-              <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 44 }}>do_not_disturb</span>
-              <p className="text-[12px] font-black text-slate-500">No rooms available</p>
-              <p className="text-[11px] text-slate-400">All rooms are booked for this period.</p>
+              <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
+              <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
+              <p className="text-[11px] text-[var(--ds-text-3)]">{t('all_rooms_booked')}</p>
             </div>
           )}
 
@@ -547,8 +571,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
 )
             if (visibleRooms.length === 0) return (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
-                <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 44 }}>do_not_disturb</span>
-                <p className="text-[12px] font-black text-slate-500">No rooms available</p>
+                <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
+                <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
               </div>
             )
 
@@ -585,7 +609,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             if (groupBy === 'room' || !isRange) {
               return (
                 <>
-                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 pb-0.5">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] pb-0.5">
                     {visibleRooms.length} room{visibleRooms.length !== 1 ? 's' : ''} with availability
                   </p>
                   {visibleRooms.map((room: Room) => {
@@ -595,24 +619,24 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                     const visibleSlots = isRange ? (byDate[activeDate] ?? []) : singleSlots[room.id]
 
                     return (
-                      <div key={room.id} className="rounded-2xl overflow-hidden border border-slate-100">
-                        <div className="flex items-center gap-3 px-4 py-3 bg-slate-50">
-                          <div className="size-10 rounded-[10px] bg-slate-200 overflow-hidden shrink-0">
+                      <div key={room.id} className="rounded-2xl overflow-hidden border border-[var(--ds-border-sub)]">
+                        <div className="flex items-center gap-3 px-4 py-3 bg-[var(--ds-bg-surface-2)]">
+                          <div className="size-10 rounded-[10px] bg-[var(--ds-border)] overflow-hidden shrink-0">
                             {(room.photos ?? [])[0]
                               ? <img src={room.photos[0]} className="w-full h-full object-cover" />
-                              : <span className="w-full h-full flex items-center justify-center material-symbols-outlined text-slate-400" style={{ fontSize: 18 }}>meeting_room</span>
+                              : <span className="w-full h-full flex items-center justify-center material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 18 }}>meeting_room</span>
                             }
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="text-[12px] font-black text-slate-800 truncate">{room.name}</p>
+                              <p className="text-[12px] font-black text-[var(--ds-text-1)] truncate">{room.name}</p>
                               {room.requires_contact && (
                                 <span className="material-symbols-outlined text-amber-400 shrink-0" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>star</span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium mt-0.5">
-                              <span>Floor {room.floor}</span>
-                              <span className="text-slate-200">·</span>
+                            <div className="flex items-center gap-2 text-[10px] text-[var(--ds-text-3)] font-medium mt-0.5">
+                              <span>{room.floor}</span>
+                              <span className="text-[var(--ds-border)]">·</span>
                               <span className="flex items-center gap-0.5">
                                 <span className="material-symbols-outlined" style={{ fontSize: 11 }}>group</span>
                                 {room.capacity}
@@ -620,23 +644,23 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                             </div>
                           </div>
                           {room.is_fully_free && (
-                            <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">Fully Free</span>
+                            <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">{t('fully_free')}</span>
                           )}
                         </div>
 
                         {isRange && datesWithSlots.length > 0 && (
-                          <div className="px-3 pt-2.5 pb-2 flex items-center gap-1.5 flex-wrap bg-white border-b border-slate-100">
+                          <div className="px-3 pt-2.5 pb-2 flex items-center gap-1.5 flex-wrap bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)]">
                             {datesWithSlots.map(d => {
                               const isActive = d === activeDate
                               return (
                                 <button key={d} type="button"
                                   onClick={() => setSelectedRoomDate(prev => ({ ...prev, [room.id]: d }))}
                                   className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase transition-all
-                                    ${isActive ? 'bg-black text-[#adee2b]' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                    ${isActive ? 'bg-black dark:bg-white text-[#adee2b] dark:text-black' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] hover:bg-[var(--ds-border)]'}`}
                                 >
-                                  {fmtDate(d)}
+                                  {fmtDate(d, language)}
                                   <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black
-                                    ${isActive ? 'bg-white/15 text-[#adee2b]' : 'bg-slate-200 text-slate-400'}`}>
+                                    ${isActive ? 'bg-white/15 dark:bg-black/15 text-[#adee2b] dark:text-black' : 'bg-[var(--ds-border)] text-[var(--ds-text-3)]'}`}>
                                     {byDate[d].length}
                                   </span>
                                 </button>
@@ -645,18 +669,18 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                           </div>
                         )}
 
-                        <div className="divide-y divide-slate-100">
+                        <div className="divide-y divide-[var(--ds-border-sub)]">
                           {visibleSlots.map((slot: AvailableSlot, i: number) => (
                             <button key={i} type="button"
                               onClick={() => onRoomSelect(room, slotDate(slot.start), slotTime(slot.start), slotTime(slot.end))}
-                              className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-[#f7fee7] active:bg-[#edfbb4] transition-colors text-left group"
+                              className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--ds-bg-surface)] hover:bg-[#f7fee7] dark:hover:bg-[#adee2b]/[0.08] active:bg-[#edfbb4] dark:active:bg-[#adee2b]/[0.14] transition-colors text-left group"
                             >
                               <span className="material-symbols-outlined text-[#adee2b] shrink-0" style={{ fontSize: 14 }}>schedule</span>
-                              <span className="text-[11px] font-black text-slate-700 tabular-nums flex-1">
+                              <span className="text-[11px] font-black text-[var(--ds-text-1)] tabular-nums flex-1">
                                 {slotTime(slot.start)} – {slotTime(slot.end)}
                               </span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tabular-nums">{slotDuration(slot)}</span>
-                              <span className="material-symbols-outlined text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" style={{ fontSize: 14 }}>arrow_forward</span>
+                              <span className="text-[9px] font-bold text-[var(--ds-text-3)] uppercase tabular-nums">{slotDuration(slot)}</span>
+                              <span className="material-symbols-outlined text-[var(--ds-text-4)] dark:text-white/20 group-hover:text-[var(--ds-text-2)] dark:group-hover:text-white/50 transition-colors shrink-0" style={{ fontSize: 14 }}>arrow_forward</span>
                             </button>
                           ))}
                         </div>
@@ -674,8 +698,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               )
               if (datesWithRooms.length === 0) return (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
-                  <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 44 }}>do_not_disturb</span>
-                  <p className="text-[12px] font-black text-slate-500">No availability found</p>
+                  <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
+                  <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
                 </div>
               )
 
@@ -698,7 +722,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                               ? 'bg-[rgba(10,15,40,0.82)] border-white/[0.12] text-[#adee2b] shadow-[0_2px_12px_rgba(0,0,0,0.22)]'
                               : 'bg-[rgba(10,15,40,0.26)] border-white/[0.08] text-white/60 hover:bg-[rgba(10,15,40,0.48)] hover:border-white/[0.15] hover:text-white/90'}`}
                         >
-                          {fmtDate(d)}
+                          {fmtDate(d, language)}
                           <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black transition-colors
                             ${isActive ? 'bg-[rgba(173,238,43,0.18)] text-[#adee2b]' : 'bg-white/10 text-white/50 group-hover:text-white/75'}`}>
                             {count}
@@ -723,8 +747,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             /* ── GROUP BY SESSION — pill nav at top ── */
             if (groupBy === 'session') {
               const sessionDefs = [
-                { key: 'morning'   as const, label: 'Morning',   icon: 'wb_sunny',   test: (t: string) => t < '12:00' },
-                { key: 'afternoon' as const, label: 'Afternoon', icon: 'wb_twilight', test: (t: string) => t >= '12:00' },
+                { key: 'morning'   as const, label: t('label_morning'),   icon: 'wb_sunny',   test: (ts: string) => ts < '12:00' },
+                { key: 'afternoon' as const, label: t('label_afternoon'), icon: 'wb_twilight', test: (ts: string) => ts >= '12:00' },
               ]
 
               const availableSessions = sessionDefs.filter(sess =>
@@ -732,8 +756,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               )
               if (availableSessions.length === 0) return (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
-                  <span className="material-symbols-outlined text-slate-200" style={{ fontSize: 44 }}>do_not_disturb</span>
-                  <p className="text-[12px] font-black text-slate-500">No availability found</p>
+                  <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
+                  <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
                 </div>
               )
 

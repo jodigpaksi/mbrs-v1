@@ -42,7 +42,7 @@ export default function LoginPage() {
           <div className="size-11 bg-black rounded-2xl flex items-center justify-center text-[#adee2b]">
             <span className="material-symbols-outlined text-xl">sync_alt</span>
           </div>
-          <span className="text-2xl font-black tracking-tighter italic uppercase">
+          <span className="text-2xl font-black tracking-tighter italic uppercase text-slate-900">
             RoomSync <span className="text-blue-600">Pro</span>
           </span>
         </div>
@@ -52,7 +52,7 @@ export default function LoginPage() {
 
           <div className="mb-7">
             <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400">Welcome back</p>
-            <h1 className="text-3xl font-black italic tracking-tighter uppercase mt-1">Sign In</h1>
+            <h1 className="text-3xl font-black italic tracking-tighter uppercase mt-1 text-slate-900">Sign In</h1>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -71,7 +71,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all"
                 />
               </div>
             </div>
@@ -90,7 +90,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-12 py-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-12 py-3 text-sm font-bold text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all"
                 />
                 <button
                   type="button"

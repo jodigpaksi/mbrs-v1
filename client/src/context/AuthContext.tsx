@@ -1,6 +1,16 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react'
 import { getMe, logout as apiLogout } from '../api/auth'
 import { queryClient } from '../main'
+
+export interface UserPreferences {
+  defaultView?: string
+  defaultType?: string
+  language?: string
+  darkMode?: boolean
+  startDay?: string
+  showBarTitle?: boolean
+  defaultBuilding?: number | null
+}
 
 interface User {
   id: number
@@ -11,6 +21,9 @@ interface User {
   ext: string
   avatar: string
   on_duty?: boolean
+  buildings?: { id: number; name: string }[]
+  preferences?: UserPreferences
+  default_building_id?: number | null
 }
 
 interface AuthContextType {
@@ -33,19 +46,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTimeout(() => reject(new Error('timeout')), 7000)
     )
     Promise.race([getMe(), timeoutRace])
-      .then(setUser)
+      .then((u: User) => setUser(u))
       .catch(() => localStorage.removeItem('token'))
       .finally(() => setLoading(false))
   }, [])
 
-  async function logout() {
+  const logout = useCallback(async () => {
     try { await apiLogout() } catch {}
     queryClient.clear()
     setUser(null)
-  }
+  }, [])
+
+  const value = useMemo(() => ({ user, loading, setUser, logout }), [user, loading, logout])
 
   return (
-    <AuthContext.Provider value={{ user, loading, setUser, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

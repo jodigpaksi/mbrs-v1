@@ -12,21 +12,25 @@ class UserController extends Controller
 {
     public function index()
     {
-        return User::with('department', 'adminBuildings.location')
+        return User::with('department.location', 'adminBuildings.location')
             ->orderBy('role')
             ->orderBy('name')
             ->get()
             ->map(fn ($u) => [
-                'id'              => $u->id,
-                'name'            => $u->name,
-                'email'           => $u->email,
-                'department'      => $u->department?->name ?? '',
-                'department_id'   => $u->department_id,
-                'role'            => $u->role,
-                'ext'             => $u->ext,
-                'avatar'           => $u->avatar,
-                'can_book_special' => (bool) $u->can_book_special,
-                'admin_buildings'  => $u->adminBuildings->map(fn ($b) => [
+                'id'                   => $u->id,
+                'name'                 => $u->name,
+                'email'                => $u->email,
+                'department'           => $u->department?->name ?? '',
+                'department_id'        => $u->department_id,
+                'department_location'  => $u->department?->location
+                    ? ['id' => $u->department->location->id, 'name' => $u->department->location->name, 'code' => $u->department->location->code]
+                    : null,
+                'role'                 => $u->role,
+                'ext'                  => $u->ext,
+                'avatar'               => $u->avatar,
+                'can_book_special'     => (bool) $u->can_book_special,
+                'default_building_id'  => $u->default_building_id,
+                'admin_buildings'      => $u->adminBuildings->map(fn ($b) => [
                     'id'       => $b->id,
                     'name'     => $b->name,
                     'address'  => $b->address,
@@ -37,7 +41,7 @@ class UserController extends Controller
 
     public function directory()
     {
-        return User::with('department')
+        return User::with('department', 'adminBuildings')
             ->orderBy('name')
             ->get()
             ->map(fn ($u) => [
@@ -45,7 +49,14 @@ class UserController extends Controller
                 'name'       => $u->name,
                 'email'      => $u->email,
                 'ext'        => $u->ext,
+                'role'       => $u->role,
+                'avatar'     => $u->avatar,
                 'department' => $u->department?->name ?? '',
+                'buildings'  => $u->adminBuildings->map(fn ($b) => [
+                    'id'   => $b->id,
+                    'name' => $b->name,
+                    'code' => $b->code,
+                ])->values(),
             ]);
     }
 
@@ -65,12 +76,23 @@ class UserController extends Controller
             }
         }
 
-        // Clear building assignments when demoted to plain user
-        if ($data['role'] === 'user') {
+        // Clear building assignments only when promoted to Super Admin (unrestricted access)
+        if ($data['role'] === 'admin') {
             $user->adminBuildings()->detach();
         }
 
+        $oldRole = $user->role;
         $user->update($data);
+
+        if ($oldRole !== $data['role']) {
+            \App\Models\ActivityLog::record(
+                'user.role_changed',
+                "Changed role of {$user->name} from {$oldRole} to {$data['role']}",
+                $user,
+                ['old' => $oldRole, 'new' => $data['role']],
+            );
+        }
+
         return $user->load('adminBuildings.location');
     }
 
@@ -82,12 +104,18 @@ class UserController extends Controller
 
     public function assignBuildings(Request $request, User $user)
     {
-        $request->validate([
-            'building_ids'   => 'present|array',
-            'building_ids.*' => 'exists:buildings,id',
+        $data = $request->validate([
+            'building_ids'        => 'present|array',
+            'building_ids.*'      => 'exists:buildings,id',
+            'default_building_id' => 'sometimes|nullable|exists:buildings,id',
         ]);
 
-        $user->adminBuildings()->sync($request->building_ids);
+        $user->adminBuildings()->sync($data['building_ids']);
+
+        if (array_key_exists('default_building_id', $data)) {
+            $user->update(['default_building_id' => $data['default_building_id']]);
+        }
+
         return $user->load('adminBuildings');
     }
 
@@ -125,6 +153,13 @@ class UserController extends Controller
             ...$data,
             'role' => $data['role'] ?? 'user',
         ]);
+
+        \App\Models\ActivityLog::record(
+            'user.created',
+            "Created user {$user->name} ({$user->email}) as {$user->role}",
+            $user,
+            ['email' => $user->email, 'role' => $user->role],
+        );
 
         return $user->load('adminBuildings.location', 'department');
     }
@@ -213,6 +248,13 @@ class UserController extends Controller
                 ], 422);
             }
         }
+
+        \App\Models\ActivityLog::record(
+            'user.deleted',
+            "Deleted user {$user->name} ({$user->email}, {$user->role})",
+            $user,
+            ['email' => $user->email, 'role' => $user->role],
+        );
 
         $user->adminBuildings()->detach();
         $user->delete();

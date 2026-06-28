@@ -10,3 +10,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('bookings:archive')->dailyAt('02:00');
 Schedule::command('bookings:export-archive')->everyMinute();
+Schedule::command('bookings:release-ghosts')->everyMinute();
+
+// Activity log auto-export — always registered; enabled/disabled checked inside the command at runtime
+Schedule::command('logs:export-activity')->everyMinute()->withoutOverlapping();

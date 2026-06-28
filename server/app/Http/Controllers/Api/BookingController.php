@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\BookingChanged;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Notification;
@@ -11,6 +12,31 @@ use Illuminate\Http\Request;
 
 class BookingController extends Controller
 {
+    /**
+     * Broadcast a booking change to connected clients. Wrapped so a Reverb
+     * outage never breaks the booking request itself.
+     */
+    private function broadcastChange(string $action, ?Booking $booking = null): void
+    {
+        try {
+            $date = $booking ? Carbon::parse($booking->start_at)->format('Y-m-d') : null;
+            BookingChanged::dispatch($action, $booking?->id, $date);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    private function logCancellation(Booking $booking): void
+    {
+        $room = $booking->room?->name ?? $booking->load('room')->room?->name ?? 'a room';
+        \App\Models\ActivityLog::record(
+            'booking.cancelled',
+            "Cancelled \"{$booking->title}\" in {$room} (" . Carbon::parse($booking->start_at)->format('d M, H:i') . ')',
+            $booking,
+            ['room' => $room, 'title' => $booking->title, 'start_at' => (string) $booking->start_at],
+        );
+    }
+
     private function notifyCancelRecipient(Booking $booking, Request $request): void
     {
         if (!$booking->booked_for_user_id) return;
@@ -81,7 +107,7 @@ class BookingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Booking::with(['user.department', 'room.building', 'pantryOrder'])
+        $query = Booking::with(['user.department', 'room.building'])
             ->whereNull('archived_at')
             ->orderBy('start_at');
 
@@ -113,13 +139,23 @@ class BookingController extends Controller
     {
         $userId = $request->user()->id;
 
+        $today = Carbon::now(\App\Models\Setting::businessTz())->toDateString();
+
         $bookings = Booking::with(['room.building', 'user.department'])
             ->whereNull('archived_at')
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                   ->orWhere('booked_for_user_id', $userId);
             })
-            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($today) {
+                // Include all non-cancelled bookings + today's cancelled so TodayPanel
+                // can show ghost-released / manually cancelled bookings from today
+                $q->where('status', '!=', 'cancelled')
+                  ->orWhere(function ($q2) use ($today) {
+                      $q2->where('status', 'cancelled')
+                         ->whereDate('start_at', $today);
+                  });
+            })
             ->orderBy('start_at')
             ->get()
             ->map(function ($b) use ($userId) {
@@ -129,6 +165,155 @@ class BookingController extends Controller
             });
 
         return response()->json($bookings);
+    }
+
+    public function confirmPresenceWeb(Request $request, Booking $booking): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Confirm target: the booked_for user if set, else the creator
+        $confirmerId = $booking->booked_for_user_id ?? $booking->user_id;
+        if ($confirmerId !== $userId) {
+            return response()->json(['error' => 'You are not the presence-confirmation target for this booking'], 403);
+        }
+
+        $now = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
+        if (Carbon::parse($booking->start_at) > $now) {
+            return response()->json(['error' => 'Booking has not started yet'], 422);
+        }
+        if (Carbon::parse($booking->end_at) <= $now) {
+            return response()->json(['error' => 'Booking has already ended'], 422);
+        }
+
+        if (! $booking->presence_confirmed_at) {
+            $booking->update(['presence_confirmed_at' => $now]);
+            $this->broadcastChange('presence_confirmed', $booking);
+        }
+
+        return response()->json(['presence_confirmed_at' => $booking->presence_confirmed_at]);
+    }
+
+    public function disputeIndex(Request $request): JsonResponse
+    {
+        $allowed = ['admin', 'superadmin', 'receptionist', 'building_admin'];
+        if (! in_array($request->user()->role, $allowed)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $status = $request->query('status', 'pending'); // pending|resolved|all
+
+        $q = Booking::with(['user', 'room.building'])
+            ->whereNotNull('dispute_status');
+
+        if ($status === 'pending') {
+            $q->where('dispute_status', 'pending');
+        } elseif ($status === 'resolved') {
+            $q->whereIn('dispute_status', ['approved', 'rejected']);
+        }
+
+        $bookings = $q->orderByDesc('disputed_at')->get()->map(fn($b) => [
+            'id'                   => $b->id,
+            'title'                => $b->title,
+            'start_at'             => $b->start_at,
+            'end_at'               => $b->end_at,
+            'status'               => $b->status,
+            'cancel_reason'        => $b->cancel_reason,
+            'dispute_status'       => $b->dispute_status,
+            'dispute_note'         => $b->dispute_note,
+            'disputed_at'          => $b->disputed_at,
+            'dispute_resolved_at'  => $b->dispute_resolved_at,
+            'dispute_resolved_by'  => $b->dispute_resolved_by,
+            'room'                 => $b->room ? [
+                'id'       => $b->room->id,
+                'name'     => $b->room->name,
+                'building' => $b->room->building ? ['name' => $b->room->building->name, 'code' => $b->room->building->code] : null,
+            ] : null,
+            'user'                 => $b->user ? [
+                'id'     => $b->user->id,
+                'name'   => $b->user->name,
+                'email'  => $b->user->email,
+                'avatar' => $b->user->avatar,
+            ] : null,
+        ]);
+
+        return response()->json($bookings);
+    }
+
+    public function submitDispute(Request $request, Booking $booking): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Only the booking owner or the booked_for user can dispute
+        $ownerId = $booking->booked_for_user_id ?? $booking->user_id;
+        if ($ownerId !== $userId) {
+            return response()->json(['error' => 'Not authorised to dispute this booking'], 403);
+        }
+        if ($booking->cancel_reason !== 'ghost_release') {
+            return response()->json(['error' => 'Only auto-released bookings can be disputed'], 422);
+        }
+        if ($booking->dispute_status) {
+            return response()->json(['error' => 'Dispute already submitted'], 422);
+        }
+
+        $data = $request->validate(['note' => 'nullable|string|max:500']);
+        $now  = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
+
+        $booking->update([
+            'dispute_status' => 'pending',
+            'dispute_note'   => $data['note'] ?? null,
+            'disputed_at'    => $now,
+        ]);
+
+        \App\Models\ActivityLog::record(
+            'booking.dispute_submitted',
+            "Dispute submitted for ghost-released booking #{$booking->id} — {$booking->title}",
+            $booking,
+            ['user_id' => $userId],
+        );
+
+        return response()->json(['dispute_status' => 'pending']);
+    }
+
+    public function resolveDispute(Request $request, Booking $booking): JsonResponse
+    {
+        $admin = $request->user();
+        if (! in_array($admin->role, ['admin', 'superadmin', 'receptionist', 'building_admin'])) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+        if ($booking->dispute_status !== 'pending') {
+            return response()->json(['error' => 'No pending dispute on this booking'], 422);
+        }
+
+        $data   = $request->validate(['action' => 'required|in:approve,reject']);
+        $now    = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
+        $approve = $data['action'] === 'approve';
+
+        $updates = [
+            'dispute_status'       => $approve ? 'approved' : 'rejected',
+            'dispute_resolved_at'  => $now,
+            'dispute_resolved_by'  => $admin->id,
+        ];
+
+        if ($approve) {
+            $updates['status']       = 'confirmed';
+            $updates['cancelled_at'] = null;
+            $updates['cancel_reason'] = null;
+        }
+
+        $booking->update($updates);
+
+        \App\Models\ActivityLog::record(
+            $approve ? 'booking.dispute_approved' : 'booking.dispute_rejected',
+            ($approve ? 'Dispute approved' : 'Dispute rejected') . " for booking #{$booking->id} — {$booking->title}",
+            $booking,
+            ['resolved_by' => $admin->id],
+        );
+
+        if ($approve) {
+            $this->broadcastChange('reinstated', $booking);
+        }
+
+        return response()->json(['dispute_status' => $booking->dispute_status]);
     }
 
     public function store(Request $request): JsonResponse
@@ -146,8 +331,10 @@ class BookingController extends Controller
             'type'        => $isPrivileged
                 ? 'in:internal,external,maintenance,repairment'
                 : 'in:internal,external',
-            'series_id'          => 'nullable|string|max:36',
-            'booked_for'         => 'nullable|string|max:100',
+            'series_id'             => 'nullable|string|max:36',
+            'series_skipped_dates'  => 'nullable|array',
+            'series_skipped_dates.*'=> 'date_format:Y-m-d',
+            'booked_for'            => 'nullable|string|max:100',
             'booked_for_user_id' => 'nullable|exists:users,id',
         ]);
 
@@ -179,7 +366,8 @@ class BookingController extends Controller
             'user_id'   => $request->user()->id,
             'status'    => $data['status'] ?? 'confirmed',
             'type'      => $data['type'] ?? 'internal',
-            'series_id' => $data['series_id'] ?? null,
+            'series_id'            => $data['series_id'] ?? null,
+            'series_skipped_dates' => $data['series_skipped_dates'] ?? null,
         ]);
 
         if (!empty($data['booked_for_user_id'])) {
@@ -190,14 +378,24 @@ class BookingController extends Controller
                 'message'    => $request->user()->name . ' booked ' . $room->name . ' for you on '
                                 . Carbon::parse($booking->start_at)->format('d M, H:i'),
             ]);
+
+            $forName = \App\Models\User::find($data['booked_for_user_id'])?->name ?? ('user #' . $data['booked_for_user_id']);
+            \App\Models\ActivityLog::record(
+                'booking.created_for',
+                "Booked {$room->name} for {$forName} — \"{$booking->title}\"",
+                $booking,
+                ['room' => $room->name, 'booked_for' => $forName, 'start_at' => (string) $booking->start_at],
+            );
         }
+
+        $this->broadcastChange('created', $booking);
 
         return response()->json($booking->load(['user', 'room']), 201);
     }
 
     public function show(Booking $booking): JsonResponse
     {
-        return response()->json($booking->load(['user', 'room', 'pantryOrder']));
+        return response()->json($booking->load(['user', 'room']));
     }
 
     public function update(Request $request, Booking $booking): JsonResponse
@@ -254,7 +452,10 @@ class BookingController extends Controller
 
         if ($becomingCancelled) {
             $this->notifyCancelRecipient($booking, $request);
+            $this->logCancellation($booking);
         }
+
+        $this->broadcastChange('updated', $booking);
 
         return response()->json($booking->load(['user', 'room']));
     }
@@ -267,6 +468,8 @@ class BookingController extends Controller
 
         $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
         $this->notifyCancelRecipient($booking, $request);
+        $this->logCancellation($booking);
+        $this->broadcastChange('updated', $booking);
         return response()->json(['message' => 'Booking cancelled']);
     }
 
@@ -301,6 +504,8 @@ class BookingController extends Controller
             $booking->update($data);
         }
 
+        $this->broadcastChange('updated');
+
         return response()->json(['updated' => $bookings->count()]);
     }
 
@@ -325,6 +530,15 @@ class BookingController extends Controller
             $this->notifyCancelRecipient($booking, $request);
         }
 
+        \App\Models\ActivityLog::record(
+            'booking.cancelled',
+            "Cancelled recurring series \"{$first->title}\" ({$bookings->count()} bookings)",
+            $first,
+            ['series_id' => $seriesId, 'count' => $bookings->count(), 'title' => $first->title],
+        );
+
+        $this->broadcastChange('updated');
+
         return response()->json(['cancelled' => $bookings->count()]);
     }
 
@@ -333,6 +547,8 @@ class BookingController extends Controller
         Booking::where('user_id', $request->user()->id)
             ->where('status', 'cancelled')
             ->delete();
+
+        $this->broadcastChange('cleared');
 
         return response()->json(['message' => 'Cleared successfully']);
     }

@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { flushSync } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Room, Building, Booking } from '../types/index'
 import { getRooms, updateRoomStatus, updateRoom, updateRoomSpecial } from '../api/rooms'
@@ -12,6 +13,7 @@ import { useSettings } from '../context/SettingsContext'
 import RoomDetailModal from '../components/room/RoomDetailModal'
 import BookingPanel from '../components/booking/BookingPanel'
 import ContactReceptionistModal from '../components/room/ContactReceptionistModal'
+import AfterHoursModal from '../components/booking/AfterHoursModal'
 
 function toLocalDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -20,6 +22,20 @@ function toLocalDateStr(d: Date) {
 // Apply a CSS view-transition-name (typed loosely — not in all @types/react versions)
 function vtStyle(name?: string): React.CSSProperties | undefined {
   return name ? ({ viewTransitionName: name } as unknown as React.CSSProperties) : undefined
+}
+
+// Sliding pill indicator — measures the active button ([data-active="true"]) inside ref container
+function useSlidingIndicator(deps: unknown[]) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [ind, setInd] = useState({ left: 0, width: 0, ready: false })
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const active = el.querySelector('[data-active="true"]') as HTMLElement | null
+    if (active) setInd({ left: active.offsetLeft, width: active.offsetWidth, ready: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return { ref, ind }
 }
 
 // Subtle film grain — layered behind the glass UI for depth
@@ -45,7 +61,11 @@ export default function RoomsPage() {
   const queryClient = useQueryClient()
 
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') ?? ''
+  function setSearch(v: string) {
+    setSearchParams(p => { v ? p.set('q', v) : p.delete('q'); return p }, { replace: true })
+  }
   const [buildingFilter, setBuildingFilter] = useState<number | null>(defaultBuilding)
   const [floorFilter, setFloorFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | 'maintenance'>('')
@@ -53,6 +73,8 @@ export default function RoomsPage() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [vtId, setVtId] = useState<number | null>(null)
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false)
+  const [afterHoursOpen, setAfterHoursOpen] = useState(false)
+  const [afterHoursData, setAfterHoursData] = useState<{ buildingId?: number | null; workingHoursEnd: string } | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [contactOpen, setContactOpen] = useState(false)
   const [contactRoom, setContactRoom] = useState<Room | null>(null)
@@ -148,7 +170,7 @@ export default function RoomsPage() {
   }
 
   function handleBook(room: Room) {
-    if (room.requires_contact) { setContactRoom(room); setContactOpen(true) }
+    if (room.requires_contact && !isPrivileged) { setContactRoom(room); setContactOpen(true) }
     else { setSelectedRoom(room); setDetailOpen(false); setBookingPanelOpen(true) }
   }
 
@@ -172,6 +194,10 @@ export default function RoomsPage() {
   }
 
   const showFloorMaint = buildingFilter !== null
+
+  const viewInd     = useSlidingIndicator([viewMode])
+  const buildingInd = useSlidingIndicator([buildingFilter, buildings])
+  const floorInd    = useSlidingIndicator([floorFilter, statusFilter, floors, showFloorMaint])
 
   function renderRoomCard(room: Room, idx: number) {
     const occupied = isOccupiedNow(room)
@@ -248,8 +274,8 @@ export default function RoomsPage() {
         </div>
 
         {/* Bottom gradient-blur caption */}
-        <div className="absolute inset-x-0 bottom-0 pt-12 px-4 pb-3.5 flex items-end justify-between gap-3"
-          style={{ background: 'linear-gradient(to top, rgba(8,10,20,0.80) 35%, rgba(8,10,20,0))', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)' }}>
+        <div className="absolute inset-x-0 bottom-0 pt-7 px-4 pb-3.5 flex items-end justify-between gap-3"
+          style={{ background: 'linear-gradient(to top, rgba(8,10,20,0.76) 28%, rgba(8,10,20,0))', backdropFilter: 'blur(1.5px)', WebkitBackdropFilter: 'blur(1.5px)' }}>
           {/* Meta */}
           <div className="min-w-0">
             <p className="text-[14px] font-black text-white truncate leading-tight">{getBuildingCode(room.building_id)}</p>
@@ -259,7 +285,7 @@ export default function RoomsPage() {
             </div>
           </div>
           {/* Action pill */}
-          {room.requires_contact ? (
+          {room.requires_contact && !isPrivileged ? (
             <button onClick={e => { e.stopPropagation(); setContactRoom(room); setContactOpen(true) }}
               className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-amber-400 text-amber-900 text-[11px] font-black hover:bg-amber-300 transition-all">
               <span className="material-symbols-outlined" style={{ fontSize: 15 }}>support_agent</span>Contact
@@ -325,7 +351,7 @@ export default function RoomsPage() {
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>
               </button>
             )}
-            {room.requires_contact ? (
+            {room.requires_contact && !isPrivileged ? (
               <button onClick={e => { e.stopPropagation(); setContactRoom(room); setContactOpen(true) }}
                 className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase bg-amber-400 text-amber-900 hover:bg-amber-300 transition-all">Contact</button>
             ) : !isMaintenance ? (
@@ -369,13 +395,15 @@ export default function RoomsPage() {
                 className="w-44 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all" />
             </div>
             {/* View toggle */}
-            <div className="flex gap-0.5 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 shrink-0">
-              <button onClick={() => setViewMode('card')} title="Card view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+            <div ref={viewInd.ref} className="relative flex gap-0.5 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 shrink-0">
+              <div className="absolute top-1 bottom-1 rounded-lg pointer-events-none shadow dark:ring-1 dark:ring-white/[0.13]"
+                style={{ left: viewInd.ind.left, width: viewInd.ind.width, background: 'var(--ds-bg-surface)', opacity: viewInd.ind.ready ? 1 : 0, transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1), width 0.2s cubic-bezier(0.4,0,0.2,1), opacity 0.1s' }} />
+              <button data-active={viewMode === 'card'} onClick={() => setViewMode('card')} title="Card view"
+                className={`relative z-10 size-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'card' ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>grid_view</span>
               </button>
-              <button onClick={() => setViewMode('list')} title="List view"
-                className={`size-8 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+              <button data-active={viewMode === 'list'} onClick={() => setViewMode('list')} title="List view"
+                className={`relative z-10 size-8 flex items-center justify-center rounded-lg transition-colors ${viewMode === 'list' ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 <span className="material-symbols-outlined" style={{ fontSize: 17 }}>view_list</span>
               </button>
             </div>
@@ -385,14 +413,16 @@ export default function RoomsPage() {
         {/* Row 2: building pills + floor/maint (only when building selected) */}
         <div className="flex items-center gap-2 pb-3">
           {/* Building pills */}
-          <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
-            <button onClick={() => selectBuilding(null)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${buildingFilter === null ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+          <div ref={buildingInd.ref} className="relative flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
+            <div className="absolute top-1 bottom-1 rounded-lg pointer-events-none shadow dark:ring-1 dark:ring-white/[0.13]"
+              style={{ left: buildingInd.ind.left, width: buildingInd.ind.width, background: 'var(--ds-bg-surface)', opacity: buildingInd.ind.ready ? 1 : 0, transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1), width 0.2s cubic-bezier(0.4,0,0.2,1), opacity 0.1s' }} />
+            <button data-active={buildingFilter === null} onClick={() => selectBuilding(null)}
+              className={`relative z-10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors ${buildingFilter === null ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
               All
             </button>
             {(buildings as Building[]).map(b => (
-              <button key={b.id} onClick={() => selectBuilding(b.id)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all whitespace-nowrap ${buildingFilter === b.id ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+              <button key={b.id} data-active={buildingFilter === b.id} onClick={() => selectBuilding(b.id)}
+                className={`relative z-10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors whitespace-nowrap ${buildingFilter === b.id ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                 {b.code || b.name}{(b.location?.name || b.address) ? ` - ${b.location?.name || b.address}` : ''}
               </button>
             ))}
@@ -402,20 +432,22 @@ export default function RoomsPage() {
           {showFloorMaint && floors.length > 0 && (
             <>
               <div className="w-px h-5 bg-[var(--ds-border)] shrink-0" />
-              <div className="flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
-                <button onClick={() => { setFloorFilter(''); setStatusFilter('') }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${!floorFilter && !statusFilter ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+              <div ref={floorInd.ref} className="relative flex items-center bg-[var(--ds-bg-surface-2)] rounded-xl p-1 gap-0.5">
+                <div className="absolute top-1 bottom-1 rounded-lg pointer-events-none shadow dark:ring-1 dark:ring-white/[0.13]"
+                  style={{ left: floorInd.ind.left, width: floorInd.ind.width, background: 'var(--ds-bg-surface)', opacity: floorInd.ind.ready ? 1 : 0, transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1), width 0.2s cubic-bezier(0.4,0,0.2,1), opacity 0.1s' }} />
+                <button data-active={!floorFilter && !statusFilter} onClick={() => { setFloorFilter(''); setStatusFilter('') }}
+                  className={`relative z-10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors ${!floorFilter && !statusFilter ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   All
                 </button>
                 {floors.map(f => (
-                  <button key={f} onClick={() => { setFloorFilter(floorFilter === f ? '' : f); setStatusFilter('') }}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${floorFilter === f ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)] dark:bg-white/[0.09] dark:ring-1 dark:ring-white/[0.13]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                  <button key={f} data-active={floorFilter === f} onClick={() => { setFloorFilter(floorFilter === f ? '' : f); setStatusFilter('') }}
+                    className={`relative z-10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors ${floorFilter === f ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                     {f}
                   </button>
                 ))}
-                <div className="w-px h-4 bg-[var(--ds-border)] mx-0.5" />
-                <button onClick={() => { setStatusFilter(statusFilter === 'maintenance' ? '' : 'maintenance'); setFloorFilter('') }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-1 ${statusFilter === 'maintenance' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 shadow' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                <div className="relative z-10 w-px h-4 bg-[var(--ds-border)] mx-0.5" />
+                <button data-active={statusFilter === 'maintenance'} onClick={() => { setStatusFilter(statusFilter === 'maintenance' ? '' : 'maintenance'); setFloorFilter('') }}
+                  className={`relative z-10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center gap-1 ${statusFilter === 'maintenance' ? 'text-orange-600 dark:text-orange-300' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>Maint.
                 </button>
               </div>
@@ -468,7 +500,7 @@ export default function RoomsPage() {
                 <div className="flex items-center gap-2 flex-1 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                   {availableNowRooms.map(r => (
                     <button key={r.id}
-                      onClick={() => r.requires_contact ? (setContactRoom(r), setContactOpen(true)) : handleBook(r)}
+                      onClick={() => (r.requires_contact && !isPrivileged) ? (setContactRoom(r), setContactOpen(true)) : handleBook(r)}
                       className="group/strip flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-[#adee2b]/15 hover:border-[#adee2b]/40 transition-all shrink-0">
                       <span className="text-[11px] font-black text-white/75 group-hover/strip:text-[#adee2b] whitespace-nowrap transition-colors">{r.name}</span>
                       <span className="text-[9px] font-bold text-white/30 whitespace-nowrap">{getBuildingCode(r.building_id)}</span>
@@ -617,13 +649,30 @@ export default function RoomsPage() {
         prefillStart=""
         prefillEnd=""
         onSubmit={() => setBookingPanelOpen(false)}
+        onAfterHoursOpen={(data) => {
+          setBookingPanelOpen(false)
+          setAfterHoursData(data)
+          setAfterHoursOpen(true)
+        }}
       />
       {bookingPanelOpen && (
         <div className="fixed inset-0 z-[99] bg-black/30 backdrop-blur-sm" onClick={() => setBookingPanelOpen(false)} />
       )}
 
+      <AfterHoursModal
+        open={afterHoursOpen}
+        onClose={() => setAfterHoursOpen(false)}
+        workingHoursEnd={afterHoursData?.workingHoursEnd ?? '17:00'}
+        buildingId={afterHoursData?.buildingId}
+        onChangeTime={() => {
+          setAfterHoursOpen(false)
+          setSelectedRoom(null)
+          setBookingPanelOpen(true)
+        }}
+      />
+
       <RoomDetailModal room={detailRoom} open={detailOpen} onClose={() => setDetailOpen(false)} onBook={handleBook} bookings={todayBookings as Booking[]} />
-      <ContactReceptionistModal open={contactOpen} onClose={() => setContactOpen(false)} roomName={contactRoom?.name} />
+      <ContactReceptionistModal open={contactOpen} onClose={() => setContactOpen(false)} roomName={contactRoom?.name} buildingId={contactRoom?.building_id} />
 
       <style>{`
         @keyframes fadeSlideUp {

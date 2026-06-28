@@ -24,15 +24,15 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
-        <SettingsProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <SettingsProvider>
             <NotificationProvider>
               <CancelToastProvider>
                 <App />
               </CancelToastProvider>
             </NotificationProvider>
-          </AuthProvider>
-        </SettingsProvider>
+          </SettingsProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
   </StrictMode>,

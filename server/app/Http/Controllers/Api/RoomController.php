@@ -9,6 +9,8 @@ use App\Models\RoomView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class RoomController extends Controller
 {
@@ -28,7 +30,6 @@ class RoomController extends Controller
         $data = $request->validate([
             'building_id'      => 'nullable|exists:buildings,id',
             'name'             => 'required|string',
-            'type'             => 'nullable|string|max:20',
             'capacity'         => 'required|integer|min:1',
             'floor'            => 'required|string',
             'facilities'       => 'nullable|array',
@@ -39,7 +40,8 @@ class RoomController extends Controller
 
         // Auto-set sort_order to max within the building + 1
         $maxOrder = Room::where('building_id', $data['building_id'] ?? null)->max('sort_order') ?? 0;
-        $data['sort_order'] = $maxOrder + 1;
+        $data['sort_order']   = $maxOrder + 1;
+        $data['sensor_code']  = Str::random(16);
 
         $room = Room::create($data);
         return response()->json($room->load('building'), 201);
@@ -50,7 +52,6 @@ class RoomController extends Controller
         $data = $request->validate([
             'building_id'      => 'nullable|exists:buildings,id',
             'name'             => 'sometimes|string',
-            'type'             => 'nullable|string|max:20',
             'capacity'         => 'sometimes|integer|min:1',
             'floor'            => 'sometimes|string',
             'facilities'       => 'nullable|array',
@@ -108,6 +109,31 @@ class RoomController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    public function uploadPhoto(Request $request, Room $room): JsonResponse
+    {
+        $request->validate(['photo' => 'required|image|max:5120']);
+        $path = $request->file('photo')->store('room-photos', 'public');
+        $url  = Storage::url($path);
+        $photos = $room->photos ?? [];
+        $photos[] = $url;
+        $room->update(['photos' => $photos]);
+        return response()->json(['url' => $url, 'photos' => $photos]);
+    }
+
+    public function deletePhoto(Request $request, Room $room): JsonResponse
+    {
+        $request->validate(['url' => 'required|string']);
+        $url    = $request->url;
+        $photos = array_values(array_filter($room->photos ?? [], fn ($p) => $p !== $url));
+        $room->update(['photos' => $photos]);
+        // Remove file from storage if it's a local upload
+        $path = str_replace('/storage/', '', parse_url($url, PHP_URL_PATH));
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+        return response()->json(['photos' => $photos]);
     }
 
     public function destroy(Room $room): JsonResponse
@@ -285,5 +311,12 @@ class RoomController extends Controller
             ->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    public function regenerateSensorCode(Room $room): JsonResponse
+    {
+        $code = Str::random(16);
+        $room->update(['sensor_code' => $code]);
+        return response()->json($room->fresh('building'));
     }
 }

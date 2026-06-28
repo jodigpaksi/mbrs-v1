@@ -1,20 +1,33 @@
 <?php
 
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ArchiveController;
+use App\Http\Controllers\Api\KioskController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\BuildingController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\SensorController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
+
+// Sensor — ESP32 presence ping (no user auth, token validated in controller)
+Route::post('/sensor/ping', [SensorController::class, 'ping']);
+
+// Kiosk — public (no auth required)
+Route::prefix('kiosk')->group(function () {
+    Route::get('{id}/config', [KioskController::class, 'publicConfig']);
+    Route::post('{id}/verify', [KioskController::class, 'verifyPin']);
+    Route::get('{id}/status', [KioskController::class, 'publicStatus']);
+    Route::post('{id}/confirm', [KioskController::class, 'confirmPresence']);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -23,11 +36,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/me/avatar', [AuthController::class, 'removeAvatar']);
     Route::patch('/me/password', [AuthController::class, 'updatePassword']);
     Route::patch('/me/on-duty', [AuthController::class, 'updateOnDuty']);
+    Route::patch('/me/preferences', [AuthController::class, 'updatePreferences']);
 
     // Settings (read: all auth)
     Route::get('/settings/booking-hours', [SettingController::class, 'bookingHours']);
     Route::get('/settings/weekend', [SettingController::class, 'weekendSettings']);
     Route::get('/settings/general', [SettingController::class, 'generalSettings']);
+    Route::get('/settings/after-hours-contacts', [SettingController::class, 'afterHoursContacts']);
+    Route::get('/settings/special-room-contacts', [SettingController::class, 'specialRoomContacts']);
+
+    // Receptionist-level settings (admin + receptionist)
+    Route::middleware('can:receptionist')->group(function () {
+        Route::patch('/settings/after-hours-contacts', [SettingController::class, 'updateAfterHoursContacts']);
+        Route::patch('/settings/special-room-contacts', [SettingController::class, 'updateSpecialRoomContacts']);
+    });
 
     // Locations (read: all auth)
     Route::get('/locations', [LocationController::class, 'index']);
@@ -86,23 +108,28 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bookings/{booking}', [BookingController::class, 'show']);
     Route::patch('/bookings/{booking}', [BookingController::class, 'update']);
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
+    Route::post('/bookings/{booking}/confirm-presence', [BookingController::class, 'confirmPresenceWeb']);
+    Route::post('/bookings/{booking}/dispute', [BookingController::class, 'submitDispute']);
 
-    // Assets (read scoped to managed buildings; write: building_admin+)
-    Route::get('/assets', [AssetController::class, 'index']);
+    // Disputes — accessible to admin, receptionist, building_admin (controller enforces role)
+    Route::get('/disputes', [BookingController::class, 'disputeIndex']);
+    Route::post('/disputes/{booking}/resolve', [BookingController::class, 'resolveDispute']);
 
-    // Building admin: manage rooms + assets within their buildings
+    // Building admin: manage rooms within their buildings
     Route::middleware('can:building_admin')->group(function () {
         Route::post('/rooms', [RoomController::class, 'store']);
         Route::post('/rooms/reorder', [RoomController::class, 'reorder']);
         Route::patch('/rooms/{room}', [RoomController::class, 'update']);
         Route::delete('/rooms/{room}', [RoomController::class, 'destroy']);
-        Route::post('/assets', [AssetController::class, 'store']);
-        Route::patch('/assets/{asset}', [AssetController::class, 'update']);
-        Route::delete('/assets/{asset}', [AssetController::class, 'destroy']);
-        Route::post('/assets/{asset}/units', [AssetController::class, 'storeUnit']);
-        Route::patch('/assets/{asset}/units/{unit}', [AssetController::class, 'updateUnit']);
-        Route::delete('/assets/{asset}/units/{unit}', [AssetController::class, 'destroyUnit']);
+        Route::post('/rooms/{room}/photo', [RoomController::class, 'uploadPhoto']);
+        Route::delete('/rooms/{room}/photo', [RoomController::class, 'deletePhoto']);
+        Route::post('/rooms/{room}/sensor-code/regenerate', [RoomController::class, 'regenerateSensorCode']);
     });
+
+    // Analytics (all authenticated)
+    Route::get('/analytics/overview', [AnalyticsController::class, 'overview']);
+    Route::get('/analytics/report',   [AnalyticsController::class, 'report']);
+    Route::get('/analytics/export',   [AnalyticsController::class, 'export']);
 
     // Super admin only: locations + buildings CRUD + user management + departments + settings
     Route::middleware('can:admin')->group(function () {
@@ -126,23 +153,42 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/locations', [LocationController::class, 'store']);
         Route::patch('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
+        // Activity log (admin only)
+        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
+        Route::get('/activity-logs/export', [\App\Http\Controllers\Api\ActivityLogController::class, 'export']);
+
+        // Kiosk CRUD (admin only)
+        Route::get('/kiosk-configs', [KioskController::class, 'index']);
+        Route::post('/kiosk-configs', [KioskController::class, 'store']);
+        Route::patch('/kiosk-configs/{id}', [KioskController::class, 'update']);
+        Route::delete('/kiosk-configs/{id}', [KioskController::class, 'destroy']);
+
         Route::post('/buildings', [BuildingController::class, 'store']);
         Route::patch('/buildings/{building}', [BuildingController::class, 'update']);
         Route::delete('/buildings/{building}', [BuildingController::class, 'destroy']);
         Route::get('/users', [UserController::class, 'index']);
-        Route::get('/users/export', fn () =>
-            response()->json(
-                \App\Models\User::with('department')->orderBy('role')->orderBy('name')->get()
-                    ->map(fn ($u) => [
-                        'name'       => $u->name,
-                        'email'      => $u->email,
-                        'password'   => $u->password,
-                        'department' => $u->department?->name ?? '',
-                        'role'       => $u->role,
-                        'ext'        => $u->ext ?? '',
-                    ])
-            )
-        );
+        Route::get('/users/export', function () {
+            $rows = \App\Models\User::with('department.location', 'defaultBuilding', 'adminBuildings')->orderBy('role')->orderBy('name')->get();
+            \App\Models\ActivityLog::record(
+                'data.exported',
+                "Exported {$rows->count()} user records (incl. credentials)",
+                null,
+                ['type' => 'users', 'count' => $rows->count()],
+            );
+            return response()->json(
+                $rows->map(fn ($u) => [
+                    'name'                => $u->name,
+                    'email'               => $u->email,
+                    'password'            => $u->password,
+                    'department'          => $u->department?->name ?? '',
+                    'department_location' => $u->department?->location?->name ?? '',
+                    'role'                => $u->role,
+                    'ext'                 => $u->ext ?? '',
+                    'default_building'    => $u->defaultBuilding?->name ?? '',
+                    'assigned_buildings'  => $u->adminBuildings->pluck('name')->implode(', '),
+                ])
+            );
+        });
         Route::post('/users', [UserController::class, 'store']);
         Route::post('/users/import', [UserController::class, 'importUsers']);
         Route::patch('/users/{user}', [UserController::class, 'update']);

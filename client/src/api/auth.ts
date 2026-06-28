@@ -30,6 +30,11 @@ export async function updateOnDutyStatus(onDuty: boolean) {
   return res.data as { on_duty: boolean }
 }
 
+export async function updatePreferences(preferences: Record<string, unknown>) {
+  const res = await api.patch('/me/preferences', { preferences })
+  return res.data as { preferences: Record<string, unknown> }
+}
+
 export async function updateAvatar(file: File) {
   const form = new FormData()
   form.append('avatar', file)

@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Booking } from '../types/index'
-import { getMyBookings, clearCancelledBookings, getBookings, updateBooking } from '../api/bookings'
+import { getMyBookings, clearCancelledBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
+import { getGeneralSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { useCancelToast } from '../context/CancelToastContext'
@@ -19,21 +21,21 @@ function dur(start: string, end: string) {
   const h = Math.floor(diff / 60), m = diff % 60
   return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`
 }
-function fmtTime(iso: string) {
-  return parseLocal(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+function fmtTime(iso: string, lang = 'en') {
+  return parseLocal(iso).toLocaleTimeString(lang === 'id' ? 'id-ID' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
 }
-function fmtGroupLabel(iso: string) {
+function fmtGroupLabel(iso: string, todayLabel: string, tomorrowLabel: string, lang = 'en') {
   const d = parseLocal(iso), today = new Date(), tomorrow = new Date()
   tomorrow.setDate(today.getDate() + 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
+  if (d.toDateString() === today.toDateString()) return todayLabel
+  if (d.toDateString() === tomorrow.toDateString()) return tomorrowLabel
+  return d.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
 }
-function fmtTableDate(iso: string) {
-  return parseLocal(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+function fmtTableDate(iso: string, lang = 'en') {
+  return parseLocal(iso).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short' })
 }
-function fmtTableDay(iso: string) {
-  return parseLocal(iso).toLocaleDateString('en-GB', { weekday: 'short' })
+function fmtTableDay(iso: string, lang = 'en') {
+  return parseLocal(iso).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' })
 }
 function groupByDate(bookings: Booking[]) {
   const groups: Record<string, Booking[]> = {}
@@ -76,13 +78,9 @@ const TAB_META: Record<Tab, { color: string; indicatorColor: string }> = {
 const PRIMARY_TABS: Tab[] = ['today', 'upcoming', 'all']
 const SECONDARY_TABS: Tab[] = ['past', 'cancelled', 'tentative', 'series', 'hcal']
 
-const TAB_TOOLTIP: Partial<Record<Tab, string>> = {
-  past: 'Last 30 days only',
-  cancelled: 'Cancelled in the last 7 days',
-  series: 'Repeat booking groups',
-  tentative: 'Awaiting confirmation',
-  hcal: 'Booking timeline view',
-  special: 'Special rooms · ±90 days',
+type TabTooltipKey = 'past' | 'cancelled' | 'series' | 'tentative' | 'hcal' | 'special'
+const TAB_TOOLTIP_KEY: Partial<Record<Tab, TabTooltipKey>> = {
+  past: 'past', cancelled: 'cancelled', series: 'series', tentative: 'tentative', hcal: 'hcal', special: 'special',
 }
 
 
@@ -90,12 +88,14 @@ interface CardSharedProps {
   activeTab: Tab
   pendingCancelIds: Set<number>
   exitingCancelIds: Set<number>
+  animate: boolean
   onEdit: (b: Booking) => void
   onCancel: (b: Booking) => void
   onTentativeAction?: (b: Booking) => void
 }
 
-function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+  const { language } = useSettings()
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -118,22 +118,19 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
     : isCancelled ? 'bg-red-200 dark:bg-red-900/50 text-red-600 dark:text-red-400'
     : isPast ? 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)]' : isConf ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)]'
 
-  const TENTATIVE_HATCH_IMG = 'repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(255,255,255,0.04) 5px,rgba(255,255,255,0.04) 10px)'
-  const TENTATIVE_BADGE_HATCH = 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.05) 3px,rgba(255,255,255,0.05) 6px)'
-
   const baseCardStyle = isTentative
-    ? { background: 'var(--ds-bg-surface-2)', backgroundImage: TENTATIVE_HATCH_IMG, border: '1px solid var(--ds-border)' }
+    ? { backgroundColor: 'var(--ds-bg-surface-2)', border: '1px solid var(--ds-border)' }
     : (!isCancelled && !isConf)
-      ? { background: isPastTab ? 'var(--ds-bg-surface-2)' : 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }
+      ? { backgroundColor: isPastTab ? 'var(--ds-bg-surface-2)' : 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }
       : {}
 
   return (
     <div
       onClick={() => { if (canEdit) { if (isTentative && onTentativeAction) onTentativeAction(b); else onEdit(b) } }}
-      className={`rounded-2xl p-5 group ${cardBg} ${canEdit ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
+      className={`rounded-2xl px-5 pt-5 group relative overflow-hidden ${canEdit ? 'pb-12' : 'pb-5'} ${isTentative ? 't-hatch' : ''} ${cardBg} ${canEdit ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
       style={{
         ...baseCardStyle,
-        animation: `card-in 0.25s cubic-bezier(0.4,0,0.2,1) ${index * 45}ms both`,
+        animation: animate ? `card-in 0.25s cubic-bezier(0.4,0,0.2,1) ${index * 45}ms both` : undefined,
         opacity: isExiting ? 0 : isPending ? 0.3 : 1,
         transform: isExiting ? 'scale(0.95)' : isPending ? 'scale(0.98)' : undefined,
         outline: isPending ? '2px solid #fca5a5' : 'none',
@@ -141,11 +138,22 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
         transition: 'opacity 0.35s ease, transform 0.35s ease, box-shadow 0.2s',
       }}
     >
+      {/* Badges row — lean: status + type + optional meta. for/by pushed to right */}
       <div className="flex items-center gap-2 mb-3">
         <span
-          className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${isTentative ? '' : badge}`}
-          style={isTentative ? { backgroundColor: 'var(--ds-bg-raised)', backgroundImage: TENTATIVE_BADGE_HATCH, color: 'var(--ds-text-2)' } : undefined}
+          className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${isTentative ? 't-badge-hatch' : badge}`}
+          style={isTentative ? { backgroundColor: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' } : undefined}
         >{b.status}</span>
+        {b.cancel_reason === 'ghost_release' && b.dispute_status !== 'approved' && (
+          <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-1 rounded-full bg-orange-500/15 text-orange-600 dark:text-orange-400">
+            <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_off</span>Auto-Released
+          </span>
+        )}
+        {b.dispute_status === 'approved' && (
+          <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-1 rounded-full bg-green-500/15 text-green-600 dark:text-green-400">
+            <span className="material-symbols-outlined" style={{ fontSize: 10 }}>gavel</span>Reinstated
+          </span>
+        )}
         <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full"
           style={{ backgroundColor: tStyle.bg, color: tStyle.text }}>{tStyle.label}</span>
         {b.series_id && (
@@ -158,7 +166,29 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
             <span className="material-symbols-outlined" style={{ fontSize: 10 }}>star</span>Special
           </span>
         )}
+        {(b.booked_for && !b.is_recipient) || (b.is_recipient && b.user) ? (
+          <div className="ml-auto flex items-center gap-2">
+            {b.booked_for && !b.is_recipient && (
+              <UserHoverCard name={b.booked_for} userId={b.booked_for_user_id}>
+                <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${isConf ? 'bg-black/15 text-black' : isCancelled ? 'bg-red-500/15 text-red-700 dark:text-red-300' : 'bg-[var(--ds-text-1)]/10 text-[var(--ds-text-1)]'}`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person</span>
+                  for {b.booked_for}
+                </span>
+              </UserHoverCard>
+            )}
+            {b.is_recipient && b.user && (
+              <UserHoverCard name={b.user.name} user={b.user}>
+                <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${isConf ? 'bg-black/15 text-black' : isCancelled ? 'bg-red-500/15 text-red-700 dark:text-red-300' : 'bg-[#adee2b]/30 text-[#2d5000] dark:text-[#adee2b]'}`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person</span>
+                  by {b.user.name}
+                </span>
+              </UserHoverCard>
+            )}
+          </div>
+        ) : null}
       </div>
+
+      {/* Main content — left: title/room, right: date + time stack */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h4 className={`text-base font-black uppercase tracking-tight leading-tight ${titleClr}`}>{b.title}</h4>
@@ -172,39 +202,116 @@ function BookingCard({ b, index = 0, activeTab, pendingCancelIds, exitingCancelI
             )}
           </p>
         </div>
-        <div className="text-right shrink-0">
-          {b.booked_for && !b.is_recipient && (
-            <UserHoverCard name={b.booked_for} userId={b.booked_for_user_id}>
-              <p className="text-[11px] font-black text-[var(--ds-text-3)] mb-1.5 truncate max-w-[120px]">for {b.booked_for}</p>
-            </UserHoverCard>
-          )}
-          {b.is_recipient && b.user && (
-            <UserHoverCard name={b.user.name} user={b.user}>
-              <p className="text-[11px] font-black mb-1.5 truncate max-w-[120px] text-[#4d7a00] dark:text-[#adee2b]">by {b.user.name}</p>
-            </UserHoverCard>
-          )}
-          <p className={`text-2xl font-black tabular-nums leading-none ${t1}`}>{fmtTime(b.start_at)}</p>
-          <p className={`text-sm font-bold mt-1 ${t2}`}>{fmtTime(b.end_at)}</p>
+        <div className="text-right shrink-0 relative">
+          <p className={`text-[9px] font-black uppercase tracking-wide leading-none mb-2 ${t2}`}>{fmtTableDate(b.start_at, language)}</p>
+          <p className={`text-2xl font-black tabular-nums leading-none ${t1}`}>{fmtTime(b.start_at, language)}</p>
+          <p className={`text-sm font-bold mt-1 ${t2}`}>{fmtTime(b.end_at, language)}</p>
           <p className={`text-[11px] font-bold mt-0.5 ${td}`}>{dur(b.start_at, b.end_at)}</p>
         </div>
       </div>
       {canEdit && (
-        <div className={`flex items-center justify-between mt-4 pt-3 border-t ${isConf ? 'border-black/10' : 'border-[var(--ds-border-sub)]'}`}>
-          <span className="text-[9px] font-black uppercase tracking-wider flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-black/40">
-            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{isTentative ? 'tune' : 'edit'}</span>{isTentative ? 'Click to manage' : 'Click to edit'}
+        <>
+          <span className={`absolute bottom-3.5 left-5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isConf ? 'text-black/35' : 'text-[var(--ds-text-4)]'}`}>
+            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{isTentative ? 'tune' : 'edit'}</span>
+            {isTentative ? 'Click to manage' : 'Click to edit'}
           </span>
-          <button onClick={e => { e.stopPropagation(); onCancel(b) }} disabled={isPending}
-            className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all disabled:opacity-40
-              ${isConf ? 'bg-black/10 text-black/50 hover:bg-black hover:text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500'}`}>
+          <button
+            onClick={e => { e.stopPropagation(); onCancel(b) }}
+            disabled={isPending}
+            className={`absolute bottom-0 right-0 px-5 py-3 rounded-tl-2xl text-[11px] font-black uppercase transition-all disabled:opacity-40
+              ${isConf ? 'bg-black/10 text-black/50 hover:bg-black hover:text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500'}`}
+          >
             Cancel
           </button>
-        </div>
+        </>
+      )}
+      {/* Dispute section — only for the confirmation target (booked_for user, or creator if no booked_for) */}
+      {b.cancel_reason === 'ghost_release' && (!b.booked_for_user_id || b.is_recipient === true) && <DisputeSection b={b} />}
+    </div>
+  )
+}
+
+function DisputeSection({ b }: { b: Booking }) {
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone] = useState(b.dispute_status ?? null)
+
+  if (done === 'pending') return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20">
+      <span className="material-symbols-outlined text-orange-500" style={{ fontSize: 14 }}>hourglass_top</span>
+      <p className="text-[10px] font-black text-orange-600 dark:text-orange-400">Dispute submitted — pending admin review</p>
+    </div>
+  )
+  if (done === 'approved') return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/20">
+      <span className="material-symbols-outlined text-green-500" style={{ fontSize: 14 }}>check_circle</span>
+      <p className="text-[10px] font-black text-green-600 dark:text-green-400">Dispute approved — booking reinstated</p>
+    </div>
+  )
+  if (done === 'rejected') return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
+      <span className="material-symbols-outlined text-red-500" style={{ fontSize: 14 }}>cancel</span>
+      <p className="text-[10px] font-black text-red-500 dark:text-red-400">Dispute rejected by admin</p>
+    </div>
+  )
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      await submitDispute(b.id, note.trim() || undefined)
+      setDone('pending')
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+    } catch { /* ignore */ }
+    finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="mt-3" onClick={e => e.stopPropagation()}>
+      {!open ? (
+        <button onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl transition-all"
+          style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.25)', color: '#ea580c' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(249,115,22,0.15)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(249,115,22,0.08)' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>gavel</span>
+          Dispute auto-release
+        </button>
+      ) : (
+        <form onSubmit={handleSubmit} className="rounded-xl p-3 space-y-2.5" style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)' }}>
+          <p className="text-[10px] font-black uppercase tracking-wider text-orange-600 dark:text-orange-400">Dispute Auto-Release</p>
+          <p className="text-[10px] font-medium text-[var(--ds-text-3)]">Were you in the room but forgot to confirm? Describe the situation — admin will review.</p>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            rows={3}
+            maxLength={500}
+            placeholder="Optional: I was in the room at [time]..."
+            className="w-full text-[11px] font-medium rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-orange-400"
+            style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-1)' }}
+          />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setOpen(false)}
+              className="flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-colors"
+              style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting}
+              className="flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all disabled:opacity-50"
+              style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.4)', color: '#ea580c' }}>
+              {submitting ? 'Submitting…' : 'Submit Dispute'}
+            </button>
+          </div>
+        </form>
       )}
     </div>
   )
 }
 
-function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+function BookingListItem({ b, index = 0, animate, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+  const { language } = useSettings()
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -221,15 +328,13 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
   const titleClr = isPastTab ? 'text-[var(--ds-text-2)]' : isCancelled ? 'text-red-700 dark:text-red-400' : isTentative ? 'text-[var(--ds-text-2)]' : isConf ? 'text-black' : 'text-[var(--ds-text-1)]'
   const subClr  = isPastTab ? 'text-[var(--ds-text-3)]' : isCancelled ? 'text-red-400' : isTentative ? 'text-[var(--ds-text-3)]' : isConf ? 'text-black/50' : 'text-[var(--ds-text-3)]'
   const timeClr = isPastTab ? 'text-[var(--ds-text-2)]' : isCancelled ? 'text-red-400' : isTentative ? 'text-[var(--ds-text-2)]' : isConf ? 'text-black/80' : 'text-[var(--ds-text-1)]'
-  const TENTATIVE_HATCH = 'repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(255,255,255,0.04) 5px,rgba(255,255,255,0.04) 10px)'
-
   return (
     <div
       onClick={() => { if (canEdit) { if (isTentative && onTentativeAction) onTentativeAction(b); else onEdit(b) } }}
-      className={`flex items-center gap-4 px-4 py-3 rounded-2xl border ${rowBg} ${canEdit ? 'cursor-pointer hover:shadow-sm' : ''}`}
+      className={`flex items-center gap-4 px-4 py-3 rounded-2xl border ${isTentative ? 't-hatch' : ''} ${rowBg} ${canEdit ? 'cursor-pointer hover:shadow-sm' : ''}`}
       style={{
-        ...(isTentative ? { background: 'var(--ds-bg-surface-2)', backgroundImage: TENTATIVE_HATCH, borderColor: 'var(--ds-border)' } : !isCancelled && !isConf ? { background: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border-sub)' } : {}),
-        animation: `card-in 0.22s cubic-bezier(0.4,0,0.2,1) ${index * 35}ms both`,
+        ...(isTentative ? { backgroundColor: 'var(--ds-bg-surface-2)', borderColor: 'var(--ds-border)' } : !isCancelled && !isConf ? { backgroundColor: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border-sub)' } : {}),
+        animation: animate ? `card-in 0.22s cubic-bezier(0.4,0,0.2,1) ${index * 35}ms both` : undefined,
         opacity: isExiting ? 0 : isPending ? 0.3 : 1,
         transform: isExiting ? 'scale(0.97) translateY(4px)' : undefined,
         outline: isPending ? '2px solid #fca5a5' : 'none',
@@ -241,10 +346,10 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
       <div className={`size-2.5 rounded-full shrink-0 ${dot}`} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <span className={`text-[13px] font-black uppercase leading-tight shrink-0 ${titleClr}`}>{b.title}</span>
-          <span className={`text-[10px] font-bold truncate ${subClr}`}>{b.room?.name}</span>
+          <span className={`text-[14px] font-black uppercase leading-tight shrink-0 ${titleClr}`}>{b.title}</span>
+          <span className={`text-[12px] font-bold truncate ${subClr}`}>{b.room?.name}</span>
           {b.room?.building && (
-            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0 ${isConf ? 'bg-black/10 text-black/50' : isTentative ? 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)]' : isCancelled ? 'bg-red-500/15 text-red-400' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)]'}`}>
+            <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0 ${isConf ? 'bg-black/10 text-black/50' : isTentative ? 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)]' : isCancelled ? 'bg-red-500/15 text-red-400' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)]'}`}>
               {b.room.building.code || b.room.building.name}
             </span>
           )}
@@ -263,18 +368,28 @@ function BookingListItem({ b, index = 0, activeTab, pendingCancelIds, exitingCan
       )}
       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0"
         style={{ backgroundColor: tStyle.bg, color: tStyle.text }}>{tStyle.label}</span>
+      {b.cancel_reason === 'ghost_release' && b.dispute_status !== 'approved' && (
+        <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 bg-orange-500/15 text-orange-600 dark:text-orange-400" title="Auto-cancelled: presence not confirmed in time">
+          <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_off</span>Auto-Released
+        </span>
+      )}
+      {b.dispute_status === 'approved' && (
+        <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 bg-green-500/15 text-green-600 dark:text-green-400" title="Auto-release disputed and reinstated">
+          <span className="material-symbols-outlined" style={{ fontSize: 10 }}>gavel</span>Reinstated
+        </span>
+      )}
       {b.series_id && (
         <span className="material-symbols-outlined text-blue-400 shrink-0" style={{ fontSize: 13 }} title="Series booking">link</span>
       )}
       {b.room?.requires_contact && (
         <span className="material-symbols-outlined text-amber-400 shrink-0" style={{ fontSize: 13 }} title="Special room">star</span>
       )}
-      <div className={`text-[11px] font-bold text-right shrink-0 leading-tight ${subClr}`}>
-        <p>{fmtTableDate(b.start_at)}</p>
-        <p className="opacity-60">{fmtTableDay(b.start_at)}</p>
+      <div className={`text-[13px] font-bold text-right shrink-0 leading-tight ${subClr}`}>
+        <p>{fmtTableDate(b.start_at, language)}</p>
+        <p className="opacity-60 text-[11px]">{fmtTableDay(b.start_at, language)}</p>
       </div>
-      <div className={`text-[12px] font-black tabular-nums shrink-0 ${timeClr}`}>
-        {fmtTime(b.start_at)}–{fmtTime(b.end_at)}
+      <div className={`text-[14px] font-black tabular-nums shrink-0 ${timeClr}`}>
+        {fmtTime(b.start_at, language)}–{fmtTime(b.end_at, language)}
       </div>
       {canEdit ? (
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
@@ -303,14 +418,30 @@ function SeriesGroupRow({
   onEdit,
   onCancel,
   onCancelSeries,
+  index,
 }: {
   group: SeriesGroup
   pendingCancelIds: Set<number>
   onEdit: (b: Booking) => void
   onCancel: (b: Booking) => void
   onCancelSeries: (group: SeriesGroup) => void
+  index: number
 }) {
+  const { language } = useSettings()
   const [open, setOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  function toggleOpen() {
+    if (open && !closing) {
+      setClosing(true)
+      closeTimer.current = setTimeout(() => { setOpen(false); setClosing(false) }, 160)
+    } else if (!open) {
+      setOpen(true)
+    }
+  }
+  useEffect(() => () => { clearTimeout(closeTimer.current) }, [])
+
   const { bookings } = group
   const first = bookings[0]
   const last = bookings[bookings.length - 1]
@@ -321,7 +452,7 @@ function SeriesGroupRow({
   const allCancelled = cancelledCount === bookings.length
 
   const fmtSeriesDate = (iso: string) =>
-    parseLocal(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    parseLocal(iso).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
   const dateRange = first === last
     ? fmtSeriesDate(first.start_at)
@@ -331,7 +462,8 @@ function SeriesGroupRow({
     <tbody>
       <tr
         className={`border-b border-[var(--ds-border-sub)] transition-colors hover:bg-[var(--ds-bg-raised)] cursor-pointer ${allCancelled ? 'opacity-40' : ''}`}
-        onClick={() => setOpen(o => !o)}
+        onClick={toggleOpen}
+        style={{ animation: 'tbl-group-enter 0.28s ease-out backwards', animationDelay: `${index * 45}ms` }}
       >
         <td className="px-3 py-3.5">
           <span
@@ -386,20 +518,28 @@ function SeriesGroupRow({
           </div>
         </td>
       </tr>
-      {open && bookings.map(b => {
+      {(open || closing) && bookings.map((b, i) => {
         const isPast = isActuallyPast(b)
         const isConf = b.status === 'confirmed'
         const isCancelled = b.status === 'cancelled'
         return (
-          <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] bg-[var(--ds-bg-surface-2)]/30 ${isPast || isCancelled ? 'opacity-50' : ''}`}>
+          <tr key={b.id}
+            className={`border-b border-[var(--ds-border-sub)] bg-[var(--ds-bg-surface-2)]/30 ${isPast || isCancelled ? 'opacity-50' : ''}`}
+            style={{
+              animation: closing
+                ? `tbl-row-exit 0.13s ease-in forwards`
+                : `tbl-row-enter 0.18s ease-out backwards`,
+              animationDelay: closing ? `${i * 8}ms` : `${i * 18}ms`,
+            }}
+          >
             <td className="pl-8 pr-3 py-2.5">
               <div className="w-3 h-px bg-[var(--ds-border)] ml-1" />
             </td>
             <td className="px-3 py-2.5 text-[10px] text-[var(--ds-text-3)] font-bold whitespace-nowrap">
-              {fmtTableDate(b.start_at)} <span className="text-[var(--ds-text-4)]">{fmtTableDay(b.start_at)}</span>
+              {fmtTableDate(b.start_at, language)} <span className="text-[var(--ds-text-4)]">{fmtTableDay(b.start_at, language)}</span>
             </td>
             <td className="px-3 py-2.5 text-[10px] font-bold text-[var(--ds-text-2)] whitespace-nowrap tabular-nums">
-              {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
+              {fmtTime(b.start_at, language)} – {fmtTime(b.end_at, language)}
               <span className="text-[var(--ds-text-4)] ml-1">{dur(b.start_at, b.end_at)}</span>
             </td>
             <td className="px-3 py-2.5" />
@@ -429,6 +569,50 @@ function SeriesGroupRow({
           </tr>
         )
       })}
+      {(open || closing) && (() => {
+        const skipped = first.series_skipped_dates
+        if (!skipped || skipped.length === 0) return null
+        const fmtSkipDate = (iso: string) => {
+          const [y, m, d] = iso.split('-').map(Number)
+          return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+        }
+        return (
+          <tr style={{
+            animation: closing
+              ? 'tbl-row-exit 0.13s ease-in forwards'
+              : `tbl-row-enter 0.18s ease-out backwards`,
+            animationDelay: closing ? `${bookings.length * 8}ms` : `${bookings.length * 18}ms`,
+          }}>
+            <td colSpan={7} className="px-0 pt-0 pb-1">
+              <div className="mx-8 mb-2 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-red-200 dark:border-red-500/20">
+                  <span className="material-symbols-outlined text-red-400" style={{ fontSize: 13 }}>event_busy</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-red-500">{skipped.length} date{skipped.length !== 1 ? 's' : ''} skipped — conflict at time of booking</span>
+                </div>
+                <div className="divide-y divide-red-200/60 dark:divide-red-500/10">
+                  {skipped.map(d => (
+                    <div key={d} className="flex items-center justify-between px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-red-300" style={{ fontSize: 12 }}>block</span>
+                        <span className="text-[11px] font-bold text-red-600 dark:text-red-400">{fmtSkipDate(d)}</span>
+                      </div>
+                      <button
+                        onClick={() => document.dispatchEvent(new CustomEvent('available-rooms-prefill', { detail: { date: d, startTime: '07:00', endTime: '16:30' } }))}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide transition-all
+                          bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-2)]
+                          hover:border-[#adee2b] hover:text-[#adee2b] hover:bg-[#adee2b]/5"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>search</span>
+                        Find another slot
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </td>
+          </tr>
+        )
+      })()}
     </tbody>
   )
 }
@@ -446,6 +630,7 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
   onHover?: () => void
   onUnhover?: () => void
 }) {
+  const { language } = useSettings()
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -516,6 +701,11 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
         <p style={{ fontSize: 17, fontWeight: 900, color: 'var(--ds-text-1)', lineHeight: 1.25, marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5, overflow: 'hidden' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--ds-text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{b.room?.name ?? '—'}</p>
+          {b.room?.building && (
+            <span style={{ flexShrink: 0, fontSize: 9, fontWeight: 900, color: 'var(--ds-text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', background: 'var(--ds-bg-raised)', borderRadius: 6, padding: '2px 6px' }}>
+              {b.room.building.code || b.room.building.name}
+            </span>
+          )}
           {b.room?.requires_contact && (
             <span className="material-symbols-outlined shrink-0" style={{ fontSize: 12, color: '#d97706' }} title="Special room">star</span>
           )}
@@ -535,7 +725,7 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
             </p>
           </UserHoverCard>
         ) : null}
-        <p style={{ fontSize: 13, fontWeight: 900, color: 'var(--ds-text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
+        <p style={{ fontSize: 13, fontWeight: 900, color: 'var(--ds-text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(b.start_at, language)} – {fmtTime(b.end_at, language)}</p>
       </div>
     </div>
   )
@@ -560,24 +750,39 @@ function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); retur
 
 export default function SchedulePage() {
   const { user } = useAuth()
-  const { t, defaultBuilding } = useSettings()
+  const { t, language, defaultBuilding } = useSettings()
+  const hCalMonths = language === 'id'
+    ? ['januari','februari','maret','april','mei','juni','juli','agustus','september','oktober','november','desember']
+    : MONTHS_LOWER
   const { start: bhStart, end: bhEnd } = useBookingHours()
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('today')
   const [editBooking, setEditBooking] = useState<Booking | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [panelPrefillDate, setPanelPrefillDate] = useState<string | undefined>(undefined)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
   const [clearConfirm, setClearConfirm] = useState(false)
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
   const [viewAnimKey, setViewAnimKey] = useState(0)
+  // Entrance animation only plays on user navigation (tab/view/filter change),
+  // never on background poll refetches — prevents the grid "blinking" every 15s.
+  const [animateCards, setAnimateCards] = useState(true)
   const [overviewOpen, setOverviewOpen] = useState(false)
   const overviewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { pendingCancelIds, exitingCancelIds, addCancelToast, addInfoToast, undoCancel, confirmSeriesCancel, undoSeriesCancel } = useCancelToast()
   const [descTooltip, setDescTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
   const [allSortKey, setAllSortKey] = useState<AllSortKey>('start_at')
   const [allSortDir, setAllSortDir] = useState<AllSortDir>('asc')
-  const [allSearch, setAllSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const allSearch = searchParams.get('q') ?? ''
+  const seriesSearch = searchParams.get('qs') ?? ''
+  function setAllSearch(v: string) {
+    setSearchParams(p => { v ? p.set('q', v) : p.delete('q'); return p }, { replace: true })
+  }
+  function setSeriesSearch(v: string) {
+    setSearchParams(p => { v ? p.set('qs', v) : p.delete('qs'); return p }, { replace: true })
+  }
   const [tentativeTarget, setTentativeTarget] = useState<Booking | null>(null)
   const [tentativeConfirming, setTentativeConfirming] = useState(false)
   const [buildingFilter, setBuildingFilter] = useState<number | null>(defaultBuilding)
@@ -651,19 +856,25 @@ export default function SchedulePage() {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [indicator, setIndicator] = useState({ left: 0, width: 0 })
 
+  const { data: generalSettings } = useQuery({
+    queryKey: ['settings-general'],
+    queryFn: getGeneralSettings,
+    staleTime: 60_000,
+  })
+
   const { data: myBookings = [], isLoading } = useQuery({
     queryKey: ['my-bookings'],
     queryFn: getMyBookings,
-    refetchInterval: 15_000,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
 
   const { data: allMyBookings = [], isLoading: loadingAll } = useQuery({
     queryKey: ['all-my-bookings', user?.id],
     queryFn: () => getBookings({ user_id: user?.id }),
     enabled: !!user?.id,
-    refetchInterval: 15_000,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
 
   const isReceptionist = user?.role === 'receptionist'
@@ -671,8 +882,8 @@ export default function SchedulePage() {
     queryKey: ['special-bookings'],
     queryFn: () => getBookings({ special_rooms: true, date_from: toDateStr(past90), date_to: toDateStr(future90) }),
     enabled: isReceptionist,
-    refetchInterval: 15_000,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
   const [spShowPast, setSpShowPast]           = useState(true)
   const [spShowCancelled, setSpShowCancelled] = useState(false)
@@ -700,6 +911,17 @@ export default function SchedulePage() {
     return () => document.removeEventListener('mousedown', fn)
   }, [allExportOpen])
 
+  // Global search: open booking edit panel when triggered from navbar search
+  useEffect(() => {
+    const fn = (e: Event) => {
+      const booking = (e as CustomEvent<Booking>).detail
+      setEditBooking(booking)
+      setPanelOpen(true)
+    }
+    document.addEventListener('open-booking-edit', fn)
+    return () => document.removeEventListener('open-booking-edit', fn)
+  }, [])
+
   const today = new Date()
   const minus7 = new Date(today); minus7.setDate(today.getDate() - 7)
   const plus7 = new Date(today); plus7.setDate(today.getDate() + 7)
@@ -710,12 +932,13 @@ export default function SchedulePage() {
 
   const todayList: Booking[]     = myBookings.filter((b: Booking) => parseLocal(b.start_at).toDateString() === today.toDateString())
   const now = new Date()
-  const todayActiveList: Booking[] = todayList.filter((b: Booking) => parseLocal(b.end_at) >= now)
-  const todayPastList: Booking[]   = todayList.filter((b: Booking) => parseLocal(b.end_at) < now)
-  const upcomingList: Booking[]  = myBookings.filter((b: Booking) => parseLocal(b.start_at) > today)
+  // Cancelled bookings always go to past; never show as active even if end_at is still future
+  const todayActiveList: Booking[] = todayList.filter((b: Booking) => b.status !== 'cancelled' && parseLocal(b.end_at) >= now)
+  const todayPastList: Booking[]   = todayList.filter((b: Booking) => b.status === 'cancelled' || parseLocal(b.end_at) < now)
+  const upcomingList: Booking[]  = myBookings.filter((b: Booking) => b.status !== 'cancelled' && parseLocal(b.start_at) > today)
   const allList: Booking[] = useMemo(() => {
-    const upcoming = myBookings.filter((b: Booking) => !isActuallyPast(b))
-    const past = myBookings.filter((b: Booking) => isActuallyPast(b))
+    const upcoming = myBookings.filter((b: Booking) => b.status !== 'cancelled' && !isActuallyPast(b))
+    const past = myBookings.filter((b: Booking) => b.status !== 'cancelled' && isActuallyPast(b))
     function sortFn(a: Booking, b: Booking) {
       if (allSortKey === 'start_at') return allSortDir === 'desc'
         ? parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime()
@@ -729,9 +952,12 @@ export default function SchedulePage() {
     }
     return [...upcoming.sort(sortFn), ...past.sort(sortFn)]
   }, [myBookings, allSortKey, allSortDir])
-  const pastList: Booking[]      = myBookings.filter((b: Booking) => isActuallyPast(b) && parseLocal(b.start_at) >= past30).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+  const pastList: Booking[]      = myBookings.filter((b: Booking) => {
+    const ended = parseLocal(b.end_at) < new Date()
+    return b.status !== 'cancelled' && ended && parseLocal(b.start_at) >= past30
+  }).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
   const cancelledList: Booking[] = (allMyBookings as Booking[]).filter((b: Booking) => b.status === 'cancelled' && b.cancelled_at && parseLocal(b.cancelled_at) >= minus7).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
-  const tentativeList: Booking[] = myBookings.filter((b: Booking) => b.status === 'tentative' && !isActuallyPast(b)).sort((a: Booking, b: Booking) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
+  const tentativeList: Booking[] = myBookings.filter((b: Booking) => b.status === 'tentative' && parseLocal(b.end_at) >= new Date()).sort((a: Booking, b: Booking) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
 
   const seriesList = useMemo((): SeriesGroup[] => {
     const map = new Map<string, Booking[]>()
@@ -787,7 +1013,7 @@ export default function SchedulePage() {
   const tabLabels: Record<Tab, string> = {
     today: t('tab_today'), upcoming: t('tab_upcoming'), all: t('tab_all'),
     past: t('tab_past'), cancelled: t('tab_cancelled'), tentative: t('tab_tentative'),
-    series: 'Series', hcal: 'H-Calendar', special: 'Special Rooms',
+    series: t('tab_series'), hcal: t('tab_hcal'), special: t('tab_special'),
   }
 
   const visibleSecondaryTabs: Tab[] = [...SECONDARY_TABS, ...(isReceptionist ? ['special' as Tab] : [])]
@@ -964,8 +1190,8 @@ export default function SchedulePage() {
       headers,
       ...rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
-        fmtTime(b.start_at), fmtTime(b.end_at),
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        fmtTime(b.start_at, language), fmtTime(b.end_at, language),
         dur(b.start_at, b.end_at), b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
         b.room?.floor ?? '', b.title,
@@ -997,8 +1223,8 @@ export default function SchedulePage() {
       head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status']],
       body: rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
-        `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
         b.room?.name ?? '', b.title, b.booked_for ?? '', b.status,
       ]),
       styles: { fontSize: 8, cellPadding: 3 },
@@ -1028,8 +1254,8 @@ export default function SchedulePage() {
       headers,
       ...rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
-        fmtTime(b.start_at), fmtTime(b.end_at),
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        fmtTime(b.start_at, language), fmtTime(b.end_at, language),
         dur(b.start_at, b.end_at), b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
         b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '',
@@ -1060,8 +1286,8 @@ export default function SchedulePage() {
       head: [['No.', 'Date', 'Time', 'Room', 'Building', 'Booker', 'Role', 'Dept', 'Title', 'For', 'Status']],
       body: rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at),
-        `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
+        fmtTableDate(b.start_at, language),
+        `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
         b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
         b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '',
@@ -1110,13 +1336,34 @@ export default function SchedulePage() {
 
   useEffect(() => { setBuildingFilter(defaultBuilding) }, [activeTab])
 
+  // Replay entrance animation only when the user navigates (tab / view / building filter),
+  // then switch it off so background poll refetches don't re-trigger it.
+  useEffect(() => {
+    setAnimateCards(true)
+    const id = setTimeout(() => setAnimateCards(false), 1200)
+    return () => clearTimeout(id)
+  }, [activeTab, viewMode, buildingFilter])
+
   const displayList = buildingFilter
     ? activeList.filter((b: Booking) => b.room?.building_id === buildingFilter)
     : activeList
 
-  const displaySeriesList = buildingFilter
-    ? seriesList.filter(g => g.bookings.some(b => b.room?.building_id === buildingFilter))
-    : seriesList
+  const displaySeriesList = useMemo(() => {
+    const base = buildingFilter
+      ? seriesList.filter(g => g.bookings.some(b => b.room?.building_id === buildingFilter))
+      : seriesList
+    if (!seriesSearch.trim()) return base
+    const q = seriesSearch.toLowerCase()
+    return base.filter(g => {
+      const first = g.bookings[0]
+      return (
+        first.title?.toLowerCase().includes(q) ||
+        first.room?.name?.toLowerCase().includes(q) ||
+        first.room?.building?.name?.toLowerCase().includes(q) ||
+        first.room?.building?.code?.toLowerCase().includes(q)
+      )
+    })
+  }, [seriesList, buildingFilter, seriesSearch])
 
   const grouped = groupByDate(displayList)
   const meta = TAB_META[activeTab]
@@ -1126,6 +1373,7 @@ export default function SchedulePage() {
     activeTab,
     pendingCancelIds,
     exitingCancelIds,
+    animate: animateCards,
     onEdit: (b) => { setEditBooking(b); setPanelOpen(true) },
     onCancel: handleCancel,
     onTentativeAction: (b) => setTentativeTarget(b),
@@ -1133,7 +1381,13 @@ export default function SchedulePage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden" style={{ background: 'var(--ds-bg-surface)' }}>
-      <style>{`@keyframes card-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <style>{`
+        @keyframes card-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        .t-hatch{background-image:repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(0,0,0,0.025) 5px,rgba(0,0,0,0.025) 10px)}
+        .dark .t-hatch{background-image:repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(255,255,255,0.04) 5px,rgba(255,255,255,0.04) 10px)}
+        .t-badge-hatch{background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.05) 3px,rgba(0,0,0,0.05) 6px)}
+        .dark .t-badge-hatch{background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.08) 3px,rgba(255,255,255,0.08) 6px)}
+      `}</style>
 
       {/* Top header */}
       <div className="px-8 pt-6 shrink-0" style={{ background: 'var(--ds-bg-surface)', borderBottom: '1px solid var(--ds-border-sub)' }}>
@@ -1180,7 +1434,8 @@ export default function SchedulePage() {
           <div className="flex items-end gap-5">
             {visibleSecondaryTabs.map((key, i) => {
               const m = TAB_META[key]
-              const tabTip = TAB_TOOLTIP[key]
+              const tabTipKey = TAB_TOOLTIP_KEY[key]
+              const tabTip = tabTipKey ? t(`tooltip_${tabTipKey}` as Parameters<typeof t>[0]) : undefined
               return (
                 <button key={key} ref={el => { tabRefs.current[PRIMARY_TABS.length + i] = el }}
                   onClick={() => setActiveTab(key)}
@@ -1251,10 +1506,10 @@ export default function SchedulePage() {
                 }}
               >
                 {([
-                  { label: 'This Month', value: String(thisMonthCount).padStart(2, '0'), sub: 'bookings', icon: 'calendar_month', clr: '#6366f1' },
-                  { label: 'Hours Used', value: `${totalHours.toFixed(0)}h`, sub: 'this month', icon: 'schedule', clr: '#06b6d4' },
-                  { label: 'Today', value: String(todayList.length).padStart(2, '0'), sub: 'bookings', icon: 'today', clr: '#f59e0b' },
-                  { label: 'Upcoming', value: String(upcomingList.length).padStart(2, '0'), sub: 'scheduled', icon: 'upcoming', clr: '#adee2b' },
+                  { label: t('label_this_month'), value: String(thisMonthCount).padStart(2, '0'), sub: t('label_bookings'), icon: 'calendar_month', clr: '#6366f1' },
+                  { label: t('label_hours_used'), value: `${totalHours.toFixed(0)}h`, sub: t('label_this_month_sub'), icon: 'schedule', clr: '#06b6d4' },
+                  { label: t('label_today'), value: String(todayList.length).padStart(2, '0'), sub: t('label_bookings'), icon: 'today', clr: '#f59e0b' },
+                  { label: t('tab_upcoming'), value: String(upcomingList.length).padStart(2, '0'), sub: t('label_scheduled'), icon: 'upcoming', clr: '#adee2b' },
                 ] as const).map((card, idx) => (
                   <div key={card.label} style={{
                     width: 190,
@@ -1293,7 +1548,7 @@ export default function SchedulePage() {
 
         {/* Main content */}
         <div className="flex-1 overflow-y-auto px-8 py-6 bg-[var(--ds-bg-base)]" style={{ scrollbarWidth: 'thin' }}>
-          {(isLoading || loadingAll) ? (
+          {(isLoading || loadingAll) && myBookings.length === 0 && allMyBookings.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
             </div>
@@ -1303,13 +1558,13 @@ export default function SchedulePage() {
                 {activeTab === 'cancelled' ? 'cancel' : activeTab === 'tentative' ? 'pending' : activeTab === 'past' ? 'history' : activeTab === 'series' ? 'repeat' : 'calendar_month'}
               </span>
               <p className="text-sm font-black uppercase">
-                {activeTab === 'today' ? 'No bookings today'
-                  : activeTab === 'upcoming' ? 'No upcoming bookings'
-                  : activeTab === 'past' ? 'No past bookings (last 30 days)'
-                  : activeTab === 'cancelled' ? 'No cancelled bookings (±7 days)'
-                  : activeTab === 'tentative' ? 'No tentative bookings'
-                  : activeTab === 'series' ? 'No repeat bookings'
-                  : 'No bookings yet'}
+                {activeTab === 'today' ? t('empty_today')
+                  : activeTab === 'upcoming' ? t('empty_upcoming')
+                  : activeTab === 'past' ? t('empty_past')
+                  : activeTab === 'cancelled' ? t('empty_cancelled')
+                  : activeTab === 'tentative' ? t('empty_tentative')
+                  : activeTab === 'series' ? t('empty_series')
+                  : t('empty_no_bookings_yet')}
               </p>
             </div>
           ) : (
@@ -1438,7 +1693,7 @@ export default function SchedulePage() {
                           </div>
                         </div>
 
-                        {loadingSpecial && (
+                        {loadingSpecial && specialBookings.length === 0 && (
                           <div className="flex items-center justify-center py-16">
                             <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-4)]">progress_activity</span>
                           </div>
@@ -1499,10 +1754,10 @@ export default function SchedulePage() {
                                     {sorted.map((b: Booking, idx: number) => (
                                       <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] ${idx % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-surface-2)]/50'} ${isCancelled ? 'hover:bg-red-500/5' : isActive ? 'hover:bg-amber-500/5' : 'hover:bg-[var(--ds-bg-raised)]'} transition-colors`}>
                                         <td className="px-4 py-3 whitespace-nowrap">
-                                          <span className="text-[12px] font-bold text-[var(--ds-text-2)]">{fmtTableDate(b.start_at)}</span>
-                                          <span className="text-[var(--ds-text-4)] ml-1 text-[11px]">{fmtTableDay(b.start_at)}</span>
+                                          <span className="text-[12px] font-bold text-[var(--ds-text-2)]">{fmtTableDate(b.start_at, language)}</span>
+                                          <span className="text-[var(--ds-text-4)] ml-1 text-[11px]">{fmtTableDay(b.start_at, language)}</span>
                                         </td>
-                                        <td className="px-4 py-3 text-[11px] font-bold text-[var(--ds-text-2)] whitespace-nowrap tabular-nums">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold text-[var(--ds-text-2)] whitespace-nowrap tabular-nums">{fmtTime(b.start_at, language)} – {fmtTime(b.end_at, language)}</td>
                                         <td className="px-4 py-3">
                                           <p className="text-[12px] font-black text-[var(--ds-text-1)]">{b.room?.name ?? '—'}</p>
                                           <p className="text-[10px] text-[var(--ds-text-3)] font-bold">{b.room?.building?.code || b.room?.building?.name || ''}</p>
@@ -1608,7 +1863,14 @@ export default function SchedulePage() {
                 const hCalHasBoth = hCalUpcoming.length > 0 && hCalPast.length > 0
                 const hCalParsed = new Date(hCalDate + 'T00:00:00')
                 const hCalLabel = hCalParsed.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
-                const maxEnabledMonth = today.getMonth() + 3
+                // Months accessible = ceil(maxAdvanceDays / 30), always rounded up to a whole month count.
+                // e.g. 61d → ceil(2.03) = 3 months; 80d → ceil(2.67) = 3 months; 91d → 4 months.
+                const maxAdvanceDays  = generalSettings?.max_advance_days ?? 30
+                const monthsAllowed   = Math.ceil(maxAdvanceDays / 30)
+                // First day of the last accessible month (offset from today's month)
+                const maxAllowedFirst = new Date(today.getFullYear(), today.getMonth() + monthsAllowed - 1, 1)
+                const isMonthEnabled  = (y: number, m: number) =>
+                  new Date(y, m, 1) <= maxAllowedFirst
                 const bhStartMin = toMin(bhStart)
                 const bhEndMin   = toMin(bhEnd)
                 const bhTotalMin = bhEndMin - bhStartMin
@@ -1643,16 +1905,18 @@ export default function SchedulePage() {
 
                     {/* Month row */}
                     <div className="flex items-end gap-6 mb-6 flex-wrap">
-                      {MONTHS_LOWER.map((mName, mi) => {
-                        if (mi < today.getMonth()) return null
+                      {hCalMonths.map((mName, mi) => {
+                        if (yr === today.getFullYear() && mi < today.getMonth()) return null
                         const isCurMo = mi === mo
-                        const isEnabled = mi <= maxEnabledMonth
+                        const isEnabled = isMonthEnabled(yr, mi)
                         return (
                           <button key={mi}
                             disabled={!isEnabled}
                             onClick={() => {
                               if (!isEnabled) return
-                              const newDate = mi === today.getMonth() ? toDateKey(today) : toDateKey(new Date(yr, mi, 1))
+                              const newDate = mi === today.getMonth() && yr === today.getFullYear()
+                                ? toDateKey(today)
+                                : toDateKey(new Date(yr, mi, 1))
                               setHCalMonth({ yr, mo: mi })
                               setHCalDate(newDate)
                             }}
@@ -1709,7 +1973,7 @@ export default function SchedulePage() {
                                 {di + 1}
                               </div>
                               <span className={`text-[10px] font-bold uppercase leading-none ${isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
-                                {d.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 2)}
+                                {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' }).slice(0, 2)}
                               </span>
                               <span className="size-1.5 rounded-full" style={{ background: '#72ddf7', opacity: hasBkg ? 1 : 0 }} />
                             </button>
@@ -1875,7 +2139,7 @@ export default function SchedulePage() {
                         <span className="material-symbols-outlined text-4xl text-[var(--ds-text-4)]">event_available</span>
                         <p className="text-[11px] font-black uppercase tracking-wide text-[var(--ds-text-4)]">No bookings on this date</p>
                         <button
-                          onClick={() => { setEditBooking(null); setPanelOpen(true) }}
+                          onClick={() => { setEditBooking(null); setPanelPrefillDate(hCalDate); setPanelOpen(true) }}
                           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all"
                           style={{ background: '#adee2b', color: '#1a3a00', letterSpacing: '0.07em' }}
                         >
@@ -2027,8 +2291,31 @@ export default function SchedulePage() {
                   </div>
                 )
               })() : activeTab === 'series' ? (
-              <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border)] overflow-hidden">
-                <table className="w-full text-left">
+              <div style={{ animation: 'tab-section-enter 0.3s ease-out' }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] shrink-0">
+                    {seriesSearch ? `${displaySeriesList.length} result${displaySeriesList.length !== 1 ? 's' : ''}` : `${displaySeriesList.length} series`}
+                  </p>
+                  <div className="relative flex-1 max-w-xs">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-4)] pointer-events-none" style={{ fontSize: 16 }}>search</span>
+                    <input
+                      type="text"
+                      placeholder="Search title, room..."
+                      value={seriesSearch}
+                      onChange={e => setSeriesSearch(e.target.value)}
+                      className={`w-full pl-9 pr-8 py-2 border rounded-xl text-[11px] font-bold text-[var(--ds-text-1)] placeholder:text-[var(--ds-text-4)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all
+                        ${seriesSearch ? 'border-[#adee2b] bg-[#adee2b]/10' : 'border-[var(--ds-border)] bg-[var(--ds-bg-surface-2)]'}`}
+                    />
+                    {seriesSearch && (
+                      <button onClick={() => setSeriesSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 size-5 flex items-center justify-center rounded-md text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors">
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border)] overflow-hidden">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left">
                   <thead>
                     <tr className="bg-slate-900 border-b border-slate-700">
                       <th className="px-3 py-3.5 w-8" />
@@ -2037,10 +2324,11 @@ export default function SchedulePage() {
                       ))}
                     </tr>
                   </thead>
-                  {displaySeriesList.map(group => (
+                  {displaySeriesList.map((group, idx) => (
                     <SeriesGroupRow
                       key={group.series_id}
                       group={group}
+                      index={idx}
                       pendingCancelIds={pendingCancelIds}
                       onEdit={b => { setEditBooking(b); setPanelOpen(true) }}
                       onCancel={handleCancel}
@@ -2048,9 +2336,11 @@ export default function SchedulePage() {
                     />
                   ))}
                 </table>
+                </div>
+                </div>
               </div>
               ) : activeTab === 'all' ? (
-              <>
+              <div style={{ animation: 'tab-section-enter 0.3s ease-out' }}>
               {/* Search + Export row */}
               <div className="flex items-center gap-3 mb-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] shrink-0">
@@ -2126,7 +2416,8 @@ export default function SchedulePage() {
                 </div>
               </div>
               <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border)] overflow-hidden">
-                <table className="w-full text-left">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left">
                   <thead>
                     <tr className="bg-slate-900 border-b border-slate-700">
                       {([
@@ -2182,11 +2473,12 @@ export default function SchedulePage() {
                           className={`border-b border-[var(--ds-border-sub)] transition-colors
                             ${isPast ? 'opacity-40' : 'hover:bg-[#adee2b]/5 cursor-pointer'}
                             ${i % 2 !== 0 ? 'bg-[var(--ds-bg-surface-2)]/50' : ''}`}
+                          style={{ animation: 'tbl-row-enter 0.22s ease-out backwards', animationDelay: `${Math.min(i * 28, 320)}ms` }}
                         >
-                          <td className="px-4 py-3 text-xs font-black text-[var(--ds-text-1)] whitespace-nowrap">{fmtTableDate(b.start_at)}</td>
-                          <td className="px-4 py-3 text-xs font-bold text-[var(--ds-text-3)] whitespace-nowrap">{fmtTableDay(b.start_at)}</td>
+                          <td className="px-4 py-3 text-xs font-black text-[var(--ds-text-1)] whitespace-nowrap">{fmtTableDate(b.start_at, language)}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-[var(--ds-text-3)] whitespace-nowrap">{fmtTableDay(b.start_at, language)}</td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <p className="text-sm font-black text-[var(--ds-text-1)] tabular-nums">{fmtTime(b.start_at)} &ndash; {fmtTime(b.end_at)}</p>
+                            <p className="text-sm font-black text-[var(--ds-text-1)] tabular-nums">{fmtTime(b.start_at, language)} &ndash; {fmtTime(b.end_at, language)}</p>
                             <p className="text-[10px] font-bold text-[var(--ds-text-3)] mt-0.5">{dur(b.start_at, b.end_at)}</p>
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
@@ -2205,10 +2497,18 @@ export default function SchedulePage() {
                             }
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`text-[8px] font-black uppercase px-2.5 py-1 rounded-full whitespace-nowrap
-                              ${isConf ? 'bg-[#adee2b] text-black' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)]'}`}>
-                              {b.status}
-                            </span>
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className={`text-[8px] font-black uppercase px-2.5 py-1 rounded-full whitespace-nowrap
+                                ${isConf ? 'bg-[#adee2b] text-black' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)]'}`}>
+                                {b.status}
+                              </span>
+                              {b.series_id && (
+                                <span className="inline-flex items-center gap-0.5 text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full whitespace-nowrap bg-blue-500/10 text-blue-500 dark:text-blue-400">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 9 }}>repeat</span>
+                                  series
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <span className="text-[8px] font-black uppercase px-2.5 py-1 rounded-full whitespace-nowrap"
@@ -2249,8 +2549,9 @@ export default function SchedulePage() {
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
-            </>
+              </div>
               ) : activeTab === 'special' ? null : (
               <div key={viewAnimKey} className="space-y-8" style={{ animation: 'view-slide-in 0.22s cubic-bezier(0.4,0,0.2,1)' }}>
               {isSecondary && activeTab === 'cancelled' && (
@@ -2282,7 +2583,7 @@ export default function SchedulePage() {
                       ${activeTab === 'cancelled' ? 'text-red-400'
                         : activeTab === 'tentative' ? 'text-amber-400'
                         : 'text-[var(--ds-text-3)]'}`}>
-                      {fmtGroupLabel(bookings[0].start_at)}
+                      {fmtGroupLabel(bookings[0].start_at, t('label_today'), t('label_tomorrow'), language)}
                     </p>
                     <div className={`flex-1 h-px
                       ${activeTab === 'cancelled' ? 'bg-red-500/20'
@@ -2370,17 +2671,19 @@ export default function SchedulePage() {
 
       <BookingPanel
         open={panelOpen}
-        onClose={() => setPanelOpen(false)}
+        onClose={() => { setPanelOpen(false); setPanelPrefillDate(undefined) }}
         editBooking={editBooking}
+        prefillDate={panelPrefillDate}
         buildingId={buildingFilter ?? defaultBuilding}
         onSubmit={() => {
           setPanelOpen(false)
+          setPanelPrefillDate(undefined)
           queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
           queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
           queryClient.invalidateQueries({ queryKey: ['bookings'] })
           queryClient.refetchQueries({ queryKey: ['special-bookings'] })
         }}
-        onCancel={(b) => { setPanelOpen(false); handleCancel(b) }}
+        onCancel={(b) => { setPanelOpen(false); setPanelPrefillDate(undefined); handleCancel(b) }}
       />
 
       {/* H-Calendar day timeline hover tooltip */}
@@ -2409,7 +2712,7 @@ export default function SchedulePage() {
                 {ttB.room?.name}{ttB.room?.building ? ` · ${ttB.room.building.code || ttB.room.building.name}` : ''}
               </p>
               <p style={{ fontSize: 13, fontWeight: 900, color: 'rgba(255,255,255,0.8)', marginTop: 6, tabularNums: true } as React.CSSProperties}>
-                {fmtTime(ttB.start_at)} – {fmtTime(ttB.end_at)}
+                {fmtTime(ttB.start_at, language)} – {fmtTime(ttB.end_at, language)}
                 <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>{dur(ttB.start_at, ttB.end_at)}</span>
               </p>
             </div>
@@ -2481,11 +2784,11 @@ export default function SchedulePage() {
               </p>
               <p className="text-xs font-bold text-[var(--ds-text-2)] flex items-center gap-2">
                 <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
-                {fmtTime(cancelTarget.start_at)} &ndash; {fmtTime(cancelTarget.end_at)} &middot; {dur(cancelTarget.start_at, cancelTarget.end_at)}
+                {fmtTime(cancelTarget.start_at, language)} &ndash; {fmtTime(cancelTarget.end_at, language)} &middot; {dur(cancelTarget.start_at, cancelTarget.end_at)}
               </p>
               <p className="text-xs font-bold text-[var(--ds-text-2)] flex items-center gap-2">
                 <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>calendar_today</span>
-                {fmtTableDate(cancelTarget.start_at)} &middot; {fmtTableDay(cancelTarget.start_at)}
+                {fmtTableDate(cancelTarget.start_at, language)} &middot; {fmtTableDay(cancelTarget.start_at, language)}
               </p>
             </div>
             <div className="flex gap-3">
@@ -2551,7 +2854,7 @@ export default function SchedulePage() {
               </p>
               <p className="text-xs font-bold text-[var(--ds-text-2)] flex items-center gap-2">
                 <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
-                {fmtTableDate(tentativeTarget.start_at)} &middot; {fmtTime(tentativeTarget.start_at)} &ndash; {fmtTime(tentativeTarget.end_at)}
+                {fmtTableDate(tentativeTarget.start_at, language)} &middot; {fmtTime(tentativeTarget.start_at, language)} &ndash; {fmtTime(tentativeTarget.end_at, language)}
               </p>
             </div>
 

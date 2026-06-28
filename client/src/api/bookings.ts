@@ -10,6 +10,26 @@ export async function getMyBookings() {
   return res.data
 }
 
+export async function confirmPresenceWeb(bookingId: number): Promise<{ presence_confirmed_at: string }> {
+  const res = await api.post(`/bookings/${bookingId}/confirm-presence`)
+  return res.data
+}
+
+export async function submitDispute(bookingId: number, note?: string): Promise<{ dispute_status: string }> {
+  const res = await api.post(`/bookings/${bookingId}/dispute`, { note })
+  return res.data
+}
+
+export async function getDisputes(status: 'pending' | 'resolved' | 'all' = 'pending') {
+  const res = await api.get('/disputes', { params: { status } })
+  return res.data
+}
+
+export async function resolveDispute(bookingId: number, action: 'approve' | 'reject'): Promise<{ dispute_status: string }> {
+  const res = await api.post(`/disputes/${bookingId}/resolve`, { action })
+  return res.data
+}
+
 export async function createBooking(data: {
   room_id: number
   title: string
@@ -19,6 +39,9 @@ export async function createBooking(data: {
   status?: string
   type?: string
   series_id?: string
+  series_skipped_dates?: string[]
+  booked_for?: string
+  booked_for_user_id?: number
 }) {
   const res = await api.post('/bookings', data)
   return res.data

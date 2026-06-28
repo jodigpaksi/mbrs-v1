@@ -8,8 +8,19 @@ import {
   markAllNotificationsRead,
   clearAllNotifications,
 } from '../../api/notifications'
+import { confirmPresenceWeb, getMyBookings } from '../../api/bookings'
+import { getGeneralSettings } from '../../api/settings'
 import { useNotification } from '../../context/NotificationContext'
-import type { AppNotification } from '../../types'
+import { useCancelToast } from '../../context/CancelToastContext'
+import { useSettings } from '../../context/SettingsContext'
+import type { AppNotification, Booking } from '../../types'
+
+function parseLocal(s: string): Date {
+  const [date, time] = s.replace('T', ' ').split(' ')
+  const [y, mo, d] = date.split('-').map(Number)
+  const [h, mi] = (time ?? '').split(':').map(Number)
+  return new Date(y, mo - 1, d, h || 0, mi || 0)
+}
 
 function timeAgo(iso: string) {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -21,10 +32,13 @@ function timeAgo(iso: string) {
 
 export default function NotificationPanel() {
   const { open, closeNotifications } = useNotification()
+  const { t } = useSettings()
   const qc = useQueryClient()
+  const { addInfoToast } = useCancelToast()
   const panelRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmingId, setConfirmingId] = useState<number | null>(null)
 
   const { data: notifData, refetch } = useQuery({
     queryKey: ['notifications'],
@@ -35,6 +49,26 @@ export default function NotificationPanel() {
   })
   const unreadCount = notifData?.unread_count ?? 0
   const items: AppNotification[] = notifData?.items ?? []
+
+  // Only load settings when panel is opened — staleTime means cache is reused
+  const { data: generalSettings } = useQuery({
+    queryKey: ['settings-general'],
+    queryFn: getGeneralSettings,
+    staleTime: 5 * 60_000,
+    enabled: open,
+  })
+  const webConfirmEnabled = generalSettings?.web_confirm_enabled       ?? false
+  const windowBefore      = generalSettings?.anti_ghost_window_before  ?? 5
+  const windowAfter       = generalSettings?.anti_ghost_window_after   ?? 10
+
+  // Load my bookings only when panel is open AND feature is enabled. No refetchInterval —
+  // Reverb + ['my-bookings'] invalidation handle real-time updates.
+  const { data: myBookings = [] } = useQuery<Booking[]>({
+    queryKey: ['my-bookings'],
+    queryFn: getMyBookings,
+    enabled: open && webConfirmEnabled,
+    staleTime: 30_000,
+  })
 
   useEffect(() => {
     if (!open) { setConfirmClear(false); return }
@@ -90,6 +124,35 @@ export default function NotificationPanel() {
     await clearAllNotifications().catch(() => qc.invalidateQueries({ queryKey: ['notifications'] }))
   }
 
+  async function handleConfirmPresence(b: Booking) {
+    setConfirmingId(b.id)
+    try {
+      await confirmPresenceWeb(b.id)
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+      closeNotifications()
+      addInfoToast(`Presence confirmed for "${b.title}"`)
+    } catch { /* ignore */ }
+    finally { setConfirmingId(null) }
+  }
+
+  // Compute presence reminders inline (no extra state needed)
+  const now = new Date()
+  const today = now.toDateString()
+  const presenceReminders: Booking[] = webConfirmEnabled
+    ? (myBookings as Booking[]).filter(b => {
+        try {
+          const start       = parseLocal(b.start_at)
+          const windowOpen  = new Date(start.getTime() - windowBefore * 60_000)
+          const windowClose = new Date(start.getTime() + windowAfter  * 60_000)
+          const isToday    = start.toDateString() === today
+          const inWindow   = now >= windowOpen && now <= windowClose
+          const notConfirmed = !b.presence_confirmed_at
+          const isTarget     = !b.booked_for_user_id || b.is_recipient === true
+          return isToday && inWindow && notConfirmed && isTarget
+        } catch { return false }
+      })
+    : []
+
   if (!open) return null
 
   return createPortal(
@@ -120,7 +183,7 @@ export default function NotificationPanel() {
       <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--ds-border-sub)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--ds-text-3)' }}>notifications</span>
-          <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ds-text-1)' }}>Notifications</p>
+          <p style={{ fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ds-text-1)' }}>{t('notifications')}</p>
           {unreadCount > 0 && (
             <span style={{ fontSize: 9, fontWeight: 900, background: '#adee2b', color: '#000', borderRadius: 99, padding: '2px 7px', lineHeight: 1.6 }}>{unreadCount}</span>
           )}
@@ -133,12 +196,38 @@ export default function NotificationPanel() {
         </button>
       </div>
 
-      {/* List */}
+      {/* Presence confirmation reminders — only when feature enabled and there are ongoing bookings */}
+      {presenceReminders.length > 0 && (
+        <div style={{ borderBottom: '1px solid var(--ds-border-sub)', flexShrink: 0 }}>
+          {presenceReminders.map(b => (
+            <div key={b.id} style={{ padding: '12px 18px', display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(99,102,241,0.07)' }}>
+              <div style={{ width: 34, height: 34, borderRadius: 12, background: 'rgba(99,102,241,0.18)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1', fontVariationSettings: "'FILL' 1" }}>how_to_reg</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 11, fontWeight: 800, color: 'var(--ds-text-1)', lineHeight: 1.4, marginBottom: 2 }}>{t('confirm_your_presence')}</p>
+                <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--ds-text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {b.title}{b.room ? ` · ${b.room.name}` : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => handleConfirmPresence(b)}
+                disabled={confirmingId === b.id}
+                style={{ flexShrink: 0, padding: '5px 12px', borderRadius: 10, border: '1.5px solid rgba(99,102,241,0.5)', background: 'rgba(99,102,241,0.12)', fontSize: 10, fontWeight: 900, color: '#6366f1', cursor: 'pointer', opacity: confirmingId === b.id ? 0.6 : 1, transition: 'all 0.15s', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+              >
+                {confirmingId === b.id ? '…' : t('btn_confirm')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Notification list */}
       <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'thin' }}>
         {items.length === 0 ? (
           <div style={{ padding: '48px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <span className="material-symbols-outlined" style={{ fontSize: 36, color: 'var(--ds-text-4)' }}>notifications_off</span>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ds-text-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>No notifications</p>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ds-text-4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('no_notifications')}</p>
           </div>
         ) : (
           items.map(n => (
@@ -173,7 +262,7 @@ export default function NotificationPanel() {
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#adee2b', display: 'block', flexShrink: 0 }} />
                     <button
                       onClick={e => { e.stopPropagation(); handleMarkRead(n.id) }}
-                      title="Mark as read"
+                      title={t('mark_as_read')}
                       style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--ds-border)', background: 'var(--ds-bg-surface-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ds-text-3)', transition: 'all 0.15s' }}
                       onMouseEnter={e => { const b = e.currentTarget; b.style.background = '#adee2b'; b.style.color = '#000'; b.style.borderColor = '#adee2b' }}
                       onMouseLeave={e => { const b = e.currentTarget; b.style.background = 'var(--ds-bg-surface-2)'; b.style.color = 'var(--ds-text-3)'; b.style.borderColor = 'var(--ds-border)' }}
@@ -195,7 +284,7 @@ export default function NotificationPanel() {
         {confirmClear ? (
           <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ds-text-2)', textAlign: 'center' }}>
-              Clear all <span style={{ fontWeight: 900, color: 'var(--ds-text-1)' }}>{items.length}</span> notification{items.length !== 1 ? 's' : ''}?
+              {t('clear_all')} <span style={{ fontWeight: 900, color: 'var(--ds-text-1)' }}>{items.length}</span> {t('clear_confirm_suffix')}?
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -204,7 +293,7 @@ export default function NotificationPanel() {
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--ds-bg-raised)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--ds-bg-surface-2)' }}
               >
-                Cancel
+                {t('btn_cancel')}
               </button>
               <button
                 onClick={handleClearAll}
@@ -212,7 +301,7 @@ export default function NotificationPanel() {
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#dc2626'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#dc2626' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#ef4444' }}
               >
-                Clear all
+                {t('clear_all')}
               </button>
             </div>
           </div>
@@ -223,14 +312,14 @@ export default function NotificationPanel() {
               disabled={unreadCount === 0}
               style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: unreadCount > 0 ? 'var(--ds-text-2)' : 'var(--ds-text-4)', background: 'none', border: 'none', cursor: unreadCount > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
             >
-              Mark all as read
+              {t('mark_all_as_read')}
             </button>
             <button
               onClick={() => items.length > 0 && setConfirmClear(true)}
               disabled={items.length === 0}
               style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', color: items.length > 0 ? '#ef4444' : 'var(--ds-text-4)', background: 'none', border: 'none', cursor: items.length > 0 ? 'pointer' : 'default', padding: '4px 0', transition: 'color 0.15s' }}
             >
-              Clear all
+              {t('clear_all')}
             </button>
           </div>
         )}
