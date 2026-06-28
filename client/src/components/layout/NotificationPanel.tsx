@@ -11,6 +11,7 @@ import {
 import { confirmPresenceWeb, getMyBookings } from '../../api/bookings'
 import { getGeneralSettings } from '../../api/settings'
 import { useNotification } from '../../context/NotificationContext'
+import { useCancelToast } from '../../context/CancelToastContext'
 import type { AppNotification, Booking } from '../../types'
 
 function parseLocal(s: string): Date {
@@ -31,6 +32,7 @@ function timeAgo(iso: string) {
 export default function NotificationPanel() {
   const { open, closeNotifications } = useNotification()
   const qc = useQueryClient()
+  const { addInfoToast } = useCancelToast()
   const panelRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const [confirmClear, setConfirmClear] = useState(false)
@@ -125,6 +127,8 @@ export default function NotificationPanel() {
     try {
       await confirmPresenceWeb(b.id)
       qc.invalidateQueries({ queryKey: ['my-bookings'] })
+      closeNotifications()
+      addInfoToast(`Presence confirmed for "${b.title}"`)
     } catch { /* ignore */ }
     finally { setConfirmingId(null) }
   }

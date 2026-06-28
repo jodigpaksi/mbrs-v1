@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,8 @@ class AuthController extends Controller
 
         $user->load('department');
         $token = $user->createToken('auth-token')->plainTextToken;
+
+        ActivityLog::record('user.login', "User {$user->name} signed in", $user);
 
         return response()->json([
             'user'  => $this->userPayload($user),

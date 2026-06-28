@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Booking;
 use App\Models\Room;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Chart\Chart;
 use PhpOffice\PhpSpreadsheet\Chart\DataSeries;
 use PhpOffice\PhpSpreadsheet\Chart\DataSeriesValues;
@@ -28,25 +31,48 @@ class AnalyticsController extends Controller
         $statusPeriod = $request->query('status_period', 'month');
         $roomsPeriod  = $request->query('rooms_period',  'month');
         $hoursPeriod  = $request->query('hours_period',  'month');
-        $monthStart   = now()->startOfMonth();
+        $buildingId   = $request->query('building_id') ? (int) $request->query('building_id') : null;
+
+        $tz    = 'Asia/Jakarta';
+        $today = now($tz)->toDateString();
+        $weekStart  = now($tz)->startOfWeek()->toDateTimeString();
+        $monthStart = now($tz)->startOfMonth()->toDateTimeString();
+
+        // Closure to scope bookings by building when needed
+        $byBuilding = fn ($q) => $q->when($buildingId, fn ($q2) => $q2->whereHas('room', fn ($r) => $r->where('building_id', $buildingId)));
 
         $stats = [
-            'total_bookings' => Booking::count(),
-            'confirmed'      => Booking::where('status', 'confirmed')->count(),
-            'tentative'      => Booking::where('status', 'tentative')->count(),
-            'cancelled'      => Booking::where('status', 'cancelled')->count(),
-            'active_rooms'   => Room::where('is_active', true)->count(),
+            'total_bookings' => $byBuilding(Booking::query())->count(),
+            'confirmed'      => $byBuilding(Booking::query())->where('status', 'confirmed')->count(),
+            'tentative'      => $byBuilding(Booking::query())->where('status', 'tentative')->count(),
+            'cancelled'      => $byBuilding(Booking::query())->where('status', 'cancelled')->count(),
+            'active_rooms'   => Room::where('is_active', true)
+                ->when($buildingId, fn ($q) => $q->where('building_id', $buildingId))
+                ->count(),
             'total_users'    => User::count(),
+
+            // Unique visitors: always global (not per building)
+            'unique_visitors_today' => ActivityLog::whereDate('created_at', $today)
+                ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
+            'unique_visitors_week'  => ActivityLog::where('created_at', '>=', $weekStart)
+                ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
+            'unique_visitors_month' => ActivityLog::where('created_at', '>=', $monthStart)
+                ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
+
+            // Storage: always global
+            'storage' => $this->storageStats(),
         ];
 
-        $trend = Booking::selectRaw('DATE(start_at) as date, COUNT(*) as count')
+        $trend = $byBuilding(Booking::query())
+            ->selectRaw('DATE(start_at) as date, COUNT(*) as count')
             ->where('start_at', '>=', now()->subDays($period))
             ->groupByRaw('DATE(start_at)')
             ->orderBy('date')
             ->get()
             ->map(fn ($r) => ['date' => $r->date, 'count' => (int) $r->count]);
 
-        $topRooms = Booking::selectRaw('rooms.name as room, COUNT(*) as count')
+        $topRooms = $byBuilding(Booking::query())
+            ->selectRaw('rooms.name as room, COUNT(*) as count')
             ->join('rooms', 'bookings.room_id', '=', 'rooms.id')
             ->when($roomsPeriod === 'month', fn ($q) => $q->where('bookings.start_at', '>=', $monthStart))
             ->groupBy('rooms.id', 'rooms.name')
@@ -55,13 +81,15 @@ class AnalyticsController extends Controller
             ->get()
             ->map(fn ($r) => ['room' => $r->room, 'count' => (int) $r->count]);
 
-        $statusBreakdown = Booking::selectRaw('status, COUNT(*) as count')
+        $statusBreakdown = $byBuilding(Booking::query())
+            ->selectRaw('status, COUNT(*) as count')
             ->when($statusPeriod === 'month', fn ($q) => $q->where('start_at', '>=', $monthStart))
             ->groupBy('status')
             ->get()
             ->map(fn ($r) => ['status' => $r->status, 'count' => (int) $r->count]);
 
-        $peakHours = Booking::selectRaw('HOUR(start_at) as hour, COUNT(*) as count')
+        $peakHours = $byBuilding(Booking::query())
+            ->selectRaw('HOUR(start_at) as hour, COUNT(*) as count')
             ->when($hoursPeriod === 'month', fn ($q) => $q->where('start_at', '>=', $monthStart))
             ->groupByRaw('HOUR(start_at)')
             ->orderBy('hour')
@@ -75,6 +103,47 @@ class AnalyticsController extends Controller
             'status_breakdown' => $statusBreakdown,
             'peak_hours'       => $peakHours,
         ]);
+    }
+
+    private function storageStats(): array
+    {
+        // DB size (MySQL)
+        $dbRow = DB::selectOne("
+            SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS mb
+            FROM information_schema.tables
+            WHERE table_schema = DATABASE()
+        ");
+        $dbMb = (float) ($dbRow->mb ?? 0);
+
+        // File storage folders
+        $disk       = Storage::disk('public');
+        $basePath   = $disk->path('');
+
+        $roomMb   = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'room-photos');
+        $avatarMb = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'avatars');
+        $totalUploadsMb = $this->folderMb($basePath);
+        $logsMb   = $this->folderMb(storage_path('logs'));
+
+        return [
+            'db_mb'           => $dbMb,
+            'room_photos_mb'  => $roomMb,
+            'avatars_mb'      => $avatarMb,
+            'uploads_mb'      => $totalUploadsMb,
+            'logs_mb'         => $logsMb,
+        ];
+    }
+
+    private function folderMb(string $path): float
+    {
+        if (! is_dir($path)) return 0.0;
+        $bytes = 0;
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($it as $file) {
+            if ($file->isFile()) $bytes += $file->getSize();
+        }
+        return round($bytes / 1024 / 1024, 2);
     }
 
     public function report(Request $request): JsonResponse
@@ -130,16 +199,20 @@ class AnalyticsController extends Controller
     public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $data = $request->validate([
-            'from' => 'nullable|date',
-            'to'   => 'nullable|date',
+            'from'          => 'nullable|date',
+            'to'            => 'nullable|date',
+            'building_ids'  => 'nullable|array',
+            'building_ids.*'=> 'integer',
         ]);
 
-        $from = $data['from'] ?? null;
-        $to   = $data['to']   ?? null;
+        $from        = $data['from'] ?? null;
+        $to          = $data['to']   ?? null;
+        $buildingIds = !empty($data['building_ids']) ? $data['building_ids'] : null;
 
         $baseQ = fn () => Booking::query()
             ->when($from, fn ($q) => $q->whereDate('start_at', '>=', $from))
-            ->when($to,   fn ($q) => $q->whereDate('start_at', '<=', $to));
+            ->when($to,   fn ($q) => $q->whereDate('start_at', '<=', $to))
+            ->when($buildingIds, fn ($q) => $q->whereHas('room', fn ($r) => $r->whereIn('building_id', $buildingIds)));
 
         // ── Summary ──────────────────────────────────────────────────────────────
         $total     = (clone $baseQ())->count();
@@ -189,7 +262,8 @@ class AnalyticsController extends Controller
 
         // ── Build spreadsheet ─────────────────────────────────────────────────────
         $spreadsheet  = new Spreadsheet();
-        $periodLabel  = $from ? "{$from} to {$to}" : 'All Time';
+        $periodLabel  = ($from ? "{$from} to {$to}" : 'All Time')
+            . ($buildingIds ? ' · Building filter applied' : '');
 
         // ── Sheet 1: Summary ─────────────────────────────────────────────────────
         $s1 = $spreadsheet->getActiveSheet()->setTitle('Summary');

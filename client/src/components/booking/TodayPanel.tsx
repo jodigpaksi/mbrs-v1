@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyBookings, confirmPresenceWeb } from '../../api/bookings'
 import { getGeneralSettings } from '../../api/settings'
+import { useCancelToast } from '../../context/CancelToastContext'
 import type { Booking } from '../../types'
 
 function parseLocal(s: string): Date {
@@ -18,10 +19,12 @@ function fmtTime(s: string): string {
 
 export default function TodayPanel() {
   const qc = useQueryClient()
+  const { addInfoToast } = useCancelToast()
   const [open, setOpen] = useState(false)
   const [visible, setVisible] = useState(false)
   const [now, setNow] = useState(() => new Date())
   const [confirming, setConfirming] = useState<number | null>(null)
+  const notifiedWindowRef = useRef<Set<number>>(new Set())
 
   useEffect(() => {
     function onToggle() { setOpen(o => !o) }
@@ -67,11 +70,30 @@ export default function TodayPanel() {
 
   const todayLabel = today.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 
+  // Fire a warning toast the first time each booking enters its confirm window
+  useEffect(() => {
+    if (!webConfirmEnabled) return
+    for (const b of todayList) {
+      if (b.status === 'cancelled' || b.presence_confirmed_at) continue
+      const isConfirmTarget = !b.booked_for_user_id || b.is_recipient === true
+      if (!isConfirmTarget) continue
+      const start = parseLocal(b.start_at)
+      const windowOpen  = new Date(start.getTime() - windowBefore * 60_000)
+      const windowClose = new Date(start.getTime() + windowAfter  * 60_000)
+      if (now >= windowOpen && now <= windowClose && !notifiedWindowRef.current.has(b.id)) {
+        notifiedWindowRef.current.add(b.id)
+        addInfoToast(`Confirm your presence for "${b.title}" before it gets auto-released!`)
+      }
+    }
+  }, [now, todayList, webConfirmEnabled])
+
   async function handleConfirm(b: Booking) {
     setConfirming(b.id)
     try {
       await confirmPresenceWeb(b.id)
       qc.invalidateQueries({ queryKey: ['my-bookings'] })
+      setOpen(false)
+      addInfoToast(`Presence confirmed for "${b.title}"`)
     } catch { /* ignore */ }
     finally { setConfirming(null) }
   }
@@ -126,24 +148,23 @@ export default function TodayPanel() {
               <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>Your schedule is clear for today.</p>
             </div>
           ) : (() => {
-            const active = todayList.filter(b => parseLocal(b.end_at) > now)
-            const past   = todayList.filter(b => parseLocal(b.end_at) <= now)
+            // Cancelled bookings always go to past section regardless of end_at
+            const active = todayList.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) > now)
+            const past   = todayList.filter(b => b.status === 'cancelled' || parseLocal(b.end_at) <= now)
 
             const renderCard = (b: Booking) => {
               const start       = parseLocal(b.start_at)
               const end         = parseLocal(b.end_at)
-              const ongoing     = start <= now && end > now
-              const isPast      = end <= now
+              const ongoing     = start <= now && end > now && b.status !== 'cancelled'
+              const isPast      = b.status === 'cancelled' || end <= now
               const isCancelled = b.status === 'cancelled'
               const isTentative = b.status === 'tentative'
 
-              // Show confirm if: web confirm on, within the configured time window around start,
-              // not yet confirmed, and current user is the confirmation target
               const windowOpen  = new Date(start.getTime() - windowBefore * 60_000)
               const windowClose = new Date(start.getTime() + windowAfter  * 60_000)
               const inWindow        = now >= windowOpen && now <= windowClose
               const isConfirmTarget = !b.booked_for_user_id || b.is_recipient === true
-              const needsConfirm    = webConfirmEnabled && inWindow && !b.presence_confirmed_at && isConfirmTarget
+              const needsConfirm    = webConfirmEnabled && inWindow && !b.presence_confirmed_at && isConfirmTarget && !isCancelled
 
               const cardStyle = ongoing
                 ? { background: 'rgba(173,238,43,0.12)', border: '2px solid #adee2b' }
@@ -159,20 +180,32 @@ export default function TodayPanel() {
 
               return (
                 <div key={b.id} className="rounded-2xl px-4 py-3.5 space-y-2 transition-colors" style={cardStyle}>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-[12px] font-black leading-tight flex-1" style={{ color: 'var(--ds-text-1)' }}>{b.title}</p>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {ongoing && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-[#adee2b] text-black">
-                          <span className="size-1.5 rounded-full bg-black/40 animate-pulse inline-block" />
-                          On Going
-                        </span>
-                      )}
-                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${statusBadgeClass}`}>
-                        {b.status}
+                  {/* Title on its own line */}
+                  <p className="text-[12px] font-black leading-tight" style={{ color: 'var(--ds-text-1)' }}>{b.title}</p>
+
+                  {/* Badges row — wraps freely, never competes with title */}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {ongoing && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-[#adee2b] text-black">
+                        <span className="size-1.5 rounded-full bg-black/40 animate-pulse inline-block" />
+                        On Going
                       </span>
-                    </div>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${statusBadgeClass}`}>
+                      {b.status}
+                    </span>
+                    {b.cancel_reason === 'ghost_release' && b.dispute_status !== 'approved' && (
+                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-orange-500/15 text-orange-600">
+                        <span className="material-symbols-outlined" style={{ fontSize: 9 }}>person_off</span>Auto-Released
+                      </span>
+                    )}
+                    {b.dispute_status === 'approved' && (
+                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-green-500/15 text-green-600">
+                        <span className="material-symbols-outlined" style={{ fontSize: 9 }}>gavel</span>Reinstated
+                      </span>
+                    )}
                   </div>
+
                   {b.booked_for && (
                     <div className="flex items-center gap-2 text-[10px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
                       <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>person_pin</span>
@@ -190,7 +223,6 @@ export default function TodayPanel() {
                     </div>
                   )}
 
-                  {/* Confirmed presence badge */}
                   {ongoing && b.presence_confirmed_at && (
                     <div className="flex items-center gap-1.5 text-[10px] font-black" style={{ color: '#22c55e' }}>
                       <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
@@ -198,7 +230,6 @@ export default function TodayPanel() {
                     </div>
                   )}
 
-                  {/* Confirm presence button */}
                   {needsConfirm && (
                     <button
                       onClick={() => handleConfirm(b)}

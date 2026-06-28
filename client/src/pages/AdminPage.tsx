@@ -26,8 +26,10 @@ import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 import KioskTab from '../components/admin/KioskTab'
 import ActivityLogTab from '../components/admin/ActivityLogTab'
+import { getDisputes, resolveDispute } from '../api/bookings'
+import type { Booking } from '../types/index'
 
-type Tab = 'overview' | 'users' | 'buildings' | 'settings' | 'archive' | 'kiosk' | 'activity'
+type Tab = 'overview' | 'users' | 'buildings' | 'settings' | 'archive' | 'kiosk' | 'activity' | 'disputes'
 
 function ModalPortal({ children }: { children: ReactNode }) {
   return <>{createPortal(children, document.body)}</>
@@ -3334,6 +3336,7 @@ const SETTINGS_SECTIONS = [
   { key: 'features', label: 'Features',       icon: 'tune' },
   { key: 'archive',  label: 'Archive',         icon: 'inventory_2' },
   { key: 'export',   label: 'Export Schedule', icon: 'schedule_send' },
+  { key: 'logexport', label: 'Log Export',     icon: 'history' },
 ] as const
 type SettingsSection = typeof SETTINGS_SECTIONS[number]['key']
 
@@ -3343,7 +3346,7 @@ function SettingsTab() {
   const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, ghost: null, features: null, archive: null, export: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, rules: null, ghost: null, features: null, archive: null, export: null, logexport: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
@@ -3419,7 +3422,7 @@ function SettingsTab() {
   const [exportDom,        setExportDom]        = useState(general?.export_day_of_month ?? 1)
   const [exportFormats,    setExportFormats]    = useState<string[]>((general?.export_formats ?? 'excel,csv').split(',').filter(Boolean))
   const [antiGhostEnabled,      setAntiGhostEnabled]      = useState(general?.anti_ghost_enabled ?? false)
-  const [antiGhostMode,         setAntiGhostMode]         = useState(general?.anti_ghost_mode ?? 'kiosk')
+  const [antiGhostModes,        setAntiGhostModes]        = useState<Set<string>>(() => new Set((general?.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
   const [ghostWindowBefore,     setGhostWindowBefore]     = useState(general?.anti_ghost_window_before ?? 5)
   const [ghostWindowAfter,      setGhostWindowAfter]      = useState(general?.anti_ghost_window_after ?? 10)
   const [webConfirmEnabled,     setWebConfirmEnabled]      = useState(general?.web_confirm_enabled ?? false)
@@ -3440,7 +3443,7 @@ function SettingsTab() {
       setExportDom(general.export_day_of_month)
       setExportFormats((general.export_formats ?? 'excel,csv').split(',').filter(Boolean))
       setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
-      setAntiGhostMode(general.anti_ghost_mode ?? 'kiosk')
+      setAntiGhostModes(new Set((general.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
       setGhostWindowBefore(general.anti_ghost_window_before ?? 5)
       setGhostWindowAfter(general.anti_ghost_window_after ?? 10)
       setWebConfirmEnabled(general.web_confirm_enabled ?? false)
@@ -3489,7 +3492,18 @@ function SettingsTab() {
     maxDaysDebounce.current = setTimeout(() => saveGeneral({ max_advance_days: v }, `Max advance booking set to ${v} days`), 800)
   }
   async function toggleAntiGhost() { const v = !antiGhostEnabled; setAntiGhostEnabled(v); await saveGeneral({ anti_ghost_enabled: v }, v ? 'Anti-ghost booking enabled' : 'Anti-ghost booking disabled') }
-  async function setAntiGhostModeVal(v: string) { setAntiGhostMode(v); await saveGeneral({ anti_ghost_mode: v }, `Anti-ghost mode: ${v}`) }
+  async function toggleAntiGhostMode(key: string) {
+    const next = new Set(antiGhostModes)
+    if (next.has(key)) {
+      if (next.size === 1) return // must keep at least one selected
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+    setAntiGhostModes(next)
+    const val = [...next].sort().join(',')
+    await saveGeneral({ anti_ghost_mode: val }, `Anti-ghost mode: ${val}`)
+  }
   function onGhostWindowBeforeChange(v: number) {
     const clamped = Math.max(0, Math.min(20, v))
     setGhostWindowBefore(clamped)
@@ -3503,6 +3517,20 @@ function SettingsTab() {
     ghostWindowAfterDebounce.current = setTimeout(() => saveGeneral({ anti_ghost_window_after: clamped }, `Confirm window: closes ${clamped}min after start`), 800)
   }
   async function toggleWebConfirm() { const v = !webConfirmEnabled; setWebConfirmEnabled(v); await saveGeneral({ web_confirm_enabled: v }, v ? 'Web presence confirm enabled' : 'Web presence confirm disabled') }
+
+  const [logExportEnabled,  setLogExportEnabled]  = useState(general?.log_auto_export_enabled ?? false)
+  const [logExportInterval, setLogExportInterval] = useState(general?.log_auto_export_interval ?? 'daily')
+  const [logExportTime,     setLogExportTime]     = useState(general?.log_auto_export_time ?? '00:00')
+  useEffect(() => {
+    if (general) {
+      setLogExportEnabled(general.log_auto_export_enabled ?? false)
+      setLogExportInterval(general.log_auto_export_interval ?? 'daily')
+      setLogExportTime(general.log_auto_export_time ?? '00:00')
+    }
+  }, [general?.log_auto_export_enabled, general?.log_auto_export_interval, general?.log_auto_export_time])
+  async function toggleLogExport() { const v = !logExportEnabled; setLogExportEnabled(v); await saveGeneral({ log_auto_export_enabled: v }, v ? 'Log auto-export enabled' : 'Log auto-export disabled') }
+  async function onLogIntervalChange(v: string) { setLogExportInterval(v); await saveGeneral({ log_auto_export_interval: v }, `Log export interval: ${v}`) }
+  async function onLogTimeChange(v: string) { setLogExportTime(v); await saveGeneral({ log_auto_export_time: v }, `Log export time: ${v}`) }
 
   return (
     <div className="space-y-6">
@@ -3711,33 +3739,42 @@ function SettingsTab() {
           <>
             <div className="border-t border-[var(--ds-border-sub)]" />
             <div>
-              <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-3">Detection Method</p>
+              <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-1">Detection Method</p>
+              <p className="text-[10px] font-medium text-[var(--ds-text-4)] mb-3">Select one or both — booking is confirmed if any of the selected methods detects presence.</p>
               <div className="flex gap-2">
                 {([
-                  { key: 'kiosk',  label: 'Kiosk',  icon: 'tablet',        desc: 'User must tap Confirm on the room kiosk', badge: null },
-                  { key: 'sensor', label: 'Sensor', icon: 'sensors',       desc: 'Motion/occupancy sensor via ESP32', badge: 'Coming Soon' },
+                  { key: 'kiosk',  label: 'Kiosk',  icon: 'tablet',  desc: 'User taps Confirm on the room kiosk device', badge: null },
+                  { key: 'sensor', label: 'Sensor', icon: 'sensors', desc: 'Motion/occupancy sensor via ESP32 (coming soon)', badge: 'Coming Soon' },
                 ] as const).map(opt => {
-                  const sel = antiGhostMode === opt.key
+                  const sel      = antiGhostModes.has(opt.key)
                   const disabled = opt.key === 'sensor'
                   return (
                     <button key={opt.key} type="button"
-                      disabled={disabled}
-                      onClick={() => !disabled && setAntiGhostModeVal(opt.key)}
-                      className="flex-1 flex flex-col gap-1.5 p-3.5 rounded-xl text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => !disabled && toggleAntiGhostMode(opt.key)}
+                      className="flex-1 flex flex-col gap-2 p-4 rounded-xl text-left transition-all"
                       style={{
-                        background: sel ? 'rgba(173,238,43,0.08)' : 'var(--ds-bg-raised)',
-                        border: sel ? '1.5px solid rgba(173,238,43,0.5)' : '1.5px solid var(--ds-border)',
+                        background: sel ? 'rgba(173,238,43,0.07)' : 'var(--ds-bg-raised)',
+                        border: sel ? '2px solid rgba(173,238,43,0.55)' : '2px solid var(--ds-border)',
+                        opacity: disabled && !sel ? 0.5 : 1,
+                        cursor: disabled ? 'default' : 'pointer',
                       }}>
+                      {/* Checkbox + badge row */}
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined" style={{ fontSize: 16, color: sel ? '#4d7c00' : '#94a3b8' }}>{opt.icon}</span>
+                        <div className="flex items-center gap-2.5">
+                          {/* Checkbox */}
+                          <div className="size-4 rounded-md flex items-center justify-center shrink-0 transition-all"
+                            style={{ background: sel ? '#adee2b' : 'var(--ds-bg-surface)', border: sel ? '2px solid #adee2b' : '2px solid var(--ds-border)' }}>
+                            {sel && <span className="material-symbols-outlined text-black" style={{ fontSize: 11, fontVariationSettings: "'wght' 900" }}>check</span>}
+                          </div>
+                          <span className="material-symbols-outlined" style={{ fontSize: 16, color: sel ? '#4d7c00' : 'var(--ds-text-3)' }}>{opt.icon}</span>
                           <span className="text-[12px] font-black" style={{ color: sel ? 'var(--ds-text-1)' : 'var(--ds-text-2)' }}>{opt.label}</span>
                         </div>
                         {opt.badge && (
-                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)' }}>{opt.badge}</span>
+                          <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0"
+                            style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)' }}>{opt.badge}</span>
                         )}
                       </div>
-                      <p className="text-[10px] font-medium text-[var(--ds-text-4)]">{opt.desc}</p>
+                      <p className="text-[10px] font-medium leading-relaxed" style={{ color: sel ? 'var(--ds-text-3)' : 'var(--ds-text-4)' }}>{opt.desc}</p>
                     </button>
                   )
                 })}
@@ -4094,6 +4131,66 @@ function SettingsTab() {
         </>)}
       </div>
 
+      {/* ── Log Auto-Export ── */}
+      <div ref={el => { secRefs.current.logexport = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Activity Log Export</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Automatically export the activity log to a <code className="text-[11px] bg-[var(--ds-bg-raised)] px-1 py-0.5 rounded">.txt</code> file on a schedule. Files are saved in <code className="text-[11px] bg-[var(--ds-bg-raised)] px-1 py-0.5 rounded">storage/logs/activity-exports/</code> (last 30 kept).</p>
+        </div>
+
+        {/* Enable toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>history</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Auto-Export Log</p>
+              <p className="text-[11px] text-[var(--ds-text-3)]">Export all entries to .txt on a schedule</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleLogExport} className="relative shrink-0">
+            <div className="w-9 h-5 rounded-full transition-colors" style={{ background: logExportEnabled ? '#adee2b' : 'var(--ds-bg-surface-2)', border: '1px solid var(--ds-border)' }} />
+            <div className="absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform shadow-sm" style={{ transform: logExportEnabled ? 'translateX(16px)' : 'translateX(0)' }} />
+          </button>
+        </div>
+
+        {logExportEnabled && (<>
+          <div className="border-t border-[var(--ds-border-sub)]" />
+
+          {/* Frequency */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>repeat</span>
+              </div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Frequency</p>
+            </div>
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
+              {(['daily', 'weekly', 'monthly'] as const).map(f => (
+                <button key={f} type="button" onClick={() => onLogIntervalChange(f)}
+                  className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all capitalize"
+                  style={logExportInterval === f ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Time */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
+                <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>schedule</span>
+              </div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Time</p>
+            </div>
+            <input type="time" value={logExportTime} onChange={e => onLogTimeChange(e.target.value)}
+              className="border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[12px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
+          </div>
+        </>)}
+      </div>
+
       </div>{/* end main sections */}
 
       {/* ── Floating TOC sidebar ── */}
@@ -4135,6 +4232,172 @@ function SettingsTab() {
   )
 }
 
+// ── Disputes Tab ─────────────────────────────────────────────────────────────
+function DisputesTab() {
+  const qc = useQueryClient()
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'resolved'>('pending')
+  const [resolvingId, setResolvingId] = useState<number | null>(null)
+
+  const { data: disputes = [], isLoading } = useQuery<Booking[]>({
+    queryKey: ['disputes', statusFilter],
+    queryFn: () => getDisputes(statusFilter),
+    staleTime: 30_000,
+  })
+
+  function parseLocal(s: string) { return new Date(s.replace('T', ' ').replace('Z', '')) }
+  function fmtDt(s: string) {
+    const d = parseLocal(s)
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' +
+      d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  }
+  function fmtTime(s: string) { return parseLocal(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }
+
+  async function handleResolve(b: Booking, action: 'approve' | 'reject') {
+    setResolvingId(b.id)
+    try {
+      await resolveDispute(b.id, action)
+      qc.invalidateQueries({ queryKey: ['disputes'] })
+    } catch { /* ignore */ }
+    finally { setResolvingId(null) }
+  }
+
+  const pendingCount = statusFilter === 'pending' ? disputes.length : 0
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      {/* Header */}
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Auto-Release</p>
+          <h1 className="text-3xl font-black italic tracking-tighter uppercase text-[var(--ds-text-1)]">Disputes</h1>
+        </div>
+        {/* Filter pills */}
+        <div className="flex gap-2">
+          {(['pending', 'resolved'] as const).map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className="px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all"
+              style={statusFilter === s
+                ? { background: '#adee2b', color: '#000' }
+                : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Info */}
+      {statusFilter === 'pending' && (
+        <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)', color: '#ea580c' }}>
+          <span className="font-black">Approve</span> to reinstate the booking (status → confirmed). <span className="font-black">Reject</span> to confirm the auto-release stands.
+        </div>
+      )}
+
+      {/* List */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="size-8 border-2 border-[var(--ds-border)] border-t-[#adee2b] rounded-full animate-spin" />
+        </div>
+      ) : disputes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+          <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 48 }}>gavel</span>
+          <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-4)]">
+            {statusFilter === 'pending' ? 'No pending disputes' : 'No resolved disputes'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {disputes.map((b) => {
+            const isPending   = b.dispute_status === 'pending'
+            const isApproved  = b.dispute_status === 'approved'
+            const resolving   = resolvingId === b.id
+
+            return (
+              <div key={b.id} className="rounded-2xl p-5 space-y-4 transition-all"
+                style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }}>
+
+                {/* Top row: user + booking info */}
+                <div className="flex items-start gap-4">
+                  <UserAvatar name={b.user?.name ?? '?'} avatar={b.user?.avatar} size={38} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <p className="text-[13px] font-black text-[var(--ds-text-1)]">{b.user?.name ?? 'Unknown User'}</p>
+                      <span className="text-[9px] font-bold text-[var(--ds-text-4)]">{b.user?.email}</span>
+                    </div>
+                    <p className="text-[12px] font-black uppercase tracking-tight text-[var(--ds-text-1)]">{b.title}</p>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--ds-text-3)]">
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>meeting_room</span>
+                        {b.room?.name}{b.room?.building ? ` · ${b.room.building.code ?? b.room.building.name}` : ''}
+                      </span>
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--ds-text-3)]">
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>schedule</span>
+                        {b.start_at ? fmtDt(b.start_at).split(' ').slice(0, 3).join(' ') : ''} · {b.start_at ? fmtTime(b.start_at) : ''}–{b.end_at ? fmtTime(b.end_at) : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Status badge */}
+                  <div className="shrink-0">
+                    {isPending && (
+                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-orange-500/15 text-orange-600 dark:text-orange-400">
+                        <span className="material-symbols-outlined" style={{ fontSize: 10 }}>hourglass_top</span>Pending
+                      </span>
+                    )}
+                    {isApproved && (
+                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-green-500/15 text-green-600 dark:text-green-400">
+                        <span className="material-symbols-outlined" style={{ fontSize: 10 }}>check_circle</span>Approved
+                      </span>
+                    )}
+                    {b.dispute_status === 'rejected' && (
+                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-red-500/15 text-red-500">
+                        <span className="material-symbols-outlined" style={{ fontSize: 10 }}>cancel</span>Rejected
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* User note */}
+                {b.dispute_note ? (
+                  <div className="px-4 py-3 rounded-xl" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border-sub)' }}>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-4)] mb-1">User's note</p>
+                    <p className="text-[11px] font-medium text-[var(--ds-text-2)] leading-relaxed">{b.dispute_note}</p>
+                  </div>
+                ) : (
+                  <p className="text-[10px] font-medium text-[var(--ds-text-4)] italic">No note provided</p>
+                )}
+
+                {/* Meta */}
+                <div className="flex items-center gap-4 text-[9px] font-bold text-[var(--ds-text-4)]">
+                  <span>Disputed: {b.disputed_at ? fmtDt(b.disputed_at) : '—'}</span>
+                  {b.dispute_resolved_at && <span>Resolved: {fmtDt(b.dispute_resolved_at)}</span>}
+                </div>
+
+                {/* Actions — only for pending */}
+                {isPending && (
+                  <div className="flex gap-3 pt-1">
+                    <button onClick={() => handleResolve(b, 'approve')} disabled={resolving}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all disabled:opacity-50 hover:opacity-80"
+                      style={{ background: '#adee2b', color: '#000' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+                      {resolving ? '…' : 'Approve — Reinstate'}
+                    </button>
+                    <button onClick={() => handleResolve(b, 'reject')} disabled={resolving}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all disabled:opacity-50 hover:opacity-80"
+                      style={{ background: 'rgba(239,68,68,0.12)', border: '1.5px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>cancel</span>
+                      {resolving ? '…' : 'Reject'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main AdminPage ───────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { user } = useAuth()
@@ -4142,16 +4405,38 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
+  // Read anti_ghost_enabled to gate Disputes tab visibility
+  const { data: rootSettings } = useQuery({
+    queryKey: ['settings-general'],
+    queryFn: getGeneralSettings,
+    staleTime: 5 * 60_000,
+  })
+  const antiGhostActive = rootSettings?.anti_ghost_enabled ?? false
+
+  // If anti-ghost gets disabled while on Disputes tab, bounce back to overview
+  useEffect(() => {
+    if (!antiGhostActive && tab === 'disputes') setTab('overview')
+  }, [antiGhostActive, tab])
+
   // Overview
   const [overviewPeriod, setOverviewPeriod]   = useState<7 | 30>(7)
   const [statusPeriod, setStatusPeriod]       = useState<SectionPeriod>('month')
   const [roomsPeriod, setRoomsPeriod]         = useState<SectionPeriod>('month')
   const [hoursPeriod, setHoursPeriod]         = useState<SectionPeriod>('month')
+  const [overviewBuilding, setOverviewBuilding] = useState<number | null>(null)
   const [exportModal, setExportModal]         = useState(false)
   const [exportMonth, setExportMonth]         = useState(() => new Date().toISOString().slice(0, 7))
   const [exportAllTime, setExportAllTime]     = useState(false)
+  const [exportBuildingIds, setExportBuildingIds] = useState<number[]>([])
   const [exporting, setExporting]             = useState(false)
   const [chartSettingsOpen, setChartSettingsOpen] = useState(false)
+
+  const { data: overviewBuildingsList = [] } = useQuery({
+    queryKey: ['buildings'],
+    queryFn: getBuildings,
+    staleTime: 300_000,
+    enabled: tab === 'overview',
+  })
 
   const { data: chartGeneral } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 60_000 })
   const parsedChartColors = useMemo(() => { try { return JSON.parse(chartGeneral?.chart_colors ?? '{}') } catch { return {} } }, [chartGeneral?.chart_colors])
@@ -4167,8 +4452,8 @@ export default function AdminPage() {
   const peakTo   = chartGeneral?.chart_peak_hour_to   ?? 23
 
   const { data: overviewData, isLoading: overviewLoading } = useQuery({
-    queryKey: ['analytics-overview', overviewPeriod, statusPeriod, roomsPeriod, hoursPeriod],
-    queryFn: () => getAnalyticsOverview(overviewPeriod, statusPeriod, roomsPeriod, hoursPeriod),
+    queryKey: ['analytics-overview', overviewPeriod, statusPeriod, roomsPeriod, hoursPeriod, overviewBuilding],
+    queryFn: () => getAnalyticsOverview(overviewPeriod, statusPeriod, roomsPeriod, hoursPeriod, overviewBuilding),
     staleTime: 60_000,
     enabled: tab === 'overview',
   })
@@ -4193,14 +4478,15 @@ export default function AdminPage() {
   async function handleExport() {
     setExporting(true)
     try {
+      const buildingIds = exportBuildingIds.length > 0 ? exportBuildingIds : undefined
       if (exportAllTime) {
-        await downloadAnalyticsExport({})
+        await downloadAnalyticsExport({ building_ids: buildingIds })
       } else {
         const [y, m] = exportMonth.split('-').map(Number)
         const from = `${exportMonth}-01`
         const lastDay = new Date(y, m, 0).getDate()
         const to = `${exportMonth}-${String(lastDay).padStart(2, '0')}`
-        await downloadAnalyticsExport({ from, to })
+        await downloadAnalyticsExport({ from, to, building_ids: buildingIds })
       }
       setExportModal(false)
     } finally { setExporting(false) }
@@ -4227,6 +4513,7 @@ export default function AdminPage() {
     { key: 'archive',    label: 'Archive',    icon: 'archive' },
     { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
     { key: 'activity',   label: 'Activity',   icon: 'history' },
+    ...(antiGhostActive ? [{ key: 'disputes' as Tab, label: 'Disputes', icon: 'gavel' }] : []),
   ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
@@ -4236,6 +4523,7 @@ export default function AdminPage() {
   const sidebarBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [pillY, setPillY] = useState(0)
   const [pillH, setPillH] = useState(36)
+  const [sidebarTooltip, setSidebarTooltip] = useState<{ label: string; y: number } | null>(null)
   useEffect(() => {
     const measure = () => {
       const nav = sidebarNavRef.current
@@ -4247,10 +4535,11 @@ export default function AdminPage() {
       setPillH(btnRect.height)
     }
     measure()
-    // Re-measure after layout settles (fonts / collapse transition) and on resize
     const raf = requestAnimationFrame(measure)
+    // Re-measure after collapse transition finishes (300ms easing)
+    const timer = setTimeout(measure, 320)
     window.addEventListener('resize', measure)
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure) }
+    return () => { cancelAnimationFrame(raf); clearTimeout(timer); window.removeEventListener('resize', measure) }
   }, [tab, sidebarCollapsed])
 
   return (
@@ -4282,11 +4571,11 @@ export default function AdminPage() {
       `}</style>
       {/* Sidebar */}
       <div className={`shrink-0 p-3 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${sidebarCollapsed ? 'w-[68px]' : 'w-[196px]'}`}>
-        <div className="h-full flex flex-col rounded-3xl py-3 px-2 overflow-hidden"
+        <div className="h-full flex flex-col rounded-3xl py-3 px-2"
           style={{ background: 'rgba(15,20,45,0.92)', border: '1px solid rgba(255,255,255,0.07)', boxShadow: '0 8px 40px rgba(0,0,0,0.18)', transform: 'translateZ(0)', willChange: 'transform' }}>
 
           {/* Label */}
-          <div className={`px-2 mb-2 transition-all duration-200 overflow-hidden ${sidebarCollapsed ? 'h-0 opacity-0' : 'h-6 opacity-100'}`}>
+          <div className={`px-2 mb-2 transition-all duration-200 overflow-hidden ${sidebarCollapsed ? 'h-0 opacity-0 pointer-events-none' : 'h-6 opacity-100'}`}>
             <p className="text-[8px] font-black uppercase tracking-[0.35em] whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.2)' }}>Admin Panel</p>
           </div>
 
@@ -4299,8 +4588,10 @@ export default function AdminPage() {
             {mainTabs.map(t => {
               const active = tab === t.key
               return (
-                <div key={t.key} className="relative group">
+                <div key={t.key}>
                   <button ref={el => { sidebarBtnRefs.current[t.key] = el }} onClick={() => setTab(t.key)}
+                    onMouseEnter={sidebarCollapsed ? e => setSidebarTooltip({ label: t.label, y: e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2 }) : undefined}
+                    onMouseLeave={sidebarCollapsed ? () => setSidebarTooltip(null) : undefined}
                     className={`w-full flex items-center gap-3 rounded-2xl transition-colors duration-150 overflow-hidden relative
                       ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}>
                     <span className="material-symbols-outlined shrink-0 transition-colors duration-200" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{t.icon}</span>
@@ -4308,14 +4599,6 @@ export default function AdminPage() {
                       <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors duration-200" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{t.label}</span>
                     )}
                   </button>
-                  {sidebarCollapsed && (
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
-                      <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
-                        style={{ background: 'rgba(15,20,45,0.96)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
-                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{t.label}</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )
             })}
@@ -4324,8 +4607,10 @@ export default function AdminPage() {
             {settingsTabDef && (() => {
               const active = tab === settingsTabDef.key
               return (
-                <div className="relative group mt-auto pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <div className="mt-auto pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
                   <button ref={el => { sidebarBtnRefs.current[settingsTabDef.key] = el }} onClick={() => setTab(settingsTabDef.key)}
+                    onMouseEnter={sidebarCollapsed ? e => setSidebarTooltip({ label: settingsTabDef.label, y: e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2 }) : undefined}
+                    onMouseLeave={sidebarCollapsed ? () => setSidebarTooltip(null) : undefined}
                     className={`w-full flex items-center gap-3 rounded-2xl transition-colors duration-150 overflow-hidden relative
                       ${sidebarCollapsed ? 'justify-center py-3 px-0' : 'px-3 py-2.5'}`}>
                     <span className="material-symbols-outlined shrink-0 transition-colors duration-200" style={{ fontSize: 19, color: active ? '#adee2b' : 'rgba(255,255,255,0.3)' }}>{settingsTabDef.icon}</span>
@@ -4333,18 +4618,22 @@ export default function AdminPage() {
                       <span className="text-[10px] font-black uppercase tracking-wide whitespace-nowrap transition-colors duration-200" style={{ color: active ? '#fff' : 'rgba(255,255,255,0.4)' }}>{settingsTabDef.label}</span>
                     )}
                   </button>
-                  {sidebarCollapsed && (
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 z-[200] pointer-events-none opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200">
-                      <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
-                        style={{ background: 'rgba(15,20,45,0.96)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
-                        <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{settingsTabDef.label}</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )
             })()}
           </div>
+
+          {/* Fixed tooltip portal — outside overflow-hidden containers */}
+          {sidebarCollapsed && sidebarTooltip && (
+            <ModalPortal>
+              <div className="pointer-events-none" style={{ position: 'fixed', left: 76, top: sidebarTooltip.y, transform: 'translateY(-50%)', zIndex: 9999 }}>
+                <div className="px-3.5 py-2 rounded-xl whitespace-nowrap"
+                  style={{ background: 'rgba(15,20,45,0.96)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
+                  <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#fff' }}>{sidebarTooltip.label}</span>
+                </div>
+              </div>
+            </ModalPortal>
+          )}
 
           {/* Toggle */}
           <div className="pt-2 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
@@ -4391,11 +4680,123 @@ export default function AdminPage() {
                 <span className="material-symbols-outlined animate-spin text-[var(--ds-text-4)]" style={{ fontSize: 32 }}>progress_activity</span>
               </div>
             ) : overviewData && (<>
-              {/* Stats */}
+              {/* ── Global stats: Unique Visitors + Storage (no building filter) ── */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Unique visitors */}
+                <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"
+                  style={{ background: 'var(--ds-bg-surface)' }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1', fontVariationSettings: "'FILL' 1" }}>group</span>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[var(--ds-text-3)]">Unique Visitors</p>
+                      <p className="text-[10px] font-bold text-[var(--ds-text-4)]">Active users by period — all buildings</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {([
+                      { label: 'Today', val: overviewData.stats.unique_visitors_today },
+                      { label: 'This Week', val: overviewData.stats.unique_visitors_week },
+                      { label: 'This Month', val: overviewData.stats.unique_visitors_month },
+                    ] as const).map(item => (
+                      <div key={item.label} className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
+                        <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{item.label}</span>
+                        <span className="text-[15px] font-black text-[var(--ds-text-1)] tabular-nums">{item.val.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Storage */}
+                {overviewData.stats.storage && (() => {
+                  const s = overviewData.stats.storage
+                  const fmtMb = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb} MB`
+                  const totalMb = s.db_mb + s.uploads_mb + (s.logs_mb ?? 0)
+                  const bars = [
+                    { label: 'Database', mb: s.db_mb, color: '#6366f1' },
+                    { label: 'Room Photos', mb: s.room_photos_mb, color: '#3b82f6' },
+                    { label: 'Avatars', mb: s.avatars_mb, color: '#a855f7' },
+                    { label: 'Logs', mb: s.logs_mb ?? 0, color: '#f59e0b' },
+                  ]
+                  return (
+                    <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"
+                      style={{ background: 'var(--ds-bg-surface)' }}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)' }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#ef4444', fontVariationSettings: "'FILL' 1" }}>database</span>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[var(--ds-text-3)]">Storage Usage</p>
+                          <p className="text-[10px] font-bold text-[var(--ds-text-4)]">Total uploads: {fmtMb(s.uploads_mb)} · DB: {fmtMb(s.db_mb)}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2.5">
+                        {bars.map(b => {
+                          const pct = totalMb > 0 ? Math.max(2, (b.mb / totalMb) * 100) : 2
+                          return (
+                            <div key={b.label}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-bold text-[var(--ds-text-2)]">{b.label}</span>
+                                <span className="text-[10px] font-black text-[var(--ds-text-1)]">{fmtMb(b.mb)}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--ds-bg-raised)' }}>
+                                <div className="h-full rounded-full transition-all duration-700"
+                                  style={{ width: `${pct}%`, background: b.color }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+
+              {/* ── Divider ── */}
+              <div className="border-t border-[var(--ds-border-sub)]" />
+
+              {/* ── Building filter toggle ── */}
+              {overviewBuildingsList.length > 0 && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[var(--ds-text-3)] shrink-0">Filter by building</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => setOverviewBuilding(null)}
+                      className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all"
+                      style={{
+                        background: overviewBuilding === null ? '#111827' : 'var(--ds-bg-raised)',
+                        color: overviewBuilding === null ? '#adee2b' : 'var(--ds-text-3)',
+                        border: overviewBuilding === null ? '1px solid transparent' : '1px solid var(--ds-border)',
+                      }}>
+                      All
+                    </button>
+                    {overviewBuildingsList.map(b => (
+                      <button key={b.id}
+                        onClick={() => setOverviewBuilding(overviewBuilding === b.id ? null : b.id)}
+                        className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all"
+                        style={{
+                          background: overviewBuilding === b.id ? '#111827' : 'var(--ds-bg-raised)',
+                          color: overviewBuilding === b.id ? '#adee2b' : 'var(--ds-text-3)',
+                          border: overviewBuilding === b.id ? '1px solid transparent' : '1px solid var(--ds-border)',
+                        }}>
+                        {b.code ?? b.name}
+                      </button>
+                    ))}
+                  </div>
+                  {overviewBuilding !== null && (
+                    <span className="text-[10px] text-[var(--ds-text-4)] font-bold">
+                      {overviewBuildingsList.find(b => b.id === overviewBuilding)?.name}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* ── Stats (filtered by building) ── */}
               <div className="grid grid-cols-4 gap-4">
-                <StatCard label="Total Bookings" value={String(overviewData.stats.total_bookings)} sub="all time" dark />
+                <StatCard label="Total Bookings" value={String(overviewData.stats.total_bookings)} sub={overviewBuilding ? 'this building' : 'all time'} dark />
                 <StatCard label="Confirmed" value={String(overviewData.stats.confirmed)} sub="bookings" />
-                <StatCard label="Active Rooms" value={String(overviewData.stats.active_rooms)} sub="available" />
+                <StatCard label="Active Rooms" value={String(overviewData.stats.active_rooms)} sub={overviewBuilding ? 'in building' : 'available'} />
                 <StatCard label="Users" value={String(overviewData.stats.total_users)} sub="registered" />
               </div>
 
@@ -4623,7 +5024,7 @@ export default function AdminPage() {
                 <h3 className="text-base font-black uppercase tracking-tight mt-0.5 text-[var(--ds-text-1)]">Export Bookings</h3>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* All time toggle */}
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <div className="relative shrink-0" onClick={() => setExportAllTime(v => !v)}>
@@ -4647,8 +5048,31 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {exportAllTime && (
-                  <p className="text-[10px] text-[var(--ds-text-3)] font-bold">Exports all bookings with no date filter.</p>
+                {/* Building filter */}
+                {overviewBuildingsList.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">
+                      Buildings <span className="text-[var(--ds-text-4)] normal-case font-bold">(leave all unchecked = all buildings)</span>
+                    </p>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                      {overviewBuildingsList.map(b => {
+                        const checked = exportBuildingIds.includes(b.id)
+                        return (
+                          <label key={b.id} className="flex items-center gap-2.5 cursor-pointer group px-3 py-2 rounded-xl transition-colors hover:bg-[var(--ds-bg-raised)]">
+                            <div
+                              className="size-4 rounded-md flex items-center justify-center shrink-0 transition-all"
+                              style={{ background: checked ? '#111827' : 'var(--ds-bg-raised)', border: checked ? '1px solid #111827' : '1px solid var(--ds-border)' }}
+                              onClick={() => setExportBuildingIds(ids => checked ? ids.filter(i => i !== b.id) : [...ids, b.id])}>
+                              {checked && <span className="material-symbols-outlined" style={{ fontSize: 11, color: '#adee2b', fontVariationSettings: "'FILL' 1" }}>check</span>}
+                            </div>
+                            <span className="text-[11px] font-bold text-[var(--ds-text-2)]">
+                              {b.name}{b.code ? ` (${b.code})` : ''}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -4756,8 +5180,9 @@ export default function AdminPage() {
 
         {tab === 'archive'  && <div className="admin-tab-in"><ArchiveTab /></div>}
         {tab === 'settings' && <div className="admin-tab-in"><SettingsTab /></div>}
-        {tab === 'kiosk'    && <div className="admin-tab-in"><KioskTab /></div>}
-        {tab === 'activity' && <div className="admin-tab-in"><ActivityLogTab /></div>}
+        {tab === 'kiosk'     && <div className="admin-tab-in"><KioskTab /></div>}
+        {tab === 'activity'  && <div className="admin-tab-in"><ActivityLogTab /></div>}
+        {tab === 'disputes'  && <div className="admin-tab-in"><DisputesTab /></div>}
       </div>
     </div>
   )

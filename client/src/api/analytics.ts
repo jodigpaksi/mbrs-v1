@@ -7,6 +7,16 @@ export interface OverviewStats {
   cancelled: number
   active_rooms: number
   total_users: number
+  unique_visitors_today: number
+  unique_visitors_week: number
+  unique_visitors_month: number
+  storage: {
+    db_mb: number
+    room_photos_mb: number
+    avatars_mb: number
+    uploads_mb: number
+    logs_mb: number
+  }
 }
 
 export interface AnalyticsOverview {
@@ -47,6 +57,7 @@ export interface AnalyticsFilters {
   to?: string
   room_id?: number | ''
   building_id?: number | ''
+  building_ids?: number[]
   dept_id?: number | ''
   page?: number
 }
@@ -58,9 +69,16 @@ export async function getAnalyticsOverview(
   statusPeriod: SectionPeriod = 'month',
   roomsPeriod: SectionPeriod = 'month',
   hoursPeriod: SectionPeriod = 'month',
+  buildingId?: number | null,
 ): Promise<AnalyticsOverview> {
   const { data } = await api.get('/analytics/overview', {
-    params: { period, status_period: statusPeriod, rooms_period: roomsPeriod, hours_period: hoursPeriod },
+    params: {
+      period,
+      status_period: statusPeriod,
+      rooms_period: roomsPeriod,
+      hours_period: hoursPeriod,
+      ...(buildingId ? { building_id: buildingId } : {}),
+    },
   })
   return data
 }
@@ -83,6 +101,7 @@ export async function downloadAnalyticsExport(filters: AnalyticsFilters = {}): P
   if (filters.to) params.to = filters.to
   if (filters.room_id) params.room_id = filters.room_id
   if (filters.building_id) params.building_id = filters.building_id
+  if (filters.building_ids?.length) params['building_ids[]'] = filters.building_ids
   if (filters.dept_id) params.dept_id = filters.dept_id
 
   const response = await api.get('/analytics/export', { params, responseType: 'blob' })

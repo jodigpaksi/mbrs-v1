@@ -90,6 +90,12 @@ export interface Booking {
   booked_for_user_id?: number
   is_recipient?: boolean
   presence_confirmed_at?: string | null
+  cancel_reason?: string | null
+  dispute_status?: 'pending' | 'approved' | 'rejected' | null
+  dispute_note?: string | null
+  disputed_at?: string | null
+  dispute_resolved_at?: string | null
+  dispute_resolved_by?: number | null
 }
 
 export interface AppNotification {

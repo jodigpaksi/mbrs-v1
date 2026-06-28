@@ -6,9 +6,12 @@ import {
   getGeneralSettings,
 } from '../api/settings'
 import type { AfterHoursContact } from '../api/settings'
+import { getDisputes, resolveDispute } from '../api/bookings'
 import { getDirectory } from '../api/users'
-import type { User } from '../types'
+import type { Booking, User } from '../types'
 import UserAvatar from '../components/ui/UserAvatar'
+
+type Tab = 'contacts' | 'disputes'
 
 interface ContactSectionProps {
   queryKey: string
@@ -256,12 +259,151 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
   )
 }
 
+function DisputesSection() {
+  const qc = useQueryClient()
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'resolved'>('pending')
+  const [resolvingId, setResolvingId] = useState<number | null>(null)
+
+  const { data: disputes = [], isLoading } = useQuery<Booking[]>({
+    queryKey: ['disputes', statusFilter],
+    queryFn: () => getDisputes(statusFilter),
+    staleTime: 30_000,
+  })
+
+  function parseLocal(s: string) { return new Date(s.replace('T', ' ').replace('Z', '')) }
+  function fmtDt(s: string) {
+    const d = parseLocal(s)
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' +
+      d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  }
+  function fmtTime(s: string) { return parseLocal(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }
+
+  async function handleResolve(b: Booking, action: 'approve' | 'reject') {
+    setResolvingId(b.id)
+    try {
+      await resolveDispute(b.id, action)
+      qc.invalidateQueries({ queryKey: ['disputes'] })
+    } catch { /* ignore */ }
+    finally { setResolvingId(null) }
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Filter + info */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          {(['pending', 'resolved'] as const).map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className="px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all"
+              style={statusFilter === s
+                ? { background: '#adee2b', color: '#000' }
+                : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {statusFilter === 'pending' && (
+        <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed"
+          style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)', color: '#ea580c' }}>
+          <span className="font-black">Approve</span> to reinstate the booking. <span className="font-black">Reject</span> to confirm auto-release stands.
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="size-8 border-2 border-[var(--ds-border)] border-t-[#adee2b] rounded-full animate-spin" />
+        </div>
+      ) : disputes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+          <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 48 }}>gavel</span>
+          <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-4)]">
+            {statusFilter === 'pending' ? 'No pending disputes' : 'No resolved disputes'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {disputes.map(b => {
+            const isPending  = b.dispute_status === 'pending'
+            const isApproved = b.dispute_status === 'approved'
+            const resolving  = resolvingId === b.id
+            return (
+              <div key={b.id} className="rounded-2xl p-5 space-y-4"
+                style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border-sub)' }}>
+                <div className="flex items-start gap-4">
+                  <UserAvatar name={b.user?.name ?? '?'} avatar={b.user?.avatar} size={38} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <p className="text-[13px] font-black text-[var(--ds-text-1)]">{b.user?.name ?? 'Unknown User'}</p>
+                      <span className="text-[9px] font-bold text-[var(--ds-text-4)]">{b.user?.email}</span>
+                    </div>
+                    <p className="text-[12px] font-black uppercase tracking-tight text-[var(--ds-text-1)]">{b.title}</p>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--ds-text-3)]">
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>meeting_room</span>
+                        {b.room?.name}{b.room?.building ? ` · ${b.room.building.code ?? b.room.building.name}` : ''}
+                      </span>
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--ds-text-3)]">
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>schedule</span>
+                        {b.start_at ? fmtDt(b.start_at).split(' ').slice(0, 3).join(' ') : ''} · {b.start_at ? fmtTime(b.start_at) : ''}–{b.end_at ? fmtTime(b.end_at) : ''}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {isPending && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-orange-500/15 text-orange-600 dark:text-orange-400"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>hourglass_top</span>Pending</span>}
+                    {isApproved && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-green-500/15 text-green-600 dark:text-green-400"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>check_circle</span>Approved</span>}
+                    {b.dispute_status === 'rejected' && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-red-500/15 text-red-500"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>cancel</span>Rejected</span>}
+                  </div>
+                </div>
+
+                {b.dispute_note ? (
+                  <div className="px-4 py-3 rounded-xl" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border-sub)' }}>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-4)] mb-1">User's note</p>
+                    <p className="text-[11px] font-medium text-[var(--ds-text-2)] leading-relaxed">{b.dispute_note}</p>
+                  </div>
+                ) : (
+                  <p className="text-[10px] font-medium text-[var(--ds-text-4)] italic">No note provided</p>
+                )}
+
+                <div className="flex items-center gap-4 text-[9px] font-bold text-[var(--ds-text-4)]">
+                  <span>Disputed: {b.disputed_at ? fmtDt(b.disputed_at) : '—'}</span>
+                  {b.dispute_resolved_at && <span>Resolved: {fmtDt(b.dispute_resolved_at)}</span>}
+                </div>
+
+                {isPending && (
+                  <div className="flex gap-3 pt-1">
+                    <button onClick={() => handleResolve(b, 'approve')} disabled={resolving}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all disabled:opacity-50 hover:opacity-80"
+                      style={{ background: '#adee2b', color: '#000' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+                      {resolving ? '…' : 'Approve — Reinstate'}
+                    </button>
+                    <button onClick={() => handleResolve(b, 'reject')} disabled={resolving}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all disabled:opacity-50 hover:opacity-80"
+                      style={{ background: 'rgba(239,68,68,0.12)', border: '1.5px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>cancel</span>
+                      {resolving ? '…' : 'Reject'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ReceptionistPage() {
+  const [tab, setTab] = useState<Tab>('contacts')
   const { data: generalSettings, isLoading: loadingSettings } = useQuery({
     queryKey: ['settings-general'],
     queryFn: getGeneralSettings,
     staleTime: 60_000,
   })
+  const antiGhostEnabled = generalSettings?.anti_ghost_enabled ?? false
 
   return (
     <div className="flex-1 overflow-auto" style={{ background: 'var(--ds-bg-base)' }}>
@@ -277,42 +419,68 @@ export default function ReceptionistPage() {
             <h1 className="text-[22px] font-black" style={{ color: 'var(--ds-text-1)' }}>Receptionist</h1>
           </div>
           <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>
-            Manage contact settings shown to users in booking restrictions.
+            Manage contact settings and review auto-release disputes.
           </p>
         </div>
 
-        <div className="flex flex-col gap-5">
-          <ContactSection
-            queryKey="after-hours-contacts"
-            fetchFn={getAfterHoursContacts}
-            saveFn={updateAfterHoursContacts}
-            icon="schedule"
-            iconColor="#6366f1"
-            iconBg="rgba(99,102,241,0.1)"
-            title="After-Working Hours Contacts"
-            description="Shown to staff attempting to book outside working hours. Leave empty to auto-show all on-duty receptionists."
-            emptyNote="No custom contacts — all on-duty receptionists shown by default"
-            enabled={generalSettings?.restrict_after_hours}
-            enabledLabel="Restriction On"
-            disabledLabel="Restriction Off"
-            loadingStatus={loadingSettings}
-          />
-
-          <ContactSection
-            queryKey="special-room-contacts"
-            fetchFn={getSpecialRoomContacts}
-            saveFn={updateSpecialRoomContacts}
-            icon="star"
-            iconColor="#f59e0b"
-            iconBg="rgba(251,191,36,0.1)"
-            title="Special Room Contacts"
-            description="Shown when a user tries to book a special/contact-required room. Leave empty to auto-show all on-duty receptionists."
-            emptyNote="No custom contacts — all on-duty receptionists shown by default"
-            enabled={true}
-            enabledLabel="Always Active"
-            loadingStatus={false}
-          />
+        {/* Tab bar */}
+        <div className="flex gap-2 mb-6">
+          <button onClick={() => setTab('contacts')}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all"
+            style={tab === 'contacts'
+              ? { background: '#adee2b', color: '#000' }
+              : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>contacts</span>
+            Contacts
+          </button>
+          {antiGhostEnabled && (
+            <button onClick={() => setTab('disputes')}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all"
+              style={tab === 'disputes'
+                ? { background: '#adee2b', color: '#000' }
+                : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>gavel</span>
+              Disputes
+            </button>
+          )}
         </div>
+
+        {tab === 'contacts' && (
+          <div className="flex flex-col gap-5">
+            <ContactSection
+              queryKey="after-hours-contacts"
+              fetchFn={getAfterHoursContacts}
+              saveFn={updateAfterHoursContacts}
+              icon="schedule"
+              iconColor="#6366f1"
+              iconBg="rgba(99,102,241,0.1)"
+              title="After-Working Hours Contacts"
+              description="Shown to staff attempting to book outside working hours. Leave empty to auto-show all on-duty receptionists."
+              emptyNote="No custom contacts — all on-duty receptionists shown by default"
+              enabled={generalSettings?.restrict_after_hours}
+              enabledLabel="Restriction On"
+              disabledLabel="Restriction Off"
+              loadingStatus={loadingSettings}
+            />
+
+            <ContactSection
+              queryKey="special-room-contacts"
+              fetchFn={getSpecialRoomContacts}
+              saveFn={updateSpecialRoomContacts}
+              icon="star"
+              iconColor="#f59e0b"
+              iconBg="rgba(251,191,36,0.1)"
+              title="Special Room Contacts"
+              description="Shown when a user tries to book a special/contact-required room. Leave empty to auto-show all on-duty receptionists."
+              emptyNote="No custom contacts — all on-duty receptionists shown by default"
+              enabled={true}
+              enabledLabel="Always Active"
+              loadingStatus={false}
+            />
+          </div>
+        )}
+
+        {tab === 'disputes' && antiGhostEnabled && <DisputesSection />}
 
       </div>
     </div>

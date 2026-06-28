@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { getActivityLogs, type ActivityLog } from '../../api/activityLogs'
+import { getActivityLogs, exportActivityLogs, type ActivityLog } from '../../api/activityLogs'
 
 const CATEGORIES: { key: string; label: string }[] = [
   { key: '',         label: 'All' },
@@ -67,6 +67,9 @@ export default function ActivityLogTab() {
   const [category, setCategory] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const exportRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['activity-logs', category, search, page],
@@ -77,12 +80,56 @@ export default function ActivityLogTab() {
   const logs = data?.data ?? []
   const meta = data?.meta
 
+  async function handleExport(format: 'excel' | 'pdf' | 'txt') {
+    setExportOpen(false)
+    setExporting(true)
+    try {
+      await exportActivityLogs({ format, category: category || undefined, q: search || undefined })
+    } catch { /* ignore */ }
+    finally { setExporting(false) }
+  }
+
   return (
     <div className="max-w-3xl">
       {/* Header */}
-      <div className="mb-5">
-        <h2 className="text-xl font-black text-[var(--ds-text-1)]">Activity Log</h2>
-        <p className="text-[12px] text-[var(--ds-text-3)] mt-1">Audit trail of important admin actions — cancellations, role changes, user & settings changes, and data exports.</p>
+      <div className="flex items-start justify-between mb-5 gap-4">
+        <div>
+          <h2 className="text-xl font-black text-[var(--ds-text-1)]">Activity Log</h2>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-1">Audit trail of important admin actions — cancellations, role changes, user & settings changes, and data exports.</p>
+        </div>
+        {/* Export dropdown */}
+        <div className="relative shrink-0" ref={exportRef}>
+          <button
+            onClick={() => setExportOpen(o => !o)}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all disabled:opacity-60"
+            style={{ background: '#111827', color: '#adee2b' }}
+          >
+            {exporting
+              ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>Exporting…</>
+              : <><span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Export</>}
+          </button>
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 rounded-2xl overflow-hidden shadow-xl"
+              style={{ background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', minWidth: 160 }}>
+              <button onClick={() => handleExport('excel')}
+                className="flex items-center gap-2 w-full px-4 py-3 text-[11px] font-black uppercase tracking-wide text-left transition-colors hover:bg-[var(--ds-bg-raised)]"
+                style={{ color: 'var(--ds-text-1)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#22c55e' }}>table</span>Excel (.xlsx)
+              </button>
+              <button onClick={() => handleExport('pdf')}
+                className="flex items-center gap-2 w-full px-4 py-3 text-[11px] font-black uppercase tracking-wide text-left transition-colors hover:bg-[var(--ds-bg-raised)]"
+                style={{ color: 'var(--ds-text-1)', borderTop: '1px solid var(--ds-border-sub)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#ef4444' }}>description</span>PDF
+              </button>
+              <button onClick={() => handleExport('txt')}
+                className="flex items-center gap-2 w-full px-4 py-3 text-[11px] font-black uppercase tracking-wide text-left transition-colors hover:bg-[var(--ds-bg-raised)]"
+                style={{ color: 'var(--ds-text-1)', borderTop: '1px solid var(--ds-border-sub)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 15, color: '#94a3b8' }}>text_snippet</span>Text (.txt) — All
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filters */}

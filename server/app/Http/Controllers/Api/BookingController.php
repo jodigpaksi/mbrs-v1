@@ -139,13 +139,23 @@ class BookingController extends Controller
     {
         $userId = $request->user()->id;
 
+        $today = Carbon::now('Asia/Jakarta')->toDateString();
+
         $bookings = Booking::with(['room.building', 'user.department'])
             ->whereNull('archived_at')
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                   ->orWhere('booked_for_user_id', $userId);
             })
-            ->where('status', '!=', 'cancelled')
+            ->where(function ($q) use ($today) {
+                // Include all non-cancelled bookings + today's cancelled so TodayPanel
+                // can show ghost-released / manually cancelled bookings from today
+                $q->where('status', '!=', 'cancelled')
+                  ->orWhere(function ($q2) use ($today) {
+                      $q2->where('status', 'cancelled')
+                         ->whereDate('start_at', $today);
+                  });
+            })
             ->orderBy('start_at')
             ->get()
             ->map(function ($b) use ($userId) {
@@ -181,6 +191,129 @@ class BookingController extends Controller
         }
 
         return response()->json(['presence_confirmed_at' => $booking->presence_confirmed_at]);
+    }
+
+    public function disputeIndex(Request $request): JsonResponse
+    {
+        $allowed = ['admin', 'superadmin', 'receptionist', 'building_admin'];
+        if (! in_array($request->user()->role, $allowed)) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $status = $request->query('status', 'pending'); // pending|resolved|all
+
+        $q = Booking::with(['user', 'room.building'])
+            ->whereNotNull('dispute_status');
+
+        if ($status === 'pending') {
+            $q->where('dispute_status', 'pending');
+        } elseif ($status === 'resolved') {
+            $q->whereIn('dispute_status', ['approved', 'rejected']);
+        }
+
+        $bookings = $q->orderByDesc('disputed_at')->get()->map(fn($b) => [
+            'id'                   => $b->id,
+            'title'                => $b->title,
+            'start_at'             => $b->start_at,
+            'end_at'               => $b->end_at,
+            'status'               => $b->status,
+            'cancel_reason'        => $b->cancel_reason,
+            'dispute_status'       => $b->dispute_status,
+            'dispute_note'         => $b->dispute_note,
+            'disputed_at'          => $b->disputed_at,
+            'dispute_resolved_at'  => $b->dispute_resolved_at,
+            'dispute_resolved_by'  => $b->dispute_resolved_by,
+            'room'                 => $b->room ? [
+                'id'       => $b->room->id,
+                'name'     => $b->room->name,
+                'building' => $b->room->building ? ['name' => $b->room->building->name, 'code' => $b->room->building->code] : null,
+            ] : null,
+            'user'                 => $b->user ? [
+                'id'     => $b->user->id,
+                'name'   => $b->user->name,
+                'email'  => $b->user->email,
+                'avatar' => $b->user->avatar,
+            ] : null,
+        ]);
+
+        return response()->json($bookings);
+    }
+
+    public function submitDispute(Request $request, Booking $booking): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Only the booking owner or the booked_for user can dispute
+        $ownerId = $booking->booked_for_user_id ?? $booking->user_id;
+        if ($ownerId !== $userId) {
+            return response()->json(['error' => 'Not authorised to dispute this booking'], 403);
+        }
+        if ($booking->cancel_reason !== 'ghost_release') {
+            return response()->json(['error' => 'Only auto-released bookings can be disputed'], 422);
+        }
+        if ($booking->dispute_status) {
+            return response()->json(['error' => 'Dispute already submitted'], 422);
+        }
+
+        $data = $request->validate(['note' => 'nullable|string|max:500']);
+        $now  = Carbon::parse(Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s'));
+
+        $booking->update([
+            'dispute_status' => 'pending',
+            'dispute_note'   => $data['note'] ?? null,
+            'disputed_at'    => $now,
+        ]);
+
+        \App\Models\ActivityLog::record(
+            'booking.dispute_submitted',
+            "Dispute submitted for ghost-released booking #{$booking->id} — {$booking->title}",
+            $booking,
+            ['user_id' => $userId],
+        );
+
+        return response()->json(['dispute_status' => 'pending']);
+    }
+
+    public function resolveDispute(Request $request, Booking $booking): JsonResponse
+    {
+        $admin = $request->user();
+        if (! in_array($admin->role, ['admin', 'superadmin', 'receptionist', 'building_admin'])) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+        if ($booking->dispute_status !== 'pending') {
+            return response()->json(['error' => 'No pending dispute on this booking'], 422);
+        }
+
+        $data   = $request->validate(['action' => 'required|in:approve,reject']);
+        $now    = Carbon::parse(Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s'));
+        $approve = $data['action'] === 'approve';
+
+        $updates = [
+            'dispute_status'       => $approve ? 'approved' : 'rejected',
+            'dispute_resolved_at'  => $now,
+            'dispute_resolved_by'  => $admin->id,
+        ];
+
+        if ($approve) {
+            $updates['status']       = 'confirmed';
+            $updates['cancelled_at'] = null;
+            $updates['cancel_reason'] = null;
+        }
+
+        $booking->update($updates);
+
+        \App\Models\ActivityLog::record(
+            $approve ? 'booking.dispute_approved' : 'booking.dispute_rejected',
+            ($approve ? 'Dispute approved' : 'Dispute rejected') . " for booking #{$booking->id} — {$booking->title}",
+            $booking,
+            ['resolved_by' => $admin->id],
+        );
+
+        if ($approve) {
+            $this->broadcastChange('reinstated', $booking);
+        }
+
+        return response()->json(['dispute_status' => $booking->dispute_status]);
     }
 
     public function store(Request $request): JsonResponse

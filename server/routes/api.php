@@ -105,6 +105,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/bookings/{booking}', [BookingController::class, 'update']);
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
     Route::post('/bookings/{booking}/confirm-presence', [BookingController::class, 'confirmPresenceWeb']);
+    Route::post('/bookings/{booking}/dispute', [BookingController::class, 'submitDispute']);
+
+    // Disputes — accessible to admin, receptionist, building_admin (controller enforces role)
+    Route::get('/disputes', [BookingController::class, 'disputeIndex']);
+    Route::post('/disputes/{booking}/resolve', [BookingController::class, 'resolveDispute']);
 
     // Building admin: manage rooms within their buildings
     Route::middleware('can:building_admin')->group(function () {
@@ -145,6 +150,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
         // Activity log (admin only)
         Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
+        Route::get('/activity-logs/export', [\App\Http\Controllers\Api\ActivityLogController::class, 'export']);
 
         // Kiosk CRUD (admin only)
         Route::get('/kiosk-configs', [KioskController::class, 'index']);

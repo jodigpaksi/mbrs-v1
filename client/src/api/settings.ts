@@ -27,6 +27,9 @@ export interface GeneralSettings {
   anti_ghost_window_before: number
   anti_ghost_window_after: number
   web_confirm_enabled: boolean
+  log_auto_export_enabled: boolean
+  log_auto_export_interval: string
+  log_auto_export_time: string
 }
 
 export async function getBookingHours(): Promise<BookingHours> {

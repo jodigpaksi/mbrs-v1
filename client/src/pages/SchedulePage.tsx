@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Booking } from '../types/index'
-import { getMyBookings, clearCancelledBookings, getBookings, updateBooking } from '../api/bookings'
+import { getMyBookings, clearCancelledBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
 import { getGeneralSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
@@ -147,6 +147,16 @@ function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exiti
           className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${isTentative ? 't-badge-hatch' : badge}`}
           style={isTentative ? { backgroundColor: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' } : undefined}
         >{b.status}</span>
+        {b.cancel_reason === 'ghost_release' && b.dispute_status !== 'approved' && (
+          <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-1 rounded-full bg-orange-500/15 text-orange-600 dark:text-orange-400">
+            <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_off</span>Auto-Released
+          </span>
+        )}
+        {b.dispute_status === 'approved' && (
+          <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-1 rounded-full bg-green-500/15 text-green-600 dark:text-green-400">
+            <span className="material-symbols-outlined" style={{ fontSize: 10 }}>gavel</span>Reinstated
+          </span>
+        )}
         <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full"
           style={{ backgroundColor: tStyle.bg, color: tStyle.text }}>{tStyle.label}</span>
         {b.series_id && (
@@ -218,6 +228,87 @@ function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exiti
           </button>
         </>
       )}
+      {/* Dispute section — only for the confirmation target (booked_for user, or creator if no booked_for) */}
+      {b.cancel_reason === 'ghost_release' && (!b.booked_for_user_id || b.is_recipient === true) && <DisputeSection b={b} />}
+    </div>
+  )
+}
+
+function DisputeSection({ b }: { b: Booking }) {
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone] = useState(b.dispute_status ?? null)
+
+  if (done === 'pending') return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20">
+      <span className="material-symbols-outlined text-orange-500" style={{ fontSize: 14 }}>hourglass_top</span>
+      <p className="text-[10px] font-black text-orange-600 dark:text-orange-400">Dispute submitted — pending admin review</p>
+    </div>
+  )
+  if (done === 'approved') return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/20">
+      <span className="material-symbols-outlined text-green-500" style={{ fontSize: 14 }}>check_circle</span>
+      <p className="text-[10px] font-black text-green-600 dark:text-green-400">Dispute approved — booking reinstated</p>
+    </div>
+  )
+  if (done === 'rejected') return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
+      <span className="material-symbols-outlined text-red-500" style={{ fontSize: 14 }}>cancel</span>
+      <p className="text-[10px] font-black text-red-500 dark:text-red-400">Dispute rejected by admin</p>
+    </div>
+  )
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    try {
+      await submitDispute(b.id, note.trim() || undefined)
+      setDone('pending')
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+    } catch { /* ignore */ }
+    finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="mt-3" onClick={e => e.stopPropagation()}>
+      {!open ? (
+        <button onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-xl transition-all"
+          style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.25)', color: '#ea580c' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(249,115,22,0.15)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(249,115,22,0.08)' }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>gavel</span>
+          Dispute auto-release
+        </button>
+      ) : (
+        <form onSubmit={handleSubmit} className="rounded-xl p-3 space-y-2.5" style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)' }}>
+          <p className="text-[10px] font-black uppercase tracking-wider text-orange-600 dark:text-orange-400">Dispute Auto-Release</p>
+          <p className="text-[10px] font-medium text-[var(--ds-text-3)]">Were you in the room but forgot to confirm? Describe the situation — admin will review.</p>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            rows={3}
+            maxLength={500}
+            placeholder="Optional: I was in the room at [time]..."
+            className="w-full text-[11px] font-medium rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-orange-400"
+            style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-1)' }}
+          />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setOpen(false)}
+              className="flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-colors"
+              style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting}
+              className="flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all disabled:opacity-50"
+              style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.4)', color: '#ea580c' }}>
+              {submitting ? 'Submitting…' : 'Submit Dispute'}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -279,6 +370,16 @@ function BookingListItem({ b, index = 0, animate, activeTab, pendingCancelIds, e
       )}
       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0"
         style={{ backgroundColor: tStyle.bg, color: tStyle.text }}>{tStyle.label}</span>
+      {b.cancel_reason === 'ghost_release' && b.dispute_status !== 'approved' && (
+        <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 bg-orange-500/15 text-orange-600 dark:text-orange-400" title="Auto-cancelled: presence not confirmed in time">
+          <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_off</span>Auto-Released
+        </span>
+      )}
+      {b.dispute_status === 'approved' && (
+        <span className="flex items-center gap-0.5 text-[8px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 bg-green-500/15 text-green-600 dark:text-green-400" title="Auto-release disputed and reinstated">
+          <span className="material-symbols-outlined" style={{ fontSize: 10 }}>gavel</span>Reinstated
+        </span>
+      )}
       {b.series_id && (
         <span className="material-symbols-outlined text-blue-400 shrink-0" style={{ fontSize: 13 }} title="Series booking">link</span>
       )}
@@ -828,12 +929,13 @@ export default function SchedulePage() {
 
   const todayList: Booking[]     = myBookings.filter((b: Booking) => parseLocal(b.start_at).toDateString() === today.toDateString())
   const now = new Date()
-  const todayActiveList: Booking[] = todayList.filter((b: Booking) => parseLocal(b.end_at) >= now)
-  const todayPastList: Booking[]   = todayList.filter((b: Booking) => parseLocal(b.end_at) < now)
-  const upcomingList: Booking[]  = myBookings.filter((b: Booking) => parseLocal(b.start_at) > today)
+  // Cancelled bookings always go to past; never show as active even if end_at is still future
+  const todayActiveList: Booking[] = todayList.filter((b: Booking) => b.status !== 'cancelled' && parseLocal(b.end_at) >= now)
+  const todayPastList: Booking[]   = todayList.filter((b: Booking) => b.status === 'cancelled' || parseLocal(b.end_at) < now)
+  const upcomingList: Booking[]  = myBookings.filter((b: Booking) => b.status !== 'cancelled' && parseLocal(b.start_at) > today)
   const allList: Booking[] = useMemo(() => {
-    const upcoming = myBookings.filter((b: Booking) => !isActuallyPast(b))
-    const past = myBookings.filter((b: Booking) => isActuallyPast(b))
+    const upcoming = myBookings.filter((b: Booking) => b.status !== 'cancelled' && !isActuallyPast(b))
+    const past = myBookings.filter((b: Booking) => b.status !== 'cancelled' && isActuallyPast(b))
     function sortFn(a: Booking, b: Booking) {
       if (allSortKey === 'start_at') return allSortDir === 'desc'
         ? parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime()
@@ -849,7 +951,7 @@ export default function SchedulePage() {
   }, [myBookings, allSortKey, allSortDir])
   const pastList: Booking[]      = myBookings.filter((b: Booking) => {
     const ended = parseLocal(b.end_at) < new Date()
-    return ended && parseLocal(b.start_at) >= past30
+    return b.status !== 'cancelled' && ended && parseLocal(b.start_at) >= past30
   }).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
   const cancelledList: Booking[] = (allMyBookings as Booking[]).filter((b: Booking) => b.status === 'cancelled' && b.cancelled_at && parseLocal(b.cancelled_at) >= minus7).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
   const tentativeList: Booking[] = myBookings.filter((b: Booking) => b.status === 'tentative' && parseLocal(b.end_at) >= new Date()).sort((a: Booking, b: Booking) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())

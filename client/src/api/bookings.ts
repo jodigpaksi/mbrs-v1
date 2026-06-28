@@ -15,6 +15,21 @@ export async function confirmPresenceWeb(bookingId: number): Promise<{ presence_
   return res.data
 }
 
+export async function submitDispute(bookingId: number, note?: string): Promise<{ dispute_status: string }> {
+  const res = await api.post(`/bookings/${bookingId}/dispute`, { note })
+  return res.data
+}
+
+export async function getDisputes(status: 'pending' | 'resolved' | 'all' = 'pending') {
+  const res = await api.get('/disputes', { params: { status } })
+  return res.data
+}
+
+export async function resolveDispute(bookingId: number, action: 'approve' | 'reject'): Promise<{ dispute_status: string }> {
+  const res = await api.post(`/disputes/${bookingId}/resolve`, { action })
+  return res.data
+}
+
 export async function createBooking(data: {
   room_id: number
   title: string
