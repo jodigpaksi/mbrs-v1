@@ -21,21 +21,21 @@ function dur(start: string, end: string) {
   const h = Math.floor(diff / 60), m = diff % 60
   return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`
 }
-function fmtTime(iso: string) {
-  return parseLocal(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+function fmtTime(iso: string, lang = 'en') {
+  return parseLocal(iso).toLocaleTimeString(lang === 'id' ? 'id-ID' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
 }
-function fmtGroupLabel(iso: string) {
+function fmtGroupLabel(iso: string, todayLabel: string, tomorrowLabel: string, lang = 'en') {
   const d = parseLocal(iso), today = new Date(), tomorrow = new Date()
   tomorrow.setDate(today.getDate() + 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
+  if (d.toDateString() === today.toDateString()) return todayLabel
+  if (d.toDateString() === tomorrow.toDateString()) return tomorrowLabel
+  return d.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
 }
-function fmtTableDate(iso: string) {
-  return parseLocal(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+function fmtTableDate(iso: string, lang = 'en') {
+  return parseLocal(iso).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short' })
 }
-function fmtTableDay(iso: string) {
-  return parseLocal(iso).toLocaleDateString('en-GB', { weekday: 'short' })
+function fmtTableDay(iso: string, lang = 'en') {
+  return parseLocal(iso).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' })
 }
 function groupByDate(bookings: Booking[]) {
   const groups: Record<string, Booking[]> = {}
@@ -78,13 +78,9 @@ const TAB_META: Record<Tab, { color: string; indicatorColor: string }> = {
 const PRIMARY_TABS: Tab[] = ['today', 'upcoming', 'all']
 const SECONDARY_TABS: Tab[] = ['past', 'cancelled', 'tentative', 'series', 'hcal']
 
-const TAB_TOOLTIP: Partial<Record<Tab, string>> = {
-  past: 'Last 30 days only',
-  cancelled: 'Cancelled in the last 7 days',
-  series: 'Repeat booking groups',
-  tentative: 'Awaiting confirmation',
-  hcal: 'Booking timeline view',
-  special: 'Special rooms · ±90 days',
+type TabTooltipKey = 'past' | 'cancelled' | 'series' | 'tentative' | 'hcal' | 'special'
+const TAB_TOOLTIP_KEY: Partial<Record<Tab, TabTooltipKey>> = {
+  past: 'past', cancelled: 'cancelled', series: 'series', tentative: 'tentative', hcal: 'hcal', special: 'special',
 }
 
 
@@ -99,6 +95,7 @@ interface CardSharedProps {
 }
 
 function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+  const { language } = useSettings()
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -206,9 +203,9 @@ function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exiti
           </p>
         </div>
         <div className="text-right shrink-0 relative">
-          <p className={`text-[9px] font-black uppercase tracking-wide leading-none mb-2 ${t2}`}>{fmtTableDate(b.start_at)}</p>
-          <p className={`text-2xl font-black tabular-nums leading-none ${t1}`}>{fmtTime(b.start_at)}</p>
-          <p className={`text-sm font-bold mt-1 ${t2}`}>{fmtTime(b.end_at)}</p>
+          <p className={`text-[9px] font-black uppercase tracking-wide leading-none mb-2 ${t2}`}>{fmtTableDate(b.start_at, language)}</p>
+          <p className={`text-2xl font-black tabular-nums leading-none ${t1}`}>{fmtTime(b.start_at, language)}</p>
+          <p className={`text-sm font-bold mt-1 ${t2}`}>{fmtTime(b.end_at, language)}</p>
           <p className={`text-[11px] font-bold mt-0.5 ${td}`}>{dur(b.start_at, b.end_at)}</p>
         </div>
       </div>
@@ -314,6 +311,7 @@ function DisputeSection({ b }: { b: Booking }) {
 }
 
 function BookingListItem({ b, index = 0, animate, activeTab, pendingCancelIds, exitingCancelIds, onEdit, onCancel, onTentativeAction }: { b: Booking; index?: number } & CardSharedProps) {
+  const { language } = useSettings()
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -387,11 +385,11 @@ function BookingListItem({ b, index = 0, animate, activeTab, pendingCancelIds, e
         <span className="material-symbols-outlined text-amber-400 shrink-0" style={{ fontSize: 13 }} title="Special room">star</span>
       )}
       <div className={`text-[13px] font-bold text-right shrink-0 leading-tight ${subClr}`}>
-        <p>{fmtTableDate(b.start_at)}</p>
-        <p className="opacity-60 text-[11px]">{fmtTableDay(b.start_at)}</p>
+        <p>{fmtTableDate(b.start_at, language)}</p>
+        <p className="opacity-60 text-[11px]">{fmtTableDay(b.start_at, language)}</p>
       </div>
       <div className={`text-[14px] font-black tabular-nums shrink-0 ${timeClr}`}>
-        {fmtTime(b.start_at)}–{fmtTime(b.end_at)}
+        {fmtTime(b.start_at, language)}–{fmtTime(b.end_at, language)}
       </div>
       {canEdit ? (
         <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
@@ -429,6 +427,7 @@ function SeriesGroupRow({
   onCancelSeries: (group: SeriesGroup) => void
   index: number
 }) {
+  const { language } = useSettings()
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -453,7 +452,7 @@ function SeriesGroupRow({
   const allCancelled = cancelledCount === bookings.length
 
   const fmtSeriesDate = (iso: string) =>
-    parseLocal(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    parseLocal(iso).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
   const dateRange = first === last
     ? fmtSeriesDate(first.start_at)
@@ -537,10 +536,10 @@ function SeriesGroupRow({
               <div className="w-3 h-px bg-[var(--ds-border)] ml-1" />
             </td>
             <td className="px-3 py-2.5 text-[10px] text-[var(--ds-text-3)] font-bold whitespace-nowrap">
-              {fmtTableDate(b.start_at)} <span className="text-[var(--ds-text-4)]">{fmtTableDay(b.start_at)}</span>
+              {fmtTableDate(b.start_at, language)} <span className="text-[var(--ds-text-4)]">{fmtTableDay(b.start_at, language)}</span>
             </td>
             <td className="px-3 py-2.5 text-[10px] font-bold text-[var(--ds-text-2)] whitespace-nowrap tabular-nums">
-              {fmtTime(b.start_at)} – {fmtTime(b.end_at)}
+              {fmtTime(b.start_at, language)} – {fmtTime(b.end_at, language)}
               <span className="text-[var(--ds-text-4)] ml-1">{dur(b.start_at, b.end_at)}</span>
             </td>
             <td className="px-3 py-2.5" />
@@ -631,6 +630,7 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
   onHover?: () => void
   onUnhover?: () => void
 }) {
+  const { language } = useSettings()
   const isConf = b.status === 'confirmed'
   const isCancelled = b.status === 'cancelled'
   const isTentative = b.status === 'tentative'
@@ -725,7 +725,7 @@ function HCalCompactCard({ b, expanded, onToggle, onEdit, onCancel, clickable = 
             </p>
           </UserHoverCard>
         ) : null}
-        <p style={{ fontSize: 13, fontWeight: 900, color: 'var(--ds-text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</p>
+        <p style={{ fontSize: 13, fontWeight: 900, color: 'var(--ds-text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(b.start_at, language)} – {fmtTime(b.end_at, language)}</p>
       </div>
     </div>
   )
@@ -750,7 +750,10 @@ function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); retur
 
 export default function SchedulePage() {
   const { user } = useAuth()
-  const { t, defaultBuilding } = useSettings()
+  const { t, language, defaultBuilding } = useSettings()
+  const hCalMonths = language === 'id'
+    ? ['januari','februari','maret','april','mei','juni','juli','agustus','september','oktober','november','desember']
+    : MONTHS_LOWER
   const { start: bhStart, end: bhEnd } = useBookingHours()
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
@@ -1010,7 +1013,7 @@ export default function SchedulePage() {
   const tabLabels: Record<Tab, string> = {
     today: t('tab_today'), upcoming: t('tab_upcoming'), all: t('tab_all'),
     past: t('tab_past'), cancelled: t('tab_cancelled'), tentative: t('tab_tentative'),
-    series: 'Series', hcal: 'H-Calendar', special: 'Special Rooms',
+    series: t('tab_series'), hcal: t('tab_hcal'), special: t('tab_special'),
   }
 
   const visibleSecondaryTabs: Tab[] = [...SECONDARY_TABS, ...(isReceptionist ? ['special' as Tab] : [])]
@@ -1187,8 +1190,8 @@ export default function SchedulePage() {
       headers,
       ...rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
-        fmtTime(b.start_at), fmtTime(b.end_at),
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        fmtTime(b.start_at, language), fmtTime(b.end_at, language),
         dur(b.start_at, b.end_at), b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
         b.room?.floor ?? '', b.title,
@@ -1220,8 +1223,8 @@ export default function SchedulePage() {
       head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status']],
       body: rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
-        `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
         b.room?.name ?? '', b.title, b.booked_for ?? '', b.status,
       ]),
       styles: { fontSize: 8, cellPadding: 3 },
@@ -1251,8 +1254,8 @@ export default function SchedulePage() {
       headers,
       ...rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at), fmtTableDay(b.start_at),
-        fmtTime(b.start_at), fmtTime(b.end_at),
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        fmtTime(b.start_at, language), fmtTime(b.end_at, language),
         dur(b.start_at, b.end_at), b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
         b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '',
@@ -1283,8 +1286,8 @@ export default function SchedulePage() {
       head: [['No.', 'Date', 'Time', 'Room', 'Building', 'Booker', 'Role', 'Dept', 'Title', 'For', 'Status']],
       body: rows.map((b: Booking, i: number) => [
         i + 1,
-        fmtTableDate(b.start_at),
-        `${fmtTime(b.start_at)} – ${fmtTime(b.end_at)}`,
+        fmtTableDate(b.start_at, language),
+        `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
         b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
         b.user?.name ?? '', b.user?.role ?? '', b.user?.department_name ?? '',
@@ -1431,7 +1434,8 @@ export default function SchedulePage() {
           <div className="flex items-end gap-5">
             {visibleSecondaryTabs.map((key, i) => {
               const m = TAB_META[key]
-              const tabTip = TAB_TOOLTIP[key]
+              const tabTipKey = TAB_TOOLTIP_KEY[key]
+              const tabTip = tabTipKey ? t(`tooltip_${tabTipKey}` as Parameters<typeof t>[0]) : undefined
               return (
                 <button key={key} ref={el => { tabRefs.current[PRIMARY_TABS.length + i] = el }}
                   onClick={() => setActiveTab(key)}
@@ -1502,10 +1506,10 @@ export default function SchedulePage() {
                 }}
               >
                 {([
-                  { label: 'This Month', value: String(thisMonthCount).padStart(2, '0'), sub: 'bookings', icon: 'calendar_month', clr: '#6366f1' },
-                  { label: 'Hours Used', value: `${totalHours.toFixed(0)}h`, sub: 'this month', icon: 'schedule', clr: '#06b6d4' },
-                  { label: 'Today', value: String(todayList.length).padStart(2, '0'), sub: 'bookings', icon: 'today', clr: '#f59e0b' },
-                  { label: 'Upcoming', value: String(upcomingList.length).padStart(2, '0'), sub: 'scheduled', icon: 'upcoming', clr: '#adee2b' },
+                  { label: t('label_this_month'), value: String(thisMonthCount).padStart(2, '0'), sub: t('label_bookings'), icon: 'calendar_month', clr: '#6366f1' },
+                  { label: t('label_hours_used'), value: `${totalHours.toFixed(0)}h`, sub: t('label_this_month_sub'), icon: 'schedule', clr: '#06b6d4' },
+                  { label: t('label_today'), value: String(todayList.length).padStart(2, '0'), sub: t('label_bookings'), icon: 'today', clr: '#f59e0b' },
+                  { label: t('tab_upcoming'), value: String(upcomingList.length).padStart(2, '0'), sub: t('label_scheduled'), icon: 'upcoming', clr: '#adee2b' },
                 ] as const).map((card, idx) => (
                   <div key={card.label} style={{
                     width: 190,
@@ -1554,13 +1558,13 @@ export default function SchedulePage() {
                 {activeTab === 'cancelled' ? 'cancel' : activeTab === 'tentative' ? 'pending' : activeTab === 'past' ? 'history' : activeTab === 'series' ? 'repeat' : 'calendar_month'}
               </span>
               <p className="text-sm font-black uppercase">
-                {activeTab === 'today' ? 'No bookings today'
-                  : activeTab === 'upcoming' ? 'No upcoming bookings'
-                  : activeTab === 'past' ? 'No past bookings (last 30 days)'
-                  : activeTab === 'cancelled' ? 'No cancelled bookings (±7 days)'
-                  : activeTab === 'tentative' ? 'No tentative bookings'
-                  : activeTab === 'series' ? 'No repeat bookings'
-                  : 'No bookings yet'}
+                {activeTab === 'today' ? t('empty_today')
+                  : activeTab === 'upcoming' ? t('empty_upcoming')
+                  : activeTab === 'past' ? t('empty_past')
+                  : activeTab === 'cancelled' ? t('empty_cancelled')
+                  : activeTab === 'tentative' ? t('empty_tentative')
+                  : activeTab === 'series' ? t('empty_series')
+                  : t('empty_no_bookings_yet')}
               </p>
             </div>
           ) : (
@@ -1750,10 +1754,10 @@ export default function SchedulePage() {
                                     {sorted.map((b: Booking, idx: number) => (
                                       <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] ${idx % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-surface-2)]/50'} ${isCancelled ? 'hover:bg-red-500/5' : isActive ? 'hover:bg-amber-500/5' : 'hover:bg-[var(--ds-bg-raised)]'} transition-colors`}>
                                         <td className="px-4 py-3 whitespace-nowrap">
-                                          <span className="text-[12px] font-bold text-[var(--ds-text-2)]">{fmtTableDate(b.start_at)}</span>
-                                          <span className="text-[var(--ds-text-4)] ml-1 text-[11px]">{fmtTableDay(b.start_at)}</span>
+                                          <span className="text-[12px] font-bold text-[var(--ds-text-2)]">{fmtTableDate(b.start_at, language)}</span>
+                                          <span className="text-[var(--ds-text-4)] ml-1 text-[11px]">{fmtTableDay(b.start_at, language)}</span>
                                         </td>
-                                        <td className="px-4 py-3 text-[11px] font-bold text-[var(--ds-text-2)] whitespace-nowrap tabular-nums">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold text-[var(--ds-text-2)] whitespace-nowrap tabular-nums">{fmtTime(b.start_at, language)} – {fmtTime(b.end_at, language)}</td>
                                         <td className="px-4 py-3">
                                           <p className="text-[12px] font-black text-[var(--ds-text-1)]">{b.room?.name ?? '—'}</p>
                                           <p className="text-[10px] text-[var(--ds-text-3)] font-bold">{b.room?.building?.code || b.room?.building?.name || ''}</p>
@@ -1901,7 +1905,7 @@ export default function SchedulePage() {
 
                     {/* Month row */}
                     <div className="flex items-end gap-6 mb-6 flex-wrap">
-                      {MONTHS_LOWER.map((mName, mi) => {
+                      {hCalMonths.map((mName, mi) => {
                         if (yr === today.getFullYear() && mi < today.getMonth()) return null
                         const isCurMo = mi === mo
                         const isEnabled = isMonthEnabled(yr, mi)
@@ -1969,7 +1973,7 @@ export default function SchedulePage() {
                                 {di + 1}
                               </div>
                               <span className={`text-[10px] font-bold uppercase leading-none ${isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
-                                {d.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 2)}
+                                {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' }).slice(0, 2)}
                               </span>
                               <span className="size-1.5 rounded-full" style={{ background: '#72ddf7', opacity: hasBkg ? 1 : 0 }} />
                             </button>
@@ -2471,10 +2475,10 @@ export default function SchedulePage() {
                             ${i % 2 !== 0 ? 'bg-[var(--ds-bg-surface-2)]/50' : ''}`}
                           style={{ animation: 'tbl-row-enter 0.22s ease-out backwards', animationDelay: `${Math.min(i * 28, 320)}ms` }}
                         >
-                          <td className="px-4 py-3 text-xs font-black text-[var(--ds-text-1)] whitespace-nowrap">{fmtTableDate(b.start_at)}</td>
-                          <td className="px-4 py-3 text-xs font-bold text-[var(--ds-text-3)] whitespace-nowrap">{fmtTableDay(b.start_at)}</td>
+                          <td className="px-4 py-3 text-xs font-black text-[var(--ds-text-1)] whitespace-nowrap">{fmtTableDate(b.start_at, language)}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-[var(--ds-text-3)] whitespace-nowrap">{fmtTableDay(b.start_at, language)}</td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <p className="text-sm font-black text-[var(--ds-text-1)] tabular-nums">{fmtTime(b.start_at)} &ndash; {fmtTime(b.end_at)}</p>
+                            <p className="text-sm font-black text-[var(--ds-text-1)] tabular-nums">{fmtTime(b.start_at, language)} &ndash; {fmtTime(b.end_at, language)}</p>
                             <p className="text-[10px] font-bold text-[var(--ds-text-3)] mt-0.5">{dur(b.start_at, b.end_at)}</p>
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
@@ -2579,7 +2583,7 @@ export default function SchedulePage() {
                       ${activeTab === 'cancelled' ? 'text-red-400'
                         : activeTab === 'tentative' ? 'text-amber-400'
                         : 'text-[var(--ds-text-3)]'}`}>
-                      {fmtGroupLabel(bookings[0].start_at)}
+                      {fmtGroupLabel(bookings[0].start_at, t('label_today'), t('label_tomorrow'), language)}
                     </p>
                     <div className={`flex-1 h-px
                       ${activeTab === 'cancelled' ? 'bg-red-500/20'
@@ -2708,7 +2712,7 @@ export default function SchedulePage() {
                 {ttB.room?.name}{ttB.room?.building ? ` · ${ttB.room.building.code || ttB.room.building.name}` : ''}
               </p>
               <p style={{ fontSize: 13, fontWeight: 900, color: 'rgba(255,255,255,0.8)', marginTop: 6, tabularNums: true } as React.CSSProperties}>
-                {fmtTime(ttB.start_at)} – {fmtTime(ttB.end_at)}
+                {fmtTime(ttB.start_at, language)} – {fmtTime(ttB.end_at, language)}
                 <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginLeft: 6 }}>{dur(ttB.start_at, ttB.end_at)}</span>
               </p>
             </div>
@@ -2780,11 +2784,11 @@ export default function SchedulePage() {
               </p>
               <p className="text-xs font-bold text-[var(--ds-text-2)] flex items-center gap-2">
                 <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
-                {fmtTime(cancelTarget.start_at)} &ndash; {fmtTime(cancelTarget.end_at)} &middot; {dur(cancelTarget.start_at, cancelTarget.end_at)}
+                {fmtTime(cancelTarget.start_at, language)} &ndash; {fmtTime(cancelTarget.end_at, language)} &middot; {dur(cancelTarget.start_at, cancelTarget.end_at)}
               </p>
               <p className="text-xs font-bold text-[var(--ds-text-2)] flex items-center gap-2">
                 <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>calendar_today</span>
-                {fmtTableDate(cancelTarget.start_at)} &middot; {fmtTableDay(cancelTarget.start_at)}
+                {fmtTableDate(cancelTarget.start_at, language)} &middot; {fmtTableDay(cancelTarget.start_at, language)}
               </p>
             </div>
             <div className="flex gap-3">
@@ -2850,7 +2854,7 @@ export default function SchedulePage() {
               </p>
               <p className="text-xs font-bold text-[var(--ds-text-2)] flex items-center gap-2">
                 <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
-                {fmtTableDate(tentativeTarget.start_at)} &middot; {fmtTime(tentativeTarget.start_at)} &ndash; {fmtTime(tentativeTarget.end_at)}
+                {fmtTableDate(tentativeTarget.start_at, language)} &middot; {fmtTime(tentativeTarget.start_at, language)} &ndash; {fmtTime(tentativeTarget.end_at, language)}
               </p>
             </div>
 

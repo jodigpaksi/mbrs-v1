@@ -2,10 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSettings } from '../../context/SettingsContext'
 import { useWeekendSettings } from '../../hooks/useWeekendSettings'
 
-const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const WEEKDAYS_SUN = ['Su','Mo','Tu','We','Th','Fr','Sa']
-const WEEKDAYS_MON = ['Mo','Tu','We','Th','Fr','Sa','Su']
+const MONTHS_SHORT_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTHS_LONG_EN  = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const MONTHS_SHORT_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
+const MONTHS_LONG_ID  = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+const WEEKDAYS_SUN_EN = ['Su','Mo','Tu','We','Th','Fr','Sa']
+const WEEKDAYS_MON_EN = ['Mo','Tu','We','Th','Fr','Sa','Su']
+const WEEKDAYS_SUN_ID = ['Mi','Se','Se','Ra','Ka','Ju','Sa']
+const WEEKDAYS_MON_ID = ['Se','Se','Ra','Ka','Ju','Sa','Mi']
 
 function parseISO(iso: string): Date | null {
   if (!iso) return null
@@ -38,12 +42,18 @@ interface GlassDatePickerProps {
 export default function GlassDatePicker({ value, onChange, min, align = 'left', panelWidth, compact = false, footer, highlightWeek, children }: GlassDatePickerProps) {
   const defaultWidth = compact ? 232 : 300
   panelWidth = panelWidth ?? defaultWidth
-  const { startDay } = useSettings()
+  const { startDay, language } = useSettings()
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'days' | 'months'>('days')
   const [cursor, setCursor] = useState(() => parseISO(value) ?? new Date())
   const ref = useRef<HTMLDivElement>(null)
+
+  const isId = language === 'id'
+  const MONTHS_SHORT = isId ? MONTHS_SHORT_ID : MONTHS_SHORT_EN
+  const MONTHS_LONG  = isId ? MONTHS_LONG_ID  : MONTHS_LONG_EN
+  const WEEKDAYS_SUN = isId ? WEEKDAYS_SUN_ID : WEEKDAYS_SUN_EN
+  const WEEKDAYS_MON = isId ? WEEKDAYS_MON_ID : WEEKDAYS_MON_EN
 
   const selected = parseISO(value)
   const today = new Date()
@@ -67,7 +77,7 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
   const m = cursor.getMonth()
 
   const label = selected
-    ? selected.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
+    ? selected.toLocaleDateString(isId ? 'id-ID' : 'en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
     : ''
 
   function pick(d: Date) { onChange(toISO(d)); setOpen(false) }
@@ -156,10 +166,12 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
           {view === 'days' && (
             <>
               <div className="grid grid-cols-7 mb-1">
-                {weekdays.map(d => {
-                  const isWkHeader = (d === 'Sa' && wkSat) || (d === 'Su' && wkSun)
+                {weekdays.map((d, colIdx) => {
+                  // determine which day-of-week (0=Sun,6=Sat) each column represents
+                  const dow = startDay === 'mon' ? (colIdx + 1) % 7 : colIdx
+                  const isWkHeader = (dow === 6 && wkSat) || (dow === 0 && wkSun)
                   return (
-                    <div key={d} className={`text-center ${compact ? 'text-[8px]' : 'text-[9px]'} font-black uppercase py-0.5 ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
+                    <div key={colIdx} className={`text-center ${compact ? 'text-[8px]' : 'text-[9px]'} font-black uppercase py-0.5 ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
                   )
                 })}
               </div>

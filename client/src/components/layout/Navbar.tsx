@@ -24,16 +24,16 @@ interface NavbarProps {
   onTodayClick?: () => void
 }
 
-function fmtSearchDate(iso: string) {
+function fmtSearchDate(iso: string, lang = 'en') {
   const d = new Date(iso)
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  return d.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
-  const { t } = useSettings()
+  const { t, language } = useSettings()
   const queryClient = useQueryClient()
   const { openNotifications } = useNotification()
   const unreadCount = useNotificationUnreadCount()
@@ -212,7 +212,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
               <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-[51] transition-opacity duration-150 whitespace-nowrap ${searchOpen ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
                 <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-[var(--ds-text-2)]"
                   style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
-                  Search
+                  {t('nav_search_tooltip')}
                 </div>
               </div>
             </div>
@@ -236,7 +236,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                   <input
                     ref={searchInputRef}
                     type="text"
-                    placeholder="Search rooms, bookings..."
+                    placeholder={t('nav_search_rooms_placeholder')}
                     value={q}
                     onChange={e => { setQ(e.target.value); dispatchTimeline(e.target.value) }}
                     onKeyDown={e => e.key === 'Escape' && closeSearch()}
@@ -257,7 +257,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                   <div style={{ borderTop: '1px solid var(--ds-border-sub)' }}>
                     {searchResults.rooms.length > 0 && (
                       <div className="px-2 pt-2 pb-1">
-                        <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>Rooms</p>
+                        <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>{t('nav_rooms_section')}</p>
                         {searchResults.rooms.map(r => (
                           <button key={r.id} onClick={() => goToRoom(r)}
                             className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left"
@@ -282,7 +282,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
                     {searchResults.bookings.length > 0 && (
                       <div className={`px-2 pt-2 pb-1 ${searchResults.rooms.length > 0 ? 'border-t' : ''}`} style={{ borderColor: 'var(--ds-border-sub)' }}>
-                        <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>Bookings</p>
+                        <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>{t('nav_bookings_section')}</p>
                         {searchResults.bookings.map(b => {
                           const isOwn = b.user_id === user?.id
                           return (
@@ -299,7 +299,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                               <div className="flex-1 min-w-0">
                                 <p className="text-[12px] font-black truncate">{b.title}</p>
                                 <p className="text-[10px] font-bold truncate" style={{ color: 'var(--ds-text-3)' }}>
-                                  {b.room?.name} · {fmtSearchDate(b.start_at)}
+                                  {b.room?.name} · {fmtSearchDate(b.start_at, language)}
                                   {!isOwn && b.user && <span style={{ color: 'var(--ds-text-4)' }}> · {b.user.name}</span>}
                                 </p>
                               </div>
@@ -314,7 +314,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
                     {!hasResults && (
                       <div className="px-4 py-4 text-center">
-                        <p className="text-[11px] font-bold" style={{ color: 'var(--ds-text-3)' }}>No results for "{q}"</p>
+                        <p className="text-[11px] font-bold" style={{ color: 'var(--ds-text-3)' }}>{t('nav_no_results')} "{q}"</p>
                       </div>
                     )}
                   </div>
@@ -333,7 +333,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 16 }}>tune</span>
-                    Search Available Rooms
+                    {t('nav_search_available_rooms')}
                   </button>
                 </div>
 
@@ -358,7 +358,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap">
               <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-[var(--ds-text-2)]"
                 style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
-                Today's Bookings
+                {t('nav_todays_bookings')}
               </div>
             </div>
           </div>
@@ -380,7 +380,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             <div className="absolute top-full right-0 mt-2 pointer-events-none z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 whitespace-nowrap">
               <div className="px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wide text-[var(--ds-text-2)]"
                 style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
-                Notifications{unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
+                {t('nav_notifications')}{unreadCount > 0 ? ` · ${unreadCount} ${t('nav_notifications_unread')}` : ''}
               </div>
             </div>
           </div>
@@ -416,9 +416,9 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
               <div className="py-1.5">
                 {[
-                  { icon: 'account_circle', label: 'User Profile', action: () => { setProfileModalOpen(true); setProfileOpen(false) } },
-                  { icon: 'settings', label: 'Setting', action: () => { setSettingOpen(true); setProfileOpen(false) } },
-                  { icon: 'help', label: 'Help', action: () => { setHelpOpen(true); setProfileOpen(false) } },
+                  { icon: 'account_circle', label: t('nav_user_profile'), action: () => { setProfileModalOpen(true); setProfileOpen(false) } },
+                  { icon: 'settings', label: t('nav_setting'), action: () => { setSettingOpen(true); setProfileOpen(false) } },
+                  { icon: 'help', label: t('nav_help'), action: () => { setHelpOpen(true); setProfileOpen(false) } },
                 ].map(({ icon, label, action }) => (
                   <button key={label} onClick={action}
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/10 transition-colors text-[11px] font-black uppercase"
@@ -436,7 +436,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                   style={{ color: 'var(--ds-text-3)' }}
                 >
                   <span className="material-symbols-outlined text-base">logout</span>
-                  Logout
+                  {t('nav_logout')}
                 </button>
               </div>
             </div>

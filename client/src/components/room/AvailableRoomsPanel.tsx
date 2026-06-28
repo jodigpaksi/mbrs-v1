@@ -17,9 +17,9 @@ function todayISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-function fmtDate(iso: string) {
+function fmtDate(iso: string, lang = 'en') {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 function slotTime(iso: string) { return iso.split('T')[1]?.slice(0, 5) ?? '' }
 function slotDate(iso: string) { return iso.split('T')[0] ?? '' }
@@ -91,6 +91,7 @@ function SlotRoomCard({
   showDate?: boolean
   onSelect: (room: Room, date: string, start: string, end: string) => void
 }) {
+  const { language, t: tr } = useSettings()
   if (slots.length === 0) return null
   return (
     <div className="rounded-2xl overflow-hidden border border-[var(--ds-border-sub)]">
@@ -118,7 +119,7 @@ function SlotRoomCard({
           </div>
         </div>
         {room.is_fully_free && (
-          <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">Fully Free</span>
+          <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">{tr('fully_free')}</span>
         )}
       </div>
       <div className="divide-y divide-[var(--ds-border-sub)]">
@@ -132,7 +133,7 @@ function SlotRoomCard({
             <span className="material-symbols-outlined text-[#adee2b] shrink-0" style={{ fontSize: 14 }}>schedule</span>
             <span className="text-[11px] font-black text-[var(--ds-text-1)] tabular-nums flex-1">
               {showDate && (
-                <span className="text-[var(--ds-text-3)] font-bold mr-1.5">{fmtDate(slotDate(slot.start))} ·</span>
+                <span className="text-[var(--ds-text-3)] font-bold mr-1.5">{fmtDate(slotDate(slot.start), language)} ·</span>
               )}
               {slotTime(slot.start)} – {slotTime(slot.end)}
             </span>
@@ -146,7 +147,7 @@ function SlotRoomCard({
 }
 
 export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoomSelect, prefillDate, prefillStartTime, prefillEndTime }: Props) {
-  const { defaultBuilding } = useSettings()
+  const { defaultBuilding, t, language } = useSettings()
   const { user } = useAuth()
   const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
   const { start: bsStr, end: beStr } = useBookingHours()
@@ -237,9 +238,9 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
   const modeIdx = mode === 'day' ? 0 : 1
 
   const groupByOptions: { value: GroupBy; label: string; icon: string }[] = [
-    { value: 'room',    label: 'By Room',    icon: 'meeting_room' },
-    { value: 'date',    label: 'By Date',    icon: 'calendar_today' },
-    { value: 'session', label: 'By Session', icon: 'wb_sunny' },
+    { value: 'room',    label: t('by_room'),    icon: 'meeting_room' },
+    { value: 'date',    label: t('by_date'),    icon: 'calendar_today' },
+    { value: 'session', label: t('by_session'), icon: 'wb_sunny' },
   ]
   const groupByIdx = groupByOptions.findIndex(o => o.value === groupBy)
 
@@ -264,8 +265,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <span className="material-symbols-outlined text-black" style={{ fontSize: 18 }}>meeting_room</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black uppercase tracking-[0.22em] text-[var(--ds-text-3)]">Schedule</p>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)] uppercase tracking-tight leading-tight">Available Rooms</p>
+              <p className="text-[8px] font-black uppercase tracking-[0.22em] text-[var(--ds-text-3)]">{t('available_rooms_schedule')}</p>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)] uppercase tracking-tight leading-tight">{t('available_rooms')}</p>
             </div>
             <button onClick={onClose} className="size-8 rounded-xl bg-slate-100 dark:bg-white/[0.08] hover:bg-slate-200 dark:hover:bg-white/[0.14] active:scale-95 flex items-center justify-center transition-all shrink-0">
               <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>close</span>
@@ -278,7 +279,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
 
           {/* Building dropdown */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Building</label>
+            <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('building')}</label>
             <div ref={bDropRef} className="relative">
               <button
                 type="button"
@@ -332,7 +333,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
 
           {/* Search Mode */}
           <div className="space-y-1">
-            <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Search Mode</label>
+            <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('search_mode')}</label>
             <div className="relative flex items-center p-1 rounded-xl bg-slate-100 dark:bg-white/[0.08]">
               <div
                 className="absolute top-1 bottom-1 rounded-[9px] bg-black shadow-sm pointer-events-none transition-transform duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
@@ -343,7 +344,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                   className={`relative z-10 flex-1 py-1.5 rounded-[9px] text-[11px] font-black uppercase tracking-wide transition-colors duration-200
                     ${mode === m ? 'text-[#adee2b]' : 'text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70'}`}
                 >
-                  {m === 'day' ? 'Single Day' : 'Date Range'}
+                  {m === 'day' ? t('single_day') : t('date_range')}
                 </button>
               ))}
             </div>
@@ -352,7 +353,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
           {/* Group By — range mode only, placed ABOVE form fields so date pickers can open freely below */}
           {mode === 'range' && (
             <div className="space-y-1">
-              <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Group Results By</label>
+              <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('group_by')}</label>
               <div className="relative flex items-center p-1 rounded-xl bg-slate-100 dark:bg-white/[0.08]">
                 <div
                   className="absolute top-1 bottom-1 rounded-[9px] bg-black shadow-sm pointer-events-none transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
@@ -381,7 +382,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
-                        <span className="flex-1 text-left text-[var(--ds-text-1)]">{label || fmtDate(startDate)}</span>
+                        <span className="flex-1 text-left text-[var(--ds-text-1)]">{label || fmtDate(startDate, language)}</span>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 13 }}>expand_more</span>
                       </button>
                     )}
@@ -389,7 +390,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Start</label>
+                    <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')}</label>
                     <GlassTimePicker value={startTime} onChange={setStartTime} min={bsStr} max={fromMin(bookingEndMin - 30)}>
                       {() => (
                         <button type="button" className={fieldBtn}>
@@ -400,7 +401,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                     </GlassTimePicker>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">End</label>
+                    <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')}</label>
                     <GlassTimePicker value={endTime} onChange={setEndTime} min={fromMin(bookingStartMin + 30)} max={beStr} align="right">
                       {() => (
                         <button type="button" className={fieldBtn}>
@@ -415,23 +416,23 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Start Date</label>
+                  <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')} {t('panel_date')}</label>
                   <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }} compact>
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
-                        <span className="flex-1 text-left text-[var(--ds-text-1)] truncate">{label || fmtDate(startDate)}</span>
+                        <span className="flex-1 text-left text-[var(--ds-text-1)] truncate">{label || fmtDate(startDate, language)}</span>
                       </button>
                     )}
                   </GlassDatePicker>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">End Date</label>
+                  <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')} {t('panel_date')}</label>
                   <GlassDatePicker value={endDate} onChange={setEndDate} min={startDate} compact align="right">
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
-                        <span className="flex-1 text-left text-[var(--ds-text-1)] truncate">{label || fmtDate(endDate)}</span>
+                        <span className="flex-1 text-left text-[var(--ds-text-1)] truncate">{label || fmtDate(endDate, language)}</span>
                       </button>
                     )}
                   </GlassDatePicker>
@@ -456,14 +457,14 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
           `}</style>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Minimum Seats</label>
+              <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('minimum_seats')}</label>
               {minCapacity > 0 && (
                 <button
                   type="button"
                   onClick={() => setMinCapacity(0)}
                   className="text-[8px] font-black uppercase text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors flex items-center gap-0.5"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 10 }}>close</span>Clear
+                  <span className="material-symbols-outlined" style={{ fontSize: 10 }}>close</span>{t('clear')}
                 </button>
               )}
             </div>
@@ -502,7 +503,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             </div>
             {minCapacity > 0 && (
               <p className="text-[9px] font-bold text-[var(--ds-text-3)]">
-                Showing rooms with <span className="text-[var(--ds-text-1)] font-black">{minCapacity}+</span> seats
+                {t('showing_rooms_with')} <span className="text-[var(--ds-text-1)] font-black">{minCapacity}+</span> {t('seats_suffix')}
               </p>
             )}
           </div>
@@ -519,7 +520,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 }`}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 13 }}>star</span>
-              Special Rooms only
+              {t('special_rooms_only')}
             </button>
           )}
 
@@ -532,8 +533,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               flex items-center justify-center gap-2 transition-all"
           >
             {isFetching
-              ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span>Searching…</>
-              : <><span className="material-symbols-outlined" style={{ fontSize: 14 }}>search</span>Search</>}
+              ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span>{t('searching')}</>
+              : <><span className="material-symbols-outlined" style={{ fontSize: 14 }}>search</span>{t('search_btn')}</>}
           </button>
         </div>
 
@@ -543,22 +544,22 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
           {!buildingId && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
               <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>domain</span>
-              <p className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">Select a building first</p>
+              <p className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">{t('select_building_first')}</p>
             </div>
           )}
 
           {buildingId && !searched && !isFetching && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
               <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>meeting_room</span>
-              <p className="text-[11px] font-bold text-[var(--ds-text-3)]">Pick a date and time, then tap Search</p>
+              <p className="text-[11px] font-bold text-[var(--ds-text-3)]">{t('pick_date_time')}</p>
             </div>
           )}
 
           {buildingId && searched && !isFetching && rooms.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
               <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
-              <p className="text-[12px] font-black text-[var(--ds-text-2)]">No rooms available</p>
-              <p className="text-[11px] text-[var(--ds-text-3)]">All rooms are booked for this period.</p>
+              <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
+              <p className="text-[11px] text-[var(--ds-text-3)]">{t('all_rooms_booked')}</p>
             </div>
           )}
 
@@ -571,7 +572,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             if (visibleRooms.length === 0) return (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
                 <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
-                <p className="text-[12px] font-black text-[var(--ds-text-2)]">No rooms available</p>
+                <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
               </div>
             )
 
@@ -643,7 +644,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                             </div>
                           </div>
                           {room.is_fully_free && (
-                            <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">Fully Free</span>
+                            <span className="shrink-0 px-2 py-0.5 bg-[#adee2b] text-black rounded-lg text-[8px] font-black uppercase">{t('fully_free')}</span>
                           )}
                         </div>
 
@@ -657,7 +658,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                                   className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase transition-all
                                     ${isActive ? 'bg-black dark:bg-white text-[#adee2b] dark:text-black' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] hover:bg-[var(--ds-border)]'}`}
                                 >
-                                  {fmtDate(d)}
+                                  {fmtDate(d, language)}
                                   <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black
                                     ${isActive ? 'bg-white/15 dark:bg-black/15 text-[#adee2b] dark:text-black' : 'bg-[var(--ds-border)] text-[var(--ds-text-3)]'}`}>
                                     {byDate[d].length}
@@ -698,7 +699,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               if (datesWithRooms.length === 0) return (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
                   <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
-                  <p className="text-[12px] font-black text-[var(--ds-text-2)]">No availability found</p>
+                  <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
                 </div>
               )
 
@@ -721,7 +722,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                               ? 'bg-[rgba(10,15,40,0.82)] border-white/[0.12] text-[#adee2b] shadow-[0_2px_12px_rgba(0,0,0,0.22)]'
                               : 'bg-[rgba(10,15,40,0.26)] border-white/[0.08] text-white/60 hover:bg-[rgba(10,15,40,0.48)] hover:border-white/[0.15] hover:text-white/90'}`}
                         >
-                          {fmtDate(d)}
+                          {fmtDate(d, language)}
                           <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black transition-colors
                             ${isActive ? 'bg-[rgba(173,238,43,0.18)] text-[#adee2b]' : 'bg-white/10 text-white/50 group-hover:text-white/75'}`}>
                             {count}
@@ -746,8 +747,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             /* ── GROUP BY SESSION — pill nav at top ── */
             if (groupBy === 'session') {
               const sessionDefs = [
-                { key: 'morning'   as const, label: 'Morning',   icon: 'wb_sunny',   test: (t: string) => t < '12:00' },
-                { key: 'afternoon' as const, label: 'Afternoon', icon: 'wb_twilight', test: (t: string) => t >= '12:00' },
+                { key: 'morning'   as const, label: t('label_morning'),   icon: 'wb_sunny',   test: (ts: string) => ts < '12:00' },
+                { key: 'afternoon' as const, label: t('label_afternoon'), icon: 'wb_twilight', test: (ts: string) => ts >= '12:00' },
               ]
 
               const availableSessions = sessionDefs.filter(sess =>
@@ -756,7 +757,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               if (availableSessions.length === 0) return (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
                   <span className="material-symbols-outlined text-slate-200 dark:text-white/10" style={{ fontSize: 44 }}>do_not_disturb</span>
-                  <p className="text-[12px] font-black text-[var(--ds-text-2)]">No availability found</p>
+                  <p className="text-[12px] font-black text-[var(--ds-text-2)]">{t('no_rooms_available')}</p>
                 </div>
               )
 

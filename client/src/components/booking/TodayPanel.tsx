@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyBookings, confirmPresenceWeb } from '../../api/bookings'
 import { getGeneralSettings } from '../../api/settings'
 import { useCancelToast } from '../../context/CancelToastContext'
+import { useSettings } from '../../context/SettingsContext'
 import type { Booking } from '../../types'
 
 function parseLocal(s: string): Date {
@@ -19,6 +20,7 @@ function fmtTime(s: string): string {
 
 export default function TodayPanel() {
   const qc = useQueryClient()
+  const { t, language } = useSettings()
   const { addInfoToast } = useCancelToast()
   const [open, setOpen] = useState(false)
   const [visible, setVisible] = useState(false)
@@ -68,7 +70,7 @@ export default function TodayPanel() {
     .filter(b => parseLocal(b.start_at).toDateString() === today.toDateString())
     .sort((a, b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
 
-  const todayLabel = today.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+  const todayLabel = today.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 
   // Fire a warning toast the first time each booking enters its confirm window
   useEffect(() => {
@@ -126,7 +128,7 @@ export default function TodayPanel() {
               <span className="material-symbols-outlined text-[#adee2b]" style={{ fontSize: 18 }}>calendar_today</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--ds-text-3)' }}>My Schedule</p>
+              <p className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'var(--ds-text-3)' }}>{t('label_my_schedule')}</p>
               <p className="text-[11px] font-black uppercase tracking-tight truncate" style={{ color: 'var(--ds-text-1)' }}>{todayLabel}</p>
             </div>
             <button onClick={() => setOpen(false)}
@@ -144,8 +146,8 @@ export default function TodayPanel() {
           {todayList.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
               <span className="material-symbols-outlined" style={{ fontSize: 52, color: 'var(--ds-text-4)' }}>event_available</span>
-              <p className="text-[12px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>No bookings today</p>
-              <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>Your schedule is clear for today.</p>
+              <p className="text-[12px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>{t('empty_today')}</p>
+              <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>{t('empty_today_clear')}</p>
             </div>
           ) : (() => {
             // Cancelled bookings always go to past section regardless of end_at
@@ -188,7 +190,7 @@ export default function TodayPanel() {
                     {ongoing && (
                       <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-[#adee2b] text-black">
                         <span className="size-1.5 rounded-full bg-black/40 animate-pulse inline-block" />
-                        On Going
+                        {t('label_on_going')}
                       </span>
                     )}
                     <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${statusBadgeClass}`}>
@@ -226,7 +228,7 @@ export default function TodayPanel() {
                   {ongoing && b.presence_confirmed_at && (
                     <div className="flex items-center gap-1.5 text-[10px] font-black" style={{ color: '#22c55e' }}>
                       <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                      Presence confirmed
+                      {t('presence_confirmed')}
                     </div>
                   )}
 
@@ -238,7 +240,7 @@ export default function TodayPanel() {
                       style={{ background: 'rgba(99,102,241,0.12)', border: '1.5px solid rgba(99,102,241,0.35)', color: '#6366f1' }}
                     >
                       <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>how_to_reg</span>
-                      {confirming === b.id ? 'Confirming…' : 'Confirm Presence'}
+                      {confirming === b.id ? t('confirming') : t('confirm_presence')}
                     </button>
                   )}
                 </div>
@@ -248,14 +250,14 @@ export default function TodayPanel() {
             return (
               <>
                 <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-3)' }}>
-                  {todayList.length} booking{todayList.length !== 1 ? 's' : ''} today
+                  {todayList.length} {t('label_bookings')} {t('label_today').toLowerCase()}
                 </p>
                 {active.map(renderCard)}
                 {past.length > 0 && (
                   <>
                     <div className="flex items-center gap-2 pt-1">
                       <div className="flex-1 h-px" style={{ background: 'var(--ds-border-sub)' }} />
-                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>Past</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>{t('label_past')}</span>
                       <div className="flex-1 h-px" style={{ background: 'var(--ds-border-sub)' }} />
                     </div>
                     {past.map(renderCard)}

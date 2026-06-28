@@ -5239,6 +5239,9 @@ export default function AdminPage() {
   const [roomsPeriod, setRoomsPeriod]         = useState<SectionPeriod>('month')
   const [hoursPeriod, setHoursPeriod]         = useState<SectionPeriod>('month')
   const [overviewBuilding, setOverviewBuilding] = useState<number | null>(null)
+  const [storageLimitMb, setStorageLimitMb] = useState(5120)
+  const [storageLimitRaw, setStorageLimitRaw] = useState('5120')
+  const [storageLimitOpen, setStorageLimitOpen] = useState(false)
   const [exportModal, setExportModal]         = useState(false)
   const [exportMonth, setExportMonth]         = useState(() => new Date().toISOString().slice(0, 7))
   const [exportAllTime, setExportAllTime]     = useState(false)
@@ -5529,27 +5532,111 @@ export default function AdminPage() {
                   const s = overviewData.stats.storage
                   const fmtMb = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb} MB`
                   const totalMb = s.db_mb + s.uploads_mb + (s.logs_mb ?? 0)
+                  const usedPct = storageLimitMb > 0 ? Math.min(100, (totalMb / storageLimitMb) * 100) : 0
+                  const isWarn = usedPct >= 70 && usedPct < 90
+                  const isCrit = usedPct >= 90
+                  const totalBarColor = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#adee2b'
                   const bars = [
-                    { label: 'Database', mb: s.db_mb, color: '#6366f1' },
-                    { label: 'Room Photos', mb: s.room_photos_mb, color: '#3b82f6' },
-                    { label: 'Avatars', mb: s.avatars_mb, color: '#a855f7' },
-                    { label: 'Logs', mb: s.logs_mb ?? 0, color: '#f59e0b' },
+                    { label: 'Database',    mb: s.db_mb,           color: '#6366f1' },
+                    { label: 'Room Photos', mb: s.room_photos_mb,  color: '#3b82f6' },
+                    { label: 'Avatars',     mb: s.avatars_mb,      color: '#a855f7' },
+                    { label: 'Logs',        mb: s.logs_mb ?? 0,    color: '#f59e0b' },
                   ]
                   return (
                     <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"
                       style={{ background: 'var(--ds-bg-surface)' }}>
-                      <div className="flex items-center gap-2 mb-4">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 mb-3">
                         <div className="size-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)' }}>
                           <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#ef4444', fontVariationSettings: "'FILL' 1" }}>database</span>
                         </div>
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[var(--ds-text-3)]">Storage Usage</p>
                           <p className="text-[10px] font-bold text-[var(--ds-text-4)]">Total uploads: {fmtMb(s.uploads_mb)} · DB: {fmtMb(s.db_mb)}</p>
                         </div>
                       </div>
+
+                      {/* Total vs limit bar */}
+                      <div className="mb-4 p-3 rounded-xl border" style={{ borderColor: 'var(--ds-border-sub)' }}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-black text-[var(--ds-text-2)]">
+                            {fmtMb(totalMb)}
+                            <span className="text-[var(--ds-text-4)] font-bold"> / {fmtMb(storageLimitMb)}</span>
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-black tabular-nums" style={{ color: totalBarColor }}>
+                              {usedPct.toFixed(1)}%
+                            </span>
+                            {/* (i) tooltip */}
+                            <div className="relative group">
+                              <button type="button" className="size-4 rounded-full flex items-center justify-center text-[9px] font-black leading-none border transition-colors"
+                                style={{ borderColor: 'var(--ds-border)', color: 'var(--ds-text-4)', background: 'var(--ds-bg-surface-2)' }}>
+                                i
+                              </button>
+                              <div className="absolute right-0 top-5 z-50 w-52 p-2.5 rounded-xl shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-[10px] font-medium leading-relaxed"
+                                style={{ background: 'rgba(15,20,45,0.92)', backdropFilter: 'blur(12px)', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                This limit only affects the chart display. It has no effect on actual folder size or server storage capacity.
+                              </div>
+                            </div>
+                            {/* Settings toggle */}
+                            <button type="button"
+                              onClick={() => setStorageLimitOpen(o => !o)}
+                              className="size-5 rounded-lg flex items-center justify-center transition-colors"
+                              style={{ background: storageLimitOpen ? '#adee2b' : 'var(--ds-bg-surface-2)', color: storageLimitOpen ? '#000' : 'var(--ds-text-4)' }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>tune</span>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--ds-bg-surface-2)' }}>
+                          <div className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${Math.max(2, usedPct)}%`, background: totalBarColor }} />
+                        </div>
+
+                        {/* Accordion: limit settings */}
+                        {storageLimitOpen && (
+                          <div className="mt-3 pt-3 border-t flex items-center gap-1.5 flex-wrap" style={{ borderColor: 'var(--ds-border-sub)' }}>
+                            <span className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-4)]">Limit</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={storageLimitRaw}
+                              onChange={e => {
+                                const raw = e.target.value.replace(/\D/g, '')
+                                setStorageLimitRaw(raw)
+                                const v = parseInt(raw)
+                                if (!isNaN(v) && v > 0) setStorageLimitMb(v)
+                              }}
+                              onBlur={e => {
+                                const v = parseInt(e.target.value)
+                                const clamped = isNaN(v) || v <= 0 ? 5120 : v
+                                setStorageLimitMb(clamped)
+                                setStorageLimitRaw(String(clamped))
+                              }}
+                              className="w-20 text-[10px] font-black text-center tabular-nums bg-transparent border-b focus:outline-none transition-colors"
+                              style={{ borderColor: 'var(--ds-border)', caretColor: '#adee2b' }}
+                              onFocus={e => { e.target.style.borderColor = '#adee2b'; e.target.select() }}
+                              onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
+                            />
+                            <span className="text-[9px] font-bold text-[var(--ds-text-4)]">MB</span>
+                            {[1024, 5120, 10240, 20480].map(preset => (
+                              <button key={preset} type="button"
+                                onClick={() => { setStorageLimitMb(preset); setStorageLimitRaw(String(preset)) }}
+                                className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md transition-colors"
+                                style={{
+                                  background: storageLimitMb === preset ? '#adee2b' : 'var(--ds-bg-surface-2)',
+                                  color: storageLimitMb === preset ? '#000' : 'var(--ds-text-4)',
+                                }}>
+                                {preset >= 1024 ? `${preset / 1024}G` : `${preset}M`}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Per-segment bars (relative to limit) */}
                       <div className="space-y-2.5">
                         {bars.map(b => {
-                          const pct = totalMb > 0 ? Math.max(2, (b.mb / totalMb) * 100) : 2
+                          const pct = storageLimitMb > 0 ? Math.min(100, (b.mb / storageLimitMb) * 100) : 0
                           return (
                             <div key={b.label}>
                               <div className="flex items-center justify-between mb-1">
@@ -5558,7 +5645,7 @@ export default function AdminPage() {
                               </div>
                               <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--ds-bg-raised)' }}>
                                 <div className="h-full rounded-full transition-all duration-700"
-                                  style={{ width: `${pct}%`, background: b.color }} />
+                                  style={{ width: `${Math.max(pct > 0 ? 2 : 0, pct)}%`, background: b.color }} />
                               </div>
                             </div>
                           )

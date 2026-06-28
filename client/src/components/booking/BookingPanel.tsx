@@ -13,25 +13,26 @@ import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 
-function fmtFieldDate(iso: string): string {
-  if (!iso) return 'Select date'
+function fmtFieldDate(iso: string, lang = 'en', pickDateLabel = 'Pick a date'): string {
+  if (!iso) return pickDateLabel
   const [y, m, d] = iso.split('T')[0].split('-').map(Number)
-  if (!y || !m || !d) return 'Select date'
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  if (!y || !m || !d) return pickDateLabel
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function fmtShortDate(iso: string): string {
+function fmtShortDate(iso: string, lang = 'en'): string {
   if (!iso) return ''
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short' })
 }
 
 function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
 function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
 const DOW_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-const DOW_LABELS: Record<string, string> = { mon: 'Mo', tue: 'Tu', wed: 'We', thu: 'Th', fri: 'Fr', sat: 'Sa', sun: 'Su' }
-const DOW_FULL: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' }
+const DOW_LABELS: Record<string, string> = { mon: 'Sen', tue: 'Sel', wed: 'Rab', thu: 'Kam', fri: 'Jum', sat: 'Sab', sun: 'Min' }
+const DOW_FULL: Record<string, string> = { mon: 'Senin', tue: 'Selasa', wed: 'Rabu', thu: 'Kamis', fri: 'Jumat', sat: 'Sabtu', sun: 'Minggu' }
+const REPEAT_LABELS: Record<string, string> = { none: 'Tidak', daily: 'Harian', weekly: 'Mingguan' }
 // JS getDay() returns 0=Sun,1=Mon,...,6=Sat; our array index in DOW_KEYS: mon=0,...,sun=6
 const JS_DOW_TO_KEY: Record<number, string> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 const KEY_TO_JS_DOW: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
@@ -53,7 +54,10 @@ interface BookingPanelProps {
 
 export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, prefillVersion, buildingId, onSubmit, onCancel, onAfterHoursOpen }: BookingPanelProps) {
   const { user } = useAuth()
-  const { defaultType, defaultBuilding } = useSettings()
+  const { defaultType, defaultBuilding, t, language } = useSettings()
+  const REPEAT_LBL: Record<string, string> = { none: t('repeat_none'), daily: t('repeat_daily'), weekly: t('repeat_weekly') }
+  const DOW_LBL: Record<string, string> = { mon: t('dow_mon'), tue: t('dow_tue'), wed: t('dow_wed'), thu: t('dow_thu'), fri: t('dow_fri'), sat: t('dow_sat'), sun: t('dow_sun') }
+  const DOW_FUL: Record<string, string> = { mon: t('dow_full_mon'), tue: t('dow_full_tue'), wed: t('dow_full_wed'), thu: t('dow_full_thu'), fri: t('dow_full_fri'), sat: t('dow_full_sat'), sun: t('dow_full_sun') }
   const { start: bsStr, end: beStr } = useBookingHours()
   const bookingStartMin = toMin(bsStr)
   const bookingEndMin   = toMin(beStr)
@@ -360,14 +364,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   }, [repeatEndDate])
 
   function getDuration() {
-    if (!startTime || !endTime) return '— min'
+    if (!startTime || !endTime) return '— mnt'
     const [h1, m1] = startTime.split(':').map(Number)
     const [h2, m2] = endTime.split(':').map(Number)
     const total = (h2 * 60 + m2) - (h1 * 60 + m1)
-    if (total <= 0) return 'Invalid'
+    if (total <= 0) return 'Tidak Valid'
     const h = Math.floor(total / 60)
     const m = total % 60
-    return h && m ? `${h} hrs ${m} min` : h ? `${h} hrs` : `${m} min`
+    return h && m ? `${h} jam ${m} mnt` : h ? `${h} jam` : `${m} mnt`
   }
 
   function toISO(d: Date): string {
@@ -453,7 +457,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     const dates = generateRepeatDates()
     if (dates.length === 0) return ''
     const last = dates[dates.length - 1]
-    return `${dates.length} occurrence${dates.length !== 1 ? 's' : ''} · ends ${fmtShortDate(last)}`
+    return `${dates.length} ${t('series_label')} · ${t('series_ends')} ${fmtShortDate(last, language)}`
   }
 
   function isTimeValid() {
@@ -522,7 +526,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       } catch { runtimeSkipped.push(d) }
     }
     const allSkipped = [...knownSkipped, ...runtimeSkipped]
-    if (created === 0) { setError(`All ${datesToBook.length + knownSkipped.length} slots had conflicts.`); return }
+    if (created === 0) { setError(t('all_slots_taken')); return }
     // If any runtime skips happened (race condition after pre-check), patch the stored skipped dates
     // by including them in a final pass — simplest: just show combined result
     clearDraft()
@@ -536,7 +540,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   async function doSubmitSeries() {
     if (!selectedRoom) return
     const dates = generateRepeatDates()
-    if (dates.length === 0) { setError('No repeat dates configured.'); return }
+    if (dates.length === 0) { setError(t('err_no_repeat_dates')); return }
 
     const seriesId = crypto.randomUUID()
 
@@ -561,7 +565,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     }
 
     // Skip mode: create only available, pass conflicting as knownSkipped
-    if (available.length === 0) { setError('All selected slots are already booked.'); return }
+    if (available.length === 0) { setError(t('all_slots_taken')); return }
     await doCreateBookings(available, seriesId, conflicting)
   }
 
@@ -580,10 +584,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       const status = e?.response?.status
       const msg = e?.response?.data?.message
       if (status === 422 && msg?.toLowerCase().includes('not available')) {
-        setError('Someone just booked this room. Please choose another time or room.')
+        setError(t('err_room_taken'))
         recheckAvailability()
       } else {
-        setError(msg || 'Failed to save booking.')
+        setError(msg || t('err_save_booking'))
       }
     } finally {
       setSubmitting(false)
@@ -691,7 +695,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       >
         {/* Header */}
         <div className="px-5 pt-5 pb-4 border-b border-[var(--ds-border-sub)]">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--ds-text-3)] mb-1.5">Free Slots</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--ds-text-3)] mb-1.5">Slot Tersedia</p>
           <p className="text-[16px] font-black text-[var(--ds-text-1)] leading-tight truncate">{selectedRoom?.name ?? ''}</p>
           {date && (
             <p className="text-[12px] font-bold text-[var(--ds-text-3)] mt-1">
@@ -711,7 +715,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           ) : miniSlots.length === 0 ? (
             <div className="flex flex-col items-center gap-2.5 py-6 px-4 text-center">
               <span className="material-symbols-outlined text-4xl text-[var(--ds-text-3)]">event_busy</span>
-              <p className="text-[11px] font-black uppercase tracking-wide text-[var(--ds-text-3)]">Fully Booked</p>
+              <p className="text-[11px] font-black uppercase tracking-wide text-[var(--ds-text-3)]">Penuh</p>
             </div>
           ) : (
             <div className="px-3 space-y-2">
@@ -776,7 +780,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           <div>
             <div className="flex items-center gap-2">
               <p className="text-[9px] font-black text-[var(--ds-text-3)] uppercase tracking-[0.25em] leading-none">
-                {isEdit ? 'Edit Booking' : 'Create Booking'}
+                {isEdit ? t('panel_edit_booking') : t('panel_book_room')}
               </p>
               {draftRestored && !isEdit && (
                 <div className="flex items-center gap-1">
@@ -788,7 +792,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <button
                     onClick={() => { clearDraft(); setTitle(''); setDesc(''); setDate(today); setStartTime(''); setEndTime(''); setSelectedRoom(null); setRepeat('none'); setBookFor(''); setBookForUserId(null); setShowBookFor(false); setDraftRestored(false) }}
                     className="text-[var(--ds-text-4)] hover:text-red-400 transition-colors"
-                    title="Discard draft">
+                    title="Buang draf">
                     <span className="material-symbols-outlined" style={{ fontSize: 12 }}>close</span>
                   </button>
                 </div>
@@ -801,7 +805,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 className="text-3xl font-black italic tracking-tighter text-blue-600 leading-none uppercase hover:text-blue-700 transition-colors flex items-center gap-2 rounded-lg px-1 -mx-1"
                 style={glowActive ? { animation: 'field-glow-pulse 1.4s ease-in-out forwards' } : undefined}
               >
-                {selectedRoom?.name || 'Select a Room'}
+                {selectedRoom?.name || t('panel_pick_room')}
                 <span className="material-symbols-outlined text-lg text-blue-400">expand_more</span>
               </button>
               {showRoomDrop && (
@@ -809,13 +813,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   {/* Building selector */}
                   {(buildings as Building[]).length > 1 && (
                     <div className="px-3 pt-3 pb-2 border-b border-[var(--ds-border-sub)]">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">Building</p>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">Gedung</p>
                       <div className="flex flex-wrap gap-1.5">
                         <button
                           onClick={() => setActiveBuildingId(null)}
                           className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeBuildingId === null ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-[var(--ds-border)]'}`}
                         >
-                          All
+                          Semua
                         </button>
                         {(buildings as Building[]).map(b => (
                           <button
@@ -833,7 +837,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <div className="p-3 border-b border-[var(--ds-border-sub)]">
                     <input
                       type="text"
-                      placeholder="Search room..."
+                      placeholder="Cari ruangan..."
                       value={roomSearch}
                       onChange={e => setRoomSearch(e.target.value)}
                       className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
@@ -874,7 +878,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             {isMaint && (
                               <span className="shrink-0 flex items-center gap-1 px-2.5 py-1 bg-orange-500/15 text-orange-500 dark:text-orange-400 rounded-lg text-[9px] font-black uppercase">
                                 <span className="material-symbols-outlined" style={{ fontSize: 11 }}>construction</span>
-                                Maint.
+                                {t('type_maintenance')}
                               </span>
                             )}
                             {r.requires_contact && !isMaint && <SpecialRoomBadge size="xs" />}
@@ -912,9 +916,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <span className="material-symbols-outlined" style={{ fontSize: 32, color: '#d97706', fontVariationSettings: "'FILL' 1" }}>support_agent</span>
               </div>
               <div>
-                <p className="text-[13px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-1)' }}>Booking via Receptionist Only</p>
+                <p className="text-[13px] font-black uppercase tracking-wide" style={{ color: 'var(--ds-text-1)' }}>{t('special_room_contact_title')}</p>
                 <p className="text-[11px] font-medium mt-2 leading-relaxed max-w-[260px] mx-auto" style={{ color: 'var(--ds-text-3)' }}>
-                  This room requires special access. Please contact the receptionist to make a reservation.
+                  {t('special_room_contact_msg')}
                 </p>
               </div>
               <button
@@ -922,7 +926,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] transition-colors text-[10px] font-black uppercase text-[var(--ds-text-2)]"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_back</span>
-                Choose another room
+                {t('panel_change_room')}
               </button>
             </div>
           )}
@@ -946,12 +950,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <span className={`material-symbols-outlined shrink-0 mt-0.5 ${isPrivileged ? 'text-orange-500' : 'text-red-500'}`} style={{ fontSize: 18 }}>construction</span>
                 <div>
                   <p className={`text-[11px] font-black uppercase tracking-wide ${isPrivileged ? 'text-orange-700 dark:text-orange-400' : 'text-red-700 dark:text-red-400'}`}>
-                    Room Under Maintenance
+                    {t('panel_maintenance_title')}
                   </p>
                   <p className={`text-[10px] font-medium mt-0.5 leading-relaxed ${isPrivileged ? 'text-orange-600 dark:text-orange-300' : 'text-red-500 dark:text-red-400'}`}>
-                    {isPrivileged
-                      ? 'This room is under maintenance. As admin/receptionist you may still book.'
-                      : 'This room is currently under maintenance and cannot be booked. Please contact Receptionist or GAA.'}
+                    {isPrivileged ? t('panel_maintenance_admin') : t('panel_maintenance_user')}
                   </p>
                 </div>
               </div>
@@ -961,14 +963,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             <div className="bg-[var(--ds-bg-raised)] px-4 py-3.5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-2.5">
               {/* Date */}
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Date</label>
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_date')}</label>
                 <GlassDatePicker value={date} onChange={setDate} min={today} compact>
                   {() => (
                     <button type="button"
                       className="w-full flex items-center gap-2 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-3 py-2 hover:border-[#adee2b] transition-all"
                       style={glowActive ? { animation: 'field-glow-pulse 1.4s ease-in-out forwards' } : undefined}>
                       <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 15 }}>calendar_today</span>
-                      <span className={`flex-1 text-left ${date ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>{fmtFieldDate(date)}</span>
+                      <span className={`flex-1 text-left ${date ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>{fmtFieldDate(date, language, t('panel_pick_date'))}</span>
                       <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>expand_more</span>
                     </button>
                   )}
@@ -978,7 +980,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {/* Time + Duration */}
               <div className="flex items-start gap-1.5">
                 <div className="w-[88px] shrink-0 space-y-1">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Start Time</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_start')}</label>
                   <GlassTimePicker value={startTime} onChange={setStartTime} min={bsStr} max={fromMin(bookingEndMin - 30)}>
                     {() => (
                       <button type="button"
@@ -997,7 +999,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 </div>
 
                 <div className="w-[88px] shrink-0 space-y-1">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">End Time</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_end')}</label>
                   <GlassTimePicker value={endTime} onChange={setEndTime} min={fromMin(bookingStartMin + 30)} max={beStr} align="right">
                     {() => (
                       <button type="button"
@@ -1015,7 +1017,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   const dur = getDuration()
                   return (
                     <div className="shrink-0 space-y-1">
-                      <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Duration</label>
+                      <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_duration')}</label>
                       <div
                         key={dur}
                         className="px-3 py-2 rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center dark:bg-[#adee2b]/15 dark:text-[#adee2b]"
@@ -1049,7 +1051,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                     {showMiniPanel ? 'visibility_off' : 'calendar_view_week'}
                   </span>
-                  {showMiniPanel ? 'Hide available time' : 'Show available time'}
+                  {showMiniPanel ? 'Sembunyikan slot tersedia' : 'Tampilkan slot tersedia'}
                 </button>
               )}
             </div>
@@ -1057,16 +1059,16 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             {/* Details */}
             <div className="bg-[var(--ds-bg-raised)] p-5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-3">
               <div className="space-y-1.5 transition-transform duration-200 ease-out focus-within:scale-[1.015] origin-left">
-                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">Meeting Title *</label>
+                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">{t('panel_meeting_title')}</label>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-                  placeholder="Write title here..."
+                  placeholder={t('panel_title_placeholder')}
                   className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 outline-none transition-all duration-200
                     focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
               </div>
               <div className="space-y-1.5 transition-transform duration-200 ease-out focus-within:scale-[1.015] origin-left">
-                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">Description</label>
+                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">{t('panel_description')}</label>
                 <textarea rows={2} value={desc} onChange={e => setDesc(e.target.value)}
-                  placeholder="Agenda, notes, or attendees..."
+                  placeholder={t('panel_desc_placeholder')}
                   className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium p-2.5 outline-none resize-none transition-all duration-200
                     focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
               </div>
@@ -1082,7 +1084,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <span className="material-symbols-outlined transition-transform duration-200" style={{ fontSize: 13, transform: showBookFor ? 'rotate(45deg)' : 'rotate(0deg)' }}>
                     add
                   </span>
-                  Booking for (optional)
+                  {t('panel_booked_for')}
                   {bookFor && (
                     <span
                       key={bookFor}
@@ -1102,7 +1104,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       value={bookFor}
                       onChange={e => { setBookFor(e.target.value); setBookForUserId(null); setShowBookForDrop(true) }}
                       onFocus={() => setShowBookForDrop(true)}
-                      placeholder="Type name or pick from dept..."
+                      placeholder={t('panel_booked_for_placeholder')}
                       autoFocus
                       className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium pl-8 pr-8 py-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none transition-all"
                       style={bookForUserId !== null ? { borderColor: '#adee2b', animation: 'field-success 0.5s ease-out' } : undefined}
@@ -1144,7 +1146,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {pantrySaved && (
                 <div className="flex items-center gap-2 bg-slate-900 text-[#adee2b] px-4 py-3 rounded-2xl">
                   <span className="material-symbols-outlined text-sm">shopping_bag</span>
-                  <span className="text-[9px] font-black uppercase tracking-widest">Pantry Request Added</span>
+                  <span className="text-[9px] font-black uppercase tracking-widest">{t('panel_pantry_added')}</span>
                 </div>
               )}
             </div>
@@ -1153,14 +1155,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             <div className="bg-[var(--ds-bg-raised)] p-5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Type</label>
+                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_type')}</label>
                   {isPrivileged ? (
                     <div className="grid grid-cols-2 gap-1.5">
                       {([
-                        { value: 'internal',    label: 'Internal', bg: '#1d4ed8', text: 'white',   shadow: '0 4px 14px rgba(29,78,216,0.45)' },
-                        { value: 'external',    label: 'External', bg: '#f97316', text: 'white',   shadow: '0 4px 14px rgba(249,115,22,0.45)' },
-                        { value: 'maintenance', label: 'Maint.',   bg: '#fb923c', text: '#7c2d12', shadow: '0 4px 14px rgba(251,146,60,0.45)' },
-                        { value: 'repairment',  label: 'Repair',   bg: '#ef4444', text: 'white',   shadow: '0 4px 14px rgba(239,68,68,0.45)' },
+                        { value: 'internal',    label: t('type_internal'),    bg: '#1d4ed8', text: 'white',   shadow: '0 4px 14px rgba(29,78,216,0.45)' },
+                        { value: 'external',    label: t('type_external'),    bg: '#f97316', text: 'white',   shadow: '0 4px 14px rgba(249,115,22,0.45)' },
+                        { value: 'maintenance', label: t('type_maintenance'), bg: '#fb923c', text: '#7c2d12', shadow: '0 4px 14px rgba(251,146,60,0.45)' },
+                        { value: 'repairment',  label: t('type_repairment'),  bg: '#ef4444', text: 'white',   shadow: '0 4px 14px rgba(239,68,68,0.45)' },
                       ] as const).map(opt => {
                         const isActive = type === opt.value
                         return (
@@ -1188,17 +1190,17 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         style={{ left: type === 'internal' ? 3 : 'calc(50%)', width: 'calc(50% - 3px)', background: type === 'internal' ? '#1d4ed8' : '#f97316', transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1)' }} />
                       <button onClick={() => setType('internal')}
                         className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'internal' ? 'text-white' : 'text-[var(--ds-text-3)]'}`}>
-                        Internal
+                        {t('type_internal')}
                       </button>
                       <button onClick={() => setType('external')}
                         className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${type === 'external' ? 'text-white' : 'text-[var(--ds-text-3)]'}`}>
-                        External
+                        {t('type_external')}
                       </button>
                     </div>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Status</label>
+                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_status')}</label>
                   <div className="relative flex bg-[var(--ds-bg-surface-2)] p-[3px] rounded-full border border-[var(--ds-border-sub)]">
                     <div className="absolute inset-y-[3px] rounded-full shadow-sm pointer-events-none"
                       style={{
@@ -1210,11 +1212,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       }} />
                     <button onClick={() => setStatus('confirmed')}
                       className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'confirmed' ? 'text-black' : 'text-[var(--ds-text-3)]'}`}>
-                      Confirmed
+                      {t('status_confirmed')}
                     </button>
                     <button onClick={() => setStatus('tentative')}
                       className={`relative z-10 flex-1 py-1.5 text-[10px] font-black uppercase rounded-full transition-colors duration-150 ${status === 'tentative' ? 'text-[var(--ds-text-2)]' : 'text-[var(--ds-text-3)]'}`}>
-                      Tentative
+                      {t('status_tentative')}
                     </button>
                   </div>
                 </div>
@@ -1223,7 +1225,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {/* Repeat — only for create */}
               {!isEdit && (
                 <div className="space-y-3">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Repeat</label>
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_repeat')}</label>
                   {/* Repeat mode toggle: None / Daily / Weekly */}
                   <div className="relative flex bg-[var(--ds-bg-surface-2)] p-1 rounded-full border border-[var(--ds-border-sub)]">
                     <div className="absolute top-1 bottom-1 rounded-full bg-[var(--ds-bg-surface)] shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
@@ -1231,7 +1233,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     {(['none', 'daily', 'weekly'] as const).map(r => (
                       <button key={r} onClick={() => handleRepeatChange(r)}
                         className={`relative z-10 flex-1 py-1.5 text-[11px] font-black uppercase rounded-full transition-colors duration-150 ${repeat === r ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>
-                        {r}
+                        {REPEAT_LBL[r]}
                       </button>
                     ))}
                   </div>
@@ -1241,7 +1243,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       {/* Weekly day picker */}
                       {repeat === 'weekly' && (
                         <div className="space-y-1.5" style={{ animation: 'section-in 0.22s ease-out' }}>
-                          <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Repeat Days</p>
+                          <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('repeat_days_label')}</p>
                           <div className="flex gap-1">
                             {DOW_KEYS.map(key => {
                               const selected = weeklyDays.includes(key)
@@ -1249,7 +1251,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 <button
                                   key={key}
                                   type="button"
-                                  title={DOW_FULL[key]}
+                                  title={DOW_FUL[key]}
                                   onClick={() => {
                                     if (selected && weeklyDays.length === 1) return
                                     setWeeklyDays(selected ? weeklyDays.filter(d => d !== key) : [...weeklyDays, key])
@@ -1264,7 +1266,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                     transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)',
                                   }}
                                 >
-                                  {DOW_LABELS[key]}
+                                  {DOW_LBL[key]}
                                 </button>
                               )
                             })}
@@ -1283,7 +1285,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             {repeatMode === 'count' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
                           <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex-1" onClick={() => setRepeatMode('count')}>
-                            {repeat === 'daily' ? 'For N days' : 'For N weeks'}
+                            {repeat === 'daily' ? t('repeat_for_days') : t('repeat_for_weeks')}
                           </span>
                           {repeatMode === 'count' && (
                             <div className="flex items-center gap-1.5 ml-auto">
@@ -1333,7 +1335,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             {repeatMode === 'until' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
                           <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex-1" onClick={() => setRepeatMode('until')}>
-                            Until date
+                            {t('repeat_until')}
                           </span>
                           {repeatMode === 'until' && (
                             <div className="flex items-center gap-1.5 ml-auto" onClick={e => e.stopPropagation()}>
@@ -1402,7 +1404,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         <div className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${skipConflicts ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}>
                           <div className={`absolute top-0.5 w-4 h-4 rounded-full shadow-sm transition-transform duration-200 ${skipConflicts ? 'translate-x-4 bg-black' : 'translate-x-0.5 bg-[var(--ds-bg-surface)]'}`} />
                         </div>
-                        <span className={`text-[10px] font-black uppercase ${skipConflicts ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>Skip past conflicts</span>
+                        <span className={`text-[10px] font-black uppercase ${skipConflicts ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>{t('skip_conflicts')}</span>
                         <span className={`ml-auto text-[9px] font-black uppercase ${skipConflicts ? 'text-[#adee2b] dark:text-[#adee2b]/80' : 'text-[var(--ds-text-4)]'}`}>
                           {skipConflicts ? 'ON' : 'OFF'}
                         </span>
@@ -1423,15 +1425,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 className="text-[28px] font-black text-[#adee2b] leading-none tabular-nums"
                                 style={{ animation: 'stat-pop 0.38s cubic-bezier(0.34,1.56,0.64,1)' }}
                               >{repeatDates.length}</span>
-                              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">occurrence{repeatDates.length !== 1 ? 's' : ''}</span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{t('series_label')}</span>
                             </div>
                             <div className="bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-xl py-3 flex flex-col items-center justify-center gap-1 overflow-hidden">
                               <span
                                 key={repeatDates[repeatDates.length - 1]}
                                 className="text-[18px] font-black text-[var(--ds-text-1)] leading-none"
                                 style={{ animation: 'stat-pop 0.38s cubic-bezier(0.34,1.56,0.64,1) 0.04s both' }}
-                              >{fmtShortDate(repeatDates[repeatDates.length - 1])}</span>
-                              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">ends on</span>
+                              >{fmtShortDate(repeatDates[repeatDates.length - 1], language)}</span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{t('series_ends')}</span>
                             </div>
                           </div>
                           {/* Preview first 8 dates — stagger-animate when list changes */}
@@ -1442,7 +1444,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 className="text-[10px] font-bold bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-lg px-2.5 py-1 text-[var(--ds-text-2)]"
                                 style={{ animation: `chip-in 0.28s cubic-bezier(0.34,1.56,0.64,1) ${i * 30}ms both` }}
                               >
-                                {fmtShortDate(d)}
+                                {fmtShortDate(d, language)}
                               </span>
                             ))}
                             {repeatDates.length > 8 && (
@@ -1450,7 +1452,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 className="text-[10px] font-bold bg-black dark:bg-white/10 text-[#adee2b] rounded-lg px-2.5 py-1"
                                 style={{ animation: `chip-in 0.28s cubic-bezier(0.34,1.56,0.64,1) ${8 * 30}ms both` }}
                               >
-                                +{repeatDates.length - 8} more
+                                +{repeatDates.length - 8} {t('series_more')}
                               </span>
                             )}
                           </div>
@@ -1466,8 +1468,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <div className="flex items-center gap-3 bg-blue-600 rounded-2xl px-4 py-3">
                   <span className="material-symbols-outlined text-blue-200" style={{ fontSize: 16 }}>link</span>
                   <div>
-                    <p className="text-[11px] font-black uppercase text-white tracking-wider">Booking Series</p>
-                    <p className="text-[10px] text-blue-200 font-medium mt-0.5">Changes can apply to this booking or the entire series</p>
+                    <p className="text-[11px] font-black uppercase text-white tracking-wider">{t('series_title')}</p>
+                    <p className="text-[10px] text-blue-200 font-medium mt-0.5">{t('series_edit_note')}</p>
                   </div>
                 </div>
               )}
@@ -1482,8 +1484,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       <span className="material-symbols-outlined text-base">schedule</span>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Invalid Time</p>
-                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">End time must be after start time.</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">{t('time_invalid_title')}</p>
+                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">{t('time_invalid_msg')}</p>
                     </div>
                   </div>
                 )}
@@ -1492,7 +1494,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     <div className="size-8 rounded-xl bg-[var(--ds-bg-surface-2)] flex items-center justify-center text-[var(--ds-text-3)] shrink-0">
                       <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
                     </div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Checking availability&hellip;</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{t('checking_avail')}</p>
                   </div>
                 )}
                 {isTimeValid() === true && !availChecking && isAvailable() === true && (
@@ -1502,10 +1504,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     </div>
                     <div>
                       <p className={`text-[9px] font-black uppercase tracking-widest ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-green-800 dark:text-[#adee2b]'}`}>
-                        {(availResult?.other_viewers ?? 0) > 0 ? `${availResult!.other_viewers} other user${availResult!.other_viewers > 1 ? 's' : ''} viewing this slot` : 'Room Available'}
+                        {(availResult?.other_viewers ?? 0) > 0 ? `${availResult!.other_viewers} ${t('others_viewing')}` : t('room_available')}
                       </p>
                       <p className={`text-[9px] mt-0.5 ${(availResult?.other_viewers ?? 0) > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-green-700 dark:text-[#adee2b]/70'}`}>
-                        {(availResult?.other_viewers ?? 0) > 0 ? 'Submit quickly — someone else may book first.' : 'No conflicts for this slot.'}
+                        {(availResult?.other_viewers ?? 0) > 0 ? t('confirm_quickly') : t('no_conflict')}
                       </p>
                     </div>
                   </div>
@@ -1516,8 +1518,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       <span className="material-symbols-outlined text-base">block</span>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">Room Conflict</p>
-                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">Another booking exists at this time.</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">{t('room_conflict_title')}</p>
+                      <p className="text-[9px] mt-0.5 text-red-600 dark:text-red-400">{t('room_conflict_msg')}</p>
                     </div>
                   </div>
                 )}
@@ -1534,7 +1536,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <div className="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b]">
                   <span className="material-symbols-outlined text-base">flatware</span>
                 </div>
-                <h4 className="font-black uppercase tracking-tighter text-xl italic">Pantry Order</h4>
+                <h4 className="font-black uppercase tracking-tighter text-xl italic">Pesanan Pantry</h4>
               </div>
               <button
                 onClick={() => setPantryOpen(false)}
@@ -1590,7 +1592,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 onClick={() => { setPantryOpen(false); setPantrySaved(true) }}
                 className="w-full py-4 bg-black text-[#adee2b] rounded-full text-[9px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-transform"
               >
-                Save & Return →
+                {t('panel_save_and_back')}
               </button>
             </div>
           </div>
@@ -1604,19 +1606,19 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>cancel</span>
                   </div>
                   <div>
-                    <p className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">Cancel Booking</p>
-                    <p className="text-[10px] text-[var(--ds-text-3)] font-bold">Part of a series</p>
+                    <p className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">{t('btn_cancel_booking')}</p>
+                    <p className="text-[10px] text-[var(--ds-text-3)] font-bold">{t('cancel_part_of_series')}</p>
                   </div>
                 </div>
                 <p className="text-[11px] text-[var(--ds-text-3)] leading-relaxed">
-                  Cancel just this booking, or cancel all bookings in the series?
+                  {t('cancel_series_confirm')}
                 </p>
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <button
                     onClick={() => { setShowCancelModal(false); onClose(); setTimeout(() => onCancel(editBooking), 150) }}
                     className="py-3.5 rounded-2xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase tracking-wide hover:bg-[var(--ds-border)] transition-all"
                   >
-                    Just this one
+                    {t('cancel_only_this')}
                   </button>
                   <button
                     onClick={async () => {
@@ -1625,19 +1627,19 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       try { await cancelSeries(editBooking.series_id!); onSubmit?.(); onClose() }
                       catch (err: unknown) {
                         const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-                        setError(msg || 'Failed to cancel series.')
+                        setError(msg || t('err_cancel_series'))
                       } finally { setSubmitting(false) }
                     }}
                     className="py-3.5 rounded-2xl bg-red-500 text-white text-[10px] font-black uppercase tracking-wide hover:bg-red-600 transition-all"
                   >
-                    All in series
+                    {t('cancel_all_series')}
                   </button>
                 </div>
                 <button
                   onClick={() => setShowCancelModal(false)}
                   className="w-full text-[9px] font-black uppercase text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)] py-1 tracking-wider transition-colors"
                 >
-                  Back
+                  {t('btn_back')}
                 </button>
               </div>
             </div>
@@ -1652,9 +1654,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>event_busy</span>
                   </div>
                   <div>
-                    <p className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">Conflicts Found</p>
+                    <p className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">{t('conflict_found_title')}</p>
                     <p className="text-[10px] text-[var(--ds-text-3)] font-bold">
-                      {conflictInfo.conflicting.length} slot{conflictInfo.conflicting.length !== 1 ? 's' : ''} already booked
+                      {conflictInfo.conflicting.length} {t('slots_taken')}
                     </p>
                   </div>
                 </div>
@@ -1664,15 +1666,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   {conflictInfo.conflicting.map(d => (
                     <div key={d} className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-red-400" style={{ fontSize: 13 }}>block</span>
-                      <span className="text-[10px] font-bold text-red-600">{fmtShortDate(d)}</span>
+                      <span className="text-[10px] font-bold text-red-600">{fmtShortDate(d, language)}</span>
                     </div>
                   ))}
                 </div>
 
                 <p className="text-[11px] text-[var(--ds-text-3)] leading-relaxed">
                   {conflictInfo.available.length > 0
-                    ? `Turn on "Skip conflicts" to book the ${conflictInfo.available.length} available slot${conflictInfo.available.length !== 1 ? 's' : ''} and skip the ${conflictInfo.conflicting.length} above.`
-                    : 'All selected slots are already booked. Choose different dates or times.'}
+                    ? t('enable_skip_conflicts').replace('{a}', String(conflictInfo.available.length)).replace('{c}', String(conflictInfo.conflicting.length))
+                    : t('all_slots_taken')}
                 </p>
 
                 <div className={`${conflictInfo.available.length > 0 ? 'grid grid-cols-2 gap-3' : ''} pt-1`}>
@@ -1691,10 +1693,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           const status = e?.response?.status
                           const msg = e?.response?.data?.message
                           if (status === 422 && msg?.toLowerCase().includes('not available')) {
-                            setError('Someone just booked this room. Please choose another time or room.')
+                            setError(t('err_room_taken'))
                             recheckAvailability()
                           } else {
-                            setError(msg || 'Failed to save booking.')
+                            setError(msg || t('err_save_booking'))
                           }
                         } finally {
                           setSubmitting(false)
@@ -1702,14 +1704,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       }}
                       className="py-3.5 rounded-2xl bg-black text-[#adee2b] text-[10px] font-black uppercase tracking-wide hover:bg-slate-800 transition-all"
                     >
-                      Skip & Book {conflictInfo.available.length}
+                      {t('skip_and_book')} {conflictInfo.available.length}
                     </button>
                   )}
                   <button
                     onClick={() => setConflictInfo(null)}
                     className="py-3.5 rounded-2xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase tracking-wide hover:bg-[var(--ds-border)] transition-all"
                   >
-                    Cancel
+                    {t('btn_cancel')}
                   </button>
                 </div>
               </div>
@@ -1738,23 +1740,23 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     <span className="material-symbols-outlined text-black" style={{ fontSize: 14 }}>task_alt</span>
                   </div>
                   <div>
-                    <p className="text-[11px] font-black text-[var(--ds-text-1)]">{skippedResult.created} of {skippedResult.total} booked</p>
-                    <p className="text-[9px] text-[var(--ds-text-3)] font-bold">{skippedResult.skipped.length} skipped — conflicts</p>
+                    <p className="text-[11px] font-black text-[var(--ds-text-1)]">{skippedResult.created} {t('booked_of')} {skippedResult.total} {t('booked_count')}</p>
+                    <p className="text-[9px] text-[var(--ds-text-3)] font-bold">{skippedResult.skipped.length} {t('skipped_conflicts')}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => { setSkippedResult(null); onSubmit?.() }}
                   className="px-3 py-1.5 rounded-xl bg-black text-[#adee2b] text-[9px] font-black uppercase tracking-wide hover:bg-slate-800 transition-all shrink-0"
                 >
-                  Done
+                  {t('btn_done')}
                 </button>
               </div>
               <div className="bg-red-50 rounded-xl p-2.5 space-y-1 max-h-32 overflow-y-auto">
-                <p className="text-[8px] font-black uppercase text-red-400 tracking-wider px-1 mb-1.5">Skipped dates</p>
+                <p className="text-[8px] font-black uppercase text-red-400 tracking-wider px-1 mb-1.5">{t('skipped_dates_label')}</p>
                 {skippedResult.skipped.map(d => (
                   <div key={d} className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-red-400 shrink-0" style={{ fontSize: 12 }}>block</span>
-                    <span className="text-[11px] font-bold text-red-600">{fmtShortDate(d)}</span>
+                    <span className="text-[11px] font-bold text-red-600">{fmtShortDate(d, language)}</span>
                   </div>
                 ))}
               </div>
@@ -1775,10 +1777,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       const status = e?.response?.status
                       const msg = e?.response?.data?.message
                       if (status === 422 && msg?.toLowerCase().includes('not available')) {
-                        setError('Someone just booked this room. Please choose another time or room.')
+                        setError(t('err_room_taken'))
                         recheckAvailability()
                       } else {
-                        setError(msg || 'Failed to save.')
+                        setError(msg || t('err_save'))
                       }
                     } finally { setSubmitting(false) }
                   }}
@@ -1787,7 +1789,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     bg-[#adee2b] text-black hover:bg-slate-900 hover:text-[#adee2b]
                     disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed"
                 >
-                  {submitting ? '...' : 'Save this'}
+                  {submitting ? '...' : t('btn_save_this')}
                 </button>
                 <button
                   onClick={async () => {
@@ -1798,7 +1800,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       onSubmit?.()
                     } catch (err: unknown) {
                       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-                      setError(msg || 'Failed to save series.')
+                      setError(msg || t('err_save_series'))
                     } finally { setSubmitting(false) }
                   }}
                   disabled={!isValid() || submitting}
@@ -1807,7 +1809,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed"
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>link</span>
-                  {submitting ? '...' : 'Save series'}
+                  {submitting ? '...' : t('btn_save_series')}
                 </button>
               </div>
               {onCancel && (
@@ -1816,7 +1818,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   onClick={() => setShowCancelModal(true)}
                   className="w-full py-3 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-200 border-2 border-red-100 text-red-400 hover:border-red-400 hover:bg-red-50 hover:text-red-600"
                 >
-                  Cancel Booking
+                  {t('btn_cancel_booking')}
                 </button>
               )}
             </div>
@@ -1831,7 +1833,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] shadow-lime-400/20
                     disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none"
                 >
-                  {submitting ? 'Saving...' : isEdit ? 'Save Changes' : repeat !== 'none' ? `Schedule ${repeatDates.length > 0 ? `(${repeatDates.length})` : ''} Bookings` : 'Confirm Booking'}
+                  {submitting ? t('btn_saving') : isEdit ? t('btn_save_changes') : repeat !== 'none' ? `${t('btn_schedule_sessions')} ${repeatDates.length > 0 ? `(${repeatDates.length})` : ''}`.trim() : t('btn_confirm_booking')}
                 </button>
                 {/* After-hours overlay — covers the Confirm Booking button */}
                 {restrictAfterHours && startTime >= workingHoursEnd && !showReceptionistNotice && (
@@ -1846,7 +1848,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     }}
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}>schedule</span>
-                    After-working hours — contact receptionist
+                    {t('after_hours_msg')}
                     <span className="material-symbols-outlined" style={{ fontSize: 13 }}>chevron_right</span>
                   </button>
                 )}
@@ -1857,7 +1859,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   onClick={() => { onClose(); setTimeout(() => onCancel(editBooking), 150) }}
                   className="w-full py-3 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-200 border-2 border-red-100 text-red-400 hover:border-red-400 hover:bg-red-50 hover:text-red-600"
                 >
-                  Cancel Booking
+                  {t('btn_cancel_booking')}
                 </button>
               )}
             </>

@@ -1032,12 +1032,12 @@ export default function TimelinePage() {
           d.setDate(gridStart.getDate() + i)
           return d
         })
-        const bkgs = monthBookings as Booking[]
+        const bkgs = (monthBookings as Booking[]).filter(b => !location || b.room?.building_id === location.id)
         const DOW_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
         const todayDateStr = toLocalDateStr(today)
-        const regularRooms = (rooms as Room[]).filter(r => r.status !== 'maintenance')
+        const regularRooms = (rooms as Room[]).filter(r => r.status !== 'maintenance' && (!location || r.building_id === location.id))
         const totalCapacityMins = regularRooms.length * (HOUR_END - HOUR_START) * 60
         const regularRoomIds = new Set(regularRooms.map(r => r.id))
         return (

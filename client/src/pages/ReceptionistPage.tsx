@@ -10,6 +10,7 @@ import { getDisputes, resolveDispute } from '../api/bookings'
 import { getDirectory } from '../api/users'
 import type { Booking, User } from '../types'
 import UserAvatar from '../components/ui/UserAvatar'
+import { useSettings } from '../context/SettingsContext'
 
 type Tab = 'contacts' | 'disputes'
 
@@ -29,7 +30,8 @@ interface ContactSectionProps {
   loadingStatus?: boolean
 }
 
-function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, title, description, emptyNote, enabled, enabledLabel = 'Enabled', disabledLabel = 'Disabled', loadingStatus }: ContactSectionProps) {
+function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, title, description, emptyNote, enabled, enabledLabel, disabledLabel, loadingStatus }: ContactSectionProps) {
+  const { t } = useSettings()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [showPicker, setShowPicker] = useState(false)
@@ -83,6 +85,9 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
     (u.email ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
+  const elActive = enabledLabel ?? t('rec_active')
+  const elInactive = disabledLabel ?? t('rec_inactive')
+
   return (
     <div className="rounded-3xl overflow-hidden" style={{
       background: 'var(--ds-bg-surface)',
@@ -97,7 +102,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
             <p className="text-[13px] font-black" style={{ color: 'var(--ds-text-1)' }}>{title}</p>
             {saved && (
               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
-                style={{ background: '#adee2b', color: '#000' }}>Saved</span>
+                style={{ background: '#adee2b', color: '#000' }}>{t('rec_saved')}</span>
             )}
             {loadingStatus ? (
               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
@@ -106,13 +111,13 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
               <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
                 style={{ background: 'rgba(173,238,43,0.18)', color: '#4d7c00' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#65a30d', display: 'inline-block' }} />
-                {enabledLabel}
+                {elActive}
               </span>
             ) : enabled === false ? (
               <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
                 style={{ background: 'rgba(148,163,184,0.12)', color: 'var(--ds-text-4)' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--ds-text-4)', display: 'inline-block' }} />
-                {disabledLabel}
+                {elInactive}
               </span>
             ) : null}
           </div>
@@ -126,7 +131,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
           style={{ background: showPicker ? '#adee2b' : 'var(--ds-bg-raised)', color: showPicker ? '#000' : 'var(--ds-text-2)' }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{showPicker ? 'close' : 'person_add'}</span>
-          {showPicker ? 'Done' : 'Edit'}
+          {showPicker ? t('btn_done') : 'Edit'}
         </button>
       </div>
 
@@ -177,7 +182,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[11px] mt-2 italic" style={{ color: 'var(--ds-text-4)' }}>No building assigned — handles all</p>
+                  <p className="text-[11px] mt-2 italic" style={{ color: 'var(--ds-text-4)' }}>{t('rec_no_buildings')}</p>
                 )}
               </div>
               <button
@@ -198,7 +203,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
       {showPicker && (
         <div className="border-t px-4 pb-4 pt-3 picker-slide-in" style={{ borderColor: 'var(--ds-border-sub)' }}>
           <p className="text-[9px] font-black uppercase tracking-widest mb-2.5" style={{ color: 'var(--ds-text-3)' }}>
-            Add from user directory
+            {t('rec_add_from_dir')}
           </p>
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl mb-3"
             style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border-sub)' }}>
@@ -207,7 +212,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
               autoFocus
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search name or email…"
+              placeholder={t('rec_search_placeholder')}
               className="flex-1 bg-transparent text-[11px] font-medium outline-none"
               style={{ color: 'var(--ds-text-1)' }}
             />
@@ -250,7 +255,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
               )
             })}
             {pickerFiltered.length === 0 && (
-              <p className="text-[11px] text-center py-4" style={{ color: 'var(--ds-text-4)' }}>No users found</p>
+              <p className="text-[11px] text-center py-4" style={{ color: 'var(--ds-text-4)' }}>{t('rec_user_not_found')}</p>
             )}
           </div>
         </div>
@@ -260,6 +265,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
 }
 
 function DisputesSection() {
+  const { t, language } = useSettings()
   const qc = useQueryClient()
   const [statusFilter, setStatusFilter] = useState<'pending' | 'resolved'>('pending')
   const [resolvingId, setResolvingId] = useState<number | null>(null)
@@ -270,13 +276,14 @@ function DisputesSection() {
     staleTime: 30_000,
   })
 
+  const loc = language === 'id' ? 'id-ID' : 'en-GB'
   function parseLocal(s: string) { return new Date(s.replace('T', ' ').replace('Z', '')) }
   function fmtDt(s: string) {
     const d = parseLocal(s)
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' +
-      d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleDateString(loc, { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' +
+      d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' })
   }
-  function fmtTime(s: string) { return parseLocal(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }
+  function fmtTime(s: string) { return parseLocal(s).toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' }) }
 
   async function handleResolve(b: Booking, action: 'approve' | 'reject') {
     setResolvingId(b.id)
@@ -289,7 +296,7 @@ function DisputesSection() {
 
   return (
     <div className="space-y-5">
-      {/* Filter + info */}
+      {/* Filter */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
           {(['pending', 'resolved'] as const).map(s => (
@@ -298,7 +305,7 @@ function DisputesSection() {
               style={statusFilter === s
                 ? { background: '#adee2b', color: '#000' }
                 : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
-              {s}
+              {s === 'pending' ? t('rec_pending') : t('rec_resolved')}
             </button>
           ))}
         </div>
@@ -307,7 +314,10 @@ function DisputesSection() {
       {statusFilter === 'pending' && (
         <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed"
           style={{ background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)', color: '#ea580c' }}>
-          <span className="font-black">Approve</span> to reinstate the booking. <span className="font-black">Reject</span> to confirm auto-release stands.
+          <span className="font-black">{t('rec_approve_restore').split('—')[0].trim()}</span>
+          {language === 'id' ? ' untuk memulihkan pemesanan. ' : ' to restore the booking. '}
+          <span className="font-black">{t('rec_reject')}</span>
+          {language === 'id' ? ' untuk mengonfirmasi pembatalan otomatis.' : ' to confirm auto-cancellation.'}
         </div>
       )}
 
@@ -319,7 +329,7 @@ function DisputesSection() {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
           <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 48 }}>gavel</span>
           <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-4)]">
-            {statusFilter === 'pending' ? 'No pending disputes' : 'No resolved disputes'}
+            {statusFilter === 'pending' ? t('rec_no_disputes_pending') : t('rec_no_disputes_resolved')}
           </p>
         </div>
       ) : (
@@ -351,24 +361,24 @@ function DisputesSection() {
                     </div>
                   </div>
                   <div className="shrink-0">
-                    {isPending && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-orange-500/15 text-orange-600 dark:text-orange-400"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>hourglass_top</span>Pending</span>}
-                    {isApproved && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-green-500/15 text-green-600 dark:text-green-400"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>check_circle</span>Approved</span>}
-                    {b.dispute_status === 'rejected' && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-red-500/15 text-red-500"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>cancel</span>Rejected</span>}
+                    {isPending  && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-orange-500/15 text-orange-600 dark:text-orange-400"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>hourglass_top</span>{t('rec_pending')}</span>}
+                    {isApproved && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-green-500/15 text-green-600 dark:text-green-400"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>check_circle</span>{t('rec_approved')}</span>}
+                    {b.dispute_status === 'rejected' && <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-red-500/15 text-red-500"><span className="material-symbols-outlined" style={{ fontSize: 10 }}>cancel</span>{t('rec_rejected')}</span>}
                   </div>
                 </div>
 
                 {b.dispute_note ? (
                   <div className="px-4 py-3 rounded-xl" style={{ background: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border-sub)' }}>
-                    <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-4)] mb-1">User's note</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-4)] mb-1">{t('rec_user_note')}</p>
                     <p className="text-[11px] font-medium text-[var(--ds-text-2)] leading-relaxed">{b.dispute_note}</p>
                   </div>
                 ) : (
-                  <p className="text-[10px] font-medium text-[var(--ds-text-4)] italic">No note provided</p>
+                  <p className="text-[10px] font-medium text-[var(--ds-text-4)] italic">{t('rec_no_note')}</p>
                 )}
 
                 <div className="flex items-center gap-4 text-[9px] font-bold text-[var(--ds-text-4)]">
-                  <span>Disputed: {b.disputed_at ? fmtDt(b.disputed_at) : '—'}</span>
-                  {b.dispute_resolved_at && <span>Resolved: {fmtDt(b.dispute_resolved_at)}</span>}
+                  <span>{t('rec_disputed_at')} {b.disputed_at ? fmtDt(b.disputed_at) : '—'}</span>
+                  {b.dispute_resolved_at && <span>{t('rec_resolved_at')} {fmtDt(b.dispute_resolved_at)}</span>}
                 </div>
 
                 {isPending && (
@@ -377,13 +387,13 @@ function DisputesSection() {
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all disabled:opacity-50 hover:opacity-80"
                       style={{ background: '#adee2b', color: '#000' }}>
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
-                      {resolving ? '…' : 'Approve — Reinstate'}
+                      {resolving ? '…' : t('rec_approve_restore')}
                     </button>
                     <button onClick={() => handleResolve(b, 'reject')} disabled={resolving}
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all disabled:opacity-50 hover:opacity-80"
                       style={{ background: 'rgba(239,68,68,0.12)', border: '1.5px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>cancel</span>
-                      {resolving ? '…' : 'Reject'}
+                      {resolving ? '…' : t('rec_reject')}
                     </button>
                   </div>
                 )}
@@ -397,6 +407,7 @@ function DisputesSection() {
 }
 
 export default function ReceptionistPage() {
+  const { t } = useSettings()
   const [tab, setTab] = useState<Tab>('contacts')
   const { data: generalSettings, isLoading: loadingSettings } = useQuery({
     queryKey: ['settings-general'],
@@ -416,10 +427,10 @@ export default function ReceptionistPage() {
               style={{ background: 'rgba(99,102,241,0.1)' }}>
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1', fontVariationSettings: "'FILL' 1" }}>support_agent</span>
             </div>
-            <h1 className="text-[22px] font-black" style={{ color: 'var(--ds-text-1)' }}>Receptionist</h1>
+            <h1 className="text-[22px] font-black" style={{ color: 'var(--ds-text-1)' }}>{t('rec_page_title')}</h1>
           </div>
           <p className="text-[11px] font-medium" style={{ color: 'var(--ds-text-3)' }}>
-            Manage contact settings and review auto-release disputes.
+            {t('rec_page_subtitle')}
           </p>
         </div>
 
@@ -431,7 +442,7 @@ export default function ReceptionistPage() {
               ? { background: '#adee2b', color: '#000' }
               : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>contacts</span>
-            Contacts
+            {t('rec_tab_contacts')}
           </button>
           {antiGhostEnabled && (
             <button onClick={() => setTab('disputes')}
@@ -440,7 +451,7 @@ export default function ReceptionistPage() {
                 ? { background: '#adee2b', color: '#000' }
                 : { background: 'var(--ds-bg-surface)', border: '1px solid var(--ds-border)', color: 'var(--ds-text-2)' }}>
               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>gavel</span>
-              Disputes
+              {t('rec_tab_disputes')}
             </button>
           )}
         </div>
@@ -454,12 +465,12 @@ export default function ReceptionistPage() {
               icon="schedule"
               iconColor="#6366f1"
               iconBg="rgba(99,102,241,0.1)"
-              title="After-Working Hours Contacts"
-              description="Shown to staff attempting to book outside working hours. Leave empty to auto-show all on-duty receptionists."
-              emptyNote="No custom contacts — all on-duty receptionists shown by default"
+              title={t('rec_after_hours_title')}
+              description={t('rec_after_hours_desc')}
+              emptyNote={t('rec_empty_contacts')}
               enabled={generalSettings?.restrict_after_hours}
-              enabledLabel="Restriction On"
-              disabledLabel="Restriction Off"
+              enabledLabel={t('rec_restriction_active')}
+              disabledLabel={t('rec_restriction_inactive')}
               loadingStatus={loadingSettings}
             />
 
@@ -470,11 +481,11 @@ export default function ReceptionistPage() {
               icon="star"
               iconColor="#f59e0b"
               iconBg="rgba(251,191,36,0.1)"
-              title="Special Room Contacts"
-              description="Shown when a user tries to book a special/contact-required room. Leave empty to auto-show all on-duty receptionists."
-              emptyNote="No custom contacts — all on-duty receptionists shown by default"
+              title={t('rec_special_room_title')}
+              description={t('rec_special_room_desc')}
+              emptyNote={t('rec_empty_contacts')}
               enabled={true}
-              enabledLabel="Always Active"
+              enabledLabel={t('rec_always_active')}
               loadingStatus={false}
             />
           </div>

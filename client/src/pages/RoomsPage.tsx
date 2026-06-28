@@ -274,8 +274,8 @@ export default function RoomsPage() {
         </div>
 
         {/* Bottom gradient-blur caption */}
-        <div className="absolute inset-x-0 bottom-0 pt-12 px-4 pb-3.5 flex items-end justify-between gap-3"
-          style={{ background: 'linear-gradient(to top, rgba(8,10,20,0.80) 35%, rgba(8,10,20,0))', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)' }}>
+        <div className="absolute inset-x-0 bottom-0 pt-7 px-4 pb-3.5 flex items-end justify-between gap-3"
+          style={{ background: 'linear-gradient(to top, rgba(8,10,20,0.76) 28%, rgba(8,10,20,0))', backdropFilter: 'blur(1.5px)', WebkitBackdropFilter: 'blur(1.5px)' }}>
           {/* Meta */}
           <div className="min-w-0">
             <p className="text-[14px] font-black text-white truncate leading-tight">{getBuildingCode(room.building_id)}</p>
