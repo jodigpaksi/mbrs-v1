@@ -95,6 +95,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [bookFor, setBookFor] = useState('')
   const [bookForUserId, setBookForUserId] = useState<number | null>(null)
   const [showBookForDrop, setShowBookForDrop] = useState(false)
+  const [pendingBookFor, setPendingBookFor] = useState<{ id: number; name: string; department: string } | null>(null)
   const bookForRef     = useRef<HTMLDivElement>(null)
   const panelBodyRef   = useRef<HTMLDivElement>(null)
   const summaryRef     = useRef<HTMLDivElement>(null)
@@ -364,14 +365,16 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   }, [repeatEndDate])
 
   function getDuration() {
-    if (!startTime || !endTime) return '— mnt'
+    const id = language === 'id'
+    if (!startTime || !endTime) return id ? '— mnt' : '— min'
     const [h1, m1] = startTime.split(':').map(Number)
     const [h2, m2] = endTime.split(':').map(Number)
     const total = (h2 * 60 + m2) - (h1 * 60 + m1)
-    if (total <= 0) return 'Tidak Valid'
+    if (total <= 0) return id ? 'Tidak Valid' : 'Invalid'
     const h = Math.floor(total / 60)
     const m = total % 60
-    return h && m ? `${h} jam ${m} mnt` : h ? `${h} jam` : `${m} mnt`
+    if (id) return h && m ? `${h} jam ${m} mnt` : h ? `${h} jam` : `${m} mnt`
+    return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`
   }
 
   function toISO(d: Date): string {
@@ -1051,7 +1054,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                     {showMiniPanel ? 'visibility_off' : 'calendar_view_week'}
                   </span>
-                  {showMiniPanel ? 'Sembunyikan slot tersedia' : 'Tampilkan slot tersedia'}
+                  {showMiniPanel ? t('panel_hide_slots') : t('panel_show_slots')}
                 </button>
               )}
             </div>
@@ -1077,7 +1080,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {allowBookForOthers && <div ref={bookForRef}>
                 <button
                   type="button"
-                  onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setBookForUserId(null); setShowBookForDrop(false) } }}
+                  onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setBookForUserId(null); setShowBookForDrop(false); setPendingBookFor(null) } }}
                   className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider transition-colors"
                   style={{ color: showBookFor ? 'var(--ds-text-2)' : 'var(--ds-text-3)' }}
                 >
@@ -1118,16 +1121,27 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     {showBookForDrop && (() => {
                       const q = bookFor.toLowerCase()
                       const sameDept = directory.filter(u => u.department === (user?.department ?? ''))
-                      const filtered = sameDept.filter(u => !q || u.name.toLowerCase().includes(q))
-                      if (filtered.length === 0) return null
+                      const sameDeptFiltered = q ? sameDept.filter(u => u.name.toLowerCase().includes(q)) : sameDept
+                      const results = sameDeptFiltered.length > 0
+                        ? sameDeptFiltered
+                        : q ? directory.filter(u => u.name.toLowerCase().includes(q)) : []
+                      if (results.length === 0) return null
                       return (
                         <div
                           className="absolute top-full left-0 right-0 mt-1 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl shadow-xl z-50 overflow-hidden"
                           style={{ maxHeight: 200, overflowY: 'auto', animation: 'drop-in 0.18s ease-out' }}
                         >
-                          {filtered.map(u => (
+                          {results.map(u => (
                             <button key={u.id} type="button"
-                              onMouseDown={e => { e.preventDefault(); setBookFor(u.name); setBookForUserId(u.id); setShowBookForDrop(false) }}
+                              onMouseDown={e => {
+                                e.preventDefault()
+                                setShowBookForDrop(false)
+                                if (u.department === (user?.department ?? '')) {
+                                  setBookFor(u.name); setBookForUserId(u.id)
+                                } else {
+                                  setPendingBookFor({ id: u.id, name: u.name, department: u.department })
+                                }
+                              }}
                               className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b]/10 transition-colors text-left">
                               <span className="size-7 rounded-full bg-[#adee2b]/20 flex items-center justify-center text-[11px] font-black text-[#2d5000] shrink-0">
                                 {u.name.charAt(0).toUpperCase()}
@@ -1139,6 +1153,39 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         </div>
                       )
                     })()}
+
+                    {/* Inline cross-dept confirm */}
+                    {pendingBookFor && (
+                      <div
+                        className="mt-2 rounded-2xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 space-y-2.5"
+                        style={{ animation: 'section-in 0.18s ease-out' }}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className="material-symbols-outlined text-amber-500 shrink-0 mt-0.5" style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}>warning</span>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-black text-[var(--ds-text-1)]">{pendingBookFor.name}</p>
+                            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide">{pendingBookFor.department}</p>
+                            <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">This person is from a different department. Book on their behalf?</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setBookFor(pendingBookFor.name); setBookForUserId(pendingBookFor.id); setPendingBookFor(null) }}
+                            className="flex-1 py-1.5 rounded-xl bg-black dark:bg-white text-[#adee2b] dark:text-black text-[10px] font-black uppercase tracking-wide transition-all hover:opacity-80 active:scale-[0.97]"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setPendingBookFor(null); setBookFor('') }}
+                            className="flex-1 py-1.5 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[10px] font-black uppercase tracking-wide transition-all hover:bg-[var(--ds-bg-raised)] active:scale-[0.97]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>}

@@ -408,6 +408,7 @@ class BookingController extends Controller
         }
 
         $data = $request->validate([
+            'room_id'     => 'sometimes|exists:rooms,id',
             'title'       => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'start_at'    => 'sometimes|date',
