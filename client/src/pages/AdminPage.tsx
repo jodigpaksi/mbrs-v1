@@ -5637,6 +5637,7 @@ export default function AdminPage() {
                       { label: 'Today', val: overviewData.stats.unique_visitors_today },
                       { label: 'This Week', val: overviewData.stats.unique_visitors_week },
                       { label: 'This Month', val: overviewData.stats.unique_visitors_month },
+                      { label: 'All Time', val: overviewData.stats.unique_visitors_all ?? 0 },
                     ] as const).map(item => (
                       <div key={item.label} className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
                         <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{item.label}</span>

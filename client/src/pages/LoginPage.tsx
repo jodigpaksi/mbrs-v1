@@ -30,7 +30,8 @@ export default function LoginPage() {
       const data = await login(email, password)
       setUser(data.user)
       await prefetchAfterLogin()
-      navigate('/')
+      const isAdmin = data.user.role === 'admin' || data.user.role === 'superadmin'
+      navigate(isAdmin ? '/admin' : '/')
     } catch {
       setError('Invalid email or password.')
     } finally {
