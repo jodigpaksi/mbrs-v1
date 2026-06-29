@@ -101,6 +101,51 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const summaryRef     = useRef<HTMLDivElement>(null)
   const calendarBtnRef = useRef<HTMLDivElement>(null)
   const [draftRestored, setDraftRestored] = useState(false)
+  // copy-paste preset
+  const PRESET_KEY = 'mbrs_booking_preset'
+  const [preset, setPreset] = useState<Record<string, unknown> | null>(() => {
+    try { return JSON.parse(localStorage.getItem('mbrs_booking_preset') ?? 'null') } catch { return null }
+  })
+  const [justCopied, setJustCopied] = useState(false)
+
+  function handleCopyPreset() {
+    const p: Record<string, unknown> = { title, desc, type, status }
+    if (bookFor) { p.bookFor = bookFor; p.bookForUserId = bookForUserId ?? undefined }
+    if (repeat !== 'none') {
+      p.repeat = repeat; p.repeatMode = repeatMode; p.repeatCount = repeatCount
+      p.repeatEndDate = repeatEndDate; p.skipConflicts = skipConflicts
+      if (repeat === 'weekly') p.weeklyDays = weeklyDays
+    }
+    localStorage.setItem(PRESET_KEY, JSON.stringify(p))
+    setPreset(p)
+    setJustCopied(true)
+    setTimeout(() => setJustCopied(false), 2000)
+  }
+
+  function handlePastePreset() {
+    if (!preset) return
+    if (preset.title) setTitle(preset.title as string)
+    if (preset.desc !== undefined) setDesc(preset.desc as string)
+    if (preset.type) setType(preset.type as typeof type)
+    if (preset.status) setStatus(preset.status as typeof status)
+    if (preset.bookFor && allowBookForOthers) {
+      setBookFor(preset.bookFor as string)
+      setBookForUserId((preset.bookForUserId as number | null) ?? null)
+      setShowBookFor(true)
+    }
+    if (preset.repeat && preset.repeat !== 'none') {
+      setRepeat(preset.repeat as typeof repeat)
+      if (preset.repeatMode) setRepeatMode(preset.repeatMode as typeof repeatMode)
+      if (preset.repeatCount) { setRepeatCount(preset.repeatCount as number); setRepeatCountRaw(String(preset.repeatCount)) }
+      if (preset.repeatEndDate) {
+        setRepeatEndDate(preset.repeatEndDate as string)
+        const [y, m, d] = (preset.repeatEndDate as string).split('-')
+        setUntilDateText(`${d}/${m}/${y}`)
+      }
+      if (preset.weeklyDays) setWeeklyDays(preset.weeklyDays as string[])
+      if (preset.skipConflicts !== undefined) setSkipConflicts(preset.skipConflicts as boolean)
+    }
+  }
 
   // Always-current snapshot of form values — updated every render, no closure staleness.
   const draftSnapshotRef = useRef<Record<string, unknown>>({})
@@ -816,13 +861,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   {/* Building selector */}
                   {(buildings as Building[]).length > 1 && (
                     <div className="px-3 pt-3 pb-2 border-b border-[var(--ds-border-sub)]">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">Gedung</p>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">{t('building')}</p>
                       <div className="flex flex-wrap gap-1.5">
                         <button
                           onClick={() => setActiveBuildingId(null)}
                           className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeBuildingId === null ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-[var(--ds-border)]'}`}
                         >
-                          Semua
+                          {t('all')}
                         </button>
                         {(buildings as Building[]).map(b => (
                           <button
@@ -840,7 +885,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <div className="p-3 border-b border-[var(--ds-border-sub)]">
                     <input
                       type="text"
-                      placeholder="Cari ruangan..."
+                      placeholder={t('search_room_placeholder')}
                       value={roomSearch}
                       onChange={e => setRoomSearch(e.target.value)}
                       className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
@@ -1062,7 +1107,29 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             {/* Details */}
             <div className="bg-[var(--ds-bg-raised)] p-5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-3">
               <div className="space-y-1.5 transition-transform duration-200 ease-out focus-within:scale-[1.015] origin-left">
-                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">{t('panel_meeting_title')}</label>
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">{t('panel_meeting_title')}</label>
+                  <div className="flex items-center gap-1">
+                    {!isEdit && preset && (
+                      <button
+                        type="button"
+                        onClick={handlePastePreset}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#adee2b]/15 hover:bg-[#adee2b]/30 text-[#3a6600] dark:text-[#adee2b] transition-all active:scale-95"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>content_paste</span>
+                        <span className="text-[9px] font-black uppercase tracking-wide">Paste</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleCopyPreset}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-[var(--ds-bg-raised)] text-[var(--ds-text-4)] hover:text-[var(--ds-text-2)] transition-all active:scale-95"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 11 }}>{justCopied ? 'check' : 'content_copy'}</span>
+                      <span className="text-[9px] font-black uppercase tracking-wide">{justCopied ? 'Copied!' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
                   placeholder={t('panel_title_placeholder')}
                   className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 outline-none transition-all duration-200

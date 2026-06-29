@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
 import TimelinePage from './pages/TimelinePage'
 import SchedulePage from './pages/SchedulePage'
@@ -11,6 +11,18 @@ import ProtectedRoute from './components/auth/ProtectedRoute'
 import NotificationPanel from './components/layout/NotificationPanel'
 import NotificationToast from './components/layout/NotificationToast'
 import { useBookingRealtime } from './hooks/useBookingRealtime'
+import { useAuth } from './context/AuthContext'
+
+function HomeRedirect() {
+  const { user } = useAuth()
+  if (user?.role === 'superadmin') return <Navigate to="/admin" replace />
+  return (
+    <MainLayout>
+      <TimelinePage />
+    </MainLayout>
+  )
+}
+
 function App() {
   useBookingRealtime()
   return (
@@ -24,9 +36,7 @@ function App() {
         path="/"
         element={
           <ProtectedRoute>
-            <MainLayout>
-              <TimelinePage />
-            </MainLayout>
+            <HomeRedirect />
           </ProtectedRoute>
         }
       />

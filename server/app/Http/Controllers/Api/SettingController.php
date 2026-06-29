@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class SettingController extends Controller
 {
@@ -75,7 +76,46 @@ class SettingController extends Controller
             'log_auto_export_interval'   => $get('log_auto_export_interval', 'daily'),
             'log_auto_export_time'       => $get('log_auto_export_time', '00:00'),
             'business_timezone'          => $get('business_timezone', config('app.business_timezone', 'Asia/Jakarta')),
+            'app_name'                   => $get('app_name', 'RoomSync Pro'),
+            'app_logo_url'               => $get('app_logo_url', null),
         ]);
+    }
+
+    public function branding(): JsonResponse
+    {
+        $get = fn(string $key, mixed $default) => Setting::where('key', $key)->value('value') ?? $default;
+        return response()->json([
+            'app_name'     => $get('app_name', 'RoomSync Pro'),
+            'app_logo_url' => $get('app_logo_url', null),
+        ]);
+    }
+
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        $request->validate(['logo' => 'required|image|max:2048']);
+        // Remove old logo file if exists
+        $old = Setting::where('key', 'app_logo_url')->value('value');
+        if ($old) {
+            $oldPath = str_replace('/storage/', '', $old);
+            Storage::disk('public')->delete($oldPath);
+        }
+        $path = $request->file('logo')->store('logo', 'public');
+        $url = Storage::url($path);
+        Setting::updateOrCreate(['key' => 'app_logo_url'], ['value' => $url]);
+        \App\Models\ActivityLog::record('settings.updated', 'Updated app logo', null, []);
+        return response()->json(['app_logo_url' => $url]);
+    }
+
+    public function deleteLogo(): JsonResponse
+    {
+        $old = Setting::where('key', 'app_logo_url')->value('value');
+        if ($old) {
+            $oldPath = str_replace('/storage/', '', $old);
+            Storage::disk('public')->delete($oldPath);
+        }
+        Setting::where('key', 'app_logo_url')->delete();
+        \App\Models\ActivityLog::record('settings.updated', 'Removed app logo', null, []);
+        return response()->json(['app_logo_url' => null]);
     }
 
     public function updateGeneralSettings(Request $request): JsonResponse
@@ -115,6 +155,7 @@ class SettingController extends Controller
             'log_auto_export_interval'   => 'sometimes|in:daily,weekly,monthly',
             'log_auto_export_time'       => 'sometimes|date_format:H:i',
             'business_timezone'          => 'sometimes|string|timezone',
+            'app_name'                   => 'sometimes|string|max:100',
         ]);
 
         $changes = [];

@@ -298,7 +298,7 @@ export default function HelpModal({ open, onClose }: Props) {
             </div>
             <div>
               <p className="text-[14px] font-black" style={{ color: 'var(--ds-text-1)' }}>{id ? 'Bantuan & FAQ' : 'Help & FAQ'}</p>
-              <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>RoomSync Pro</p>
+              <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>{general?.app_name ?? 'RoomSync Pro'}</p>
             </div>
           </div>
           <button

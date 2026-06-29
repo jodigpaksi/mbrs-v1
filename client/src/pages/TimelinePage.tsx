@@ -17,6 +17,7 @@ import GlassDatePicker from '../components/ui/GlassDatePicker'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
 import { getDepartments } from '../api/departments'
+import { getGeneralSettings } from '../api/settings'
 import type { Department } from '../types'
 
 const HOUR_START = 7
@@ -45,6 +46,8 @@ export default function TimelinePage() {
   const { defaultView, startDay, defaultBuilding, showBarTitle, t } = useSettings()
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
+  const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
+  const appName = appSettings?.app_name ?? 'RoomSync Pro'
   const [searchParams, setSearchParams] = useSearchParams()
   const [highlightId, setHighlightId] = useState<number | null>(() => {
     const h = searchParams.get('highlight')
@@ -1232,19 +1235,29 @@ export default function TimelinePage() {
           <div className="sticky top-0 z-40 border-b shadow-sm flex" style={{ background: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border)' }}>
             <div className="shrink-0 flex items-center px-3 text-[9px] font-black text-[var(--ds-text-3)] uppercase tracking-widest border-r-2 border-[var(--ds-border)]"
               style={{ width: ROOM_W, height: CELL_H }}>Room</div>
-            {Array.from({ length: HOUR_END - HOUR_START }, (_, i) => {
-              const h = HOUR_START + i
-              return (
-                <div key={h} style={{ width: SLOT_W * 2, height: CELL_H }} className="flex shrink-0">
-                  <div className="flex-1 flex items-center justify-center text-[13px] font-black text-[var(--ds-text-1)] border-r-2 border-[var(--ds-border)] border-b border-b-[var(--ds-border-sub)]">
-                    {h}:00
+            {(() => {
+              const hDragMin = cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+              const hDragMax = cellDragRef.current ? Math.max(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+              return Array.from({ length: HOUR_END - HOUR_START }, (_, i) => {
+                const h = HOUR_START + i
+                const slot0 = i * 2
+                const slot1 = i * 2 + 1
+                const s0In = cellDragRef.current && slot0 >= hDragMin && slot0 <= hDragMax
+                const s1In = cellDragRef.current && slot1 >= hDragMin && slot1 <= hDragMax
+                return (
+                  <div key={h} style={{ width: SLOT_W * 2, height: CELL_H }} className="flex shrink-0">
+                    <div className="flex-1 flex items-center justify-center text-[13px] font-black border-r-2 border-[var(--ds-border)] transition-colors"
+                      style={{ color: 'var(--ds-text-1)', background: s0In ? 'rgba(173,238,43,0.18)' : undefined, borderBottom: s0In ? '2px solid #adee2b' : '1px solid var(--ds-border-sub)' }}>
+                      {h}:00
+                    </div>
+                    <div className="flex-1 flex items-center justify-center text-[10px] font-medium border-r border-[var(--ds-border-sub)] transition-colors"
+                      style={{ color: s1In ? 'var(--ds-text-2)' : 'var(--ds-text-3)', background: s1In ? 'rgba(173,238,43,0.12)' : undefined, borderBottom: s1In ? '2px solid rgba(173,238,43,0.5)' : '1px solid var(--ds-border-sub)' }}>
+                      {h}:30
+                    </div>
                   </div>
-                  <div className="flex-1 flex items-center justify-center text-[10px] font-medium text-[var(--ds-text-3)] border-r border-[var(--ds-border-sub)] border-b border-b-[var(--ds-border-sub)]">
-                    {h}:30
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })
+            })()}
           </div>
 
           {/* Empty search state — day view */}
@@ -1506,7 +1519,7 @@ export default function TimelinePage() {
             <span className="text-[8px] font-bold text-[var(--ds-text-4)] uppercase">Drag bar to move &middot; drag edge to resize &middot; drag cell to create</span>
           </div>
         </div>
-        <p className="text-[8px] font-black text-[var(--ds-text-4)] uppercase tracking-widest italic">RoomSync Pro v2.1 &middot; 2026</p>
+        <p className="text-[8px] font-black text-[var(--ds-text-4)] uppercase tracking-widest italic">{appName} &middot; 2026</p>
       </footer>
 
       {/* Booking Tooltip */}
