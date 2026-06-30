@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyBookings, getBookings } from '../../api/bookings'
 import { getRooms } from '../../api/rooms'
+import { getGeneralSettings } from '../../api/settings'
 import type { Booking, Room } from '../../types'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
@@ -37,6 +38,10 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const queryClient = useQueryClient()
   const { openNotifications } = useNotification()
   const unreadCount = useNotificationUnreadCount()
+  const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
+  const appName = appSettings?.app_name ?? 'RoomSync Pro'
+  const appLogoUrl = appSettings?.app_logo_url ?? null
+  useEffect(() => { document.title = appName }, [appName])
 
   // — all useState / useRef declarations first, before any useQuery that references them —
   const [q, setQ] = useState('')
@@ -162,11 +167,14 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
         {/* Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-          <div className="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b]">
-            <span className="material-symbols-outlined text-lg">sync_alt</span>
+          <div className="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b] overflow-hidden">
+            {appLogoUrl
+              ? <img src={appLogoUrl} alt="logo" className="size-9 object-cover" />
+              : <span className="material-symbols-outlined text-lg">sync_alt</span>
+            }
           </div>
           <span className="text-xl font-black tracking-tighter italic uppercase" style={{ color: 'var(--ds-text-1)' }}>
-            RoomSync <span className="text-blue-500">Pro</span>
+            {appName}
           </span>
         </div>
 

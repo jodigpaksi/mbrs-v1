@@ -11,6 +11,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute'
 import NotificationPanel from './components/layout/NotificationPanel'
 import NotificationToast from './components/layout/NotificationToast'
 import { useBookingRealtime } from './hooks/useBookingRealtime'
+
 function App() {
   useBookingRealtime()
   return (

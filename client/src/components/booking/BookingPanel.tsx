@@ -95,11 +95,57 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [bookFor, setBookFor] = useState('')
   const [bookForUserId, setBookForUserId] = useState<number | null>(null)
   const [showBookForDrop, setShowBookForDrop] = useState(false)
+  const [pendingBookFor, setPendingBookFor] = useState<{ id: number; name: string; department: string } | null>(null)
   const bookForRef     = useRef<HTMLDivElement>(null)
   const panelBodyRef   = useRef<HTMLDivElement>(null)
   const summaryRef     = useRef<HTMLDivElement>(null)
   const calendarBtnRef = useRef<HTMLDivElement>(null)
   const [draftRestored, setDraftRestored] = useState(false)
+  // copy-paste preset
+  const PRESET_KEY = 'mbrs_booking_preset'
+  const [preset, setPreset] = useState<Record<string, unknown> | null>(() => {
+    try { return JSON.parse(localStorage.getItem('mbrs_booking_preset') ?? 'null') } catch { return null }
+  })
+  const [justCopied, setJustCopied] = useState(false)
+
+  function handleCopyPreset() {
+    const p: Record<string, unknown> = { title, desc, type, status }
+    if (bookFor) { p.bookFor = bookFor; p.bookForUserId = bookForUserId ?? undefined }
+    if (repeat !== 'none') {
+      p.repeat = repeat; p.repeatMode = repeatMode; p.repeatCount = repeatCount
+      p.repeatEndDate = repeatEndDate; p.skipConflicts = skipConflicts
+      if (repeat === 'weekly') p.weeklyDays = weeklyDays
+    }
+    localStorage.setItem(PRESET_KEY, JSON.stringify(p))
+    setPreset(p)
+    setJustCopied(true)
+    setTimeout(() => setJustCopied(false), 2000)
+  }
+
+  function handlePastePreset() {
+    if (!preset) return
+    if (preset.title) setTitle(preset.title as string)
+    if (preset.desc !== undefined) setDesc(preset.desc as string)
+    if (preset.type) setType(preset.type as typeof type)
+    if (preset.status) setStatus(preset.status as typeof status)
+    if (preset.bookFor && allowBookForOthers) {
+      setBookFor(preset.bookFor as string)
+      setBookForUserId((preset.bookForUserId as number | null) ?? null)
+      setShowBookFor(true)
+    }
+    if (preset.repeat && preset.repeat !== 'none') {
+      setRepeat(preset.repeat as typeof repeat)
+      if (preset.repeatMode) setRepeatMode(preset.repeatMode as typeof repeatMode)
+      if (preset.repeatCount) { setRepeatCount(preset.repeatCount as number); setRepeatCountRaw(String(preset.repeatCount)) }
+      if (preset.repeatEndDate) {
+        setRepeatEndDate(preset.repeatEndDate as string)
+        const [y, m, d] = (preset.repeatEndDate as string).split('-')
+        setUntilDateText(`${d}/${m}/${y}`)
+      }
+      if (preset.weeklyDays) setWeeklyDays(preset.weeklyDays as string[])
+      if (preset.skipConflicts !== undefined) setSkipConflicts(preset.skipConflicts as boolean)
+    }
+  }
 
   // Always-current snapshot of form values — updated every render, no closure staleness.
   const draftSnapshotRef = useRef<Record<string, unknown>>({})
@@ -364,14 +410,16 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   }, [repeatEndDate])
 
   function getDuration() {
-    if (!startTime || !endTime) return '— mnt'
+    const id = language === 'id'
+    if (!startTime || !endTime) return id ? '— mnt' : '— min'
     const [h1, m1] = startTime.split(':').map(Number)
     const [h2, m2] = endTime.split(':').map(Number)
     const total = (h2 * 60 + m2) - (h1 * 60 + m1)
-    if (total <= 0) return 'Tidak Valid'
+    if (total <= 0) return id ? 'Tidak Valid' : 'Invalid'
     const h = Math.floor(total / 60)
     const m = total % 60
-    return h && m ? `${h} jam ${m} mnt` : h ? `${h} jam` : `${m} mnt`
+    if (id) return h && m ? `${h} jam ${m} mnt` : h ? `${h} jam` : `${m} mnt`
+    return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`
   }
 
   function toISO(d: Date): string {
@@ -813,13 +861,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   {/* Building selector */}
                   {(buildings as Building[]).length > 1 && (
                     <div className="px-3 pt-3 pb-2 border-b border-[var(--ds-border-sub)]">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">Gedung</p>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-2">{t('building')}</p>
                       <div className="flex flex-wrap gap-1.5">
                         <button
                           onClick={() => setActiveBuildingId(null)}
                           className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${activeBuildingId === null ? 'bg-black text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-[var(--ds-border)]'}`}
                         >
-                          Semua
+                          {t('all')}
                         </button>
                         {(buildings as Building[]).map(b => (
                           <button
@@ -837,7 +885,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <div className="p-3 border-b border-[var(--ds-border-sub)]">
                     <input
                       type="text"
-                      placeholder="Cari ruangan..."
+                      placeholder={t('search_room_placeholder')}
                       value={roomSearch}
                       onChange={e => setRoomSearch(e.target.value)}
                       className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
@@ -1051,7 +1099,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                     {showMiniPanel ? 'visibility_off' : 'calendar_view_week'}
                   </span>
-                  {showMiniPanel ? 'Sembunyikan slot tersedia' : 'Tampilkan slot tersedia'}
+                  {showMiniPanel ? t('panel_hide_slots') : t('panel_show_slots')}
                 </button>
               )}
             </div>
@@ -1059,7 +1107,29 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             {/* Details */}
             <div className="bg-[var(--ds-bg-raised)] p-5 rounded-[1.8rem] border border-[var(--ds-border-sub)] space-y-3">
               <div className="space-y-1.5 transition-transform duration-200 ease-out focus-within:scale-[1.015] origin-left">
-                <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">{t('panel_meeting_title')}</label>
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">{t('panel_meeting_title')}</label>
+                  <div className="flex items-center gap-1">
+                    {!isEdit && preset && (
+                      <button
+                        type="button"
+                        onClick={handlePastePreset}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#adee2b]/15 hover:bg-[#adee2b]/30 text-[#3a6600] dark:text-[#adee2b] transition-all active:scale-95"
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>content_paste</span>
+                        <span className="text-[9px] font-black uppercase tracking-wide">Paste</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleCopyPreset}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-[var(--ds-bg-raised)] text-[var(--ds-text-4)] hover:text-[var(--ds-text-2)] transition-all active:scale-95"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 11 }}>{justCopied ? 'check' : 'content_copy'}</span>
+                      <span className="text-[9px] font-black uppercase tracking-wide">{justCopied ? 'Copied!' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
                   placeholder={t('panel_title_placeholder')}
                   className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 outline-none transition-all duration-200
@@ -1077,7 +1147,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {allowBookForOthers && <div ref={bookForRef}>
                 <button
                   type="button"
-                  onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setBookForUserId(null); setShowBookForDrop(false) } }}
+                  onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setBookForUserId(null); setShowBookForDrop(false); setPendingBookFor(null) } }}
                   className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider transition-colors"
                   style={{ color: showBookFor ? 'var(--ds-text-2)' : 'var(--ds-text-3)' }}
                 >
@@ -1118,16 +1188,27 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     {showBookForDrop && (() => {
                       const q = bookFor.toLowerCase()
                       const sameDept = directory.filter(u => u.department === (user?.department ?? ''))
-                      const filtered = sameDept.filter(u => !q || u.name.toLowerCase().includes(q))
-                      if (filtered.length === 0) return null
+                      const sameDeptFiltered = q ? sameDept.filter(u => u.name.toLowerCase().includes(q)) : sameDept
+                      const results = sameDeptFiltered.length > 0
+                        ? sameDeptFiltered
+                        : q ? directory.filter(u => u.name.toLowerCase().includes(q)) : []
+                      if (results.length === 0) return null
                       return (
                         <div
                           className="absolute top-full left-0 right-0 mt-1 bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl shadow-xl z-50 overflow-hidden"
                           style={{ maxHeight: 200, overflowY: 'auto', animation: 'drop-in 0.18s ease-out' }}
                         >
-                          {filtered.map(u => (
+                          {results.map(u => (
                             <button key={u.id} type="button"
-                              onMouseDown={e => { e.preventDefault(); setBookFor(u.name); setBookForUserId(u.id); setShowBookForDrop(false) }}
+                              onMouseDown={e => {
+                                e.preventDefault()
+                                setShowBookForDrop(false)
+                                if (u.department === (user?.department ?? '')) {
+                                  setBookFor(u.name); setBookForUserId(u.id)
+                                } else {
+                                  setPendingBookFor({ id: u.id, name: u.name, department: u.department })
+                                }
+                              }}
                               className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b]/10 transition-colors text-left">
                               <span className="size-7 rounded-full bg-[#adee2b]/20 flex items-center justify-center text-[11px] font-black text-[#2d5000] shrink-0">
                                 {u.name.charAt(0).toUpperCase()}
@@ -1139,6 +1220,39 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                         </div>
                       )
                     })()}
+
+                    {/* Inline cross-dept confirm */}
+                    {pendingBookFor && (
+                      <div
+                        className="mt-2 rounded-2xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 space-y-2.5"
+                        style={{ animation: 'section-in 0.18s ease-out' }}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className="material-symbols-outlined text-amber-500 shrink-0 mt-0.5" style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}>warning</span>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-black text-[var(--ds-text-1)]">{pendingBookFor.name}</p>
+                            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide">{pendingBookFor.department}</p>
+                            <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">This person is from a different department. Book on their behalf?</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setBookFor(pendingBookFor.name); setBookForUserId(pendingBookFor.id); setPendingBookFor(null) }}
+                            className="flex-1 py-1.5 rounded-xl bg-black dark:bg-white text-[#adee2b] dark:text-black text-[10px] font-black uppercase tracking-wide transition-all hover:opacity-80 active:scale-[0.97]"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setPendingBookFor(null); setBookFor('') }}
+                            className="flex-1 py-1.5 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[10px] font-black uppercase tracking-wide transition-all hover:bg-[var(--ds-bg-raised)] active:scale-[0.97]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>}

@@ -15,7 +15,7 @@ import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, 
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
-import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess } from '../api/settings'
+import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo } from '../api/settings'
 import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive, runExport, listExports, getExportDownloadUrl, deleteAllExports } from '../api/archive'
 import type { ArchiveParams } from '../api/archive'
 import type { UserRole } from '../types/index'
@@ -3738,6 +3738,7 @@ function ArchiveTab() {
 
 // ── Settings Tab ─────────────────────────────────────────────────────────────
 const SETTINGS_SECTIONS = [
+  { key: 'branding',  label: 'Branding',       icon: 'palette' },
   { key: 'hours',    label: 'Booking Hours',  icon: 'schedule' },
   { key: 'weekend',  label: 'Weekend',        icon: 'calendar_today' },
   { key: 'system',   label: 'System',         icon: 'settings' },
@@ -3756,7 +3757,7 @@ function SettingsTab() {
   const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, archive: null, export: null, logexport: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ branding: null, hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, archive: null, export: null, logexport: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
@@ -3815,6 +3816,11 @@ function SettingsTab() {
 
   // General — auto-save each field
   const { data: general } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings })
+  const [appName,      setAppName]      = useState(general?.app_name ?? 'RoomSync Pro')
+  const [appLogoUrl,   setAppLogoUrl]   = useState<string | null>(general?.app_logo_url ?? null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const appNameDebounce = useRef<ReturnType<typeof setTimeout>>()
   const [maxDays,      setMaxDays]      = useState(general?.max_advance_days ?? 30)
   const [allowBookFor,      setAllowBookFor]      = useState(general?.allow_book_for_others ?? true)
   const [allowPasswordChange, setAllowPasswordChange] = useState(general?.allow_password_change ?? true)
@@ -3846,6 +3852,8 @@ function SettingsTab() {
   const tzDebounce             = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
     if (general) {
+      setAppName(general.app_name ?? 'RoomSync Pro')
+      setAppLogoUrl(general.app_logo_url ?? null)
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
       setAllowPasswordChange(general.allow_password_change ?? true)
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
@@ -3863,7 +3871,7 @@ function SettingsTab() {
       setWebConfirmEnabled(general.web_confirm_enabled ?? false)
       setBusinessTz(general.business_timezone ?? 'Asia/Jakarta')
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone, general?.app_name, general?.app_logo_url])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -3872,6 +3880,33 @@ function SettingsTab() {
   async function saveGeneral(patch: Parameters<typeof updateGeneralSettings>[0], msg: string) {
     await doSaveGeneral(patch)
     addInfoToast(msg)
+  }
+  function onAppNameChange(v: string) {
+    setAppName(v)
+    clearTimeout(appNameDebounce.current)
+    appNameDebounce.current = setTimeout(() => saveGeneral({ app_name: v }, `App name set to "${v}"`), 800)
+  }
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoUploading(true)
+    try {
+      const res = await uploadAppLogo(file)
+      setAppLogoUrl(res.app_logo_url)
+      queryClient.invalidateQueries({ queryKey: ['settings-general'] })
+      addInfoToast('App logo updated')
+    } catch {
+      addInfoToast('Logo upload failed')
+    } finally {
+      setLogoUploading(false)
+      if (logoInputRef.current) logoInputRef.current.value = ''
+    }
+  }
+  async function handleDeleteLogo() {
+    await deleteAppLogo()
+    setAppLogoUrl(null)
+    queryClient.invalidateQueries({ queryKey: ['settings-general'] })
+    addInfoToast('App logo removed')
   }
   async function toggleAllowBookFor()        { const v = !allowBookFor;       setAllowBookFor(v);       await saveGeneral({ allow_book_for_others: v },    v ? 'Book for others enabled' : 'Book for others disabled') }
   async function toggleAllowPasswordChange() { const v = !allowPasswordChange; setAllowPasswordChange(v); await saveGeneral({ allow_password_change: v }, v ? 'Password change enabled' : 'Password change disabled') }
@@ -4000,6 +4035,90 @@ function SettingsTab() {
 
       {/* ── Main sections ── */}
       <div className="flex-1 min-w-0 max-w-2xl space-y-6 pb-32">
+
+      {/* Branding */}
+      <div ref={el => { secRefs.current.branding = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-6">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Branding</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Customize the app name and logo shown in the navbar and throughout the app.</p>
+        </div>
+
+        {/* App Name */}
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">App Name</label>
+          <input
+            type="text"
+            value={appName}
+            onChange={e => onAppNameChange(e.target.value)}
+            maxLength={100}
+            className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 text-[14px] font-black text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] transition-all"
+            placeholder="RoomSync Pro"
+          />
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Auto-saved. Updates navbar, page title, and all app references.</p>
+        </div>
+
+        {/* Logo Upload */}
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Navbar Logo</label>
+          {appLogoUrl ? (
+            <div className="flex items-center gap-4">
+              <div className="size-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shrink-0">
+                <img src={appLogoUrl} alt="App logo" className="size-16 object-cover" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-[12px] font-semibold text-[var(--ds-text-2)]">Custom logo active</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoUploading}
+                    className="px-3 py-1.5 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteLogo}
+                    disabled={logoUploading}
+                    className="px-3 py-1.5 text-[10px] font-black uppercase rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:border-[#adee2b] hover:bg-[#adee2b]/5"
+              style={{ borderColor: 'var(--ds-border)', minHeight: 100 }}>
+              {logoUploading
+                ? <span className="text-[12px] font-semibold text-[var(--ds-text-3)]">Uploading...</span>
+                : <>
+                  <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 28 }}>add_photo_alternate</span>
+                  <span className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">Click to upload logo</span>
+                  <span className="text-[9px] text-[var(--ds-text-4)]">PNG, SVG, JPG · max 2 MB · square recommended</span>
+                </>
+              }
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+            </label>
+          )}
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Appears in the navbar. Use a square image (min 64×64 px). Leave empty to use the default icon.</p>
+        </div>
+
+        {/* Favicon guide */}
+        <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>info</span>
+            <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: '#6366f1' }}>Changing the Favicon (Browser Tab Icon)</p>
+          </div>
+          <p className="text-[11px] text-[var(--ds-text-2)] leading-relaxed">The browser tab icon is bundled at build time and cannot be changed here. To update it:</p>
+          <ol className="text-[11px] text-[var(--ds-text-2)] leading-relaxed list-decimal list-inside space-y-1">
+            <li>Prepare a square icon (32×32 or 64×64 px) in <strong>SVG or PNG</strong> format.</li>
+            <li>Rename it to <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">favicon.svg</code>.</li>
+            <li>Replace the file at <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">client/public/favicon.svg</code>.</li>
+            <li>Rebuild the frontend (<code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">npm run build</code>) for the change to take effect.</li>
+          </ol>
+        </div>
+      </div>
 
       {/* Booking Hours — keep save button (destructive) */}
       <div ref={el => { secRefs.current.hours = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
@@ -5518,6 +5637,7 @@ export default function AdminPage() {
                       { label: 'Today', val: overviewData.stats.unique_visitors_today },
                       { label: 'This Week', val: overviewData.stats.unique_visitors_week },
                       { label: 'This Month', val: overviewData.stats.unique_visitors_month },
+                      { label: 'All Time', val: overviewData.stats.unique_visitors_all ?? 0 },
                     ] as const).map(item => (
                       <div key={item.label} className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
                         <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{item.label}</span>

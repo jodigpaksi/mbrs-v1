@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\Route;
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
 
+// Public branding (no auth)
+Route::get('/settings/branding', [SettingController::class, 'branding']);
+
 // Sensor — ESP32 presence ping (no user auth, token validated in controller)
 Route::post('/sensor/ping', [SensorController::class, 'ping']);
 
@@ -136,6 +139,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/settings/booking-hours', [SettingController::class, 'updateBookingHours']);
         Route::patch('/settings/weekend', [SettingController::class, 'updateWeekendSettings']);
         Route::patch('/settings/general', [SettingController::class, 'updateGeneralSettings']);
+        Route::post('/settings/logo', [SettingController::class, 'uploadLogo']);
+        Route::delete('/settings/logo', [SettingController::class, 'deleteLogo']);
         Route::patch('/users/{user}/special-access', [UserController::class, 'toggleSpecialAccess']);
         Route::get('/archive', [ArchiveController::class, 'index']);
         Route::post('/archive/run', [ArchiveController::class, 'run']);

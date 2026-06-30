@@ -58,6 +58,7 @@ class AnalyticsController extends Controller
                 ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
             'unique_visitors_month' => ActivityLog::where('created_at', '>=', $monthStart)
                 ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
+            'unique_visitors_all'   => ActivityLog::whereNotNull('user_id')->distinct('user_id')->count('user_id'),
 
             // Storage: always global
             'storage' => $this->storageStats(),

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSettings } from '../../context/SettingsContext'
 import { useWeekendSettings } from '../../hooks/useWeekendSettings'
 
@@ -48,6 +49,8 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
   const [view, setView] = useState<'days' | 'months'>('days')
   const [cursor, setCursor] = useState(() => parseISO(value) ?? new Date())
   const ref = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+  const [popupStyle, setPopupStyle] = useState<CSSProperties>({})
 
   const isId = language === 'id'
   const MONTHS_SHORT = isId ? MONTHS_SHORT_ID : MONTHS_SHORT_EN
@@ -60,17 +63,51 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
   const minDate = min ? parseISO(min) : null
   const weekdays = startDay === 'mon' ? WEEKDAYS_MON : WEEKDAYS_SUN
 
+  function calcPopupStyle() {
+    if (!ref.current) return {}
+    const r = ref.current.getBoundingClientRect()
+    const style: CSSProperties = {
+      position: 'fixed',
+      top: r.bottom + 8,
+      zIndex: 9999,
+      width: panelWidth,
+    }
+    if (align === 'right') {
+      style.right = window.innerWidth - r.right
+    } else {
+      style.left = r.left
+    }
+    return style
+  }
+
   function toggle() {
-    if (!open) { setCursor(parseISO(value) ?? new Date()); setView('days') }
+    if (!open) {
+      setCursor(parseISO(value) ?? new Date())
+      setView('days')
+      setPopupStyle(calcPopupStyle())
+    }
     setOpen(o => !o)
   }
 
   useEffect(() => {
+    if (!open) return
     function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (
+        ref.current && !ref.current.contains(t) &&
+        popupRef.current && !popupRef.current.contains(t)
+      ) setOpen(false)
     }
-    if (open) document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
+    function onScroll() { setPopupStyle(calcPopupStyle()) }
+    document.addEventListener('mousedown', onDoc)
+    window.addEventListener('resize', onScroll)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('resize', onScroll)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const y = cursor.getFullYear()
@@ -128,10 +165,11 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
     <div ref={ref} className="relative">
       <div onClick={toggle}>{children({ open, label })}</div>
 
-      {open && (
+      {open && createPortal(
         <div
-          className={`absolute top-full mt-2 z-[400] ${align === 'right' ? 'right-0 dropdown-enter-right' : 'left-0 dropdown-enter'} rounded-[1.5rem] p-4`}
-          style={{ width: panelWidth, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}
+          ref={popupRef}
+          className={`${align === 'right' ? 'dropdown-enter-right' : 'dropdown-enter'} rounded-[1.5rem] p-4`}
+          style={{ ...popupStyle, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}
         >
           {/* header */}
           <div className="flex items-center justify-between mb-3">
@@ -203,7 +241,8 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
               {footer(() => setOpen(false))}
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

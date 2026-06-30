@@ -156,6 +156,12 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
 
   const [buildingId, setBuildingId]   = useState<number | null>(defaultBuilding)
   const [bDropOpen, setBDropOpen]     = useState(false)
+
+  // Sync buildingId if defaultBuilding loads after mount (async settings)
+  useEffect(() => {
+    if (defaultBuilding !== null && buildingId === null) setBuildingId(defaultBuilding)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultBuilding])
   const bDropRef                      = useRef<HTMLDivElement>(null)
 
   const [mode, setMode]               = useState<'day' | 'range'>('day')
@@ -350,7 +356,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             </div>
           </div>
 
-          {/* Group By — range mode only, placed ABOVE form fields so date pickers can open freely below */}
+          {/* Group By — range mode only, above form fields so date pickers can open freely below */}
           {mode === 'range' && (
             <div className="space-y-1">
               <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('group_by')}</label>

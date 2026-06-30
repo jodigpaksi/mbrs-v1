@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { login } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { prefetchAfterLogin } from '../api/prefetch'
+import { getBranding } from '../api/settings'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -12,6 +14,9 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { data: branding } = useQuery({ queryKey: ['app-branding'], queryFn: getBranding, staleTime: 5 * 60 * 1000 })
+  const appName = branding?.app_name ?? 'RoomSync Pro'
+  useEffect(() => { document.title = appName }, [appName])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -25,7 +30,8 @@ export default function LoginPage() {
       const data = await login(email, password)
       setUser(data.user)
       await prefetchAfterLogin()
-      navigate('/')
+      const isAdmin = data.user.role === 'admin' || data.user.role === 'superadmin'
+      navigate(isAdmin ? '/admin' : '/')
     } catch {
       setError('Invalid email or password.')
     } finally {
@@ -39,11 +45,14 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-3 mb-10 justify-center">
-          <div className="size-11 bg-black rounded-2xl flex items-center justify-center text-[#adee2b]">
-            <span className="material-symbols-outlined text-xl">sync_alt</span>
+          <div className="size-11 bg-black rounded-2xl flex items-center justify-center text-[#adee2b] overflow-hidden">
+            {branding?.app_logo_url
+              ? <img src={branding.app_logo_url} alt="logo" className="size-11 object-cover" />
+              : <span className="material-symbols-outlined text-xl">sync_alt</span>
+            }
           </div>
           <span className="text-2xl font-black tracking-tighter italic uppercase text-slate-900">
-            RoomSync <span className="text-blue-600">Pro</span>
+            {appName}
           </span>
         </div>
 
@@ -128,7 +137,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-[9px] font-black text-slate-300 uppercase tracking-widest italic mt-6">
-          RoomSync Pro · {new Date().getFullYear()}
+          {appName} · {new Date().getFullYear()}
         </p>
 
       </div>

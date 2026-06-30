@@ -32,6 +32,29 @@ export interface GeneralSettings {
   log_auto_export_time: string
   sensor_api_token: string
   business_timezone: string
+  app_name: string
+  app_logo_url: string | null
+}
+
+export interface AppBranding {
+  app_name: string
+  app_logo_url: string | null
+}
+
+export async function getBranding(): Promise<AppBranding> {
+  const res = await api.get('/settings/branding')
+  return res.data
+}
+
+export async function uploadAppLogo(file: File): Promise<{ app_logo_url: string }> {
+  const form = new FormData()
+  form.append('logo', file)
+  const res = await api.post('/settings/logo', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  return res.data
+}
+
+export async function deleteAppLogo(): Promise<void> {
+  await api.delete('/settings/logo')
 }
 
 export async function getBookingHours(): Promise<BookingHours> {
