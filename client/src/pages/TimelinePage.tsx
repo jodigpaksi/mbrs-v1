@@ -36,6 +36,29 @@ function toLocalDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function exportToICS(booking: { title: string; description?: string; start_at: string; end_at: string; id?: number; room?: { name?: string; building?: { name?: string } } }) {
+  const fmtDT = (dt: string) => dt.replace(/-/g, '').replace(/:/g, '').replace(' ', 'T').substring(0, 15)
+  const esc = (s: string) => s.replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n')
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  const loc = [booking.room?.name, booking.room?.building?.name].filter(Boolean).join(', ')
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MBRS//RoomSync//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `DTSTART:${fmtDT(booking.start_at)}`,
+    `DTEND:${fmtDT(booking.end_at)}`,
+    `DTSTAMP:${stamp}`,
+    `UID:booking-${booking.id ?? Date.now()}@mbrs`,
+    `SUMMARY:${esc(booking.title)}`,
+    booking.description ? `DESCRIPTION:${esc(booking.description)}` : '',
+    loc ? `LOCATION:${esc(loc)}` : '',
+    'END:VEVENT', 'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n')
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([lines], { type: 'text/calendar;charset=utf-8' })),
+    download: `${(booking.title || 'booking').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`,
+  })
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+}
 
 type CellDrag = { roomId: number; room: Room; startSlot: number; endSlot: number }
 type BarDrag  = { booking: Booking; origStartSlot: number; origSpan: number; offsetSlot: number; deltaSlot: number; origClientX: number; deltaPixels: number }
@@ -94,6 +117,7 @@ export default function TimelinePage() {
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => defaultView)
   const [ganttKey, setGanttKey] = useState(0)
   const [ganttAnim, setGanttAnim] = useState<'left' | 'right' | 'up' | 'fade' | 'none'>('none')
+  const [pastDateModalOpen, setPastDateModalOpen] = useState(false)
 
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
@@ -218,6 +242,15 @@ export default function TimelinePage() {
         if (!canBookDirectly(cd.room)) {
           setContactRoom(cd.room); setContactOpen(true)
         } else {
+          const dragDateStr = toLocalDateStr(currentDate)
+          const todayStr = toLocalDateStr(new Date())
+          const now = new Date()
+          const slotStartMins = HOUR_START * 60 + minSlot * 30
+          const isPastDrag = dragDateStr < todayStr || (dragDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes())
+          if (isPastDrag) {
+            setPastDateModalOpen(true)
+            return
+          }
           setPrefillStart(slotToTimeStr(minSlot))
           setPrefillEnd(slotToTimeStr(maxSlot + 1))
           setSelectedRoom(cd.room)
@@ -1785,6 +1818,15 @@ export default function TimelinePage() {
 
               <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
 
+              {/* Export to ICS */}
+              <button
+                onClick={() => { exportToICS(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+              >
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar</span>
+              </button>
+
               {/* View Room */}
               <button
                 onClick={() => {
@@ -1836,6 +1878,12 @@ export default function TimelinePage() {
               {/* New Booking */}
               <button
                 onClick={() => {
+                  const ctxDateStr = toLocalDateStr(cellCtxMenu.date)
+                  const todayStr = toLocalDateStr(new Date())
+                  const now = new Date()
+                  const slotStartMins = HOUR_START * 60 + cellCtxMenu.slot * 30
+                  const isPastCtx = ctxDateStr < todayStr || (ctxDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes())
+                  if (isPastCtx) { setCellCtxMenu(null); setPastDateModalOpen(true); return }
                   setCurrentDate(cellCtxMenu.date)
                   setPrefillStart(slotToTimeStr(cellCtxMenu.slot))
                   setPrefillEnd(slotToTimeStr(Math.min(slots, cellCtxMenu.slot + 2)))
@@ -1901,6 +1949,15 @@ export default function TimelinePage() {
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>edit</span>
                 <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Edit</span>
+              </button>
+
+              {/* Export to ICS */}
+              <button
+                onClick={() => { exportToICS(ctxMenu.booking); setCtxMenu(null) }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+              >
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar</span>
               </button>
 
               {/* Cancel */}
@@ -2096,6 +2153,51 @@ export default function TimelinePage() {
           )}
         </div>
       </div>
+
+      {/* Past date/time booking blocked modal */}
+      {pastDateModalOpen && (
+        <>
+          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
+            onClick={() => setPastDateModalOpen(false)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: 360,
+                background: 'rgba(255,255,255,0.88)',
+                backdropFilter: 'blur(48px) saturate(200%)',
+                WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+                border: '1px solid rgba(255,255,255,0.95)',
+                borderRadius: 22,
+                boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
+                padding: 28,
+                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
+              }}
+            >
+              <div className="flex items-center gap-3.5 mb-5">
+                <div className="size-11 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(234,179,8,0.12)' }}>
+                  <span className="material-symbols-outlined text-yellow-500" style={{ fontSize: 22 }}>schedule</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">{t('past_datetime_title')}</h3>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 font-medium mb-6 leading-relaxed">{t('past_datetime_modal_msg')}</p>
+              <button
+                onClick={() => setPastDateModalOpen(false)}
+                className="w-full py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-colors"
+                style={{ background: '#adee2b', color: '#1a3a00' }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

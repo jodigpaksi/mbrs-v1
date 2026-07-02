@@ -28,6 +28,7 @@ class Booking extends Model
         'booked_for',
         'booked_for_user_id',
         'archived_at',
+        'reminder_sent',
     ];
 
     protected function casts(): array
@@ -40,6 +41,7 @@ class Booking extends Model
             'dispute_resolved_at'   => 'datetime',
             'archived_at'           => 'datetime',
             'series_skipped_dates'  => 'array',
+            'reminder_sent'         => 'boolean',
         ];
     }
 
