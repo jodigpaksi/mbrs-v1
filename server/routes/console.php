@@ -9,11 +9,10 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('bookings:archive')->dailyAt('02:00');
-Schedule::command('bookings:export-archive')->everyMinute();
 Schedule::command('bookings:release-ghosts')->everyMinute();
-
-// Activity log auto-export — always registered; enabled/disabled checked inside the command at runtime
-Schedule::command('logs:export-activity')->everyMinute()->withoutOverlapping();
 
 // Email reminders for bookings starting soon (window configured via 'reminder_minutes' setting, default 10)
 Schedule::command('bookings:send-reminders')->everyMinute()->withoutOverlapping();
+
+// Auto backup (archive, activity log, users/buildings/rooms — one bundled batch) — always registered; enabled/disabled checked inside the command at runtime
+Schedule::command('backup:export-data')->everyMinute()->withoutOverlapping();

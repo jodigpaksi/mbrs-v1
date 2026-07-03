@@ -13,12 +13,6 @@ export interface GeneralSettings {
   rooms_grid_cols: number
   archive_after_days: number
   archive_delete_after_days: number
-  export_enabled: boolean
-  export_frequency: string
-  export_time: string
-  export_day_of_week: number
-  export_day_of_month: number
-  export_formats: string
   chart_peak_hour_from: number
   chart_peak_hour_to: number
   chart_colors: string
@@ -27,9 +21,15 @@ export interface GeneralSettings {
   anti_ghost_window_before: number
   anti_ghost_window_after: number
   web_confirm_enabled: boolean
-  log_auto_export_enabled: boolean
-  log_auto_export_interval: string
-  log_auto_export_time: string
+  backup_enabled: boolean
+  backup_frequency: string
+  backup_time: string
+  backup_day_of_week: number
+  backup_day_of_month: number
+  backup_formats: string
+  backup_include_archive: boolean
+  backup_include_log: boolean
+  backup_include_data: boolean
   sensor_api_token: string
   business_timezone: string
   app_name: string

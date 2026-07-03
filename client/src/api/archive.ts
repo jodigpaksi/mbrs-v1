@@ -11,17 +11,8 @@ export interface ArchivePage {
   settings: {
     archive_after_days: number
     archive_delete_after_days: number
-    export_enabled: boolean
-    export_frequency: string
-    export_time: string
-    export_day_of_week: number
-    export_day_of_month: number
-    export_formats: string[]
   }
 }
-
-export interface ExportFile { path: string; name: string; size: number }
-export interface ExportEntry { label: string; files: ExportFile[]; created_at: number }
 
 export interface ArchiveParams {
   date_from?: string
@@ -61,21 +52,3 @@ export async function importArchive(file: File): Promise<{ created: number; erro
   return res.data
 }
 
-export async function runExport(formats: string[]): Promise<{ files: number }> {
-  const res = await api.post('/archive/export', { formats })
-  return res.data
-}
-
-export async function listExports(): Promise<ExportEntry[]> {
-  const res = await api.get('/exports')
-  return res.data
-}
-
-export async function deleteAllExports(): Promise<{ deleted: number }> {
-  const res = await api.delete('/exports/all')
-  return res.data
-}
-
-export function getExportDownloadUrl(path: string): string {
-  return `/api/exports/download?path=${encodeURIComponent(path)}`
-}

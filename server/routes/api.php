@@ -150,10 +150,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/archive/restore-all', [ArchiveController::class, 'restoreAll']);
         Route::delete('/archive/purge', [ArchiveController::class, 'purge']);
         Route::post('/archive/import', [ArchiveController::class, 'import']);
-        Route::post('/archive/export', [ArchiveController::class, 'runExport']);
-        Route::get('/exports', [ArchiveController::class, 'listExports']);
-        Route::get('/exports/download', [ArchiveController::class, 'downloadExport']);
-        Route::delete('/exports/all', [ArchiveController::class, 'deleteAllExports']);
+        Route::post('/backup/export', [\App\Http\Controllers\Api\BackupController::class, 'runExport']);
+        Route::get('/backups', [\App\Http\Controllers\Api\BackupController::class, 'listExports']);
+        Route::get('/backups/download', [\App\Http\Controllers\Api\BackupController::class, 'downloadExport']);
+        Route::delete('/backups/all', [\App\Http\Controllers\Api\BackupController::class, 'deleteAllExports']);
         Route::post('/departments', [DepartmentController::class, 'store']);
         Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);

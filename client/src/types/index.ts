@@ -47,7 +47,6 @@ export interface Building {
   code?: string
   address?: string
   floors: number
-  photo?: string
   notes?: string
   is_active: boolean
   rooms?: Room[]

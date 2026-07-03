@@ -28,7 +28,6 @@ class BuildingController extends Controller
             'address'     => 'nullable|string|max:500',
             'location_id' => 'nullable|exists:locations,id',
             'floors'      => 'nullable|integer|min:1|max:200',
-            'photo'       => 'nullable|string|max:500',
             'notes'       => 'nullable|string',
             'is_active'   => 'nullable|boolean',
         ]);
@@ -44,7 +43,6 @@ class BuildingController extends Controller
             'address'     => 'nullable|string|max:500',
             'location_id' => 'nullable|exists:locations,id',
             'floors'      => 'nullable|integer|min:1|max:200',
-            'photo'       => 'nullable|string|max:500',
             'notes'       => 'nullable|string',
             'is_active'   => 'nullable|boolean',
         ]);
@@ -78,7 +76,6 @@ class BuildingController extends Controller
             'location'  => $b->location?->name ?? '',
             'address'   => $b->address ?? '',
             'floors'    => (string) $b->floors,
-            'photo'     => $b->photo ?? '',
             'notes'     => $b->notes ?? '',
             'is_active' => $b->is_active ? 'yes' : 'no',
         ]));
@@ -117,7 +114,6 @@ class BuildingController extends Controller
                     'address'     => trim($row['address'] ?? '') ?: null,
                     'location_id' => $locationId,
                     'floors'      => is_numeric($row['floors'] ?? null) ? (int) $row['floors'] : 1,
-                    'photo'       => trim($row['photo'] ?? '') ?: null,
                     'notes'       => trim($row['notes'] ?? '') ?: null,
                     'is_active'   => $isActive,
                 ]);

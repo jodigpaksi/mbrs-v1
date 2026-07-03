@@ -5,13 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Setting;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ArchiveController extends Controller
@@ -24,16 +21,10 @@ class ArchiveController extends Controller
         return [
             'archive_after_days'        => (int)  $get('archive_after_days', '30'),
             'archive_delete_after_days' => (int)  $get('archive_delete_after_days', '90'),
-            'export_enabled'            =>        $get('export_enabled', 'false') === 'true',
-            'export_frequency'          =>        $get('export_frequency', 'daily'),
-            'export_time'               =>        $get('export_time', '06:00'),
-            'export_day_of_week'        => (int)  $get('export_day_of_week', '1'),
-            'export_day_of_month'       => (int)  $get('export_day_of_month', '1'),
-            'export_formats'            => array_filter(explode(',', $get('export_formats', 'excel,csv'))),
         ];
     }
 
-    private static function bookingColumns(): array
+    public static function bookingColumns(): array
     {
         return [
             'ID', 'Title', 'Description', 'Status', 'Type',
@@ -44,7 +35,7 @@ class ArchiveController extends Controller
         ];
     }
 
-    private static function bookingRow(Booking $b): array
+    public static function bookingRow(Booking $b): array
     {
         return [
             $b->id,
@@ -206,103 +197,4 @@ class ArchiveController extends Controller
         return response()->json(['created' => $created, 'errors' => $errors]);
     }
 
-    // ── Scheduled export (called by command + manual) ─────────────────────
-
-    public static function generateExports(array $formats, string $label = ''): array
-    {
-        if (!$label) $label = Carbon::now()->format('Y-m-d_His');
-        $dir  = "exports/archive/{$label}";
-        Storage::makeDirectory($dir);
-
-        $bookings = Booking::with(['user', 'room.building'])
-            ->whereNotNull('archived_at')
-            ->orderBy('start_at', 'desc')
-            ->get();
-
-        $cols = self::bookingColumns();
-        $files = [];
-
-        if (in_array('csv', $formats)) {
-            $csvPath = "{$dir}/archive_{$label}.csv";
-            $handle  = fopen(Storage::path($csvPath), 'w');
-            fputcsv($handle, $cols);
-            foreach ($bookings as $b) fputcsv($handle, self::bookingRow($b));
-            fclose($handle);
-            $files[] = $csvPath;
-        }
-
-        if (in_array('excel', $formats)) {
-            $xlsPath    = "{$dir}/archive_{$label}.xlsx";
-            $spreadsheet = new Spreadsheet();
-            $sheet       = $spreadsheet->getActiveSheet();
-            $sheet->fromArray([$cols], null, 'A1');
-            $rowIdx = 2;
-            foreach ($bookings as $b) {
-                $sheet->fromArray([self::bookingRow($b)], null, "A{$rowIdx}");
-                $rowIdx++;
-            }
-            // Bold header
-            $sheet->getStyle('A1:' . $sheet->getHighestColumn() . '1')->getFont()->setBold(true);
-            (new Xlsx($spreadsheet))->save(Storage::path($xlsPath));
-            $files[] = $xlsPath;
-        }
-
-        if (in_array('pdf', $formats)) {
-            $pdfPath = "{$dir}/archive_{$label}.pdf";
-            $rows    = $bookings->map(fn($b) => self::bookingRow($b))->toArray();
-            $pdf     = Pdf::loadView('exports.archive', ['cols' => $cols, 'rows' => $rows, 'label' => $label])
-                ->setPaper('a4', 'landscape');
-            $pdf->save(Storage::path($pdfPath));
-            $files[] = $pdfPath;
-        }
-
-        return $files;
-    }
-
-    // ── Exports listing + download ────────────────────────────────────────
-
-    public function listExports(): JsonResponse
-    {
-        $dirs = Storage::directories('exports/archive');
-        $exports = [];
-        foreach ($dirs as $dir) {
-            $files = Storage::files($dir);
-            if (empty($files)) continue;
-            $label   = basename($dir);
-            $exports[] = [
-                'label'     => $label,
-                'files'     => array_map(fn($f) => [
-                    'path' => $f,
-                    'name' => basename($f),
-                    'size' => Storage::size($f),
-                ], $files),
-                'created_at' => Storage::lastModified($files[0]),
-            ];
-        }
-        usort($exports, fn($a, $b) => $b['created_at'] - $a['created_at']);
-        return response()->json($exports);
-    }
-
-    public function deleteAllExports(): JsonResponse
-    {
-        $dirs = Storage::directories('exports/archive');
-        foreach ($dirs as $dir) {
-            Storage::deleteDirectory($dir);
-        }
-        return response()->json(['deleted' => count($dirs)]);
-    }
-
-    public function downloadExport(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
-    {
-        $path = $request->query('path');
-        abort_unless($path && Storage::exists($path), 404);
-        return Storage::download($path, basename($path));
-    }
-
-    public function runExport(Request $request): JsonResponse
-    {
-        $formats = $request->input('formats', ['excel', 'csv']);
-        $files   = self::generateExports($formats);
-        return response()->json(['files' => count($files)]);
-    }
 }
