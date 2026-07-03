@@ -13,6 +13,29 @@ import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 
+function exportToICS(data: { title: string; description?: string; startAt: string; endAt: string; location?: string }) {
+  const fmtDT = (dt: string) => dt.replace(/-/g, '').replace(/:/g, '').replace(' ', 'T').substring(0, 15)
+  const esc = (s: string) => s.replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n')
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MBRS//RoomSync//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `DTSTART:${fmtDT(data.startAt)}`,
+    `DTEND:${fmtDT(data.endAt)}`,
+    `DTSTAMP:${stamp}`,
+    `UID:booking-panel-${Date.now()}@mbrs`,
+    `SUMMARY:${esc(data.title)}`,
+    data.description ? `DESCRIPTION:${esc(data.description)}` : '',
+    data.location ? `LOCATION:${esc(data.location)}` : '',
+    'END:VEVENT', 'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n')
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([lines], { type: 'text/calendar;charset=utf-8' })),
+    download: `${(data.title || 'booking').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`,
+  })
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+}
+
 function fmtFieldDate(iso: string, lang = 'en', pickDateLabel = 'Pick a date'): string {
   if (!iso) return pickDateLabel
   const [y, m, d] = iso.split('T')[0].split('-').map(Number)
@@ -196,6 +219,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   }
 
   const today = new Date().toISOString().split('T')[0]
+
+  const isPastBookingTime = !isEdit && !!date && !!startTime && (() => {
+    const now = new Date()
+    if (date < today) return true
+    if (date === today) return toMin(startTime) < now.getHours() * 60 + now.getMinutes()
+    return false
+  })()
 
   // Update snapshot every render — guarantees saveDraft() always has current values.
   const DRAFT_KEY = 'mbrs-booking-draft'
@@ -535,6 +565,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   function isValid() {
     if (maintenanceBlocked) return false
     if (specialRoomBlocked) return false
+    if (isPastBookingTime) return false
     if (!title.trim() || !startTime || !endTime || !selectedRoom) return false
     if (restrictAfterHours && startTime >= workingHoursEnd) return false
     if (repeat !== 'none') {
@@ -1083,6 +1114,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   )
                 })()}
               </div>
+
+              {/* Past date/time warning */}
+              {isPastBookingTime && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)' }}>
+                  <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15, color: '#ca8a04' }}>schedule</span>
+                  <p className="text-[11px] font-semibold" style={{ color: '#92610a' }}>{t('past_datetime_inline')}</p>
+                </div>
+              )}
 
               {/* Show available time toggle */}
               {selectedRoom && date && (
@@ -1874,6 +1913,26 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Export to Calendar */}
+          {title.trim() && date && startTime && endTime && selectedRoom && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => exportToICS({
+                  title,
+                  description: desc || undefined,
+                  startAt: `${date} ${startTime}:00`,
+                  endAt: `${date} ${endTime}:00`,
+                  location: [selectedRoom.name, selectedRoom.building?.name].filter(Boolean).join(', '),
+                })}
+                className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>event</span>
+                {t('btn_export_ics')}
+              </button>
             </div>
           )}
 

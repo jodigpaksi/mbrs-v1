@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Booking;
+use App\Models\Building;
 use App\Models\Room;
 use App\Models\RoomView;
 use Illuminate\Http\JsonResponse;
@@ -318,5 +320,91 @@ class RoomController extends Controller
         $code = Str::random(16);
         $room->update(['sensor_code' => $code]);
         return response()->json($room->fresh('building'));
+    }
+
+    public function export(): JsonResponse
+    {
+        $rows = Room::with('building')->orderBy('sort_order')->orderBy('id')->get();
+        ActivityLog::record(
+            'data.exported',
+            "Exported {$rows->count()} room records",
+            null,
+            ['type' => 'rooms', 'count' => $rows->count()],
+        );
+
+        return response()->json($rows->map(fn (Room $r) => [
+            'name'             => $r->name,
+            'building'         => $r->building?->name ?? '',
+            'capacity'         => (string) $r->capacity,
+            'floor'            => $r->floor,
+            'facilities'       => collect($r->facilities ?? [])->pluck('name')->implode(', '),
+            'notes'            => $r->notes ?? '',
+            'is_active'        => $r->is_active ? 'yes' : 'no',
+            'status'           => $r->status,
+            'requires_contact' => $r->requires_contact ? 'yes' : 'no',
+        ]));
+    }
+
+    public function importRooms(Request $request): JsonResponse
+    {
+        $request->validate(['rooms' => 'required|array|min:1|max:500']);
+
+        $created = 0;
+        $errors  = [];
+        $buildingCache = Building::all()->keyBy(fn ($b) => strtolower($b->name));
+        $sortOrderCache = [];
+
+        foreach ($request->rooms as $i => $row) {
+            $rowNum = $i + 1;
+            if (empty($row['name']) || empty($row['capacity']) || empty($row['floor'])) {
+                $errors[] = "Row {$rowNum}: name, capacity, and floor are required.";
+                continue;
+            }
+            try {
+                $buildingId = null;
+                $buildingName = trim($row['building'] ?? '');
+                if ($buildingName !== '') {
+                    $b = $buildingCache[strtolower($buildingName)] ?? null;
+                    if ($b) $buildingId = $b->id;
+                    else { $errors[] = "Row {$rowNum}: building \"{$buildingName}\" not found."; continue; }
+                }
+
+                $facilities = collect(explode(',', $row['facilities'] ?? ''))
+                    ->map(fn ($f) => trim($f))
+                    ->filter()
+                    ->map(fn ($f) => ['name' => $f, 'icon' => 'devices'])
+                    ->values()
+                    ->all();
+
+                $isActive = !in_array(strtolower(trim($row['is_active'] ?? 'yes')), ['no', 'false', '0', '']);
+                $status = strtolower(trim($row['status'] ?? 'active'));
+                if (!in_array($status, ['active', 'maintenance'])) $status = 'active';
+                $requiresContact = in_array(strtolower(trim($row['requires_contact'] ?? 'no')), ['yes', 'true', '1']);
+
+                if (!array_key_exists($buildingId, $sortOrderCache)) {
+                    $sortOrderCache[$buildingId] = Room::where('building_id', $buildingId)->max('sort_order') ?? 0;
+                }
+                $sortOrderCache[$buildingId]++;
+
+                Room::create([
+                    'building_id'      => $buildingId,
+                    'name'             => trim($row['name']),
+                    'capacity'         => (int) $row['capacity'],
+                    'floor'            => trim($row['floor']),
+                    'facilities'       => $facilities,
+                    'notes'            => trim($row['notes'] ?? '') ?: null,
+                    'is_active'        => $isActive,
+                    'status'           => $status,
+                    'requires_contact' => $requiresContact,
+                    'sort_order'       => $sortOrderCache[$buildingId],
+                    'sensor_code'      => Str::random(16),
+                ]);
+                $created++;
+            } catch (\Exception $e) {
+                $errors[] = "Row {$rowNum}: " . $e->getMessage();
+            }
+        }
+
+        return response()->json(['created' => $created, 'errors' => $errors]);
     }
 }

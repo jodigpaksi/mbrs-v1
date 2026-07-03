@@ -59,12 +59,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Buildings (read: all auth)
     Route::get('/buildings', [BuildingController::class, 'index']);
-    Route::get('/buildings/{building}', [BuildingController::class, 'show']);
+    Route::get('/buildings/{building}', [BuildingController::class, 'show'])->where('building', '[0-9]+');
 
     // Rooms (read: all auth)
     Route::get('/rooms', [RoomController::class, 'index']);
     Route::get('/rooms/available', [RoomController::class, 'available']);
-    Route::get('/rooms/{room}', [RoomController::class, 'show']);
+    Route::get('/rooms/{room}', [RoomController::class, 'show'])->where('room', '[0-9]+');
     Route::get('/rooms/{room}/availability', [RoomController::class, 'availability']);
     Route::delete('/rooms/{room}/view', [RoomController::class, 'clearView']);
     Route::get('/rooms/{room}/stats', [RoomController::class, 'stats']);
@@ -127,6 +127,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/rooms/{room}/photo', [RoomController::class, 'uploadPhoto']);
         Route::delete('/rooms/{room}/photo', [RoomController::class, 'deletePhoto']);
         Route::post('/rooms/{room}/sensor-code/regenerate', [RoomController::class, 'regenerateSensorCode']);
+        Route::get('/rooms/export', [RoomController::class, 'export']);
+        Route::post('/rooms/import', [RoomController::class, 'importRooms']);
     });
 
     // Analytics (all authenticated)
@@ -171,6 +173,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/buildings', [BuildingController::class, 'store']);
         Route::patch('/buildings/{building}', [BuildingController::class, 'update']);
         Route::delete('/buildings/{building}', [BuildingController::class, 'destroy']);
+        Route::get('/buildings/export', [BuildingController::class, 'export']);
+        Route::post('/buildings/import', [BuildingController::class, 'importBuildings']);
         Route::get('/users', [UserController::class, 'index']);
         Route::get('/users/export', function () {
             $rows = \App\Models\User::with('department.location', 'defaultBuilding', 'adminBuildings')->orderBy('role')->orderBy('name')->get();
@@ -184,6 +188,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 $rows->map(fn ($u) => [
                     'name'                => $u->name,
                     'email'               => $u->email,
+                    'alias'               => $u->alias ?? '',
                     'password'            => $u->password,
                     'department'          => $u->department?->name ?? '',
                     'department_location' => $u->department?->location?->name ?? '',

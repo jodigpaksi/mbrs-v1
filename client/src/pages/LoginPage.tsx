@@ -27,7 +27,7 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const data = await login(email, password)
+      const data = await login(email.trim(), password)
       setUser(data.user)
       await prefetchAfterLogin()
       const isAdmin = data.user.role === 'admin' || data.user.role === 'superadmin'
@@ -69,17 +69,19 @@ export default function LoginPage() {
             {/* Email */}
             <div className="space-y-1.5">
               <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">
-                Email
+                Email or Username
               </label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300 text-base">
                   mail
                 </span>
                 <input
-                  type="email"
+                  type="text"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="your@email.com"
+                  placeholder="your@email.com or username"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-bold text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all"
                 />
               </div>

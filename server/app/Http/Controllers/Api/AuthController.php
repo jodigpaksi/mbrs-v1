@@ -16,11 +16,12 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string',
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $login = trim($request->email);
+        $user = User::where('email', $login)->orWhere('alias', $login)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
@@ -64,6 +65,7 @@ class AuthController extends Controller
             'id'            => $user->id,
             'name'          => $user->name,
             'email'         => $user->email,
+            'alias'         => $user->alias,
             'role'          => $user->role,
             'department'    => $user->department?->name ?? '',
             'department_id' => $user->department_id,

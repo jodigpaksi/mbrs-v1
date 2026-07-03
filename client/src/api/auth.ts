@@ -1,7 +1,7 @@
 import api from './axios'
 
-export async function login(email: string, password: string) {
-  const res = await api.post('/login', { email, password })
+export async function login(emailOrAlias: string, password: string) {
+  const res = await api.post('/login', { email: emailOrAlias, password })
   localStorage.setItem('token', res.data.token)
   return res.data
 }

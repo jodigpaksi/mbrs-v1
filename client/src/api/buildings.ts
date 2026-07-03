@@ -24,3 +24,21 @@ export async function updateBuilding(id: number, data: Partial<Building>): Promi
 export async function deleteBuilding(id: number): Promise<void> {
   await axios.delete(`/buildings/${id}`)
 }
+
+export type BuildingExportRow = {
+  name: string; code: string; location: string; address: string
+  floors: string; photo: string; notes: string; is_active: string
+}
+
+export async function exportBuildings(): Promise<BuildingExportRow[]> {
+  const res = await axios.get('/buildings/export')
+  return res.data
+}
+
+export async function importBuildings(rows: {
+  name: string; code?: string; location?: string; address?: string
+  floors?: string; photo?: string; notes?: string; is_active?: string
+}[]): Promise<{ created: number; errors: string[] }> {
+  const res = await axios.post('/buildings/import', { buildings: rows })
+  return res.data
+}

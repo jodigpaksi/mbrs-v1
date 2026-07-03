@@ -85,3 +85,21 @@ export async function getReceptionists() {
   const res = await api.get('/users/receptionists')
   return res.data as { id: number; name: string; department: string; ext: string; email: string; avatar?: string }[]
 }
+
+export type RoomExportRow = {
+  name: string; building: string; capacity: string; floor: string
+  facilities: string; notes: string; is_active: string; status: string; requires_contact: string
+}
+
+export async function exportRooms(): Promise<RoomExportRow[]> {
+  const res = await api.get('/rooms/export')
+  return res.data
+}
+
+export async function importRooms(rows: {
+  name: string; building?: string; capacity: string; floor: string
+  facilities?: string; notes?: string; is_active?: string; status?: string; requires_contact?: string
+}[]): Promise<{ created: number; errors: string[] }> {
+  const res = await api.post('/rooms/import', { rooms: rows })
+  return res.data
+}

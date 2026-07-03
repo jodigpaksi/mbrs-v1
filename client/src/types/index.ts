@@ -13,6 +13,7 @@ export interface User {
   id: number
   name: string
   email: string
+  alias?: string | null
   department: string       // name string, returned from backend for display (auth context)
   department_name?: string  // flat string from appended accessor on booking user relations
   department_id?: number | null

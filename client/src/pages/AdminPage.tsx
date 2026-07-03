@@ -7,11 +7,12 @@ import type { SectionPeriod } from '../api/analytics'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { mockBookings, mockRooms, mockUsers } from '../data/mockData'
 import type { Building, Room, Location, User, Department } from '../types/index'
-import { getBuildings, createBuilding, updateBuilding, deleteBuilding } from '../api/buildings'
-import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms, uploadRoomPhoto, deleteRoomPhoto, regenerateSensorCode } from '../api/rooms'
+import { getBuildings, createBuilding, updateBuilding, deleteBuilding, exportBuildings, importBuildings } from '../api/buildings'
+import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms, uploadRoomPhoto, deleteRoomPhoto, regenerateSensorCode, exportRooms, importRooms } from '../api/rooms'
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
@@ -1152,8 +1153,23 @@ function BuildingsTab() {
   const [confirmBuildingInput, setConfirmBuildingInput] = useState('')
   const [confirmRoomInput, setConfirmRoomInput] = useState('')
   const [localRooms, setLocalRooms] = useState<Room[] | null>(null)
+  const [buildingIEModal, setBuildingIEModal] = useState(false)
+  const [roomIEModal, setRoomIEModal] = useState(false)
 
   const effectiveRooms = localRooms ?? (allRooms as Room[])
+
+  async function handleImportBuildings(rows: Parameters<typeof importBuildings>[0]) {
+    const result = await importBuildings(rows)
+    qc.invalidateQueries({ queryKey: ['buildings'] })
+    return result
+  }
+
+  async function handleImportRooms(rows: Parameters<typeof importRooms>[0]) {
+    const result = await importRooms(rows)
+    qc.invalidateQueries({ queryKey: ['rooms'] })
+    qc.invalidateQueries({ queryKey: ['buildings'] })
+    return result
+  }
 
   function roomsFor(bid: number) {
     return effectiveRooms.filter(r => r.building_id === bid).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -1212,10 +1228,29 @@ function BuildingsTab() {
 
   return (
     <div className="max-w-4xl space-y-5">
-      <div>
-        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
-        <h1 className="text-3xl font-black italic tracking-tighter uppercase">Buildings</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
+          <h1 className="text-3xl font-black italic tracking-tighter uppercase">Buildings</h1>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setBuildingIEModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>import_export</span>Buildings
+          </button>
+          <button onClick={() => setRoomIEModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>import_export</span>Rooms
+          </button>
+        </div>
       </div>
+
+      {buildingIEModal && (
+        <BuildingImportExportModal buildings={buildings} onImport={handleImportBuildings} onClose={() => setBuildingIEModal(false)} />
+      )}
+      {roomIEModal && (
+        <RoomImportExportModal rooms={effectiveRooms} onImport={handleImportRooms} onClose={() => setRoomIEModal(false)} />
+      )}
 
       <LocationsSection />
 
@@ -1714,11 +1749,12 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
   buildings: Building[]
   locations: Location[]
   departments: Department[]
-  onSave: (data: { name: string; email: string; password: string; department_id: number | null; role: UserRole; ext: string; building_ids: number[]; default_building_id: number | null }) => Promise<void>
+  onSave: (data: { name: string; email: string; alias: string; password: string; department_id: number | null; role: UserRole; ext: string; building_ids: number[]; default_building_id: number | null }) => Promise<void>
   onClose: () => void
 }) {
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
+  const [alias, setAlias]       = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm]   = useState('')
   const [showPw, setShowPw]     = useState(false)
@@ -1753,10 +1789,11 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
     if (role === 'building_admin' && bldIds.length === 0) { setErr('Assign at least one building for Building Admin'); return }
     setSaving(true); setErr('')
     try {
-      await onSave({ name: name.trim(), email: email.trim(), password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds, default_building_id: defaultBldId })
+      await onSave({ name: name.trim(), email: email.trim(), alias: alias.trim(), password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds, default_building_id: defaultBldId })
       onClose()
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { errors?: { email?: string[] } } } })?.response?.data?.errors?.email?.[0]
+      const errs = (e as { response?: { data?: { errors?: { email?: string[]; alias?: string[] } } } })?.response?.data?.errors
+      const msg = errs?.email?.[0] ?? errs?.alias?.[0]
       setErr(msg ?? 'Failed to create user.')
     } finally { setSaving(false) }
   }
@@ -1823,6 +1860,19 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>mail</span>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. budi@company.com"
+                  className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)]`} />
+              </div>
+            </div>
+
+            {/* Alias / Username */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between px-1">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Username / Alias</label>
+                <span className="text-[9px] text-[var(--ds-text-3)]">Optional — defaults to email prefix</span>
+              </div>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>alternate_email</span>
+                <input value={alias} onChange={e => setAlias(e.target.value.toLowerCase())} placeholder="e.g. budi.santoso"
                   className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)]`} />
               </div>
             </div>
@@ -1981,10 +2031,15 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
 // ── Import / Export modal ─────────────────────────────────────────────────────
 type ImportTab = 'excel' | 'csv' | 'sql'
 
-const IMPORT_COLS = ['name', 'email', 'password', 'department', 'role', 'ext']
-const EXPORT_COLS = ['name', 'email', 'password', 'department', 'department_location', 'role', 'ext', 'default_building', 'assigned_buildings']
+const EXPORT_COLS = ['name', 'email', 'alias', 'password', 'department', 'department_location', 'role', 'ext', 'default_building', 'assigned_buildings']
+const IMPORT_COLS = EXPORT_COLS
+const ROLE_OPTIONS = ['user', 'admin', 'receptionist', 'building_admin']
 
-type ImportRow = { name: string; email: string; password: string; department?: string; role?: string; ext?: string }
+type ImportRow = {
+  name: string; email: string; alias?: string; password: string
+  department?: string; department_location?: string; role?: string; ext?: string
+  default_building?: string; assigned_buildings?: string
+}
 
 function ImportExportModal({ users, onImport, onClose }: {
   users: User[]
@@ -2021,7 +2076,7 @@ function ImportExportModal({ users, onImport, onClose }: {
   async function doExportExcel() {
     const data = await fetchExportData()
     const ws = XLSX.utils.json_to_sheet(data.map(u => ({
-      name: u.name, email: u.email, password: u.password,
+      name: u.name, email: u.email, alias: u.alias, password: u.password,
       department: u.department, department_location: u.department_location,
       role: u.role, ext: u.ext,
       default_building: u.default_building, assigned_buildings: u.assigned_buildings,
@@ -2034,34 +2089,36 @@ function ImportExportModal({ users, onImport, onClose }: {
   async function doExportSQL() {
     const data = await fetchExportData()
     const rows = data.map(u => {
-      const vals = [u.name, u.email, u.password, u.department, u.department_location, u.role, u.ext, u.default_building, u.assigned_buildings]
+      const vals = [u.name, u.email, u.alias, u.password, u.department, u.department_location, u.role, u.ext, u.default_building, u.assigned_buildings]
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
+    const sql = `-- MBRS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
     download('users_export.sql', sql, 'text/plain')
   }
 
-  function download(filename: string, content: string, type: string) {
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([content], { type }))
-    a.download = filename
-    a.click()
-  }
-
   // ── Import: download template ───────────────────────────────────────────────
-  function downloadTemplate(fmt: 'xlsx' | 'csv') {
-    const example: Record<string, string>[] = [
-      { name: 'Budi Santoso', email: 'budi@company.com', password: 'password123', department: 'IT', role: 'user', ext: '1001' },
-      { name: 'Siti Rahayu', email: 'siti@company.com', password: 'password123', department: 'HR', role: 'receptionist', ext: '' },
-    ]
+  const TEMPLATE_EXAMPLE: Record<string, string>[] = [
+    { name: 'Budi Santoso', email: 'budi@company.com', alias: 'budi', password: 'password123', department: 'IT', department_location: 'Jakarta', role: 'user', ext: '1001', default_building: 'Tower A', assigned_buildings: '' },
+    { name: 'Siti Rahayu', email: 'siti@company.com', alias: 'siti.rahayu', password: 'password123', department: 'HR', department_location: 'Jakarta', role: 'receptionist', ext: '', default_building: '', assigned_buildings: 'Tower A, Tower B' },
+  ]
+
+  async function downloadTemplate(fmt: 'xlsx' | 'csv') {
     if (fmt === 'xlsx') {
-      const ws = XLSX.utils.json_to_sheet(example, { header: IMPORT_COLS })
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Users')
-      XLSX.writeFile(wb, 'users_import_template.xlsx')
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('Users')
+      ws.columns = IMPORT_COLS.map(c => ({ header: c, key: c, width: 22 }))
+      ws.getRow(1).font = { bold: true }
+      TEMPLATE_EXAMPLE.forEach(r => ws.addRow(r))
+      applyDropdown(ws, 'role', ROLE_OPTIONS)
+
+      const buf = await wb.xlsx.writeBuffer()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      a.download = 'users_import_template.xlsx'
+      a.click()
     } else {
-      const rows = [IMPORT_COLS.join(','), ...example.map(r => IMPORT_COLS.map(c => r[c] ?? '').join(','))]
+      const rows = [IMPORT_COLS.join(','), ...TEMPLATE_EXAMPLE.map(r => IMPORT_COLS.map(c => r[c] ?? '').join(','))]
       download('users_import_template.csv', rows.join('\n'), 'text/csv')
     }
   }
@@ -2079,14 +2136,21 @@ function ImportExportModal({ users, onImport, onClose }: {
       const nameI = idx('name'), emailI = idx('email'), pwI = idx('password')
       if (nameI < 0 || emailI < 0 || pwI < 0)
         throw new Error('Missing required columns: name, email, password')
-      return raw.slice(1).filter(r => r[nameI] || r[emailI]).map(r => ({
-        name:       String(r[nameI] ?? '').trim(),
-        email:      String(r[emailI] ?? '').trim(),
-        password:   String(r[pwI] ?? '').trim(),
-        department: idx('department') >= 0 ? String(r[idx('department')] ?? '').trim() : '',
-        role:       idx('role') >= 0 ? String(r[idx('role')] ?? '').trim() : 'user',
-        ext:        idx('ext') >= 0 ? String(r[idx('ext')] ?? '').trim() : '',
-      }))
+      return raw.slice(1).filter(r => r[nameI] || r[emailI]).map(r => {
+        const get = (col: string) => idx(col) >= 0 ? String(r[idx(col)] ?? '').trim() : ''
+        return {
+          name:                String(r[nameI] ?? '').trim(),
+          email:               String(r[emailI] ?? '').trim(),
+          alias:               get('alias'),
+          password:            String(r[pwI] ?? '').trim(),
+          department:          get('department'),
+          department_location: get('department_location'),
+          role:                get('role') || 'user',
+          ext:                 get('ext'),
+          default_building:    get('default_building'),
+          assigned_buildings:  get('assigned_buildings'),
+        }
+      })
     }
 
     if (ext === 'csv' || ext === 'sql') {
@@ -2226,8 +2290,8 @@ function ImportExportModal({ users, onImport, onClose }: {
                   <table className="text-[10px] border-collapse w-full">
                     <thead>
                       <tr className="bg-[var(--ds-border)]">
-                        {['Col A', 'Col B', 'Col C', 'Col D', 'Col E', 'Col F'].map(c => (
-                          <th key={c} className="px-3 py-1.5 text-left font-black text-[var(--ds-text-1)] border border-[var(--ds-border)]">{c}</th>
+                        {IMPORT_COLS.map((_, i) => (
+                          <th key={i} className="px-3 py-1.5 text-left font-black text-[var(--ds-text-1)] border border-[var(--ds-border)]">Col {String.fromCharCode(65 + i)}</th>
                         ))}
                       </tr>
                       <tr className="bg-[var(--ds-bg-surface-2)]">
@@ -2238,12 +2302,12 @@ function ImportExportModal({ users, onImport, onClose }: {
                     </thead>
                     <tbody>
                       <tr className="bg-[var(--ds-bg-surface)]">
-                        {['Budi Santoso', 'budi@co.com', 'pass1234', 'IT', 'user', '1001'].map((v, i) => (
+                        {['Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''].map((v, i) => (
                           <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)]">{v}</td>
                         ))}
                       </tr>
                       <tr className="bg-[var(--ds-bg-raised)]">
-                        {['Siti Rahayu', 'siti@co.com', 'pass1234', 'HR', 'receptionist', ''].map((v, i) => (
+                        {['Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', '', '', 'Tower A, Tower B'].map((v, i) => (
                           <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(empty)'}</td>
                         ))}
                       </tr>
@@ -2252,8 +2316,11 @@ function ImportExportModal({ users, onImport, onClose }: {
                 </div>
                 <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                   <li>First row must be a header — column names can be anything, <em>column order determines mapping</em></li>
-                  <li>Columns A–C required; D–F optional</li>
-                  <li>Role: <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">user</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">admin</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">receptionist</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>)</li>
+                  <li>Required: <span className="font-mono">name</span> (Col A), <span className="font-mono">email</span> (Col B), <span className="font-mono">password</span> (Col D). All other columns are optional</li>
+                  <li>Alias (Col C): login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix</li>
+                  <li>Role: <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">user</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">admin</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">receptionist</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>) — the downloaded template has a dropdown on this column</li>
+                  <li>Department location (Col F) is only used when the department name is new (creates it with that location)</li>
+                  <li>Default/assigned building (Col I–J) must match an existing building name exactly; separate multiple assigned buildings with commas</li>
                   <li>Password is hashed automatically on the server</li>
                 </ul>
                 <button onClick={() => downloadTemplate('xlsx')}
@@ -2266,15 +2333,18 @@ function ImportExportModal({ users, onImport, onClose }: {
             {tab === 'csv' && (
               <>
                 <p className="font-black text-[var(--ds-text-1)]">Format CSV (.csv)</p>
-                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5">
-                  <p className="text-[var(--ds-text-3)]">name,email,password,department,role,ext</p>
-                  <p>Budi Santoso,budi@co.com,pass1234,IT,user,1001</p>
-                  <p>Siti Rahayu,siti@co.com,pass1234,HR,receptionist,</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                  <p className="text-[var(--ds-text-3)]">{IMPORT_COLS.join(',')}</p>
+                  <p>Budi Santoso,budi@co.com,budi,pass1234,IT,Jakarta,user,1001,Tower A,</p>
+                  <p>Siti Rahayu,siti@co.com,siti.rahayu,pass1234,HR,Jakarta,receptionist,,,&quot;Tower A, Tower B&quot;</p>
                 </div>
                 <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
-                  <li>Separator: comma <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">,</span> — wrap values containing commas in double quotes</li>
+                  <li>Separator: comma <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">,</span> — wrap values containing commas (e.g. multiple assigned buildings) in double quotes</li>
                   <li>First row = header (column names used for mapping, order doesn't matter)</li>
-                  <li>Columns <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required</li>
+                  <li>Columns <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required — all others are optional</li>
+                  <li>Alias: login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix</li>
+                  <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
+                  <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas inside quotes</li>
                   <li>Encoding: UTF-8</li>
                 </ul>
                 <button onClick={() => downloadTemplate('csv')}
@@ -2287,16 +2357,19 @@ function ImportExportModal({ users, onImport, onClose }: {
             {tab === 'sql' && (
               <>
                 <p className="font-black text-[var(--ds-text-1)]">Format SQL (.sql)</p>
-                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5">
-                  <p className="text-[var(--ds-text-3)]">-- Column order required: name, email, password, department, role, ext</p>
-                  <p>INSERT INTO users (name, email, password, department, role, ext) VALUES</p>
-                  <p className="pl-2">('Budi Santoso', 'budi@co.com', 'pass1234', 'IT', 'user', '1001'),</p>
-                  <p className="pl-2">('Siti Rahayu', 'siti@co.com', 'pass1234', 'HR', 'receptionist', NULL);</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                  <p className="text-[var(--ds-text-3)]">-- Column order required: {IMPORT_COLS.join(', ')}</p>
+                  <p>INSERT INTO users ({IMPORT_COLS.join(', ')}) VALUES</p>
+                  <p className="pl-2">('Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''),</p>
+                  <p className="pl-2">('Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', NULL, NULL, 'Tower A, Tower B');</p>
                 </div>
                 <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                   <li>Only one <span className="font-mono">INSERT INTO ... VALUES (...)</span> block is processed</li>
-                  <li>Column order in VALUES must be: <span className="font-mono">name, email, password, department, role, ext</span></li>
-                  <li>Use <span className="font-mono">NULL</span> or empty string <span className="font-mono">''</span> for optional fields</li>
+                  <li>Column order in VALUES must be: <span className="font-mono">{IMPORT_COLS.join(', ')}</span></li>
+                  <li>Use <span className="font-mono">NULL</span> or empty string <span className="font-mono">''</span> for optional fields — only <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required</li>
+                  <li>Alias: login username. Leave <span className="font-mono">NULL</span>/empty to auto-generate from the email prefix (e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>)</li>
+                  <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
+                  <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas</li>
                   <li>Password can be plain text (auto-hashed) or a bcrypt hash from an export (recognized automatically)</li>
                   <li>Multi-statement and subqueries are not supported</li>
                 </ul>
@@ -2344,19 +2417,23 @@ function ImportExportModal({ users, onImport, onClose }: {
                       <tr key={i} className={i % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-raised)]'}>
                         <td className="px-3 py-1.5 font-bold text-[var(--ds-text-1)]">{row.name}</td>
                         <td className="px-3 py-1.5 text-[var(--ds-text-2)]">{row.email}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.alias || '—'}</td>
                         <td className="px-3 py-1.5 text-[var(--ds-text-3)] font-mono">{'•'.repeat(Math.min(row.password?.length ?? 0, 8))}</td>
-                        <td className="px-3 py-1.5 text-[var(--ds-text-2)]">{row.department ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-2)]">{row.department || '—'}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.department_location || '—'}</td>
                         <td className="px-3 py-1.5">
                           {row.role && ROLE_META[row.role as UserRole] ? (
                             <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${ROLE_META[row.role as UserRole].bg} ${ROLE_META[row.role as UserRole].text}`}>{row.role}</span>
                           ) : <span className="text-[var(--ds-text-3)]">{row.role || 'user'}</span>}
                         </td>
                         <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.ext || '—'}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.default_building || '—'}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.assigned_buildings || '—'}</td>
                       </tr>
                     ))}
                     {preview.length > 8 && (
                       <tr>
-                        <td colSpan={6} className="px-3 py-2 text-center text-[9px] text-[var(--ds-text-3)] font-bold">
+                        <td colSpan={IMPORT_COLS.length} className="px-3 py-2 text-center text-[9px] text-[var(--ds-text-3)] font-bold">
                           +{preview.length - 8} more rows...
                         </td>
                       </tr>
@@ -2394,6 +2471,726 @@ function ImportExportModal({ users, onImport, onClose }: {
           )}
         </div>{/* end import section */}
         </div>{/* end scrollable */}
+      </div>
+    </div>
+    </ModalPortal>
+  )
+}
+
+function download(filename: string, content: string, type: string) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = filename
+  a.click()
+}
+
+// Applies a real Excel dropdown (data validation) restricted to `options` on rows 2-500 of `col`
+function applyDropdown(ws: ExcelJS.Worksheet, col: string, options: string[]) {
+  const letter = ws.getColumn(col).letter
+  for (let row = 2; row <= 500; row++) {
+    ws.getCell(`${letter}${row}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`"${options.join(',')}"`],
+      showErrorMessage: true,
+      errorTitle: `Invalid ${col}`,
+      error: `${col} must be one of: ${options.join(', ')}`,
+    }
+  }
+}
+
+// ── Building Import / Export modal ────────────────────────────────────────────
+const BUILDING_COLS = ['name', 'code', 'location', 'address', 'floors', 'photo', 'notes', 'is_active']
+
+type BuildingImportRow = {
+  name: string; code?: string; location?: string; address?: string
+  floors?: string; photo?: string; notes?: string; is_active?: string
+}
+
+function BuildingImportExportModal({ buildings, onImport, onClose }: {
+  buildings: Building[]
+  onImport: (rows: BuildingImportRow[]) => Promise<{ created: number; errors: string[] }>
+  onClose: () => void
+}) {
+  const [tab, setTab] = useState<ImportTab>('excel')
+  const [preview, setPreview] = useState<BuildingImportRow[] | null>(null)
+  const [parseErr, setParseErr] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ created: number; errors: string[] } | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function fetchExportData() {
+    setExporting(true)
+    try { return await exportBuildings() }
+    finally { setExporting(false) }
+  }
+
+  async function doExportCSV() {
+    const data = await fetchExportData()
+    const rows = [BUILDING_COLS.join(','), ...data.map(b =>
+      BUILDING_COLS.map(c => {
+        const v = (b as Record<string, string>)[c] ?? ''
+        return v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v
+      }).join(',')
+    )]
+    download('buildings_export.csv', rows.join('\n'), 'text/csv')
+  }
+
+  async function doExportExcel() {
+    const data = await fetchExportData()
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Buildings')
+    XLSX.writeFile(wb, 'buildings_export.xlsx')
+  }
+
+  async function doExportSQL() {
+    const data = await fetchExportData()
+    const rows = data.map(b => {
+      const vals = BUILDING_COLS.map(c => (b as Record<string, string>)[c])
+        .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
+      return `  (${vals})`
+    }).join(',\n')
+    const sql = `-- MBRS Buildings Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO buildings (${BUILDING_COLS.join(', ')}) VALUES\n${rows};`
+    download('buildings_export.sql', sql, 'text/plain')
+  }
+
+  const TEMPLATE_EXAMPLE: Record<string, string>[] = [
+    { name: 'Tower A', code: 'TWR-A', location: 'Jakarta', address: 'Jl. Sudirman No. 1', floors: '10', photo: '', notes: 'Main office tower', is_active: 'yes' },
+    { name: 'Tower B', code: 'TWR-B', location: 'Jakarta', address: 'Jl. Sudirman No. 2', floors: '5', photo: '', notes: '', is_active: 'yes' },
+  ]
+
+  async function downloadTemplate(fmt: 'xlsx' | 'csv') {
+    if (fmt === 'xlsx') {
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('Buildings')
+      ws.columns = BUILDING_COLS.map(c => ({ header: c, key: c, width: 22 }))
+      ws.getRow(1).font = { bold: true }
+      TEMPLATE_EXAMPLE.forEach(r => ws.addRow(r))
+      applyDropdown(ws, 'is_active', ['yes', 'no'])
+      const buf = await wb.xlsx.writeBuffer()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      a.download = 'buildings_import_template.xlsx'
+      a.click()
+    } else {
+      const rows = [BUILDING_COLS.join(','), ...TEMPLATE_EXAMPLE.map(r => BUILDING_COLS.map(c => r[c] ?? '').join(','))]
+      download('buildings_import_template.csv', rows.join('\n'), 'text/csv')
+    }
+  }
+
+  const handleFile = useCallback((file: File) => {
+    setParseErr(''); setPreview(null); setImportResult(null)
+    const ext = file.name.split('.').pop()?.toLowerCase()
+
+    const parseRows = (raw: unknown[][]): BuildingImportRow[] => {
+      if (!raw.length) throw new Error('File is empty')
+      const header = (raw[0] as string[]).map(h => String(h ?? '').trim().toLowerCase())
+      const idx = (col: string) => header.indexOf(col)
+      const nameI = idx('name')
+      if (nameI < 0) throw new Error('Missing required column: name')
+      return raw.slice(1).filter(r => r[nameI]).map(r => {
+        const get = (col: string) => idx(col) >= 0 ? String(r[idx(col)] ?? '').trim() : ''
+        return {
+          name: String(r[nameI] ?? '').trim(),
+          code: get('code'), location: get('location'), address: get('address'),
+          floors: get('floors'), photo: get('photo'), notes: get('notes'), is_active: get('is_active'),
+        }
+      })
+    }
+
+    if (ext === 'csv' || ext === 'sql') {
+      const reader = new FileReader()
+      reader.onload = e => {
+        try {
+          const text = e.target!.result as string
+          if (ext === 'sql') {
+            const match = text.match(/VALUES\s*([\s\S]+?);/i)
+            if (!match) throw new Error('No INSERT VALUES block found in SQL file')
+            const rowMatches = [...match[1].matchAll(/\(([^)]+)\)/g)]
+            if (!rowMatches.length) throw new Error('No data rows found')
+            const dataRows = rowMatches.map(m => m[1].split(',').map(v => v.trim().replace(/^'|'$/g, '').replace(/''/g, "'")))
+            setPreview(parseRows([BUILDING_COLS, ...dataRows]))
+          } else {
+            const wb = XLSX.read(text, { type: 'string' })
+            const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
+            setPreview(parseRows(raw as unknown[][]))
+          }
+        } catch (err) { setParseErr(String(err)) }
+      }
+      reader.readAsText(file)
+    } else {
+      const reader = new FileReader()
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(e.target!.result, { type: 'binary' })
+          const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
+          setPreview(parseRows(raw as unknown[][]))
+        } catch (err) { setParseErr(String(err)) }
+      }
+      reader.readAsBinaryString(file)
+    }
+  }, [])
+
+  async function handleImport() {
+    if (!preview?.length) return
+    setImporting(true); setImportResult(null)
+    try {
+      const result = await onImport(preview)
+      setImportResult(result)
+      setPreview(null)
+      if (fileRef.current) fileRef.current.value = ''
+    } finally { setImporting(false) }
+  }
+
+  const TABS: { key: ImportTab; label: string; icon: string }[] = [
+    { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
+    { key: 'csv',   label: 'CSV (.csv)',    icon: 'description' },
+    { key: 'sql',   label: 'SQL (.sql)',    icon: 'database' },
+  ]
+
+  return (
+    <ModalPortal>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden admin-modal-in" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-[var(--ds-border)] shrink-0">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Admin · Buildings</p>
+            <h3 className="text-xl font-black uppercase tracking-tight text-[var(--ds-text-1)] mt-0.5">Import / Export</h3>
+          </div>
+          <button onClick={onClose} className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)]">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+
+        <div className="px-7 pt-5 pb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.12)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#10b981' }}>upload</span>
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#10b981' }}>Export Buildings</p>
+            <span className="text-[10px] font-bold text-[var(--ds-text-3)]">— {buildings.length} buildings</span>
+          </div>
+          <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'rgba(16,185,129,0.04)', borderColor: 'rgba(16,185,129,0.18)' }}>
+            <p className="text-[10px] text-[var(--ds-text-2)] font-medium">Columns: <span className="font-mono text-[var(--ds-text-1)]">{BUILDING_COLS.join(', ')}</span></p>
+            <div className="flex gap-2">
+              <button onClick={doExportExcel} disabled={exporting} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table</span>}Excel
+              </button>
+              <button onClick={doExportCSV} disabled={exporting} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>description</span>}CSV
+              </button>
+              <button onClick={doExportSQL} disabled={exporting} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700 text-white text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>database</span>}SQL
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-7 border-t border-[var(--ds-border)]" />
+
+        <div className="px-7 pt-4 pb-6 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.12)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#6366f1' }}>download</span>
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#6366f1' }}>Import Buildings</p>
+          </div>
+
+          <div className="flex gap-1 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 w-fit">
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => { setTab(t.key); setPreview(null); setParseErr(''); setImportResult(null) }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${tab === t.key ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{t.icon}</span>{t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-[var(--ds-bg-raised)] rounded-2xl p-4 space-y-3 text-[11px]">
+            {tab === 'excel' && (
+              <>
+                <p className="font-black text-[var(--ds-text-1)]">Format Excel (.xlsx)</p>
+                <div className="overflow-x-auto">
+                  <table className="text-[10px] border-collapse w-full">
+                    <thead>
+                      <tr className="bg-[var(--ds-border)]">
+                        {BUILDING_COLS.map((_, i) => <th key={i} className="px-3 py-1.5 text-left font-black text-[var(--ds-text-1)] border border-[var(--ds-border)]">Col {String.fromCharCode(65 + i)}</th>)}
+                      </tr>
+                      <tr className="bg-[var(--ds-bg-surface-2)]">
+                        {BUILDING_COLS.map(c => <th key={c} className="px-3 py-1.5 text-left font-bold text-[var(--ds-text-2)] border border-[var(--ds-border)] font-mono">{c}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {TEMPLATE_EXAMPLE.map((r, i) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-raised)]'}>
+                          {BUILDING_COLS.map(c => <td key={c} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)]">{r[c] || '(empty)'}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                  <li>First row must be a header — column order determines mapping</li>
+                  <li>Required: <span className="font-mono">name</span> (Col A). All other columns are optional</li>
+                  <li>Location (Col C) is resolved by name — created automatically if it doesn't exist yet</li>
+                  <li>Floors default to 1 if left blank</li>
+                  <li>Is Active: <span className="font-mono">yes</span>/<span className="font-mono">no</span> (default: <span className="font-mono">yes</span>) — the downloaded template has a dropdown on this column</li>
+                </ul>
+                <button onClick={() => downloadTemplate('xlsx')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[9px] font-black uppercase hover:bg-emerald-700 transition-colors">
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.xlsx)
+                </button>
+              </>
+            )}
+            {tab === 'csv' && (
+              <>
+                <p className="font-black text-[var(--ds-text-1)]">Format CSV (.csv)</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                  <p className="text-[var(--ds-text-3)]">{BUILDING_COLS.join(',')}</p>
+                  {TEMPLATE_EXAMPLE.map((r, i) => <p key={i}>{BUILDING_COLS.map(c => r[c] ?? '').join(',')}</p>)}
+                </div>
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                  <li>Separator: comma — wrap values containing commas in double quotes</li>
+                  <li>First row = header (column names used for mapping, order doesn't matter)</li>
+                  <li>Only <span className="font-mono">name</span> is required</li>
+                  <li>Location is resolved by name — created automatically if it doesn't exist yet</li>
+                  <li>Is Active: <span className="font-mono">yes</span>/<span className="font-mono">no</span> (default: <span className="font-mono">yes</span>)</li>
+                </ul>
+                <button onClick={() => downloadTemplate('csv')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500 text-white text-[9px] font-black uppercase hover:bg-blue-600 transition-colors">
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.csv)
+                </button>
+              </>
+            )}
+            {tab === 'sql' && (
+              <>
+                <p className="font-black text-[var(--ds-text-1)]">Format SQL (.sql)</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                  <p className="text-[var(--ds-text-3)]">-- Column order required: {BUILDING_COLS.join(', ')}</p>
+                  <p>INSERT INTO buildings ({BUILDING_COLS.join(', ')}) VALUES</p>
+                  {TEMPLATE_EXAMPLE.map((r, i) => <p key={i} className="pl-2">({BUILDING_COLS.map(c => `'${r[c] ?? ''}'`).join(', ')}){i < TEMPLATE_EXAMPLE.length - 1 ? ',' : ';'}</p>)}
+                </div>
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                  <li>Only one <span className="font-mono">INSERT INTO ... VALUES (...)</span> block is processed</li>
+                  <li>Column order in VALUES must be: <span className="font-mono">{BUILDING_COLS.join(', ')}</span></li>
+                  <li>Use <span className="font-mono">NULL</span> or empty string for optional fields — only <span className="font-mono">name</span> is required</li>
+                  <li>Multi-statement and subqueries are not supported</li>
+                </ul>
+              </>
+            )}
+          </div>
+
+          {!importResult && (
+            <div>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider block mb-2">Choose File</label>
+              <input ref={fileRef} type="file" accept={tab === 'excel' ? '.xlsx,.xls' : tab === 'csv' ? '.csv' : '.sql'}
+                onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
+                className="block w-full text-[11px] text-[var(--ds-text-2)] font-bold file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-black file:text-[#adee2b] hover:file:bg-slate-800 file:cursor-pointer" />
+              {parseErr && <p className="text-xs text-red-500 font-bold mt-2">{parseErr}</p>}
+            </div>
+          )}
+
+          {preview && preview.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Preview — {preview.length} rows</p>
+                <button onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = '' }} className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Clear</button>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-[var(--ds-border)]">
+                <table className="w-full text-[10px]">
+                  <thead>
+                    <tr className="bg-[var(--ds-bg-raised)] border-b border-[var(--ds-border)]">
+                      {BUILDING_COLS.map(c => <th key={c} className="px-3 py-2 text-left font-black text-[var(--ds-text-2)] uppercase">{c}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.slice(0, 8).map((row, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-raised)]'}>
+                        {BUILDING_COLS.map(c => <td key={c} className="px-3 py-1.5 text-[var(--ds-text-2)]">{(row as Record<string, string>)[c] || '—'}</td>)}
+                      </tr>
+                    ))}
+                    {preview.length > 8 && (
+                      <tr><td colSpan={BUILDING_COLS.length} className="px-3 py-2 text-center text-[9px] text-[var(--ds-text-3)] font-bold">+{preview.length - 8} more rows...</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
+                {importing && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}Import {preview.length} Buildings
+              </button>
+            </div>
+          )}
+
+          {importResult && (
+            <div className="space-y-3">
+              <div className={`rounded-2xl p-4 ${importResult.errors.length === 0 ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+                <p className={`text-sm font-black ${importResult.errors.length === 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                  {importResult.created} building{importResult.created !== 1 ? 's' : ''} created successfully
+                  {importResult.errors.length > 0 ? ` — ${importResult.errors.length} row${importResult.errors.length !== 1 ? 's' : ''} failed` : ' — all done!'}
+                </p>
+                {importResult.errors.length > 0 && (
+                  <ul className="mt-2 space-y-1">{importResult.errors.map((e, i) => <li key={i} className="text-[10px] text-amber-400 font-medium">• {e}</li>)}</ul>
+                )}
+              </div>
+              <button onClick={() => setImportResult(null)} className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Import more</button>
+            </div>
+          )}
+        </div>
+        </div>
+      </div>
+    </div>
+    </ModalPortal>
+  )
+}
+
+// ── Room Import / Export modal ────────────────────────────────────────────────
+const ROOM_COLS = ['name', 'building', 'capacity', 'floor', 'facilities', 'notes', 'is_active', 'status', 'requires_contact']
+
+type RoomImportRow = {
+  name: string; building?: string; capacity: string; floor: string
+  facilities?: string; notes?: string; is_active?: string; status?: string; requires_contact?: string
+}
+
+function RoomImportExportModal({ rooms, onImport, onClose }: {
+  rooms: Room[]
+  onImport: (rows: RoomImportRow[]) => Promise<{ created: number; errors: string[] }>
+  onClose: () => void
+}) {
+  const [tab, setTab] = useState<ImportTab>('excel')
+  const [preview, setPreview] = useState<RoomImportRow[] | null>(null)
+  const [parseErr, setParseErr] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ created: number; errors: string[] } | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function fetchExportData() {
+    setExporting(true)
+    try { return await exportRooms() }
+    finally { setExporting(false) }
+  }
+
+  async function doExportCSV() {
+    const data = await fetchExportData()
+    const rows = [ROOM_COLS.join(','), ...data.map(r =>
+      ROOM_COLS.map(c => {
+        const v = (r as Record<string, string>)[c] ?? ''
+        return v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v
+      }).join(',')
+    )]
+    download('rooms_export.csv', rows.join('\n'), 'text/csv')
+  }
+
+  async function doExportExcel() {
+    const data = await fetchExportData()
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Rooms')
+    XLSX.writeFile(wb, 'rooms_export.xlsx')
+  }
+
+  async function doExportSQL() {
+    const data = await fetchExportData()
+    const rows = data.map(r => {
+      const vals = ROOM_COLS.map(c => (r as Record<string, string>)[c])
+        .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
+      return `  (${vals})`
+    }).join(',\n')
+    const sql = `-- MBRS Rooms Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO rooms (${ROOM_COLS.join(', ')}) VALUES\n${rows};`
+    download('rooms_export.sql', sql, 'text/plain')
+  }
+
+  const TEMPLATE_EXAMPLE: Record<string, string>[] = [
+    { name: 'Meeting Room 1', building: 'Tower A', capacity: '10', floor: '3', facilities: 'Projector, WiFi, Whiteboard', notes: '', is_active: 'yes', status: 'active', requires_contact: 'no' },
+    { name: 'Board Room', building: 'Tower A', capacity: '20', floor: '5', facilities: 'TV Screen, WiFi', notes: 'Executive use', is_active: 'yes', status: 'active', requires_contact: 'yes' },
+  ]
+
+  async function downloadTemplate(fmt: 'xlsx' | 'csv') {
+    if (fmt === 'xlsx') {
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('Rooms')
+      ws.columns = ROOM_COLS.map(c => ({ header: c, key: c, width: 22 }))
+      ws.getRow(1).font = { bold: true }
+      TEMPLATE_EXAMPLE.forEach(r => ws.addRow(r))
+      applyDropdown(ws, 'is_active', ['yes', 'no'])
+      applyDropdown(ws, 'status', ['active', 'maintenance'])
+      applyDropdown(ws, 'requires_contact', ['yes', 'no'])
+      const buf = await wb.xlsx.writeBuffer()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      a.download = 'rooms_import_template.xlsx'
+      a.click()
+    } else {
+      const rows = [ROOM_COLS.join(','), ...TEMPLATE_EXAMPLE.map(r => ROOM_COLS.map(c => r[c] ?? '').join(','))]
+      download('rooms_import_template.csv', rows.join('\n'), 'text/csv')
+    }
+  }
+
+  const handleFile = useCallback((file: File) => {
+    setParseErr(''); setPreview(null); setImportResult(null)
+    const ext = file.name.split('.').pop()?.toLowerCase()
+
+    const parseRows = (raw: unknown[][]): RoomImportRow[] => {
+      if (!raw.length) throw new Error('File is empty')
+      const header = (raw[0] as string[]).map(h => String(h ?? '').trim().toLowerCase())
+      const idx = (col: string) => header.indexOf(col)
+      const nameI = idx('name'), capI = idx('capacity'), floorI = idx('floor')
+      if (nameI < 0 || capI < 0 || floorI < 0)
+        throw new Error('Missing required columns: name, capacity, floor')
+      return raw.slice(1).filter(r => r[nameI]).map(r => {
+        const get = (col: string) => idx(col) >= 0 ? String(r[idx(col)] ?? '').trim() : ''
+        return {
+          name: String(r[nameI] ?? '').trim(),
+          capacity: String(r[capI] ?? '').trim(),
+          floor: String(r[floorI] ?? '').trim(),
+          building: get('building'), facilities: get('facilities'), notes: get('notes'),
+          is_active: get('is_active'), status: get('status') || 'active', requires_contact: get('requires_contact'),
+        }
+      })
+    }
+
+    if (ext === 'csv' || ext === 'sql') {
+      const reader = new FileReader()
+      reader.onload = e => {
+        try {
+          const text = e.target!.result as string
+          if (ext === 'sql') {
+            const match = text.match(/VALUES\s*([\s\S]+?);/i)
+            if (!match) throw new Error('No INSERT VALUES block found in SQL file')
+            const rowMatches = [...match[1].matchAll(/\(([^)]+)\)/g)]
+            if (!rowMatches.length) throw new Error('No data rows found')
+            const dataRows = rowMatches.map(m => m[1].split(',').map(v => v.trim().replace(/^'|'$/g, '').replace(/''/g, "'")))
+            setPreview(parseRows([ROOM_COLS, ...dataRows]))
+          } else {
+            const wb = XLSX.read(text, { type: 'string' })
+            const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
+            setPreview(parseRows(raw as unknown[][]))
+          }
+        } catch (err) { setParseErr(String(err)) }
+      }
+      reader.readAsText(file)
+    } else {
+      const reader = new FileReader()
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(e.target!.result, { type: 'binary' })
+          const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
+          setPreview(parseRows(raw as unknown[][]))
+        } catch (err) { setParseErr(String(err)) }
+      }
+      reader.readAsBinaryString(file)
+    }
+  }, [])
+
+  async function handleImport() {
+    if (!preview?.length) return
+    setImporting(true); setImportResult(null)
+    try {
+      const result = await onImport(preview)
+      setImportResult(result)
+      setPreview(null)
+      if (fileRef.current) fileRef.current.value = ''
+    } finally { setImporting(false) }
+  }
+
+  const TABS: { key: ImportTab; label: string; icon: string }[] = [
+    { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
+    { key: 'csv',   label: 'CSV (.csv)',    icon: 'description' },
+    { key: 'sql',   label: 'SQL (.sql)',    icon: 'database' },
+  ]
+
+  return (
+    <ModalPortal>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden admin-modal-in" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-[var(--ds-border)] shrink-0">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Admin · Rooms</p>
+            <h3 className="text-xl font-black uppercase tracking-tight text-[var(--ds-text-1)] mt-0.5">Import / Export</h3>
+          </div>
+          <button onClick={onClose} className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)]">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>close</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+
+        <div className="px-7 pt-5 pb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.12)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#10b981' }}>upload</span>
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#10b981' }}>Export Rooms</p>
+            <span className="text-[10px] font-bold text-[var(--ds-text-3)]">— {rooms.length} rooms</span>
+          </div>
+          <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'rgba(16,185,129,0.04)', borderColor: 'rgba(16,185,129,0.18)' }}>
+            <p className="text-[10px] text-[var(--ds-text-2)] font-medium">Columns: <span className="font-mono text-[var(--ds-text-1)]">{ROOM_COLS.join(', ')}</span></p>
+            <div className="flex gap-2">
+              <button onClick={doExportExcel} disabled={exporting} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table</span>}Excel
+              </button>
+              <button onClick={doExportCSV} disabled={exporting} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>description</span>}CSV
+              </button>
+              <button onClick={doExportSQL} disabled={exporting} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700 text-white text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>database</span>}SQL
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-7 border-t border-[var(--ds-border)]" />
+
+        <div className="px-7 pt-4 pb-6 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.12)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#6366f1' }}>download</span>
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#6366f1' }}>Import Rooms</p>
+          </div>
+
+          <div className="flex gap-1 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 w-fit">
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => { setTab(t.key); setPreview(null); setParseErr(''); setImportResult(null) }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${tab === t.key ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{t.icon}</span>{t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-[var(--ds-bg-raised)] rounded-2xl p-4 space-y-3 text-[11px]">
+            {tab === 'excel' && (
+              <>
+                <p className="font-black text-[var(--ds-text-1)]">Format Excel (.xlsx)</p>
+                <div className="overflow-x-auto">
+                  <table className="text-[10px] border-collapse w-full">
+                    <thead>
+                      <tr className="bg-[var(--ds-border)]">
+                        {ROOM_COLS.map((_, i) => <th key={i} className="px-3 py-1.5 text-left font-black text-[var(--ds-text-1)] border border-[var(--ds-border)]">Col {String.fromCharCode(65 + i)}</th>)}
+                      </tr>
+                      <tr className="bg-[var(--ds-bg-surface-2)]">
+                        {ROOM_COLS.map(c => <th key={c} className="px-3 py-1.5 text-left font-bold text-[var(--ds-text-2)] border border-[var(--ds-border)] font-mono">{c}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {TEMPLATE_EXAMPLE.map((r, i) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-raised)]'}>
+                          {ROOM_COLS.map(c => <td key={c} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)]">{r[c] || '(empty)'}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                  <li>First row must be a header — column order determines mapping</li>
+                  <li>Required: <span className="font-mono">name</span> (Col A), <span className="font-mono">capacity</span> (Col C), <span className="font-mono">floor</span> (Col D)</li>
+                  <li>Building (Col B) must match an existing building name exactly — strongly recommended, though technically optional</li>
+                  <li>Facilities (Col E): comma-separated names, e.g. <span className="font-mono">Projector, WiFi, Whiteboard</span></li>
+                  <li>Status: <span className="font-mono">active</span>/<span className="font-mono">maintenance</span>, Is Active &amp; Requires Contact: <span className="font-mono">yes</span>/<span className="font-mono">no</span> — the downloaded template has dropdowns on these columns</li>
+                  <li>Sensor code is always auto-generated on the server, not imported</li>
+                </ul>
+                <button onClick={() => downloadTemplate('xlsx')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[9px] font-black uppercase hover:bg-emerald-700 transition-colors">
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.xlsx)
+                </button>
+              </>
+            )}
+            {tab === 'csv' && (
+              <>
+                <p className="font-black text-[var(--ds-text-1)]">Format CSV (.csv)</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                  <p className="text-[var(--ds-text-3)]">{ROOM_COLS.join(',')}</p>
+                  {TEMPLATE_EXAMPLE.map((r, i) => <p key={i}>{ROOM_COLS.map(c => c === 'facilities' ? `"${r[c] ?? ''}"` : (r[c] ?? '')).join(',')}</p>)}
+                </div>
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                  <li>Separator: comma — wrap values containing commas (e.g. facilities list) in double quotes</li>
+                  <li>First row = header (column names used for mapping, order doesn't matter)</li>
+                  <li>Required: <span className="font-mono">name</span>, <span className="font-mono">capacity</span>, <span className="font-mono">floor</span></li>
+                  <li>Building must match an existing building name exactly</li>
+                  <li>Status must be <span className="font-mono">active</span> or <span className="font-mono">maintenance</span> (default: <span className="font-mono">active</span>)</li>
+                  <li>Sensor code is always auto-generated on the server, not imported</li>
+                </ul>
+                <button onClick={() => downloadTemplate('csv')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500 text-white text-[9px] font-black uppercase hover:bg-blue-600 transition-colors">
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.csv)
+                </button>
+              </>
+            )}
+            {tab === 'sql' && (
+              <>
+                <p className="font-black text-[var(--ds-text-1)]">Format SQL (.sql)</p>
+                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                  <p className="text-[var(--ds-text-3)]">-- Column order required: {ROOM_COLS.join(', ')}</p>
+                  <p>INSERT INTO rooms ({ROOM_COLS.join(', ')}) VALUES</p>
+                  {TEMPLATE_EXAMPLE.map((r, i) => <p key={i} className="pl-2">({ROOM_COLS.map(c => `'${r[c] ?? ''}'`).join(', ')}){i < TEMPLATE_EXAMPLE.length - 1 ? ',' : ';'}</p>)}
+                </div>
+                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                  <li>Only one <span className="font-mono">INSERT INTO ... VALUES (...)</span> block is processed</li>
+                  <li>Column order in VALUES must be: <span className="font-mono">{ROOM_COLS.join(', ')}</span></li>
+                  <li>Required: <span className="font-mono">name</span>, <span className="font-mono">capacity</span>, <span className="font-mono">floor</span> — use <span className="font-mono">NULL</span> or empty string for the rest</li>
+                  <li>Sensor code is always auto-generated on the server, not imported</li>
+                  <li>Multi-statement and subqueries are not supported</li>
+                </ul>
+              </>
+            )}
+          </div>
+
+          {!importResult && (
+            <div>
+              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider block mb-2">Choose File</label>
+              <input ref={fileRef} type="file" accept={tab === 'excel' ? '.xlsx,.xls' : tab === 'csv' ? '.csv' : '.sql'}
+                onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
+                className="block w-full text-[11px] text-[var(--ds-text-2)] font-bold file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-black file:text-[#adee2b] hover:file:bg-slate-800 file:cursor-pointer" />
+              {parseErr && <p className="text-xs text-red-500 font-bold mt-2">{parseErr}</p>}
+            </div>
+          )}
+
+          {preview && preview.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Preview — {preview.length} rows</p>
+                <button onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = '' }} className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Clear</button>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-[var(--ds-border)]">
+                <table className="w-full text-[10px]">
+                  <thead>
+                    <tr className="bg-[var(--ds-bg-raised)] border-b border-[var(--ds-border)]">
+                      {ROOM_COLS.map(c => <th key={c} className="px-3 py-2 text-left font-black text-[var(--ds-text-2)] uppercase">{c}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.slice(0, 8).map((row, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-raised)]'}>
+                        {ROOM_COLS.map(c => <td key={c} className="px-3 py-1.5 text-[var(--ds-text-2)]">{(row as Record<string, string>)[c] || '—'}</td>)}
+                      </tr>
+                    ))}
+                    {preview.length > 8 && (
+                      <tr><td colSpan={ROOM_COLS.length} className="px-3 py-2 text-center text-[9px] text-[var(--ds-text-3)] font-bold">+{preview.length - 8} more rows...</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <button onClick={handleImport} disabled={importing} className="w-full py-3 rounded-2xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
+                {importing && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}Import {preview.length} Rooms
+              </button>
+            </div>
+          )}
+
+          {importResult && (
+            <div className="space-y-3">
+              <div className={`rounded-2xl p-4 ${importResult.errors.length === 0 ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+                <p className={`text-sm font-black ${importResult.errors.length === 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                  {importResult.created} room{importResult.created !== 1 ? 's' : ''} created successfully
+                  {importResult.errors.length > 0 ? ` — ${importResult.errors.length} row${importResult.errors.length !== 1 ? 's' : ''} failed` : ' — all done!'}
+                </p>
+                {importResult.errors.length > 0 && (
+                  <ul className="mt-2 space-y-1">{importResult.errors.map((e, i) => <li key={i} className="text-[10px] text-amber-400 font-medium">• {e}</li>)}</ul>
+                )}
+              </div>
+              <button onClick={() => setImportResult(null)} className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Import more</button>
+            </div>
+          )}
+        </div>
+        </div>
       </div>
     </div>
     </ModalPortal>
@@ -2587,6 +3384,7 @@ function UsersTab() {
   const [deleteBlockedUser, setDeleteBlockedUser] = useState<User | null>(null)
   const [editName, setEditName]               = useState('')
   const [editEmail, setEditEmail]             = useState('')
+  const [editAlias, setEditAlias]             = useState('')
   const [editDeptId, setEditDeptId]           = useState<number | null>(null)
   const [editExt, setEditExt]                 = useState('')
   const [editPw, setEditPw]                   = useState('')
@@ -2603,6 +3401,7 @@ function UsersTab() {
     setEditDefaultBldId(u.default_building_id ?? null)
     setEditName(u.name)
     setEditEmail(u.email)
+    setEditAlias(u.alias ?? '')
     setEditDeptId(u.department_id ?? null)
     setEditExt(u.ext ?? '')
     setEditPw('')
@@ -2622,6 +3421,7 @@ function UsersTab() {
       await updateUser(editUser.id, {
         name: editName.trim(),
         email: editEmail.trim(),
+        alias: editAlias.trim() || null,
         department_id: editDeptId,
         ext: editExt.trim() || undefined,
         ...(editPw ? { password: editPw } : {}),
@@ -2634,8 +3434,8 @@ function UsersTab() {
       qc.invalidateQueries({ queryKey: ['users'] })
       setEditUser(null)
     } catch (e: unknown) {
-      const resp = (e as { response?: { data?: { message?: string; errors?: { email?: string[] } } } })?.response?.data
-      setEditErr(resp?.message ?? resp?.errors?.email?.[0] ?? 'Failed to save changes.')
+      const resp = (e as { response?: { data?: { message?: string; errors?: { email?: string[]; alias?: string[] } } } })?.response?.data
+      setEditErr(resp?.message ?? resp?.errors?.email?.[0] ?? resp?.errors?.alias?.[0] ?? 'Failed to save changes.')
     } finally { setSaving(false) }
   }
 
@@ -2672,7 +3472,7 @@ function UsersTab() {
   }
 
   const filtered = useMemo(() =>
-    (users as User[]).filter(u => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || u.department?.toLowerCase().includes(search.toLowerCase()))
+    (users as User[]).filter(u => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || u.alias?.toLowerCase().includes(search.toLowerCase()) || u.department?.toLowerCase().includes(search.toLowerCase()))
   , [users, search])
 
   const grouped = useMemo(() => {
@@ -2755,7 +3555,10 @@ function UsersTab() {
                                 <span className="text-[13px] font-black text-[var(--ds-text-1)] whitespace-nowrap">{u.name}</span>
                               </div>
                             </td>
-                            <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium">{u.email}</td>
+                            <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium">
+                              <div>{u.email}</div>
+                              {u.alias && <div className="text-[10px] text-[var(--ds-text-4)]">@{u.alias}</div>}
+                            </td>
                             <td className="px-5 py-3.5">
                               {u.department ? (
                                 <span className="flex items-center gap-1.5">
@@ -2834,7 +3637,7 @@ function UsersTab() {
                         <UserAvatar name={u.name} avatar={u.avatar} size={44} />
                         <div className="flex-1 min-w-0">
                           <p className="text-[14px] font-black text-[var(--ds-text-1)]">{u.name}</p>
-                          <p className="text-[12px] text-[var(--ds-text-3)] font-bold">{u.email}</p>
+                          <p className="text-[12px] text-[var(--ds-text-3)] font-bold">{u.email}{u.alias && <span className="text-[var(--ds-text-4)] font-medium"> · @{u.alias}</span>}</p>
                         </div>
                         <span className="flex items-center gap-1.5 shrink-0">
                           {u.department && <span className="text-[11px] font-bold text-[var(--ds-text-3)] uppercase">{u.department}</span>}
@@ -3092,6 +3895,11 @@ function UsersTab() {
               <div className="col-span-2 space-y-1">
                 <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Email *</label>
                 <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
+                  className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Username / Alias</label>
+                <input value={editAlias} onChange={e => setEditAlias(e.target.value.toLowerCase())} placeholder="e.g. budi.santoso"
                   className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
               </div>
               <div className="space-y-1">
