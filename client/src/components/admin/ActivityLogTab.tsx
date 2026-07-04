@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { getActivityLogs, exportActivityLogs, type ActivityLog } from '../../api/activityLogs'
+import { createPortal } from 'react-dom'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { getActivityLogs, exportActivityLogs, clearAllActivityLogs, type ActivityLog } from '../../api/activityLogs'
+import { useCancelToast } from '../../context/CancelToastContext'
 
 const CATEGORIES: { key: string; label: string }[] = [
   { key: '',         label: 'All' },
@@ -107,6 +109,8 @@ function PageButtons({ current, total, onChange }: { current: number; total: num
 }
 
 export default function ActivityLogTab() {
+  const queryClient = useQueryClient()
+  const { addInfoToast } = useCancelToast()
   const [category, setCategory] = useState('')
   const [search, setSearch]     = useState('')
   const [page, setPage]         = useState(1)
@@ -114,12 +118,31 @@ export default function ActivityLogTab() {
   const [exporting, setExporting]   = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const exportRef = useRef<HTMLDivElement>(null)
+  const [clearConfirm, setClearConfirm] = useState(false)
+  const [clearInput, setClearInput]     = useState('')
+  const [clearing, setClearing]         = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['activity-logs', category, search, page, perPage],
     queryFn: () => getActivityLogs({ category: category || undefined, q: search || undefined, page, per_page: perPage }),
     placeholderData: keepPreviousData,
   })
+
+  async function doClearAll() {
+    setClearing(true)
+    try {
+      const res = await clearAllActivityLogs()
+      queryClient.invalidateQueries({ queryKey: ['activity-logs'] })
+      addInfoToast(`${res.deleted} activity log entr${res.deleted !== 1 ? 'ies' : 'y'} deleted`)
+      setClearConfirm(false)
+      setClearInput('')
+      setPage(1)
+    } catch {
+      addInfoToast('Clear failed')
+    } finally {
+      setClearing(false)
+    }
+  }
 
   const logs = data?.data ?? []
   const meta = data?.meta
@@ -245,6 +268,71 @@ export default function ActivityLogTab() {
             {meta.total} entries · page {meta.current_page} of {meta.last_page}
           </p>
         </div>
+      )}
+
+      {/* Danger Zone */}
+      {!!meta?.total && (
+        <div className="mt-6 rounded-2xl p-4 flex items-center justify-between gap-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
+          <div>
+            <p className="text-[11px] font-black text-red-500 uppercase tracking-wider">Danger Zone</p>
+            <p className="text-[10px] text-red-400 mt-0.5">Permanently delete all {meta.total} activity log entries.</p>
+          </div>
+          <button onClick={() => { setClearConfirm(true); setClearInput('') }}
+            className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-300 bg-[var(--ds-bg-surface)] text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete_forever</span>
+            Clear All
+          </button>
+        </div>
+      )}
+
+      {/* Clear all confirm modal */}
+      {clearConfirm && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
+          onClick={() => setClearConfirm(false)}>
+          <div className="w-[420px] rounded-[2rem] overflow-hidden shadow-2xl"
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px)', border: '1px solid rgba(128,128,128,0.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
+              <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
+              </div>
+              <div>
+                <p className="text-base font-black text-[var(--ds-text-1)]">Clear All Activity Log</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">This will permanently delete every log entry.</p>
+              </div>
+            </div>
+            <div className="px-7 py-6 space-y-5">
+              <p className="text-[12px] text-[var(--ds-text-2)] leading-relaxed">
+                All <span className="font-black text-[var(--ds-text-1)]">{meta?.total ?? 0} activity log entries</span> will be permanently removed. This action <span className="font-black text-red-500">cannot be undone</span>.
+              </p>
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-black text-[var(--ds-text-2)] uppercase tracking-wider">Confirm action</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">Type <span className="font-black text-red-500 font-mono">Delete all logs</span> to confirm</p>
+                <input
+                  type="text"
+                  value={clearInput}
+                  onChange={e => setClearInput(e.target.value)}
+                  placeholder="Delete all logs"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter' && clearInput === 'Delete all logs') doClearAll() }}
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setClearConfirm(false)}
+                  className="px-5 py-2.5 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
+                  Cancel
+                </button>
+                <button onClick={doClearAll} disabled={clearInput !== 'Delete all logs' || clearing}
+                  className="px-5 py-2.5 rounded-xl bg-red-500 text-white text-[11px] font-black uppercase hover:bg-red-600 disabled:opacity-40 transition-colors">
+                  {clearing ? 'Deleting…' : 'Delete Permanently'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

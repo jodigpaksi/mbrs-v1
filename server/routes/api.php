@@ -112,6 +112,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/bookings/{booking}', [BookingController::class, 'update']);
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
     Route::post('/bookings/{booking}/confirm-presence', [BookingController::class, 'confirmPresenceWeb']);
+    Route::post('/bookings/{booking}/transfer', [BookingController::class, 'transfer'])->middleware('can:receptionist');
     Route::post('/bookings/{booking}/dispute', [BookingController::class, 'submitDispute']);
 
     // Disputes — accessible to admin, receptionist, building_admin (controller enforces role)
@@ -160,9 +161,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/locations', [LocationController::class, 'store']);
         Route::patch('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
-        // Activity log (admin only)
-        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
+        // Activity log export/clear (admin only) — reading the list is also allowed for building_admin, scoped, see below
         Route::get('/activity-logs/export', [\App\Http\Controllers\Api\ActivityLogController::class, 'export']);
+        Route::delete('/activity-logs/all', [\App\Http\Controllers\Api\ActivityLogController::class, 'clearAll']);
 
         // Kiosk CRUD (admin only)
         Route::get('/kiosk-configs', [KioskController::class, 'index']);
@@ -175,7 +176,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/buildings/{building}', [BuildingController::class, 'destroy']);
         Route::get('/buildings/export', [BuildingController::class, 'export']);
         Route::post('/buildings/import', [BuildingController::class, 'importBuildings']);
-        Route::get('/users', [UserController::class, 'index']);
         Route::get('/users/export', function () {
             $rows = \App\Models\User::with('department.location', 'defaultBuilding', 'adminBuildings')->orderBy('role')->orderBy('name')->get();
             \App\Models\ActivityLog::record(
@@ -205,5 +205,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
         Route::put('/users/{user}/buildings', [UserController::class, 'assignBuildings']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
+    });
+
+    // Read-only, building-scoped for building_admin; unrestricted for admin
+    Route::middleware('can:building_admin')->group(function () {
+        Route::get('/users', [UserController::class, 'index']);
+        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
     });
 });

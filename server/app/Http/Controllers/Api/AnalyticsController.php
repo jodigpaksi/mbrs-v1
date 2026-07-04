@@ -108,13 +108,23 @@ class AnalyticsController extends Controller
 
     private function storageStats(): array
     {
-        // DB size (MySQL)
+        // DB size (MySQL) — excludes activity_logs, which is broken out separately as "Logs"
+        // below so the Admin Overview chart tracks what "Clear All" on the Activity Log actually affects.
         $dbRow = DB::selectOne("
             SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS mb
             FROM information_schema.tables
-            WHERE table_schema = DATABASE()
+            WHERE table_schema = DATABASE() AND table_name != 'activity_logs'
         ");
         $dbMb = (float) ($dbRow->mb ?? 0);
+
+        // Activity log table size (MySQL) — reflects Activity Log "Clear All", unlike the
+        // old measurement which read storage/logs/*.log files that Clear All never touched.
+        $logsRow = DB::selectOne("
+            SELECT ROUND((data_length + index_length) / 1024 / 1024, 2) AS mb
+            FROM information_schema.tables
+            WHERE table_schema = DATABASE() AND table_name = 'activity_logs'
+        ");
+        $logsMb = (float) ($logsRow->mb ?? 0);
 
         // File storage folders
         $disk       = Storage::disk('public');
@@ -123,7 +133,6 @@ class AnalyticsController extends Controller
         $roomMb   = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'room-photos');
         $avatarMb = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'avatars');
         $totalUploadsMb = $this->folderMb($basePath);
-        $logsMb   = $this->folderMb(storage_path('logs'));
 
         return [
             'db_mb'           => $dbMb,

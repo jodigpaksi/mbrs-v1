@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient, useQueries } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useQueries, useMutation } from '@tanstack/react-query'
 import type { Booking, Building, Room } from '../types/index'
 import { getRooms } from '../api/rooms'
-import { getBookings, updateBooking as updateBookingApi, cancelBooking, cancelSeries } from '../api/bookings'
+import { getBookings, updateBooking as updateBookingApi, cancelBooking, cancelSeries, transferBooking as transferBookingApi } from '../api/bookings'
 import { getBuildings } from '../api/buildings'
+import { getDirectory } from '../api/users'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import BookingBar from '../components/booking/BookingBar'
@@ -26,6 +28,8 @@ const SLOT_W = 64
 const ROOM_W = 164
 const CELL_H = 60
 const WEEK_CELL_H = 80
+const PAST_BOOKING_TOLERANCE_MIN = 60 // allow booking up to 1 hour in the past
+const ACRYLIC_GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
 
 function fmtTime(iso: string) {
   const d = new Date(iso.replace('Z', ''))
@@ -111,6 +115,7 @@ export default function TimelinePage() {
   const [otherCtxMenu, setOtherCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [cellCtxMenu, setCellCtxMenu] = useState<{ room: Room | null; slot: number; date: Date; x: number; y: number } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
+  const [transferBooking, setTransferBooking] = useState<Booking | null>(null)
   const [seriesCancelTarget, setSeriesCancelTarget] = useState<Booking | null>(null)
   const [pendingSeriesId, setPendingSeriesId] = useState<{ seriesId: string; title: string; count: number } | null>(null)
   const seriesCancelTimerRef = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
@@ -118,6 +123,8 @@ export default function TimelinePage() {
   const [ganttKey, setGanttKey] = useState(0)
   const [ganttAnim, setGanttAnim] = useState<'left' | 'right' | 'up' | 'fade' | 'none'>('none')
   const [pastDateModalOpen, setPastDateModalOpen] = useState(false)
+  const [dateOverlayShown, setDateOverlayShown] = useState(false)
+  const dateOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
@@ -246,7 +253,7 @@ export default function TimelinePage() {
           const todayStr = toLocalDateStr(new Date())
           const now = new Date()
           const slotStartMins = HOUR_START * 60 + minSlot * 30
-          const isPastDrag = dragDateStr < todayStr || (dragDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes())
+          const isPastDrag = dragDateStr < todayStr || (dragDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes() - PAST_BOOKING_TOLERANCE_MIN)
           if (isPastDrag) {
             setPastDateModalOpen(true)
             return
@@ -347,6 +354,15 @@ export default function TimelinePage() {
   }, [getSlotFromClientX, currentDate, slots])
 
   const dateStr = toLocalDateStr(currentDate)
+
+  // Day-view only: briefly flash a large "which day am I on" overlay whenever the date changes (or the view opens)
+  useEffect(() => {
+    if (viewMode !== 'day') { setDateOverlayShown(false); return }
+    setDateOverlayShown(true)
+    if (dateOverlayTimer.current) clearTimeout(dateOverlayTimer.current)
+    dateOverlayTimer.current = setTimeout(() => setDateOverlayShown(false), 1300)
+    return () => { if (dateOverlayTimer.current) clearTimeout(dateOverlayTimer.current) }
+  }, [viewMode, dateStr])
 
   const { data: buildings = [] } = useQuery<Building[]>({ queryKey: ['buildings'], queryFn: getBuildings })
 
@@ -530,6 +546,27 @@ export default function TimelinePage() {
     setBookingPanelOpen(true)
   }
 
+  const [transferSearch, setTransferSearch] = useState('')
+  const { data: directory = [] } = useQuery({ queryKey: ['user-directory'], queryFn: getDirectory, staleTime: 60_000, enabled: !!transferBooking })
+  const { mutate: doTransfer, isPending: transferring } = useMutation({
+    mutationFn: (toUserId: number) => transferBookingApi(transferBooking!.id, toUserId),
+    onSuccess: (_, toUserId) => {
+      const person = directory.find(d => d.id === toUserId)
+      queryClient.invalidateQueries({ queryKey: ['bookings'] })
+      setToastMsg(`Booking transferred to ${person?.name ?? 'new user'}`)
+      if (toastTimer.current) clearTimeout(toastTimer.current)
+      toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
+      setTransferBooking(null)
+      setTransferSearch('')
+    },
+  })
+  const filteredDirectory = transferSearch.trim()
+    ? directory.filter(d =>
+        d.name.toLowerCase().includes(transferSearch.toLowerCase()) ||
+        d.email.toLowerCase().includes(transferSearch.toLowerCase())
+      ).slice(0, 30)
+    : directory.slice(0, 30)
+
   function confirmCancel() {
     if (!cancelTarget) return
     const booking = cancelTarget
@@ -645,6 +682,31 @@ export default function TimelinePage() {
     switchDate(d, forward ? 'left' : 'right')
   }
 
+  function openNewBooking() {
+    setSelectedRoom(null); setEditBooking(null); setPrefillStart(''); setPrefillEnd(''); setBookingPanelOpen(true)
+  }
+
+  // Ctrl+N (dispatched globally by Navbar) opens a fresh New Booking panel
+  useEffect(() => {
+    function onShortcut() { openNewBooking() }
+    document.addEventListener('new-booking-shortcut', onShortcut)
+    return () => document.removeEventListener('new-booking-shortcut', onShortcut)
+  }, [])
+
+  // Arrow keys navigate day/week/month — ignored while typing or a modal/panel is open
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      const target = e.target as HTMLElement
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
+      if (bookingPanelOpen || detailOpen || contactOpen || afterHoursOpen || pastDateModalOpen) return
+      e.preventDefault()
+      navDate(e.key === 'ArrowRight')
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [currentDate, viewMode, bookingPanelOpen, detailOpen, contactOpen, afterHoursOpen, pastDateModalOpen])
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <style>{`
@@ -652,7 +714,33 @@ export default function TimelinePage() {
         @keyframes gantt-enter-right{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
         @keyframes gantt-enter-up{from{opacity:0;transform:translateY(16px) scale(0.99)}to{opacity:1;transform:translateY(0) scale(1)}}
         @keyframes gantt-enter-fade{from{opacity:0}to{opacity:1}}
+        @keyframes date-popup-fade{from{opacity:0}to{opacity:1}}
       `}</style>
+
+      {/* Day-view "which day am I on" flash popup */}
+      {viewMode === 'day' && dateOverlayShown && createPortal(
+        <div key={ganttKey} className="fixed left-1/2 pointer-events-none" style={{ top: 320, zIndex: 60, transform: 'translateX(-50%)', animation: 'date-popup-fade 0.4s ease both' }}>
+          <div className="relative overflow-hidden px-9 py-5 text-center whitespace-nowrap" style={{
+            background: 'rgba(20,20,26,0.48)',
+            backdropFilter: 'blur(26px) saturate(180%) contrast(1.1)',
+            WebkitBackdropFilter: 'blur(26px) saturate(180%) contrast(1.1)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderTop: '1px solid rgba(255,255,255,0.28)',
+            borderRadius: '1rem',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12)',
+          }}>
+            {/* Acrylic noise texture */}
+            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: ACRYLIC_GRAIN, backgroundSize: '180px 180px', opacity: 0.05, mixBlendMode: 'overlay' }} />
+            <p className="relative text-white font-black uppercase leading-tight" style={{ fontSize: 'clamp(28px,4vw,52px)', letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
+              {currentDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+            </p>
+            <p className="relative text-white/80 font-bold uppercase tracking-[0.15em] mt-1.5" style={{ fontSize: 'clamp(11px,1.4vw,14px)', textShadow: '0 1px 8px rgba(0,0,0,0.5)' }}>
+              {currentDate.toLocaleDateString('en-GB', { weekday: 'long' })} &middot; {currentDate.getFullYear()}
+            </p>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Toolbar */}
       <div className="bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)] px-8 py-2.5 grid grid-cols-3 items-center shrink-0 select-none">
@@ -870,7 +958,7 @@ export default function TimelinePage() {
 
           </div>
 
-          <button onClick={() => { setSelectedRoom(null); setEditBooking(null); setPrefillStart(''); setPrefillEnd(''); setBookingPanelOpen(true) }}
+          <button onClick={openNewBooking}
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]">
             <span className="material-symbols-outlined text-base">add</span> New Booking
           </button>
@@ -1501,9 +1589,7 @@ export default function TimelinePage() {
                   {/* Now line */}
                   {isToday && nowSlot > 0 && nowSlot < slots && (
                     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-25"
-                      style={{ left: nowSlot * SLOT_W }}>
-                      <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2.5 h-2.5 bg-red-500 rounded-full" />
-                    </div>
+                      style={{ left: nowSlot * SLOT_W }} />
                   )}
 
                   {/* Cell drag selection overlay */}
@@ -1537,6 +1623,7 @@ export default function TimelinePage() {
             { label: 'Confirmed', style: { backgroundColor: '#adee2b' } },
             { label: 'Tentative', style: { backgroundColor: '#d1d5db', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
             { label: 'Maintenance', style: { backgroundColor: '#fb923c' } },
+            { label: 'For/From Others', style: { backgroundColor: 'transparent', border: '2px solid #2563eb' } },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1.5">
               <div className="size-2.5 rounded-md" style={l.style} />
@@ -1839,6 +1926,21 @@ export default function TimelinePage() {
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
                 <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room Detail</span>
               </button>
+
+              {/* Transfer Booking — receptionist/admin only */}
+              {(user?.role === 'admin' || user?.role === 'receptionist') && otherCtxMenu.booking.status !== 'cancelled' && (<>
+                <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
+                <button
+                  onClick={() => {
+                    setTransferBooking(otherCtxMenu.booking)
+                    setOtherCtxMenu(null)
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+                >
+                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>swap_horiz</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Transfer Booking</span>
+                </button>
+              </>)}
             </div>
           </div>
         </>
@@ -1882,7 +1984,7 @@ export default function TimelinePage() {
                   const todayStr = toLocalDateStr(new Date())
                   const now = new Date()
                   const slotStartMins = HOUR_START * 60 + cellCtxMenu.slot * 30
-                  const isPastCtx = ctxDateStr < todayStr || (ctxDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes())
+                  const isPastCtx = ctxDateStr < todayStr || (ctxDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes() - PAST_BOOKING_TOLERANCE_MIN)
                   if (isPastCtx) { setCellCtxMenu(null); setPastDateModalOpen(true); return }
                   setCurrentDate(cellCtxMenu.date)
                   setPrefillStart(slotToTimeStr(cellCtxMenu.slot))
@@ -2040,6 +2142,99 @@ export default function TimelinePage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Transfer Booking modal */}
+      {transferBooking && createPortal(
+        <>
+          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
+            onClick={() => { setTransferBooking(null); setTransferSearch('') }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: 400,
+                maxHeight: '80vh',
+                display: 'flex',
+                flexDirection: 'column',
+                background: 'rgba(255,255,255,0.82)',
+                backdropFilter: 'blur(48px) saturate(200%)',
+                WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+                border: '1px solid rgba(255,255,255,0.95)',
+                borderRadius: 22,
+                boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
+                padding: 28,
+                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3.5 mb-5 shrink-0">
+                <div className="size-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'rgba(173,238,43,0.14)' }}>
+                  <span className="material-symbols-outlined text-xl" style={{ color: '#4d7c00' }}>swap_horiz</span>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-black text-slate-900">Transfer Booking</h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{transferBooking.title} &middot; {transferBooking.room?.name}</p>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative mb-3 shrink-0">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" style={{ fontSize: 16 }}>search</span>
+                <input
+                  autoFocus
+                  value={transferSearch}
+                  onChange={e => setTransferSearch(e.target.value)}
+                  placeholder="Search name or email..."
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[12px] font-medium focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+                  style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)', color: '#1e293b' }}
+                />
+              </div>
+
+              {/* Directory list */}
+              <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1" style={{ minHeight: 120 }}>
+                {filteredDirectory.length === 0 && (
+                  <p className="text-center text-xs font-bold text-slate-400 py-8">No matching users</p>
+                )}
+                {filteredDirectory.map(person => {
+                  const isCurrent = person.id === transferBooking.booked_for_user_id
+                  return (
+                    <button
+                      key={person.id}
+                      disabled={isCurrent || transferring}
+                      onClick={() => doTransfer(person.id)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors disabled:opacity-40"
+                      style={{ background: isCurrent ? 'rgba(173,238,43,0.12)' : 'transparent' }}
+                      onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = 'rgba(0,0,0,0.05)' }}
+                      onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-black text-slate-800 truncate">{person.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 truncate">{person.department || person.email}</p>
+                      </div>
+                      {isCurrent && <span className="text-[9px] font-black uppercase text-[#4d7c00] shrink-0">Current</span>}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Cancel */}
+              <button
+                onClick={() => { setTransferBooking(null); setTransferSearch('') }}
+                className="mt-4 w-full py-3 rounded-2xl text-[11px] font-black uppercase transition-colors shrink-0"
+                style={{ background: 'rgba(0,0,0,0.06)', color: '#475569' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.10)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.06)')}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
       )}
 
       {/* Cancel Series confirm modal */}

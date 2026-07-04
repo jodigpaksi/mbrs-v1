@@ -12,12 +12,18 @@ use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return User::with('department.location', 'adminBuildings.location')
+        $query = User::with('department.location', 'adminBuildings.location')
             ->orderBy('role')
-            ->orderBy('name')
-            ->get()
+            ->orderBy('name');
+
+        // building_admin is scoped to users whose default building is one they manage (view-only — see routes/api.php)
+        if ($request->user()->role === 'building_admin') {
+            $query->whereIn('default_building_id', $request->user()->managedBuildingIds());
+        }
+
+        return $query->get()
             ->map(fn ($u) => [
                 'id'                   => $u->id,
                 'name'                 => $u->name,

@@ -1129,7 +1129,11 @@ function LocationModal({ initial, onSave, onClose }: {
 // ── Buildings Tab ────────────────────────────────────────────────────────────
 function BuildingsTab() {
   const qc = useQueryClient()
-  const { data: buildings = [], isLoading } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings })
+  const { user: currentUser } = useAuth()
+  const isBuildingAdminUser = currentUser?.role === 'building_admin'
+  const managedBuildingIds = new Set((currentUser?.buildings ?? []).map(b => b.id))
+  const { data: allBuildings = [], isLoading } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings })
+  const buildings = isBuildingAdminUser ? (allBuildings as Building[]).filter(b => managedBuildingIds.has(b.id)) : (allBuildings as Building[])
   const { data: allRooms = [] } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ['locations'], queryFn: getLocations })
   const { data: bldgGeneral } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 60_000 })
@@ -1227,6 +1231,7 @@ function BuildingsTab() {
           <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
           <h1 className="text-3xl font-black italic tracking-tighter uppercase">Buildings</h1>
         </div>
+        {!isBuildingAdminUser && (
         <div className="flex gap-2">
           <button onClick={() => setBuildingIEModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
@@ -1237,6 +1242,7 @@ function BuildingsTab() {
             <span className="material-symbols-outlined" style={{ fontSize: 15 }}>import_export</span>Rooms
           </button>
         </div>
+        )}
       </div>
 
       {buildingIEModal && (
@@ -1301,6 +1307,7 @@ function BuildingsTab() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {!isBuildingAdminUser && (<>
                   <button
                     onClick={() => setBuildingModal({ open: true, initial: b })}
                     className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-black hover:text-[#adee2b] transition-all"
@@ -1315,6 +1322,7 @@ function BuildingsTab() {
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
                   </button>
+                  </>)}
                   <button
                     onClick={() => setExpanded(isExpanded ? null : b.id)}
                     className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-all"
@@ -1360,6 +1368,7 @@ function BuildingsTab() {
         })}
 
         {/* Add Building — inline at bottom of list */}
+        {!isBuildingAdminUser && (
         <button
           onClick={() => setBuildingModal({ open: true })}
           className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-[11px] font-black uppercase tracking-wide transition-all"
@@ -1370,6 +1379,7 @@ function BuildingsTab() {
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
           Add Building
         </button>
+        )}
       </div>
 
       {/* Building modal */}
@@ -3348,6 +3358,8 @@ function DepartmentsSection({ departments, locations, qc }: {
 
 function UsersTab() {
   const qc = useQueryClient()
+  const { user: currentUser } = useAuth()
+  const isReadOnly = currentUser?.role === 'building_admin'
   const { data: users = [], isLoading } = useQuery<User[]>({ queryKey: ['users'], queryFn: getUsers })
   const { data: buildings = [] } = useQuery<Building[]>({ queryKey: ['buildings'], queryFn: getBuildings })
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ['locations'], queryFn: getLocations })
@@ -3486,6 +3498,7 @@ function UsersTab() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users..."
             className="w-56 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
         </div>
+        {!isReadOnly && (<>
         {/* Import / Export */}
         <button onClick={() => setIEModal(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
@@ -3498,10 +3511,11 @@ function UsersTab() {
           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_add</span>
           Add User
         </button>
+        </>)}
       </div>
 
-      {/* ── Departments section ── */}
-      <DepartmentsSection departments={departments as Department[]} locations={locations as Location[]} qc={qc} />
+      {/* ── Departments section — admin only ── */}
+      {!isReadOnly && <DepartmentsSection departments={departments as Department[]} locations={locations as Location[]} qc={qc} />}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
@@ -3582,6 +3596,7 @@ function UsersTab() {
                             {role === 'user' && (
                               <td className="px-5 py-3.5">
                                 <button
+                                  disabled={isReadOnly}
                                   onClick={async () => { await toggleUserSpecialAccess(u.id); qc.invalidateQueries({ queryKey: ['users'] }) }}
                                   className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-black uppercase tracking-wider whitespace-nowrap"
                                   style={u.can_book_special
@@ -3605,16 +3620,20 @@ function UsersTab() {
                               </td>
                             )}
                             <td className="px-2 py-3.5">
-                              <button onClick={() => openEdit(u)}
-                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors">
-                                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
-                              </button>
+                              {!isReadOnly && (
+                                <button onClick={() => openEdit(u)}
+                                  className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
+                                </button>
+                              )}
                             </td>
                             <td className="px-2 py-3.5">
-                              <button onClick={() => { setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('') }}
-                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
-                                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
-                              </button>
+                              {!isReadOnly && (
+                                <button onClick={() => { setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('') }}
+                                  className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -3645,7 +3664,7 @@ function UsersTab() {
                           }
                         </div>
                         {/* Special room access — only for regular users */}
-                        {u.role === 'user' && (
+                        {u.role === 'user' && !isReadOnly && (
                           <button
                             title={u.can_book_special ? 'Revoke special room access' : 'Grant special room access'}
                             onClick={async () => {
@@ -3659,6 +3678,7 @@ function UsersTab() {
                             {u.can_book_special ? 'Special' : 'Regular'}
                           </button>
                         )}
+                        {!isReadOnly && (<>
                         <button onClick={() => openEdit(u)}
                           className="size-9 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
@@ -3671,6 +3691,7 @@ function UsersTab() {
                           className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
                         </button>
+                        </>)}
                       </div>
                     ))}
                   </>
@@ -6102,7 +6123,8 @@ function DisputesTab() {
 export default function AdminPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
-  const [tab, setTab] = useState<Tab>('overview')
+  const isBuildingAdmin = user?.role === 'building_admin'
+  const [tab, setTab] = useState<Tab>(isBuildingAdmin ? 'buildings' : 'overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // Read anti_ghost_enabled to gate Disputes tab visibility
@@ -6209,16 +6231,24 @@ export default function AdminPage() {
     )
   }
 
-  const mainTabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
-    { key: 'buildings',  label: 'Buildings',  icon: 'domain' },
-    { key: 'users',      label: 'Users',      icon: 'group' },
-    { key: 'archive',    label: 'Archive',    icon: 'archive' },
-    { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
-    { key: 'sensor',     label: 'Sensor',     icon: 'sensors' },
-    { key: 'activity',   label: 'Activity',   icon: 'history' },
-    ...(antiGhostActive ? [{ key: 'disputes' as Tab, label: 'Disputes', icon: 'gavel' }] : []),
-  ]
+  // building_admin gets a reduced, building-scoped menu: Buildings & Rooms, Users (view-only), Activity Log.
+  // Everything else (Overview, Archive, Kiosk, Sensor, Settings, Disputes) is admin-only.
+  const mainTabs: { key: Tab; label: string; icon: string }[] = isBuildingAdmin
+    ? [
+        { key: 'buildings', label: 'Buildings', icon: 'domain' },
+        { key: 'users',     label: 'Users',     icon: 'group' },
+        { key: 'activity',  label: 'Activity',  icon: 'history' },
+      ]
+    : [
+        { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
+        { key: 'buildings',  label: 'Buildings',  icon: 'domain' },
+        { key: 'users',      label: 'Users',      icon: 'group' },
+        { key: 'archive',    label: 'Archive',    icon: 'archive' },
+        { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
+        { key: 'sensor',     label: 'Sensor',     icon: 'sensors' },
+        { key: 'activity',   label: 'Activity',   icon: 'history' },
+        ...(antiGhostActive ? [{ key: 'disputes' as Tab, label: 'Disputes', icon: 'gavel' }] : []),
+      ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
 
@@ -6416,7 +6446,7 @@ export default function AdminPage() {
                 {/* Storage */}
                 {overviewData.stats.storage && (() => {
                   const s = overviewData.stats.storage
-                  const fmtMb = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb} MB`
+                  const fmtMb = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(2)} MB`
                   const totalMb = s.db_mb + s.uploads_mb + (s.logs_mb ?? 0)
                   const usedPct = storageLimitMb > 0 ? Math.min(100, (totalMb / storageLimitMb) * 100) : 0
                   const isWarn = usedPct >= 70 && usedPct < 90
@@ -6426,7 +6456,7 @@ export default function AdminPage() {
                     { label: 'Database',    mb: s.db_mb,           color: '#6366f1' },
                     { label: 'Room Photos', mb: s.room_photos_mb,  color: '#3b82f6' },
                     { label: 'Avatars',     mb: s.avatars_mb,      color: '#a855f7' },
-                    { label: 'Logs',        mb: s.logs_mb ?? 0,    color: '#f59e0b' },
+                    { label: 'Activity Log', mb: s.logs_mb ?? 0,  color: '#f59e0b' },
                   ]
                   return (
                     <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"

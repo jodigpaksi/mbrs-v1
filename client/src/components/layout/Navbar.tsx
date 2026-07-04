@@ -149,11 +149,60 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
   const NAV_ITEMS = NAV_PATHS.map(n => ({ ...n, label: t(n.key as Parameters<typeof t>[0]) }))
   const isReceptionist = user?.role === 'receptionist' || user?.role === 'admin'
+  const isAdminPanelUser = user?.role === 'admin' || user?.role === 'building_admin'
   const allItems = [
     ...NAV_ITEMS,
     ...(isReceptionist ? [{ path: '/receptionist', label: 'Receptionist', icon: 'support_agent' }] : []),
-    ...(user?.role === 'admin' ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
+    ...(isAdminPanelUser ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
   ]
+
+  // Global keyboard shortcuts — Ctrl+F available rooms, Tab/Shift+Tab cycles main nav,
+  // N notifications, T today panel, Alt+N new booking (handled by TimelinePage via CustomEvent)
+  // Note: Ctrl+N is reserved by the browser (new window) and cannot be overridden — Alt+N used instead.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement
+      const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
+
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (isTyping) return
+        if (e.key.toLowerCase() === 'n') {
+          e.preventDefault()
+          document.dispatchEvent(new CustomEvent('new-booking-shortcut'))
+        }
+        return
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        if (isTyping) return
+        if (e.key.toLowerCase() === 'f') {
+          e.preventDefault()
+          document.dispatchEvent(new CustomEvent('available-rooms-toggle'))
+        }
+        return
+      }
+
+      if (isTyping) return
+
+      if (e.key === 'Tab') {
+        if (allItems.length < 2) return
+        e.preventDefault()
+        const activeIndex = Math.max(0, allItems.findIndex(item => isActive(item.path)))
+        const nextIndex = e.shiftKey
+          ? (activeIndex - 1 + allItems.length) % allItems.length
+          : (activeIndex + 1) % allItems.length
+        navigate(allItems[nextIndex].path)
+      } else if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        openNotifications()
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault()
+        document.dispatchEvent(new CustomEvent('today-panel-toggle'))
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [user?.role, location.pathname, language])
 
   async function handleLogout() {
     setProfileOpen(false)

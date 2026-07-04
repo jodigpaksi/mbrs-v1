@@ -54,6 +54,70 @@ class BookingController extends Controller
         ]);
     }
 
+    public function transfer(Request $request, Booking $booking): JsonResponse
+    {
+        $role = $request->user()->role;
+        if (!in_array($role, ['admin', 'receptionist'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($booking->status === 'cancelled') {
+            return response()->json(['message' => 'Cannot transfer a cancelled booking.'], 422);
+        }
+
+        $data = $request->validate([
+            'booked_for_user_id' => 'required|exists:users,id',
+        ]);
+
+        $newUser = \App\Models\User::findOrFail($data['booked_for_user_id']);
+
+        if ($newUser->id === $booking->booked_for_user_id) {
+            return response()->json(['message' => 'Booking is already assigned to this person.'], 422);
+        }
+
+        $previousUserId = $booking->booked_for_user_id;
+        $previousName   = $booking->booked_for;
+
+        $booking->update([
+            'booked_for_user_id' => $newUser->id,
+            'booked_for'         => $newUser->name,
+        ]);
+
+        $room     = $booking->room ?? $booking->load('room')->room;
+        $roomName = $room?->name ?? 'a room';
+        $date     = Carbon::parse($booking->start_at)->format('d M, H:i');
+        $actor    = $request->user();
+
+        if ($newUser->id !== $actor->id) {
+            Notification::create([
+                'user_id'    => $newUser->id,
+                'booking_id' => $booking->id,
+                'type'       => 'booking_transferred',
+                'message'    => "{$actor->name} transferred the booking for {$roomName} on {$date} to you",
+            ]);
+        }
+
+        if ($previousUserId && $previousUserId !== $newUser->id && $previousUserId !== $actor->id) {
+            Notification::create([
+                'user_id'    => $previousUserId,
+                'booking_id' => $booking->id,
+                'type'       => 'booking_transferred',
+                'message'    => "{$actor->name} transferred the booking for {$roomName} on {$date} to someone else",
+            ]);
+        }
+
+        \App\Models\ActivityLog::record(
+            'booking.transferred',
+            "Transferred \"{$booking->title}\" in {$roomName} ({$date})" . ($previousName ? " from {$previousName}" : '') . " to {$newUser->name}",
+            $booking,
+            ['room' => $roomName, 'title' => $booking->title, 'start_at' => (string) $booking->start_at, 'from_user_id' => $previousUserId, 'to_user_id' => $newUser->id],
+        );
+
+        $this->broadcastChange('updated', $booking);
+
+        return response()->json($booking->load(['user', 'room', 'bookedForUser']));
+    }
+
     private function validateGeneralRules(array $data, Request $request, bool $isPrivileged, \App\Models\Room $room): ?JsonResponse
     {
         $get = fn(string $key, mixed $default) => \App\Models\Setting::where('key', $key)->value('value') ?? $default;
@@ -205,6 +269,10 @@ class BookingController extends Controller
         $q = Booking::with(['user', 'room.building'])
             ->whereNotNull('dispute_status');
 
+        if ($request->user()->role === 'building_admin') {
+            $q->whereHas('room', fn ($rq) => $rq->whereIn('building_id', $request->user()->managedBuildingIds()));
+        }
+
         if ($status === 'pending') {
             $q->where('dispute_status', 'pending');
         } elseif ($status === 'resolved') {
@@ -282,6 +350,9 @@ class BookingController extends Controller
         }
         if ($booking->dispute_status !== 'pending') {
             return response()->json(['error' => 'No pending dispute on this booking'], 422);
+        }
+        if ($admin->role === 'building_admin' && !$admin->canManageBuilding((int) $booking->load('room')->room?->building_id)) {
+            return response()->json(['error' => 'Forbidden'], 403);
         }
 
         $data   = $request->validate(['action' => 'required|in:approve,reject']);
@@ -402,8 +473,10 @@ class BookingController extends Controller
     {
         $role = $request->user()->role;
         $isPrivileged = in_array($role, ['admin', 'receptionist']);
+        $isOwner      = $booking->user_id === $request->user()->id;
+        $isRecipient  = $booking->booked_for_user_id !== null && $booking->booked_for_user_id === $request->user()->id;
 
-        if ($booking->user_id !== $request->user()->id && !$isPrivileged) {
+        if (!$isOwner && !$isRecipient && !$isPrivileged) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -420,6 +493,12 @@ class BookingController extends Controller
             'booked_for'         => 'sometimes|nullable|string|max:100',
             'booked_for_user_id' => 'sometimes|nullable|exists:users,id',
         ]);
+
+        // A recipient (booking made FOR them, not BY them) can edit the meeting details
+        // but cannot reassign who the booking is for — only the owner or a privileged user can.
+        if ($isRecipient && !$isOwner && !$isPrivileged) {
+            unset($data['booked_for'], $data['booked_for_user_id']);
+        }
 
         $roomId  = $data['room_id']  ?? $booking->room_id;
         $startAt = $data['start_at'] ?? $booking->start_at;

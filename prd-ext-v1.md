@@ -32,17 +32,17 @@ buildings:  id | name | code | address | location_id → locations | ...
 
 Kota/lokasi user didapat via: `user → building → location.name`
 
-### Migration A — Tambah kolom ke `users` (jalankan di MBRS server)
+### ✅ Migration A — SUDAH DIJALANKAN di MBRS server (2026-07-04)
 
 ```php
 $table->string('nik', 50)->nullable()->unique()->after('name');
-$table->foreignId('building_id')->nullable()->constrained('buildings')->nullOnDelete()->after('ext');
 ```
 
 - `nik` = Nomor Induk Karyawan
-- `building_id` = gedung tempat user bekerja (FK → buildings, beda dengan `admin_buildings` yang untuk assignment staff)
+- **Keputusan revisi:** tidak jadi bikin kolom `building_id` baru. `users` MBRS ternyata sudah punya kolom `default_building_id` (FK → buildings, nullable) yang fungsinya persis sama — "gedung tempat user ini berada", dipakai juga oleh fitur building_admin scoping. ext-v1 **pakai `default_building_id` yang sudah ada ini**, bukan bikin kolom terpisah, biar tidak ada dua sumber data building yang bisa gak sinkron.
+- Beda dengan `admin_buildings` (pivot table) yang khusus untuk assignment staff `building_admin` mengelola gedung mana.
 
-### Migration B — Tabel baru `ext_edit_logs` (jalankan di MBRS server)
+### ✅ Migration B — SUDAH DIJALANKAN di MBRS server (2026-07-04)
 
 ```
 id                bigint PK
@@ -70,11 +70,11 @@ created_by     FK → users
 timestamps
 ```
 
-### MBRS Model Updates
+### ✅ MBRS Model Updates — SUDAH DIJALANKAN
 
-- `User::$fillable` += `nik`, `building_id`
-- `User::$casts` += `building_id => 'integer'`
-- Tambah relasi `workBuilding()` BelongsTo(Building) — berbeda dengan `adminBuildings()`
+- `User::$fillable` += `nik`
+- Kota/building user didapat via relasi `defaultBuilding()` yang sudah ada (bukan `workBuilding()` baru) — `user->defaultBuilding->location->name`
+- `App\Models\ExtEditLog` dibuat (immutable log model, pola sama seperti `ActivityLog`: `const UPDATED_AT = null`)
 
 ---
 
@@ -97,9 +97,12 @@ GET    /api/directory           →  search + filter users (public)
 PATCH  /api/directory/{user}    →  update fields + tulis log (auth required)
 ```
 
-**GET params:** `q` (nama/NIK/ext), `dept_id`, `location_id`, `building_id`, `page` (50/page)
+**GET params:** `q` (nama/NIK/ext), `dept_id`, `location_id`, `default_building_id`, `page` (50/page)
 
-**PATCH fields:** `name`, `nik`, `department_id`, `ext`, `building_id` — semua `sometimes`. Kota tidak bisa diedit langsung, ikut building.
+**PATCH fields:** `name`, `email`, `nik`, `department_id`, `ext`, `default_building_id` — semua `sometimes`. Kota tidak bisa diedit langsung, ikut building.
+
+- `email` hanya bisa diedit lewat form single-user (`/users/:id/edit`), **bukan** lewat Import Excel — karena `email` dipakai sebagai match-key saat import (baris dicari berdasarkan email, jadi email itu sendiri harus tetap tidak berubah selama proses import berlangsung). Validasi: format email valid + unique di tabel `users` (kecuali user itu sendiri).
+- Karena `email` adalah kolom yang sama dipakai untuk login MBRS, ubah email di sini otomatis mengubah kredensial login user tersebut di MBRS juga (shared DB) — pastikan front-end kasih warning/konfirmasi sebelum simpan perubahan email.
 
 ### External Contacts
 
@@ -119,8 +122,8 @@ POST  /api/directory/import  →  smart import dari .xlsx
 
 **Smart import logic:**
 1. Parse Excel dengan PhpSpreadsheet
-2. Match user by `email` (primary) atau `nik` (secondary)
-3. Bandingkan tiap field — update **hanya yang berubah**
+2. Match user by `email` (primary) atau `nik` (secondary) — kolom `email` sendiri tidak pernah ikut di-update lewat import, murni dipakai untuk mencari user yang dituju
+3. Bandingkan tiap field (`name`, `nik`, `department_id`, `ext`, `default_building_id`) — update **hanya yang berubah**
 4. Tidak ketemu = skip (tidak buat user baru, itu urusan MBRS)
 5. Building tidak terdaftar = baris ditolak → masuk summary "invalid"
 6. Tulis `ext_edit_logs` untuk tiap user yang berubah
@@ -148,8 +151,9 @@ GET  /api/logs?user_id=&editor_id=&from=&to=&page=
 - Setelah login → redirect `/`, tombol Edit muncul di tiap card
 
 ### `/users/:id/edit` *(login required)*
-- Form: Name, NIK, Dept (dropdown), Ext, Building (dropdown)
+- Form: Name, Email, NIK, Dept (dropdown), Ext, Building (dropdown)
 - Kota: read-only, auto-isi dari building yang dipilih
+- Email: boleh diedit di sini (beda dengan Import Excel, lihat catatan di bagian Import/Export) — tampilkan konfirmasi/warning sebelum simpan karena ini juga kredensial login MBRS user tsb
 - Simpan → PATCH → log otomatis
 - Riwayat 5 edit terakhir user ini di bawah form
 
@@ -204,7 +208,7 @@ Simple & clean minimalis — bukan glass MBRS. Plain white background, tipografi
 
 ## Verification Checklist
 
-- [ ] Migration A & B jalan di MBRS server → `users` punya `nik`, `building_id`; tabel `ext_edit_logs` ada
+- [x] Migration A & B jalan di MBRS server (2026-07-04) → `users` punya `nik` (pakai `default_building_id` yang sudah ada untuk building); tabel `ext_edit_logs` ada
 - [ ] `POST /api/auth/login` dengan akun receptionist MBRS → dapat token
 - [ ] `GET /api/directory?q=john` → return data user dengan building + kota
 - [ ] `PATCH /api/directory/5` `{ ext: "1234" }` → ext terupdate, log tercatat

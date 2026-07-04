@@ -18,6 +18,7 @@ export default function BookingBar({
   const dept = booking.user?.department_name || (typeof booking.user?.department === 'string' ? booking.user.department : '') || 'GAA'
   const isTentative = booking.status === 'tentative'
   const isMaint = booking.type === 'maintenance' || booking.type === 'repairment'
+  const isProxy = !!booking.booked_for_user_id && booking.booked_for_user_id !== booking.user_id
 
   // Color system:
   // me + confirmed  → blue-500 solid
@@ -63,6 +64,7 @@ export default function BookingBar({
           : isMaint
           ? 'repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(0,0,0,0.06) 6px, rgba(0,0,0,0.06) 12px)'
           : undefined,
+        boxShadow: isProxy ? 'inset 0 0 0 2px #2563eb' : undefined,
       }}
       onMouseDown={isMe ? onBarMouseDown : undefined}
       onMouseEnter={e => onMouseEnter(e, booking)}
