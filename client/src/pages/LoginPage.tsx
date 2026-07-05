@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { login } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { prefetchAfterLogin } from '../api/prefetch'
-import { getBranding } from '../api/settings'
+import { getBranding, getCachedBranding } from '../api/settings'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { data: branding } = useQuery({ queryKey: ['app-branding'], queryFn: getBranding, staleTime: 5 * 60 * 1000 })
+  const { data: branding } = useQuery({ queryKey: ['app-branding'], queryFn: getBranding, staleTime: 5 * 60 * 1000, initialData: getCachedBranding })
   const appName = branding?.app_name ?? 'RoomSync Pro'
   useEffect(() => { document.title = appName }, [appName])
 
@@ -45,9 +45,9 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-3 mb-10 justify-center">
-          <div className="size-11 bg-black rounded-2xl flex items-center justify-center text-[#adee2b] overflow-hidden">
+          <div className={`h-11 min-w-11 max-w-[220px] rounded-2xl flex items-center justify-center text-[#adee2b] overflow-hidden px-1.5 ${branding?.app_logo_url ? 'bg-white' : 'bg-black'}`}>
             {branding?.app_logo_url
-              ? <img src={branding.app_logo_url} alt="logo" className="size-11 object-cover" />
+              ? <img src={branding.app_logo_url} alt="logo" className="h-full w-auto max-w-[204px] object-contain" />
               : <span className="material-symbols-outlined text-xl">sync_alt</span>
             }
           </div>

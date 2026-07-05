@@ -1,4 +1,4 @@
-# MBRS v1 — RoomSync Pro: PRD v2
+# MRBS v1 — RoomSync Pro: PRD v2
 ### Product Requirements Document · AI Development Handoff
 
 > **Tujuan file ini:** Dokumen konteks lengkap untuk AI assistant (Claude atau lainnya) agar bisa melanjutkan pengembangan tanpa kehilangan pengetahuan. Baca sebelum membuat perubahan apapun.  
@@ -9,7 +9,7 @@
 
 ## 1. Project Overview
 
-**Nama produk:** MBRS v1 / RoomSync Pro  
+**Nama produk:** MRBS v1 / RoomSync Pro  
 **Deskripsi:** Sistem pemesanan ruang rapat internal untuk kantor/hotel — staf dapat melihat timeline langsung, membuat/memindahkan/meresize booking dengan drag, mengelola jadwal mereka, dan admin dapat melihat semua booking.  
 **Status saat ini:** MVP feature-complete, aktif dikembangkan. Belum di-deploy — berjalan di XAMPP lokal.
 

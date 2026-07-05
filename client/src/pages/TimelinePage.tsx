@@ -19,7 +19,7 @@ import GlassDatePicker from '../components/ui/GlassDatePicker'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
 import { getDepartments } from '../api/departments'
-import { getGeneralSettings } from '../api/settings'
+import { getGeneralSettings, getCachedBranding } from '../api/settings'
 import type { Department } from '../types'
 
 const HOUR_START = 7
@@ -46,7 +46,7 @@ function exportToICS(booking: { title: string; description?: string; start_at: s
   const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const loc = [booking.room?.name, booking.room?.building?.name].filter(Boolean).join(', ')
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MBRS//RoomSync//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MRBS//RoomSync//EN', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `DTSTART:${fmtDT(booking.start_at)}`,
     `DTEND:${fmtDT(booking.end_at)}`,
@@ -74,7 +74,7 @@ export default function TimelinePage() {
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
   const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
-  const appName = appSettings?.app_name ?? 'RoomSync Pro'
+  const appName = appSettings?.app_name ?? (appSettings ? 'RoomSync Pro' : getCachedBranding().app_name)
   const [searchParams, setSearchParams] = useSearchParams()
   const [highlightId, setHighlightId] = useState<number | null>(() => {
     const h = searchParams.get('highlight')

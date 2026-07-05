@@ -136,7 +136,7 @@ class AuthController extends Controller
         }
         $request->validate(['avatar' => 'required|image|max:2048']);
         $path = $request->file('avatar')->store('avatars', 'public');
-        $user->update(['avatar' => Storage::url($path)]);
+        $user->update(['avatar' => Storage::disk('public')->url($path)]);
         return response()->json($user);
     }
 

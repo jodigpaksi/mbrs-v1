@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyBookings, getBookings } from '../../api/bookings'
 import { getRooms } from '../../api/rooms'
-import { getGeneralSettings } from '../../api/settings'
+import { getGeneralSettings, getCachedBranding } from '../../api/settings'
 import type { Booking, Room } from '../../types'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
@@ -39,8 +39,9 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const { openNotifications } = useNotification()
   const unreadCount = useNotificationUnreadCount()
   const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
-  const appName = appSettings?.app_name ?? 'RoomSync Pro'
-  const appLogoUrl = appSettings?.app_logo_url ?? null
+  const cachedBranding = appSettings ? null : getCachedBranding()
+  const appName = appSettings?.app_name ?? cachedBranding?.app_name ?? 'RoomSync Pro'
+  const appLogoUrl = appSettings?.app_logo_url ?? cachedBranding?.app_logo_url ?? null
   useEffect(() => { document.title = appName }, [appName])
 
   // — all useState / useRef declarations first, before any useQuery that references them —
@@ -156,9 +157,10 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     ...(isAdminPanelUser ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
   ]
 
-  // Global keyboard shortcuts — Ctrl+F available rooms, Tab/Shift+Tab cycles main nav,
-  // N notifications, T today panel, Alt+N new booking (handled by TimelinePage via CustomEvent)
+  // Global keyboard shortcuts — Ctrl+F available rooms, N notifications, T today panel,
+  // Alt+N new booking (handled by TimelinePage via CustomEvent)
   // Note: Ctrl+N is reserved by the browser (new window) and cannot be overridden — Alt+N used instead.
+  // Note: Tab/Shift+Tab nav-cycling was removed — it interfered with normal Tab-based focus navigation in forms.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement
@@ -184,15 +186,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
       if (isTyping) return
 
-      if (e.key === 'Tab') {
-        if (allItems.length < 2) return
-        e.preventDefault()
-        const activeIndex = Math.max(0, allItems.findIndex(item => isActive(item.path)))
-        const nextIndex = e.shiftKey
-          ? (activeIndex - 1 + allItems.length) % allItems.length
-          : (activeIndex + 1) % allItems.length
-        navigate(allItems[nextIndex].path)
-      } else if (e.key === 'n' || e.key === 'N') {
+      if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
         openNotifications()
       } else if (e.key === 't' || e.key === 'T') {
@@ -216,9 +210,9 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
         {/* Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-          <div className="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b] overflow-hidden">
+          <div className={`h-9 min-w-9 max-w-[160px] rounded-xl flex items-center justify-center text-[#adee2b] overflow-hidden px-1 ${appLogoUrl ? 'bg-white' : 'bg-black'}`}>
             {appLogoUrl
-              ? <img src={appLogoUrl} alt="logo" className="size-9 object-cover" />
+              ? <img src={appLogoUrl} alt="logo" className="h-full w-auto max-w-[152px] object-contain" />
               : <span className="material-symbols-outlined text-lg">sync_alt</span>
             }
           </div>

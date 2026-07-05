@@ -92,7 +92,7 @@ class SettingController extends Controller
 
     public function uploadLogo(Request $request): JsonResponse
     {
-        $request->validate(['logo' => 'required|image|max:2048']);
+        $request->validate(['logo' => 'required|image|max:8192']);
         // Remove old logo file if exists
         $old = Setting::where('key', 'app_logo_url')->value('value');
         if ($old) {
@@ -100,7 +100,7 @@ class SettingController extends Controller
             Storage::disk('public')->delete($oldPath);
         }
         $path = $request->file('logo')->store('logo', 'public');
-        $url = Storage::url($path);
+        $url = Storage::disk('public')->url($path);
         Setting::updateOrCreate(['key' => 'app_logo_url'], ['value' => $url]);
         \App\Models\ActivityLog::record('settings.updated', 'Updated app logo', null, []);
         return response()->json(['app_logo_url' => $url]);

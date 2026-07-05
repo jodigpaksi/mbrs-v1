@@ -305,7 +305,7 @@ function LandscapeLayout({ now, theme, layout, room, status, current, isOccupied
         {/* Footer */}
         <div className="flex items-center justify-between shrink-0" style={{ padding: '1.4vmin 3vmin', borderTop: '1px solid var(--k-border)' }}>
           <p style={{ fontSize: '1.7vmin', color: 'var(--k-text2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            MBRS · Meeting Room Booking System
+            MRBS · Meeting Room Booking System
           </p>
           <p style={{ fontSize: '1.7vmin', color: 'var(--k-text2)', fontWeight: 700 }}>Auto-refreshes every 30s</p>
         </div>
@@ -428,7 +428,7 @@ function PortraitLayout({ now, theme, layout, room, status, current, isOccupied,
       {/* Footer */}
       <div className="relative z-10 shrink-0" style={{ borderTop: '1px solid var(--k-border)', padding: '1.8vmin 7vmin' }}>
         <p style={{ fontSize: '1.9vmin', color: 'var(--k-text2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          MBRS · Auto-refreshes every 30s
+          MRBS · Auto-refreshes every 30s
         </p>
       </div>
     </div>

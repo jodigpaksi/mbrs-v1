@@ -146,7 +146,7 @@ class RoomController extends Controller
         if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
         $request->validate(['photo' => 'required|image|max:5120']);
         $path = $request->file('photo')->store('room-photos', 'public');
-        $url  = Storage::url($path);
+        $url  = Storage::disk('public')->url($path);
         $photos = $room->photos ?? [];
         $photos[] = $url;
         $room->update(['photos' => $photos]);

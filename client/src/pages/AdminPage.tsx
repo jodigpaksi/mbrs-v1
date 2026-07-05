@@ -2095,7 +2095,7 @@ function ImportExportModal({ users, onImport, onClose }: {
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
+    const sql = `-- MRBS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
     download('users_export.sql', sql, 'text/plain')
   }
 
@@ -2554,7 +2554,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Buildings Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO buildings (${BUILDING_COLS.join(', ')}) VALUES\n${rows};`
+    const sql = `-- MRBS Buildings Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO buildings (${BUILDING_COLS.join(', ')}) VALUES\n${rows};`
     download('buildings_export.sql', sql, 'text/plain')
   }
 
@@ -2899,7 +2899,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Rooms Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO rooms (${ROOM_COLS.join(', ')}) VALUES\n${rows};`
+    const sql = `-- MRBS Rooms Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO rooms (${ROOM_COLS.join(', ')}) VALUES\n${rows};`
     download('rooms_export.sql', sql, 'text/plain')
   }
 
@@ -4779,8 +4779,8 @@ function SettingsTab() {
           <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Navbar Logo</label>
           {appLogoUrl ? (
             <div className="flex items-center gap-4">
-              <div className="size-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shrink-0">
-                <img src={appLogoUrl} alt="App logo" className="size-16 object-cover" />
+              <div className="h-16 min-w-16 max-w-[220px] rounded-2xl overflow-hidden bg-white flex items-center justify-center shrink-0 px-2">
+                <img src={appLogoUrl} alt="App logo" className="h-full w-auto max-w-[204px] object-contain" />
               </div>
               <div className="space-y-2">
                 <p className="text-[12px] font-semibold text-[var(--ds-text-2)]">Custom logo active</p>
@@ -4805,20 +4805,20 @@ function SettingsTab() {
               </div>
             </div>
           ) : (
-            <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:border-[#adee2b] hover:bg-[#adee2b]/5"
+            <label htmlFor="app-logo-upload-input" className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:border-[#adee2b] hover:bg-[#adee2b]/5"
               style={{ borderColor: 'var(--ds-border)', minHeight: 100 }}>
               {logoUploading
                 ? <span className="text-[12px] font-semibold text-[var(--ds-text-3)]">Uploading...</span>
                 : <>
                   <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 28 }}>add_photo_alternate</span>
                   <span className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">Click to upload logo</span>
-                  <span className="text-[9px] text-[var(--ds-text-4)]">PNG, SVG, JPG · max 2 MB · square recommended</span>
+                  <span className="text-[9px] text-[var(--ds-text-4)]">PNG, SVG, JPG · max 8 MB · square or rectangular</span>
                 </>
               }
-              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
             </label>
           )}
-          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Appears in the navbar. Use a square image (min 64×64 px). Leave empty to use the default icon.</p>
+          <input id="app-logo-upload-input" ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Appears in the navbar. Square or rectangular images both work (logo fits a 36px-tall slot, up to 160px wide). Leave empty to use the default icon.</p>
         </div>
 
         {/* Favicon guide */}

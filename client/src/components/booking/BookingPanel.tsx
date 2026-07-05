@@ -18,7 +18,7 @@ function exportToICS(data: { title: string; description?: string; startAt: strin
   const esc = (s: string) => s.replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n')
   const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MBRS//RoomSync//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MRBS//RoomSync//EN', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `DTSTART:${fmtDT(data.startAt)}`,
     `DTEND:${fmtDT(data.endAt)}`,

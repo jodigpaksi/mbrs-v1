@@ -41,8 +41,23 @@ export interface AppBranding {
   app_logo_url: string | null
 }
 
+const BRANDING_CACHE_KEY = 'app_branding_cache'
+
+export function getCachedBranding(): AppBranding {
+  try {
+    const raw = localStorage.getItem(BRANDING_CACHE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch { /* ignore malformed cache */ }
+  return { app_name: 'RoomSync Pro', app_logo_url: null }
+}
+
+export function setCachedBranding(branding: AppBranding) {
+  try { localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(branding)) } catch { /* storage unavailable */ }
+}
+
 export async function getBranding(): Promise<AppBranding> {
   const res = await api.get('/settings/branding')
+  setCachedBranding(res.data)
   return res.data
 }
 
@@ -79,6 +94,7 @@ export async function updateWeekendSettings(saturday: boolean, sunday: boolean):
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
   const res = await api.get('/settings/general')
+  setCachedBranding({ app_name: res.data.app_name, app_logo_url: res.data.app_logo_url })
   return res.data
 }
 
