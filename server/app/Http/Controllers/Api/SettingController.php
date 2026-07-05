@@ -9,6 +9,8 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 class SettingController extends Controller
@@ -155,6 +157,132 @@ class SettingController extends Controller
         Setting::where('key', 'login_photo_url')->delete();
         \App\Models\ActivityLog::record('settings.updated', 'Removed login page photo', null, []);
         return response()->json(['login_photo_url' => null]);
+    }
+
+    public function m365Settings(): JsonResponse
+    {
+        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $tenantId = $get('m365_tenant_id');
+        $clientId = $get('m365_client_id');
+        $senderEmail = $get('m365_sender_email');
+        $hasSecret = (bool) $get('m365_client_secret');
+
+        return response()->json([
+            'tenant_id' => $tenantId ?? '',
+            'client_id' => $clientId ?? '',
+            'sender_email' => $senderEmail ?? '',
+            'has_secret' => $hasSecret,
+            'configured' => (bool) ($tenantId && $clientId && $hasSecret),
+            'mail_enabled' => $get('m365_mail_enabled') === 'true',
+            'mail_ready' => (bool) ($tenantId && $clientId && $hasSecret && $senderEmail),
+            'calendar_sync_enabled' => $get('m365_calendar_sync_enabled') === 'true',
+            'calendar_sync_ready' => (bool) ($tenantId && $clientId && $hasSecret),
+        ]);
+    }
+
+    public function updateM365Settings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id'     => 'sometimes|string|max:100',
+            'client_id'     => 'sometimes|string|max:100',
+            'client_secret' => 'sometimes|nullable|string|max:500',
+            'sender_email'  => 'sometimes|string|max:150',
+            'mail_enabled'  => 'sometimes|boolean',
+            'calendar_sync_enabled' => 'sometimes|boolean',
+        ]);
+
+        if (array_key_exists('tenant_id', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_tenant_id'], ['value' => $data['tenant_id']]);
+        }
+        if (array_key_exists('client_id', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_client_id'], ['value' => $data['client_id']]);
+        }
+        if (array_key_exists('sender_email', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_sender_email'], ['value' => $data['sender_email']]);
+        }
+        if (array_key_exists('mail_enabled', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_mail_enabled'], ['value' => $data['mail_enabled'] ? 'true' : 'false']);
+        }
+        if (array_key_exists('calendar_sync_enabled', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_calendar_sync_enabled'], ['value' => $data['calendar_sync_enabled'] ? 'true' : 'false']);
+        }
+        // Only touch the secret if the client actually sent a new value (empty/omitted keeps the existing one).
+        if (!empty($data['client_secret'])) {
+            Setting::updateOrCreate(['key' => 'm365_client_secret'], ['value' => Crypt::encryptString($data['client_secret'])]);
+        }
+
+        \App\Models\ActivityLog::record('settings.updated', 'Updated Microsoft 365 integration settings', null, []);
+
+        return $this->m365Settings();
+    }
+
+    public function testM365Connection(): JsonResponse
+    {
+        $tenantId = Setting::where('key', 'm365_tenant_id')->value('value');
+        $clientId = Setting::where('key', 'm365_client_id')->value('value');
+        $encryptedSecret = Setting::where('key', 'm365_client_secret')->value('value');
+
+        if (!$tenantId || !$clientId || !$encryptedSecret) {
+            return response()->json(['success' => false, 'message' => 'Tenant ID, Client ID, and Client Secret must all be set first.'], 422);
+        }
+
+        try {
+            $clientSecret = Crypt::decryptString($encryptedSecret);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Stored client secret could not be decrypted. Please re-enter it.'], 422);
+        }
+
+        try {
+            $res = Http::asForm()->post("https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token", [
+                'client_id'     => $clientId,
+                'client_secret' => $clientSecret,
+                'scope'         => 'https://graph.microsoft.com/.default',
+                'grant_type'    => 'client_credentials',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Could not reach Microsoft login endpoint: ' . $e->getMessage()], 502);
+        }
+
+        if ($res->successful() && $res->json('access_token')) {
+            return response()->json(['success' => true, 'message' => 'Connected — Azure AD app credentials are valid and a Graph API token was issued.']);
+        }
+
+        $err = $res->json('error_description') ?? $res->json('error') ?? 'Unknown error from Microsoft.';
+        return response()->json(['success' => false, 'message' => $err], 200);
+    }
+
+    public function sendM365TestEmail(Request $request): JsonResponse
+    {
+        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $tenantId = $get('m365_tenant_id');
+        $clientId = $get('m365_client_id');
+        $senderEmail = $get('m365_sender_email');
+        $encryptedSecret = $get('m365_client_secret');
+
+        if (!$tenantId || !$clientId || !$senderEmail || !$encryptedSecret) {
+            return response()->json(['success' => false, 'message' => 'Tenant ID, Client ID, Client Secret, and Sender Mailbox must all be set first.'], 422);
+        }
+
+        try {
+            $clientSecret = Crypt::decryptString($encryptedSecret);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Stored client secret could not be decrypted. Please re-enter it.'], 422);
+        }
+
+        $to = $request->user()->email;
+
+        try {
+            \Illuminate\Support\Facades\Mail::mailer('graph')->html(
+                '<p>This is a test email sent via Microsoft Graph from MRBS Admin Settings. If you received this, the Microsoft 365 mail integration is working.</p>',
+                function ($message) use ($to, $senderEmail) {
+                    $message->to($to)->from($senderEmail)->subject('MRBS — Microsoft 365 test email');
+                }
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 200);
+        }
+
+        return response()->json(['success' => true, 'message' => "Test email sent to {$to}. Check your inbox (and spam folder)."]);
     }
 
     public function updateGeneralSettings(Request $request): JsonResponse

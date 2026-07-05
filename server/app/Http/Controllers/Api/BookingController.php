@@ -459,6 +459,8 @@ class BookingController extends Controller
             );
         }
 
+        \App\Services\Microsoft365\GraphCalendarSync::syncCreate($booking->load(['room', 'user', 'bookedForUser']));
+
         $this->broadcastChange('created', $booking);
 
         return response()->json($booking->load(['user', 'room']), 201);

@@ -105,6 +105,38 @@ export async function deleteLoginPhoto(): Promise<void> {
   await api.delete('/settings/login-photo')
 }
 
+export interface M365Settings {
+  tenant_id: string
+  client_id: string
+  sender_email: string
+  has_secret: boolean
+  configured: boolean
+  mail_enabled: boolean
+  mail_ready: boolean
+  calendar_sync_enabled: boolean
+  calendar_sync_ready: boolean
+}
+
+export async function getM365Settings(): Promise<M365Settings> {
+  const res = await api.get('/settings/m365')
+  return res.data
+}
+
+export async function updateM365Settings(patch: { tenant_id?: string; client_id?: string; client_secret?: string; sender_email?: string; mail_enabled?: boolean; calendar_sync_enabled?: boolean }): Promise<M365Settings> {
+  const res = await api.patch('/settings/m365', patch)
+  return res.data
+}
+
+export async function testM365Connection(): Promise<{ success: boolean; message: string }> {
+  const res = await api.post('/settings/m365/test')
+  return res.data
+}
+
+export async function sendM365TestEmail(): Promise<{ success: boolean; message: string }> {
+  const res = await api.post('/settings/m365/test-email')
+  return res.data
+}
+
 export async function getBookingHours(): Promise<BookingHours> {
   const res = await api.get('/settings/booking-hours')
   return res.data
