@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useSettings } from '../../context/SettingsContext'
 import { useWeekendSettings } from '../../hooks/useWeekendSettings'
@@ -109,6 +109,19 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // After the popup renders, flip it above the trigger if it would overflow the
+  // bottom of the viewport (the panel it lives in may not scroll far enough to reveal it).
+  useLayoutEffect(() => {
+    if (!open || !popupRef.current || !ref.current) return
+    const popupRect = popupRef.current.getBoundingClientRect()
+    const triggerRect = ref.current.getBoundingClientRect()
+    const overflowsBottom = popupRect.bottom > window.innerHeight - 8
+    if (overflowsBottom) {
+      const flippedTop = Math.max(8, triggerRect.top - popupRect.height - 8)
+      setPopupStyle(prev => ({ ...prev, top: flippedTop }))
+    }
+  }, [open, view, cursor])
 
   const y = cursor.getFullYear()
   const m = cursor.getMonth()

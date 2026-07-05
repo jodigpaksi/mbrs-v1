@@ -16,7 +16,7 @@ import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, 
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
-import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo } from '../api/settings'
+import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto } from '../api/settings'
 import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive } from '../api/archive'
 import type { ArchiveParams } from '../api/archive'
 import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBackupExports } from '../api/backup'
@@ -4501,10 +4501,22 @@ function SettingsTab() {
   // General — auto-save each field
   const { data: general } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings })
   const [appName,      setAppName]      = useState(general?.app_name ?? 'RoomSync Pro')
+  const [appFullName,  setAppFullName]  = useState(general?.app_full_name ?? '')
   const [appLogoUrl,   setAppLogoUrl]   = useState<string | null>(general?.app_logo_url ?? null)
   const [logoUploading, setLogoUploading] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const appNameDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const appFullNameDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const [loginPhotoUrl, setLoginPhotoUrl] = useState<string | null>(general?.login_photo_url ?? null)
+  const [loginPhotoUploading, setLoginPhotoUploading] = useState(false)
+  const loginPhotoInputRef = useRef<HTMLInputElement>(null)
+  const [loginPhotoPosX, setLoginPhotoPosX] = useState(general?.login_photo_pos_x ?? 50)
+  const [loginPhotoPosY, setLoginPhotoPosY] = useState(general?.login_photo_pos_y ?? 50)
+  const [loginHeadline,    setLoginHeadline]    = useState(general?.login_headline ?? 'Booking made easy')
+  const [loginSubheadline, setLoginSubheadline] = useState(general?.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
+  const loginPhotoPosDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const loginHeadlineDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const loginSubheadlineDebounce = useRef<ReturnType<typeof setTimeout>>()
   const [maxDays,      setMaxDays]      = useState(general?.max_advance_days ?? 30)
   const [allowBookFor,      setAllowBookFor]      = useState(general?.allow_book_for_others ?? true)
   const [allowPasswordChange, setAllowPasswordChange] = useState(general?.allow_password_change ?? true)
@@ -4529,7 +4541,13 @@ function SettingsTab() {
   useEffect(() => {
     if (general) {
       setAppName(general.app_name ?? 'RoomSync Pro')
+      setAppFullName(general.app_full_name ?? '')
       setAppLogoUrl(general.app_logo_url ?? null)
+      setLoginPhotoUrl(general.login_photo_url ?? null)
+      setLoginPhotoPosX(general.login_photo_pos_x ?? 50)
+      setLoginPhotoPosY(general.login_photo_pos_y ?? 50)
+      setLoginHeadline(general.login_headline ?? 'Booking made easy')
+      setLoginSubheadline(general.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
       setAllowPasswordChange(general.allow_password_change ?? true)
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
@@ -4543,7 +4561,7 @@ function SettingsTab() {
       setWebConfirmEnabled(general.web_confirm_enabled ?? false)
       setBusinessTz(general.business_timezone ?? 'Asia/Jakarta')
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone, general?.app_name, general?.app_logo_url])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone, general?.app_name, general?.app_full_name, general?.app_logo_url, general?.login_photo_url, general?.login_photo_pos_x, general?.login_photo_pos_y, general?.login_headline, general?.login_subheadline])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -4557,6 +4575,11 @@ function SettingsTab() {
     setAppName(v)
     clearTimeout(appNameDebounce.current)
     appNameDebounce.current = setTimeout(() => saveGeneral({ app_name: v }, `App name set to "${v}"`), 800)
+  }
+  function onAppFullNameChange(v: string) {
+    setAppFullName(v)
+    clearTimeout(appFullNameDebounce.current)
+    appFullNameDebounce.current = setTimeout(() => saveGeneral({ app_full_name: v }, v ? `App full name set to "${v}"` : 'App full name cleared'), 800)
   }
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -4579,6 +4602,48 @@ function SettingsTab() {
     setAppLogoUrl(null)
     queryClient.invalidateQueries({ queryKey: ['settings-general'] })
     addInfoToast('App logo removed')
+  }
+  async function handleLoginPhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLoginPhotoUploading(true)
+    try {
+      const res = await uploadLoginPhoto(file)
+      setLoginPhotoUrl(res.login_photo_url)
+      queryClient.invalidateQueries({ queryKey: ['settings-general'] })
+      addInfoToast('Login page photo updated')
+    } catch {
+      addInfoToast('Photo upload failed')
+    } finally {
+      setLoginPhotoUploading(false)
+      if (loginPhotoInputRef.current) loginPhotoInputRef.current.value = ''
+    }
+  }
+  async function handleDeleteLoginPhoto() {
+    await deleteLoginPhoto()
+    setLoginPhotoUrl(null)
+    queryClient.invalidateQueries({ queryKey: ['settings-general'] })
+    addInfoToast('Login page photo removed')
+  }
+  function onLoginPhotoPosChange(axis: 'x' | 'y', v: number) {
+    if (axis === 'x') setLoginPhotoPosX(v); else setLoginPhotoPosY(v)
+    clearTimeout(loginPhotoPosDebounce.current)
+    loginPhotoPosDebounce.current = setTimeout(() => {
+      saveGeneral(
+        axis === 'x' ? { login_photo_pos_x: v } : { login_photo_pos_y: v },
+        'Login photo position updated'
+      )
+    }, 500)
+  }
+  function onLoginHeadlineChange(v: string) {
+    setLoginHeadline(v)
+    clearTimeout(loginHeadlineDebounce.current)
+    loginHeadlineDebounce.current = setTimeout(() => saveGeneral({ login_headline: v }, 'Login headline updated'), 800)
+  }
+  function onLoginSubheadlineChange(v: string) {
+    setLoginSubheadline(v)
+    clearTimeout(loginSubheadlineDebounce.current)
+    loginSubheadlineDebounce.current = setTimeout(() => saveGeneral({ login_subheadline: v }, 'Login subheadline updated'), 800)
   }
   async function toggleAllowBookFor()        { const v = !allowBookFor;       setAllowBookFor(v);       await saveGeneral({ allow_book_for_others: v },    v ? 'Book for others enabled' : 'Book for others disabled') }
   async function toggleAllowPasswordChange() { const v = !allowPasswordChange; setAllowPasswordChange(v); await saveGeneral({ allow_password_change: v }, v ? 'Password change enabled' : 'Password change disabled') }
@@ -4774,6 +4839,20 @@ function SettingsTab() {
           <p className="text-[10px] text-[var(--ds-text-3)] px-1">Auto-saved. Updates navbar, page title, and all app references.</p>
         </div>
 
+        {/* App Full Name */}
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">App Full Name (optional)</label>
+          <input
+            type="text"
+            value={appFullName}
+            onChange={e => onAppFullNameChange(e.target.value)}
+            maxLength={150}
+            className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 text-[14px] font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] transition-all"
+            placeholder="e.g. Meeting Room Booking System"
+          />
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Shown as a subtitle next to the app name on the login page. Leave empty to hide it.</p>
+        </div>
+
         {/* Logo Upload */}
         <div className="space-y-2">
           <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Navbar Logo</label>
@@ -4819,6 +4898,117 @@ function SettingsTab() {
           )}
           <input id="app-logo-upload-input" ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
           <p className="text-[10px] text-[var(--ds-text-3)] px-1">Appears in the navbar. Square or rectangular images both work (logo fits a 36px-tall slot, up to 160px wide). Leave empty to use the default icon.</p>
+        </div>
+
+        {/* Login Page */}
+        <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="pt-3">
+            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Login Page</label>
+            <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Customize the photo and copy shown on the left panel of the login screen.</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-5">
+            {/* Live preview */}
+            <div className="shrink-0 mx-auto sm:mx-0">
+              <div
+                className="w-[200px] aspect-[4/5] rounded-2xl overflow-hidden relative border"
+                style={{
+                  borderColor: 'var(--ds-border)',
+                  backgroundImage: loginPhotoUrl
+                    ? `linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.8) 100%), url(${loginPhotoUrl})`
+                    : 'radial-gradient(130% 130% at 15% 10%, #1a1f08 0%, #0c0c0c 55%, #000 100%)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: loginPhotoUrl ? `${loginPhotoPosX}% ${loginPhotoPosY}%` : 'center',
+                }}
+              >
+                <div className="absolute inset-0 p-3.5 flex flex-col justify-end">
+                  <div>
+                    <p className="text-[6.5px] font-black uppercase tracking-[0.2em] text-[#adee2b] mb-1 truncate">{loginHeadline || 'Booking made easy'}</p>
+                    <p className="text-[9.5px] font-black italic uppercase leading-snug text-white line-clamp-3">{loginSubheadline || 'Book meeting rooms without the back-and-forth'}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[9px] text-[var(--ds-text-4)] text-center mt-1.5">Live preview</p>
+            </div>
+
+            {/* Controls */}
+            <div className="flex-1 space-y-4 min-w-0">
+              {/* Photo upload */}
+              {loginPhotoUrl ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-[12px] font-semibold text-[var(--ds-text-2)] flex-1 min-w-[120px]">Custom photo active</p>
+                  <button
+                    type="button"
+                    onClick={() => loginPhotoInputRef.current?.click()}
+                    disabled={loginPhotoUploading}
+                    className="px-3 py-1.5 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteLoginPhoto}
+                    disabled={loginPhotoUploading}
+                    className="px-3 py-1.5 text-[10px] font-black uppercase rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label htmlFor="login-photo-upload-input" className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:border-[#adee2b] hover:bg-[#adee2b]/5"
+                  style={{ borderColor: 'var(--ds-border)', minHeight: 90 }}>
+                  {loginPhotoUploading
+                    ? <span className="text-[12px] font-semibold text-[var(--ds-text-3)]">Uploading...</span>
+                    : <>
+                      <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 24 }}>add_photo_alternate</span>
+                      <span className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">Click to upload photo</span>
+                      <span className="text-[9px] text-[var(--ds-text-4)]">JPG or PNG · max 8 MB · any aspect ratio</span>
+                    </>
+                  }
+                </label>
+              )}
+              <input id="login-photo-upload-input" ref={loginPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLoginPhotoUpload} />
+
+              {/* Position adjustment */}
+              {loginPhotoUrl && (
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Photo Position (fits the frame)</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-14 shrink-0">Horizontal</span>
+                    <input type="range" min={0} max={100} value={loginPhotoPosX} onChange={e => onLoginPhotoPosChange('x', Number(e.target.value))} className="flex-1 accent-[#adee2b]" />
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-8 text-right">{loginPhotoPosX}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-14 shrink-0">Vertical</span>
+                    <input type="range" min={0} max={100} value={loginPhotoPosY} onChange={e => onLoginPhotoPosChange('y', Number(e.target.value))} className="flex-1 accent-[#adee2b]" />
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-8 text-right">{loginPhotoPosY}%</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Copy */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Small headline</label>
+                <input
+                  type="text"
+                  value={loginHeadline}
+                  onChange={e => onLoginHeadlineChange(e.target.value)}
+                  maxLength={120}
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Headline</label>
+                <textarea
+                  value={loginSubheadline}
+                  onChange={e => onLoginSubheadlineChange(e.target.value)}
+                  maxLength={200}
+                  rows={2}
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] resize-none"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Favicon guide */}

@@ -1406,13 +1406,15 @@ export default function SchedulePage() {
               {user?.role}{user?.department ? <> &middot; {user.department}</> : ''}{user?.ext ? <> &middot; Ext. {user.ext}</> : ''}
             </p>
           </div>
-          <button
-            onClick={() => { setEditBooking(null); setPanelOpen(true) }}
-            className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]"
-          >
-            <span className="material-symbols-outlined text-base">add</span>
-            <span className="hidden sm:inline">New Booking</span>
-          </button>
+          {user?.role !== 'guest' && (
+            <button
+              onClick={() => { setEditBooking(null); setPanelOpen(true) }}
+              className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]"
+            >
+              <span className="material-symbols-outlined text-base">add</span>
+              <span className="hidden sm:inline">New Booking</span>
+            </button>
+          )}
         </div>
 
         {/* Tabs */}

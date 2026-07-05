@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -35,6 +36,24 @@ class AuthController extends Controller
         if (in_array($user->role, ['admin', 'superadmin'])) {
             ActivityLog::record('user.login', "Admin {$user->name} signed in", $user);
         }
+
+        return response()->json([
+            'user'  => $this->userPayload($user),
+            'token' => $token,
+        ]);
+    }
+
+    public function loginAsGuest(): JsonResponse
+    {
+        $user = User::firstOrCreate(
+            ['email' => 'guest@system.local'],
+            ['name' => 'Guest', 'password' => Str::random(40), 'role' => 'guest']
+        );
+        if ($user->role !== 'guest') {
+            $user->update(['role' => 'guest']);
+        }
+        $user->load('department');
+        $token = $user->createToken('guest-token')->plainTextToken;
 
         return response()->json([
             'user'  => $this->userPayload($user),

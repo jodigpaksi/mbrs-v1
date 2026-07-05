@@ -33,22 +33,44 @@ export interface GeneralSettings {
   sensor_api_token: string
   business_timezone: string
   app_name: string
+  app_full_name: string
   app_logo_url: string | null
+  login_photo_url: string | null
+  login_photo_pos_x: number
+  login_photo_pos_y: number
+  login_headline: string
+  login_subheadline: string
 }
 
 export interface AppBranding {
   app_name: string
+  app_full_name: string
   app_logo_url: string | null
+  login_photo_url: string | null
+  login_photo_pos_x: number
+  login_photo_pos_y: number
+  login_headline: string
+  login_subheadline: string
 }
 
 const BRANDING_CACHE_KEY = 'app_branding_cache'
+const DEFAULT_BRANDING: AppBranding = {
+  app_name: 'RoomSync Pro',
+  app_full_name: '',
+  app_logo_url: null,
+  login_photo_url: null,
+  login_photo_pos_x: 50,
+  login_photo_pos_y: 50,
+  login_headline: 'Booking made easy',
+  login_subheadline: 'Book meeting rooms without the back-and-forth',
+}
 
 export function getCachedBranding(): AppBranding {
   try {
     const raw = localStorage.getItem(BRANDING_CACHE_KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) return { ...DEFAULT_BRANDING, ...JSON.parse(raw) }
   } catch { /* ignore malformed cache */ }
-  return { app_name: 'RoomSync Pro', app_logo_url: null }
+  return DEFAULT_BRANDING
 }
 
 export function setCachedBranding(branding: AppBranding) {
@@ -70,6 +92,17 @@ export async function uploadAppLogo(file: File): Promise<{ app_logo_url: string 
 
 export async function deleteAppLogo(): Promise<void> {
   await api.delete('/settings/logo')
+}
+
+export async function uploadLoginPhoto(file: File): Promise<{ login_photo_url: string }> {
+  const form = new FormData()
+  form.append('photo', file)
+  const res = await api.post('/settings/login-photo', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  return res.data
+}
+
+export async function deleteLoginPhoto(): Promise<void> {
+  await api.delete('/settings/login-photo')
 }
 
 export async function getBookingHours(): Promise<BookingHours> {
@@ -94,7 +127,16 @@ export async function updateWeekendSettings(saturday: boolean, sunday: boolean):
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
   const res = await api.get('/settings/general')
-  setCachedBranding({ app_name: res.data.app_name, app_logo_url: res.data.app_logo_url })
+  setCachedBranding({
+    app_name: res.data.app_name,
+    app_full_name: res.data.app_full_name,
+    app_logo_url: res.data.app_logo_url,
+    login_photo_url: res.data.login_photo_url,
+    login_photo_pos_x: res.data.login_photo_pos_x,
+    login_photo_pos_y: res.data.login_photo_pos_y,
+    login_headline: res.data.login_headline,
+    login_subheadline: res.data.login_subheadline,
+  })
   return res.data
 }
 

@@ -6,6 +6,12 @@ export async function login(emailOrAlias: string, password: string) {
   return res.data
 }
 
+export async function loginAsGuest() {
+  const res = await api.post('/login/guest')
+  localStorage.setItem('token', res.data.token)
+  return res.data
+}
+
 export async function logout() {
   await api.post('/logout')
   localStorage.removeItem('token')

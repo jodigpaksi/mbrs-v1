@@ -958,10 +958,12 @@ export default function TimelinePage() {
 
           </div>
 
-          <button onClick={openNewBooking}
-            className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]">
-            <span className="material-symbols-outlined text-base">add</span> New Booking
-          </button>
+          {user?.role !== 'guest' && (
+            <button onClick={openNewBooking}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]">
+              <span className="material-symbols-outlined text-base">add</span> New Booking
+            </button>
+          )}
         </div>
       </div>
 
@@ -1978,27 +1980,29 @@ export default function TimelinePage() {
               <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
 
               {/* New Booking */}
-              <button
-                onClick={() => {
-                  const ctxDateStr = toLocalDateStr(cellCtxMenu.date)
-                  const todayStr = toLocalDateStr(new Date())
-                  const now = new Date()
-                  const slotStartMins = HOUR_START * 60 + cellCtxMenu.slot * 30
-                  const isPastCtx = ctxDateStr < todayStr || (ctxDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes() - PAST_BOOKING_TOLERANCE_MIN)
-                  if (isPastCtx) { setCellCtxMenu(null); setPastDateModalOpen(true); return }
-                  setCurrentDate(cellCtxMenu.date)
-                  setPrefillStart(slotToTimeStr(cellCtxMenu.slot))
-                  setPrefillEnd(slotToTimeStr(Math.min(slots, cellCtxMenu.slot + 2)))
-                  if (cellCtxMenu.room) setSelectedRoom(cellCtxMenu.room)
-                  setEditBooking(null)
-                  setBookingPanelOpen(true)
-                  setCellCtxMenu(null)
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>add_circle</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">New Booking</span>
-              </button>
+              {user?.role !== 'guest' && (
+                <button
+                  onClick={() => {
+                    const ctxDateStr = toLocalDateStr(cellCtxMenu.date)
+                    const todayStr = toLocalDateStr(new Date())
+                    const now = new Date()
+                    const slotStartMins = HOUR_START * 60 + cellCtxMenu.slot * 30
+                    const isPastCtx = ctxDateStr < todayStr || (ctxDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes() - PAST_BOOKING_TOLERANCE_MIN)
+                    if (isPastCtx) { setCellCtxMenu(null); setPastDateModalOpen(true); return }
+                    setCurrentDate(cellCtxMenu.date)
+                    setPrefillStart(slotToTimeStr(cellCtxMenu.slot))
+                    setPrefillEnd(slotToTimeStr(Math.min(slots, cellCtxMenu.slot + 2)))
+                    if (cellCtxMenu.room) setSelectedRoom(cellCtxMenu.room)
+                    setEditBooking(null)
+                    setBookingPanelOpen(true)
+                    setCellCtxMenu(null)
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+                >
+                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>add_circle</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">New Booking</span>
+                </button>
+              )}
 
               {/* View Room */}
               {cellCtxMenu.room && (

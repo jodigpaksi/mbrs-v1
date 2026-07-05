@@ -404,7 +404,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <div className="space-y-2">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Date</label>
-                  <GlassDatePicker value={startDate} onChange={setStartDate} compact align="left">
+                  <GlassDatePicker value={startDate} onChange={setStartDate} align="left">
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
@@ -443,7 +443,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')} {t('panel_date')}</label>
-                  <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }} compact>
+                  <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }}>
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
@@ -454,7 +454,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')} {t('panel_date')}</label>
-                  <GlassDatePicker value={endDate} onChange={setEndDate} min={startDate} compact align="right">
+                  <GlassDatePicker value={endDate} onChange={setEndDate} min={startDate} align="right">
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>

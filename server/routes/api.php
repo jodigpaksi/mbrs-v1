@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Route;
 
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login/guest', [AuthController::class, 'loginAsGuest']);
 
 // Public branding (no auth)
 Route::get('/settings/branding', [SettingController::class, 'branding']);
@@ -32,7 +33,7 @@ Route::prefix('kiosk')->group(function () {
     Route::post('{id}/confirm', [KioskController::class, 'confirmPresence']);
 });
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/me/avatar', [AuthController::class, 'updateAvatar']);
@@ -144,6 +145,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/settings/general', [SettingController::class, 'updateGeneralSettings']);
         Route::post('/settings/logo', [SettingController::class, 'uploadLogo']);
         Route::delete('/settings/logo', [SettingController::class, 'deleteLogo']);
+        Route::post('/settings/login-photo', [SettingController::class, 'uploadLoginPhoto']);
+        Route::delete('/settings/login-photo', [SettingController::class, 'deleteLoginPhoto']);
         Route::patch('/users/{user}/special-access', [UserController::class, 'toggleSpecialAccess']);
         Route::get('/archive', [ArchiveController::class, 'index']);
         Route::post('/archive/run', [ArchiveController::class, 'run']);

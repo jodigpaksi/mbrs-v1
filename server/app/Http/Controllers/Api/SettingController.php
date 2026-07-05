@@ -77,7 +77,13 @@ class SettingController extends Controller
             'backup_include_data'        => $get('backup_include_data', 'true') === 'true',
             'business_timezone'          => $get('business_timezone', config('app.business_timezone', 'Asia/Jakarta')),
             'app_name'                   => $get('app_name', 'RoomSync Pro'),
+            'app_full_name'              => $get('app_full_name', ''),
             'app_logo_url'               => $get('app_logo_url', null),
+            'login_photo_url'            => $get('login_photo_url', null),
+            'login_photo_pos_x'          => (int) $get('login_photo_pos_x', '50'),
+            'login_photo_pos_y'          => (int) $get('login_photo_pos_y', '50'),
+            'login_headline'             => $get('login_headline', 'Booking made easy'),
+            'login_subheadline'          => $get('login_subheadline', 'Book meeting rooms without the back-and-forth'),
         ]);
     }
 
@@ -85,8 +91,14 @@ class SettingController extends Controller
     {
         $get = fn(string $key, mixed $default) => Setting::where('key', $key)->value('value') ?? $default;
         return response()->json([
-            'app_name'     => $get('app_name', 'RoomSync Pro'),
-            'app_logo_url' => $get('app_logo_url', null),
+            'app_name'           => $get('app_name', 'RoomSync Pro'),
+            'app_full_name'      => $get('app_full_name', ''),
+            'app_logo_url'       => $get('app_logo_url', null),
+            'login_photo_url'    => $get('login_photo_url', null),
+            'login_photo_pos_x'  => (int) $get('login_photo_pos_x', '50'),
+            'login_photo_pos_y'  => (int) $get('login_photo_pos_y', '50'),
+            'login_headline'     => $get('login_headline', 'Booking made easy'),
+            'login_subheadline'  => $get('login_subheadline', 'Book meeting rooms without the back-and-forth'),
         ]);
     }
 
@@ -96,7 +108,7 @@ class SettingController extends Controller
         // Remove old logo file if exists
         $old = Setting::where('key', 'app_logo_url')->value('value');
         if ($old) {
-            $oldPath = str_replace('/storage/', '', $old);
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
             Storage::disk('public')->delete($oldPath);
         }
         $path = $request->file('logo')->store('logo', 'public');
@@ -110,12 +122,39 @@ class SettingController extends Controller
     {
         $old = Setting::where('key', 'app_logo_url')->value('value');
         if ($old) {
-            $oldPath = str_replace('/storage/', '', $old);
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
             Storage::disk('public')->delete($oldPath);
         }
         Setting::where('key', 'app_logo_url')->delete();
         \App\Models\ActivityLog::record('settings.updated', 'Removed app logo', null, []);
         return response()->json(['app_logo_url' => null]);
+    }
+
+    public function uploadLoginPhoto(Request $request): JsonResponse
+    {
+        $request->validate(['photo' => 'required|image|max:8192']);
+        $old = Setting::where('key', 'login_photo_url')->value('value');
+        if ($old) {
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
+            Storage::disk('public')->delete($oldPath);
+        }
+        $path = $request->file('photo')->store('login-photo', 'public');
+        $url = Storage::disk('public')->url($path);
+        Setting::updateOrCreate(['key' => 'login_photo_url'], ['value' => $url]);
+        \App\Models\ActivityLog::record('settings.updated', 'Updated login page photo', null, []);
+        return response()->json(['login_photo_url' => $url]);
+    }
+
+    public function deleteLoginPhoto(): JsonResponse
+    {
+        $old = Setting::where('key', 'login_photo_url')->value('value');
+        if ($old) {
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
+            Storage::disk('public')->delete($oldPath);
+        }
+        Setting::where('key', 'login_photo_url')->delete();
+        \App\Models\ActivityLog::record('settings.updated', 'Removed login page photo', null, []);
+        return response()->json(['login_photo_url' => null]);
     }
 
     public function updateGeneralSettings(Request $request): JsonResponse
@@ -156,6 +195,11 @@ class SettingController extends Controller
             'backup_include_data'        => 'sometimes|boolean',
             'business_timezone'          => 'sometimes|string|timezone',
             'app_name'                   => 'sometimes|string|max:100',
+            'app_full_name'              => 'sometimes|string|max:150',
+            'login_photo_pos_x'          => 'sometimes|integer|min:0|max:100',
+            'login_photo_pos_y'          => 'sometimes|integer|min:0|max:100',
+            'login_headline'             => 'sometimes|string|max:120',
+            'login_subheadline'          => 'sometimes|string|max:200',
         ]);
 
         $changes = [];

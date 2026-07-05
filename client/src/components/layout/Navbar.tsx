@@ -219,6 +219,11 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
           <span className="text-xl font-black tracking-tighter italic uppercase" style={{ color: 'var(--ds-text-1)' }}>
             {appName}
           </span>
+          {user?.role === 'guest' && (
+            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-[#adee2b]/15 text-[#7ea816] dark:text-[#adee2b]">
+              Guest · Read-only
+            </span>
+          )}
         </div>
 
         {/* Page nav — segmented pill */}

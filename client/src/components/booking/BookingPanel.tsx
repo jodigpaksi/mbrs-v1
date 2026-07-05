@@ -1050,7 +1050,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {/* Date */}
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_date')}</label>
-                <GlassDatePicker value={date} onChange={setDate} min={today} compact>
+                <GlassDatePicker value={date} onChange={setDate} min={today}>
                   {() => (
                     <button type="button"
                       className="w-full flex items-center gap-2 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-3 py-2 hover:border-[#adee2b] transition-all"
@@ -1534,7 +1534,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
                               />
                               <div ref={calendarBtnRef}>
-                                <GlassDatePicker value={repeatEndDate} onChange={val => { setRepeatEndDate(val) }} min={date || today} align="right" panelWidth={260}>
+                                <GlassDatePicker value={repeatEndDate} onChange={val => { setRepeatEndDate(val) }} min={date || today} align="right">
                                   {() => (
                                     <button
                                       type="button"
