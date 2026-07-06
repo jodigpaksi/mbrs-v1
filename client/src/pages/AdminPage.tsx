@@ -4812,7 +4812,8 @@ function SettingsTab() {
         await saveGeneral({ anti_ghost_enabled: true }, 'Anti-ghost booking enabled')
       }
     } else {
-      await saveGeneral({ anti_ghost_enabled: false }, 'Anti-ghost booking disabled')
+      setWebConfirmEnabled(false)
+      await saveGeneral({ anti_ghost_enabled: false, web_confirm_enabled: false }, 'Anti-ghost booking disabled')
     }
   }
   async function toggleMethod(key: 'kiosk' | 'sensor' | 'web') {

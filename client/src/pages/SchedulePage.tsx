@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { Booking } from '../types/index'
+import type { Booking, Room } from '../types/index'
 import { getMyBookings, clearCancelledBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
+import { checkAvailability } from '../api/rooms'
 import { getGeneralSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
@@ -23,6 +25,10 @@ function dur(start: string, end: string) {
 }
 function fmtTime(iso: string, lang = 'en') {
   return parseLocal(iso).toLocaleTimeString(lang === 'id' ? 'id-ID' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+function toHHMM(iso: string) {
+  const d = parseLocal(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 function fmtGroupLabel(iso: string, todayLabel: string, tomorrowLabel: string, lang = 'en') {
   const d = parseLocal(iso), today = new Date(), tomorrow = new Date()
@@ -418,6 +424,8 @@ function SeriesGroupRow({
   onEdit,
   onCancel,
   onCancelSeries,
+  onExport,
+  resolvedSkips,
   index,
 }: {
   group: SeriesGroup
@@ -425,12 +433,39 @@ function SeriesGroupRow({
   onEdit: (b: Booking) => void
   onCancel: (b: Booking) => void
   onCancelSeries: (group: SeriesGroup) => void
+  onExport: (group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) => void
+  resolvedSkips: Record<string, { title: string; room: Room; startAt: string; endAt: string }>
   index: number
 }) {
   const { language } = useSettings()
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout>>()
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportIncludePast, setExportIncludePast] = useState(false)
+  const [exportPos, setExportPos] = useState<{ top: number; right: number } | null>(null)
+  const exportBtnRef = useRef<HTMLButtonElement>(null)
+  const exportPanelRef = useRef<HTMLDivElement>(null)
+
+  function toggleExportOpen() {
+    if (!exportOpen) {
+      const rect = exportBtnRef.current?.getBoundingClientRect()
+      if (rect) setExportPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+    }
+    setExportOpen(o => !o)
+  }
+
+  useEffect(() => {
+    if (!exportOpen) return
+    const fn = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (exportBtnRef.current?.contains(target)) return
+      if (exportPanelRef.current?.contains(target)) return
+      setExportOpen(false)
+    }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [exportOpen])
 
   function toggleOpen() {
     if (open && !closing) {
@@ -506,6 +541,41 @@ function SeriesGroupRow({
               <span className="material-symbols-outlined" style={{ fontSize: 12 }}>edit</span>
               Series
             </button>
+            <div className="relative shrink-0">
+              <button
+                ref={exportBtnRef}
+                onClick={toggleExportOpen}
+                title="Export this series"
+                className="size-7 flex items-center justify-center rounded-lg bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] hover:bg-black hover:text-[#adee2b] transition-all"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span>
+              </button>
+              {exportOpen && exportPos && createPortal(
+                <div ref={exportPanelRef} className="fixed z-50 rounded-2xl p-4 w-64 dropdown-enter-right"
+                  style={{ top: exportPos.top, right: exportPos.right, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export this series</p>
+                  <label className="flex items-center gap-2.5 cursor-pointer mb-4">
+                    <input type="checkbox" checked={exportIncludePast} onChange={e => setExportIncludePast(e.target.checked)} className="accent-black w-4 h-4" />
+                    <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
+                  </label>
+                  <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
+                    <button
+                      onClick={() => { onExport(group, 'excel', exportIncludePast); setExportOpen(false) }}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] font-black uppercase hover:bg-emerald-500/25 transition-colors border border-emerald-500/25 flex-1 justify-center"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
+                    </button>
+                    <button
+                      onClick={() => { onExport(group, 'pdf', exportIncludePast); setExportOpen(false) }}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-black uppercase hover:bg-red-500/25 transition-colors border border-red-500/25 flex-1 justify-center"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
+                    </button>
+                  </div>
+                </div>,
+                document.body
+              )}
+            </div>
             {!allCancelled && (
               <button
                 onClick={() => onCancelSeries(group)}
@@ -572,10 +642,7 @@ function SeriesGroupRow({
       {(open || closing) && (() => {
         const skipped = first.series_skipped_dates
         if (!skipped || skipped.length === 0) return null
-        const fmtSkipDate = (iso: string) => {
-          const [y, m, d] = iso.split('-').map(Number)
-          return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-        }
+        const unresolvedCount = skipped.filter(d => !resolvedSkips[`${group.series_id}:${d}`]).length
         return (
           <tr style={{
             animation: closing
@@ -587,26 +654,17 @@ function SeriesGroupRow({
               <div className="mx-8 mb-2 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 overflow-hidden">
                 <div className="flex items-center gap-2 px-3 py-2 border-b border-red-200 dark:border-red-500/20">
                   <span className="material-symbols-outlined text-red-400" style={{ fontSize: 13 }}>event_busy</span>
-                  <span className="text-[9px] font-black uppercase tracking-wider text-red-500">{skipped.length} date{skipped.length !== 1 ? 's' : ''} skipped — conflict at time of booking</span>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-red-500">
+                    {unresolvedCount > 0 ? `${unresolvedCount} date${unresolvedCount !== 1 ? 's' : ''} skipped — conflict at time of booking` : `${skipped.length} date${skipped.length !== 1 ? 's' : ''} skipped — all rebooked`}
+                  </span>
                 </div>
                 <div className="divide-y divide-red-200/60 dark:divide-red-500/10">
-                  {skipped.map(d => (
-                    <div key={d} className="flex items-center justify-between px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-red-300" style={{ fontSize: 12 }}>block</span>
-                        <span className="text-[11px] font-bold text-red-600 dark:text-red-400">{fmtSkipDate(d)}</span>
-                      </div>
-                      <button
-                        onClick={() => document.dispatchEvent(new CustomEvent('available-rooms-prefill', { detail: { date: d, startTime: '07:00', endTime: '16:30' } }))}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide transition-all
-                          bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-2)]
-                          hover:border-[#adee2b] hover:text-[#adee2b] hover:bg-[#adee2b]/5"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>search</span>
-                        Find another slot
-                      </button>
-                    </div>
-                  ))}
+                  {skipped.map(d => {
+                    const resolved = resolvedSkips[`${group.series_id}:${d}`]
+                    return resolved
+                      ? <ResolvedSkipRow key={d} date={d} booking={resolved} />
+                      : <SkippedDateRow key={d} date={d} room={first.room} startTime={toHHMM(first.start_at)} endTime={toHHMM(first.end_at)} seriesId={group.series_id} />
+                  })}
                 </div>
               </div>
             </td>
@@ -614,6 +672,165 @@ function SeriesGroupRow({
         )
       })()}
     </tbody>
+  )
+}
+
+function fmtSkipDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+function MoreTooltip({ label, items }: { label: string; items: string[] }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  function openTooltip() {
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (rect) setPos({ top: rect.bottom + 6, left: rect.left })
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const fn = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node)) return
+      if (panelRef.current?.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [open])
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onMouseEnter={openTooltip}
+        onMouseLeave={() => setOpen(false)}
+        onClick={() => (open ? setOpen(false) : openTooltip())}
+        className="text-[9px] font-black text-red-400 hover:text-red-500 underline decoration-dotted underline-offset-2"
+      >
+        {label}
+      </button>
+      {open && pos && createPortal(
+        <div ref={panelRef} className="fixed z-50 rounded-xl p-2.5 w-64 space-y-1"
+          style={{ top: pos.top, left: pos.left, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+          {items.map((it, i) => (
+            <p key={i} className="text-[10px] font-semibold text-[var(--ds-text-2)] leading-snug">{it}</p>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
+  date: string
+  room?: Room
+  startTime: string
+  endTime: string
+  seriesId: string
+}) {
+  const { language } = useSettings()
+  const { data } = useQuery({
+    queryKey: ['skip-conflicts', room?.id, date, startTime, endTime],
+    queryFn: () => checkAvailability(room!.id, `${date} ${startTime}:00`, `${date} ${endTime}:00`),
+    enabled: !!room,
+    staleTime: 60_000,
+  })
+  const conflicts = (data?.conflicts ?? []) as Booking[]
+  const shown = conflicts.slice(0, 2)
+  const rest = conflicts.slice(2)
+
+  const fmtConflict = (b: Booking) => {
+    const dept = b.user?.department_name
+    return `${b.title} - ${b.user?.name ?? '—'}${dept ? ` (${dept})` : ''} ${fmtTime(b.start_at, language)}-${fmtTime(b.end_at, language)}`
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-3 px-3 py-2">
+      <div className="flex items-start gap-2 min-w-0">
+        <span className="material-symbols-outlined text-red-300 mt-0.5" style={{ fontSize: 12 }}>block</span>
+        <div className="min-w-0">
+          <span className="text-[11px] font-bold text-red-600 dark:text-red-400 block">{fmtSkipDate(date)}</span>
+          {shown.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {shown.map(c => (
+                <p key={c.id} className="text-[9px] font-semibold text-red-400/90 dark:text-red-400/80 truncate max-w-[280px]">{fmtConflict(c)}</p>
+              ))}
+              {rest.length > 0 && <MoreTooltip label={`+${rest.length} more…`} items={rest.map(fmtConflict)} />}
+            </div>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={() => document.dispatchEvent(new CustomEvent('available-rooms-prefill', {
+          detail: { date, startTime, endTime, resolveSkip: { seriesId, date } },
+        }))}
+        className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide transition-all
+          bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-2)]
+          hover:border-[#adee2b] hover:text-[#adee2b] hover:bg-[#adee2b]/5"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>search</span>
+        Find another slot
+      </button>
+    </div>
+  )
+}
+
+function ResolvedSkipRow({ date, booking }: { date: string; booking: { title: string; room: Room; startAt: string; endAt: string } }) {
+  const { language } = useSettings()
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  function toggleOpen() {
+    if (!open) {
+      const rect = btnRef.current?.getBoundingClientRect()
+      if (rect) setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+    }
+    setOpen(o => !o)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const fn = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node)) return
+      if (panelRef.current?.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [open])
+
+  return (
+    <div className="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-500/5">
+      <div className="flex items-center gap-2">
+        <span className="material-symbols-outlined text-green-500" style={{ fontSize: 13 }}>check_circle</span>
+        <span className="text-[11px] font-bold text-green-700 dark:text-green-400">{fmtSkipDate(date)} — rebooked</span>
+      </div>
+      <button ref={btnRef} onClick={toggleOpen}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide transition-all
+          bg-[var(--ds-bg-surface)] border border-green-300/60 dark:border-green-500/30 text-green-600 dark:text-green-400
+          hover:bg-green-500/10"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>info</span>
+        View booking
+      </button>
+      {open && pos && createPortal(
+        <div ref={panelRef} className="fixed z-50 rounded-xl p-3 w-64 space-y-1"
+          style={{ top: pos.top, right: pos.right, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+          <p className="text-[11px] font-black text-[var(--ds-text-1)]">{booking.title}</p>
+          <p className="text-[10px] font-bold text-[var(--ds-text-2)]">{booking.room.name}{booking.room.building?.name ? `, ${booking.room.building.name}` : ''}</p>
+          <p className="text-[10px] font-semibold text-[var(--ds-text-3)]">{fmtTableDate(booking.startAt, language)} · {fmtTime(booking.startAt, language)}–{fmtTime(booking.endAt, language)}</p>
+        </div>,
+        document.body
+      )}
+    </div>
   )
 }
 
@@ -897,6 +1114,10 @@ export default function SchedulePage() {
   const [allExportGroups, setAllExportGroups] = useState({ upcoming: true, past: true, cancelled: false })
   const allExportRef = useRef<HTMLDivElement>(null)
 
+  const [seriesExportOpen, setSeriesExportOpen]           = useState(false)
+  const [seriesIncludePastAll, setSeriesIncludePastAll]   = useState(false)
+  const seriesExportRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!spExportOpen) return
     const fn = (e: MouseEvent) => { if (spExportRef.current && !spExportRef.current.contains(e.target as Node)) setSpExportOpen(null) }
@@ -910,6 +1131,24 @@ export default function SchedulePage() {
     document.addEventListener('mousedown', fn)
     return () => document.removeEventListener('mousedown', fn)
   }, [allExportOpen])
+
+  useEffect(() => {
+    if (!seriesExportOpen) return
+    const fn = (e: MouseEvent) => { if (seriesExportRef.current && !seriesExportRef.current.contains(e.target as Node)) setSeriesExportOpen(false) }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [seriesExportOpen])
+
+  // Skipped-date resolution: "Find another slot" → booked elsewhere → row turns green
+  const [resolvedSkips, setResolvedSkips] = useState<Record<string, { title: string; room: Room; startAt: string; endAt: string }>>({})
+  useEffect(() => {
+    const fn = (e: Event) => {
+      const { seriesId, date, booking } = (e as CustomEvent<{ seriesId: string; date: string; booking: { title: string; room: Room; startAt: string; endAt: string } }>).detail
+      setResolvedSkips(prev => ({ ...prev, [`${seriesId}:${date}`]: booking }))
+    }
+    document.addEventListener('series-skip-resolved', fn)
+    return () => document.removeEventListener('series-skip-resolved', fn)
+  }, [])
 
   // Global search: open booking edit panel when triggered from navbar search
   useEffect(() => {
@@ -1301,6 +1540,66 @@ export default function SchedulePage() {
       columnStyles: { 0: { cellWidth: 12, halign: 'center' } },
     })
     doc.save(`special-room-bookings-${toDateStr(today)}.pdf`)
+  }
+
+  function seriesExportRows(bookings: Booking[], includePast: boolean): Booking[] {
+    return includePast ? bookings : bookings.filter(b => !isActuallyPast(b))
+  }
+
+  function exportSeriesExcel(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const exportedAt = today.toLocaleDateString('en-GB')
+    const headers = ['No.', 'Date', 'Day', 'Start Time', 'End Time', 'Duration', 'Room', 'Building', 'Title', 'Description', 'Booked For', 'Status', 'Type']
+    const aoa: (string | number)[][] = [
+      [label],
+      [`${includePast ? 'All dates' : 'Upcoming dates only'}   ·   Exported ${exportedAt}   ·   Total: ${rows.length}`],
+      [],
+      headers,
+      ...rows.map((b: Booking, i: number) => [
+        i + 1,
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        fmtTime(b.start_at, language), fmtTime(b.end_at, language),
+        dur(b.start_at, b.end_at), b.room?.name ?? '',
+        b.room?.building?.code || b.room?.building?.name || '',
+        b.title, b.description ?? '', b.booked_for ?? '',
+        b.status, b.type,
+      ]),
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 10 }, { wch: 12 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Series')
+    XLSX.writeFile(wb, `${fileSlug}.xlsx`)
+  }
+
+  function exportSeriesPDF(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const doc = new jsPDF()
+    doc.setFontSize(14); doc.text(label, 14, 16)
+    doc.setFontSize(9); doc.setTextColor(150)
+    doc.text(`${includePast ? 'All dates' : 'Upcoming dates only'}   ·   Exported ${today.toLocaleDateString('en-GB')}   ·   Total: ${rows.length}`, 14, 22)
+    autoTable(doc, {
+      startY: 30,
+      head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status']],
+      body: rows.map((b: Booking, i: number) => [
+        i + 1,
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
+        b.room?.name ?? '', b.title, b.booked_for ?? '', b.status,
+      ]),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [0, 0, 0], textColor: [173, 238, 43], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { cellWidth: 12, halign: 'center' } },
+    })
+    doc.save(`${fileSlug}.pdf`)
+  }
+
+  function handleExportSeriesRow(group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) {
+    const first = group.bookings[0]
+    const rows = seriesExportRows(group.bookings, includePast)
+    const label = `${first.title} — ${first.room?.name ?? ''}`
+    const slug = `series-${first.title.replace(/\s+/g, '-').toLowerCase()}-${toDateStr(parseLocal(first.start_at))}`
+    if (format === 'excel') exportSeriesExcel(rows, label, includePast, slug)
+    else exportSeriesPDF(rows, label, includePast, slug)
   }
 
   function getActiveList(): Booking[] {
@@ -2322,6 +2621,48 @@ export default function SchedulePage() {
                       </button>
                     )}
                   </div>
+                  <div className="relative shrink-0" ref={seriesExportRef}>
+                    <button
+                      onClick={() => setSeriesExportOpen(o => !o)}
+                      disabled={displaySeriesList.length === 0}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-colors border disabled:opacity-40 disabled:cursor-not-allowed ${seriesExportOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] border-[var(--ds-border)] hover:bg-[var(--ds-bg-raised)]'}`}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>download</span>Export All
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{seriesExportOpen ? 'expand_less' : 'expand_more'}</span>
+                    </button>
+                    {seriesExportOpen && (
+                      <div className="absolute right-0 top-full mt-2 z-50 rounded-2xl p-4 w-72 dropdown-enter-right"
+                        style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export all {displaySeriesList.length} series</p>
+                        <label className="flex items-center gap-2.5 cursor-pointer mb-4">
+                          <input type="checkbox" checked={seriesIncludePastAll} onChange={e => setSeriesIncludePastAll(e.target.checked)} className="accent-black w-4 h-4" />
+                          <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
+                        </label>
+                        <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              const rows = seriesExportRows(displaySeriesList.flatMap(g => g.bookings), seriesIncludePastAll)
+                              exportSeriesExcel(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
+                              setSeriesExportOpen(false)
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] font-black uppercase hover:bg-emerald-500/25 transition-colors border border-emerald-500/25 flex-1 justify-center"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
+                          </button>
+                          <button
+                            onClick={() => {
+                              const rows = seriesExportRows(displaySeriesList.flatMap(g => g.bookings), seriesIncludePastAll)
+                              exportSeriesPDF(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
+                              setSeriesExportOpen(false)
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-black uppercase hover:bg-red-500/25 transition-colors border border-red-500/25 flex-1 justify-center"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border)] overflow-hidden">
                 <div className="overflow-x-auto">
@@ -2343,6 +2684,8 @@ export default function SchedulePage() {
                       onEdit={b => { setEditBooking(b); setPanelOpen(true) }}
                       onCancel={handleCancel}
                       onCancelSeries={setSeriesCancelTarget}
+                      onExport={handleExportSeriesRow}
+                      resolvedSkips={resolvedSkips}
                     />
                   ))}
                   {pastSeriesList.length > 0 && (
@@ -2367,6 +2710,8 @@ export default function SchedulePage() {
                       onEdit={b => { setEditBooking(b); setPanelOpen(true) }}
                       onCancel={handleCancel}
                       onCancelSeries={setSeriesCancelTarget}
+                      onExport={handleExportSeriesRow}
+                      resolvedSkips={resolvedSkips}
                     />
                   ))}
                 </table>

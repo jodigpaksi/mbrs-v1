@@ -190,6 +190,10 @@ class BookingController extends Controller
             $query->where('user_id', $request->user_id);
         }
 
+        if ($request->series_id) {
+            $query->where('series_id', $request->series_id);
+        }
+
         if ($request->special_rooms) {
             $query->whereHas('room', fn($q) => $q->where('requires_contact', true));
         }

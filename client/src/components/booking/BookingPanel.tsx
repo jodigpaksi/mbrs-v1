@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Booking, Building, Room } from '../../types/index'
 import { getRooms, checkAvailability, clearRoomView, getAvailableRooms } from '../../api/rooms'
 import { getBuildings } from '../../api/buildings'
-import { createBooking, updateBooking, cancelSeries, updateSeries } from '../../api/bookings'
+import { createBooking, updateBooking, cancelSeries, updateSeries, getBookings } from '../../api/bookings'
 import { getDirectory } from '../../api/users'
 import { getGeneralSettings } from '../../api/settings'
 import { useAuth } from '../../context/AuthContext'
@@ -13,27 +13,52 @@ import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 
-function exportToICS(data: { title: string; description?: string; startAt: string; endAt: string; location?: string }) {
+type ICSData = { title: string; description?: string; startAt: string; endAt: string; location?: string; id?: number }
+
+function exportToICS(input: ICSData | ICSData[]) {
+  const items = Array.isArray(input) ? input : [input]
+  if (items.length === 0) return
   const fmtDT = (dt: string) => dt.replace(/-/g, '').replace(/:/g, '').replace(' ', 'T').substring(0, 15)
   const esc = (s: string) => s.replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n')
   const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-  const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MRBS//RoomSync//EN', 'CALSCALE:GREGORIAN',
+  const events = items.map(data => [
     'BEGIN:VEVENT',
     `DTSTART:${fmtDT(data.startAt)}`,
     `DTEND:${fmtDT(data.endAt)}`,
     `DTSTAMP:${stamp}`,
-    `UID:booking-panel-${Date.now()}@mbrs`,
+    `UID:booking-panel-${data.id ?? Date.now()}@mbrs`,
     `SUMMARY:${esc(data.title)}`,
     data.description ? `DESCRIPTION:${esc(data.description)}` : '',
     data.location ? `LOCATION:${esc(data.location)}` : '',
-    'END:VEVENT', 'END:VCALENDAR',
-  ].filter(Boolean).join('\r\n')
+    'END:VEVENT',
+  ].filter(Boolean).join('\r\n'))
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MRBS//RoomSync//EN', 'CALSCALE:GREGORIAN',
+    ...events,
+    'END:VCALENDAR',
+  ].join('\r\n')
+  const first = items[0]
+  const suffix = items.length > 1 ? '_series' : ''
   const a = Object.assign(document.createElement('a'), {
     href: URL.createObjectURL(new Blob([lines], { type: 'text/calendar;charset=utf-8' })),
-    download: `${(data.title || 'booking').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`,
+    download: `${(first.title || 'booking').replace(/[^a-z0-9]/gi, '_').toLowerCase()}${suffix}.ics`,
   })
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
+}
+
+async function exportSeriesToICS(seriesId: string) {
+  const res = await getBookings({ series_id: seriesId })
+  const items: ICSData[] = (res as Booking[])
+    .filter(b => b.status !== 'cancelled')
+    .map(b => ({
+      id: b.id,
+      title: b.title,
+      description: b.description ?? undefined,
+      startAt: b.start_at,
+      endAt: b.end_at,
+      location: [b.room?.name, b.room?.building?.name].filter(Boolean).join(', '),
+    }))
+  exportToICS(items)
 }
 
 function fmtFieldDate(iso: string, lang = 'en', pickDateLabel = 'Pick a date'): string {
@@ -70,7 +95,7 @@ interface BookingPanelProps {
   prefillDate?: string
   prefillVersion?: number
   buildingId?: number | null
-  onSubmit?: () => void
+  onSubmit?: (info?: { title: string; room: Room; startAt: string; endAt: string }) => void
   onCancel?: (booking: Booking) => void
   onAfterHoursOpen?: (data: { buildingId?: number | null; workingHoursEnd: string }) => void
 }
@@ -584,13 +609,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   async function doSubmitSingle() {
     if (!selectedRoom) return
     const base = { room_id: selectedRoom.id, title, description: desc, status, type, booked_for: bookFor.trim() || undefined, booked_for_user_id: bookForUserId ?? undefined }
+    const startAt = `${date} ${startTime}:00`
+    const endAt = `${date} ${endTime}:00`
     if (isEdit && editBooking) {
-      await updateBooking(editBooking.id, { ...base, start_at: `${date} ${startTime}:00`, end_at: `${date} ${endTime}:00` })
+      await updateBooking(editBooking.id, { ...base, start_at: startAt, end_at: endAt })
     } else {
-      await createBooking({ ...base, start_at: `${date} ${startTime}:00`, end_at: `${date} ${endTime}:00` })
+      await createBooking({ ...base, start_at: startAt, end_at: endAt })
       clearDraft()
     }
-    onSubmit?.()
+    onSubmit?.({ title, room: selectedRoom, startAt, endAt })
   }
 
   // knownSkipped: dates already known to conflict (pre-checked), so they get stored on each booking
@@ -1925,7 +1952,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
           {/* Export to Calendar */}
           {title.trim() && date && startTime && endTime && selectedRoom && (
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-3">
               <button
                 type="button"
                 onClick={() => exportToICS({
@@ -1938,8 +1965,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>event</span>
-                {t('btn_export_ics')}
+                {editBooking?.series_id ? `${t('btn_export_ics')} (This Entry)` : t('btn_export_ics')}
               </button>
+              {editBooking?.series_id && (
+                <button
+                  type="button"
+                  onClick={() => exportSeriesToICS(editBooking.series_id!)}
+                  className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>event_repeat</span>
+                  {t('btn_export_ics')} (Series)
+                </button>
+              )}
             </div>
           )}
 
