@@ -434,7 +434,7 @@ function SeriesGroupRow({
   onCancel: (b: Booking) => void
   onCancelSeries: (group: SeriesGroup) => void
   onExport: (group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) => void
-  resolvedSkips: Record<string, { title: string; room: Room; startAt: string; endAt: string }>
+  resolvedSkips: Record<string, Booking>
   index: number
 }) {
   const { language } = useSettings()
@@ -781,7 +781,7 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
   )
 }
 
-function ResolvedSkipRow({ date, booking }: { date: string; booking: { title: string; room: Room; startAt: string; endAt: string } }) {
+function ResolvedSkipRow({ date, booking }: { date: string; booking: Booking }) {
   const { language } = useSettings()
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
@@ -825,8 +825,8 @@ function ResolvedSkipRow({ date, booking }: { date: string; booking: { title: st
         <div ref={panelRef} className="fixed z-50 rounded-xl p-3 w-64 space-y-1"
           style={{ top: pos.top, right: pos.right, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
           <p className="text-[11px] font-black text-[var(--ds-text-1)]">{booking.title}</p>
-          <p className="text-[10px] font-bold text-[var(--ds-text-2)]">{booking.room.name}{booking.room.building?.name ? `, ${booking.room.building.name}` : ''}</p>
-          <p className="text-[10px] font-semibold text-[var(--ds-text-3)]">{fmtTableDate(booking.startAt, language)} · {fmtTime(booking.startAt, language)}–{fmtTime(booking.endAt, language)}</p>
+          <p className="text-[10px] font-bold text-[var(--ds-text-2)]">{booking.room?.name}{booking.room?.building?.name ? `, ${booking.room.building.name}` : ''}</p>
+          <p className="text-[10px] font-semibold text-[var(--ds-text-3)]">{fmtTableDate(booking.start_at, language)} · {fmtTime(booking.start_at, language)}–{fmtTime(booking.end_at, language)}</p>
         </div>,
         document.body
       )}
@@ -1139,16 +1139,21 @@ export default function SchedulePage() {
     return () => document.removeEventListener('mousedown', fn)
   }, [seriesExportOpen])
 
-  // Skipped-date resolution: "Find another slot" → booked elsewhere → row turns green
-  const [resolvedSkips, setResolvedSkips] = useState<Record<string, { title: string; room: Room; startAt: string; endAt: string }>>({})
+  // Skipped-date resolution: "Find another slot" → booked elsewhere → row turns green + counts toward series export
+  const [resolvedSkips, setResolvedSkips] = useState<Record<string, Booking>>({})
   useEffect(() => {
     const fn = (e: Event) => {
-      const { seriesId, date, booking } = (e as CustomEvent<{ seriesId: string; date: string; booking: { title: string; room: Room; startAt: string; endAt: string } }>).detail
+      const { seriesId, date, booking } = (e as CustomEvent<{ seriesId: string; date: string; booking: Booking }>).detail
       setResolvedSkips(prev => ({ ...prev, [`${seriesId}:${date}`]: booking }))
     }
     document.addEventListener('series-skip-resolved', fn)
     return () => document.removeEventListener('series-skip-resolved', fn)
   }, [])
+
+  function resolvedSkipsForSeries(seriesId: string): Booking[] {
+    const prefix = `${seriesId}:`
+    return Object.entries(resolvedSkips).filter(([k]) => k.startsWith(prefix)).map(([, b]) => b)
+  }
 
   // Global search: open booking edit panel when triggered from navbar search
   useEffect(() => {
@@ -1595,7 +1600,8 @@ export default function SchedulePage() {
 
   function handleExportSeriesRow(group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) {
     const first = group.bookings[0]
-    const rows = seriesExportRows(group.bookings, includePast)
+    const rebooked = seriesExportRows(resolvedSkipsForSeries(group.series_id), includePast)
+    const rows = [...seriesExportRows(group.bookings, includePast), ...rebooked]
     const label = `${first.title} — ${first.room?.name ?? ''}`
     const slug = `series-${first.title.replace(/\s+/g, '-').toLowerCase()}-${toDateStr(parseLocal(first.start_at))}`
     if (format === 'excel') exportSeriesExcel(rows, label, includePast, slug)
@@ -2641,7 +2647,8 @@ export default function SchedulePage() {
                         <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                           <button
                             onClick={() => {
-                              const rows = seriesExportRows(displaySeriesList.flatMap(g => g.bookings), seriesIncludePastAll)
+                              const allRebooked = displaySeriesList.flatMap(g => resolvedSkipsForSeries(g.series_id))
+                              const rows = seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll)
                               exportSeriesExcel(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
                               setSeriesExportOpen(false)
                             }}
@@ -2651,7 +2658,8 @@ export default function SchedulePage() {
                           </button>
                           <button
                             onClick={() => {
-                              const rows = seriesExportRows(displaySeriesList.flatMap(g => g.bookings), seriesIncludePastAll)
+                              const allRebooked = displaySeriesList.flatMap(g => resolvedSkipsForSeries(g.series_id))
+                              const rows = seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll)
                               exportSeriesPDF(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
                               setSeriesExportOpen(false)
                             }}

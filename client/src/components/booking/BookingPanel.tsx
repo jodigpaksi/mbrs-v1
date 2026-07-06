@@ -95,7 +95,7 @@ interface BookingPanelProps {
   prefillDate?: string
   prefillVersion?: number
   buildingId?: number | null
-  onSubmit?: (info?: { title: string; room: Room; startAt: string; endAt: string }) => void
+  onSubmit?: (info?: Booking) => void
   onCancel?: (booking: Booking) => void
   onAfterHoursOpen?: (data: { buildingId?: number | null; workingHoursEnd: string }) => void
 }
@@ -617,7 +617,19 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       await createBooking({ ...base, start_at: startAt, end_at: endAt })
       clearDraft()
     }
-    onSubmit?.({ title, room: selectedRoom, startAt, endAt })
+    onSubmit?.({
+      id: -Date.now(),
+      user_id: user?.id ?? 0,
+      room_id: selectedRoom.id,
+      room: selectedRoom,
+      title,
+      description: desc || undefined,
+      start_at: startAt,
+      end_at: endAt,
+      status,
+      type,
+      booked_for: bookFor.trim() || undefined,
+    })
   }
 
   // knownSkipped: dates already known to conflict (pre-checked), so they get stored on each booking

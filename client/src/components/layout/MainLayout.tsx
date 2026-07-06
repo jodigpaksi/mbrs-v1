@@ -7,7 +7,7 @@ import TodayPanel from '../booking/TodayPanel'
 import AvailableRoomsPanel from '../room/AvailableRoomsPanel'
 import BookingPanel from '../booking/BookingPanel'
 import { getGeneralSettings } from '../../api/settings'
-import type { Room } from '../../types'
+import type { Room, Booking } from '../../types'
 
 interface MainLayoutProps {
   children: ReactNode
@@ -63,7 +63,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
     toastTimer.current = setTimeout(() => setToast(null), 3000)
   }
 
-  function handleBookingSubmit(info?: { title: string; room: Room; startAt: string; endAt: string }) {
+  function handleBookingSubmit(info?: Booking) {
     const bookedDate = prefillDate
     if (resolvingSkip && info) {
       document.dispatchEvent(new CustomEvent('series-skip-resolved', {
