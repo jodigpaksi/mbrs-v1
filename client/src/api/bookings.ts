@@ -40,6 +40,8 @@ export async function createBooking(data: {
   type?: string
   series_id?: string
   series_skipped_dates?: string[]
+  resolves_series_id?: string
+  resolves_skipped_date?: string
   booked_for?: string
   booked_for_user_id?: number
 }) {

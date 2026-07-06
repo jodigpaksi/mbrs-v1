@@ -91,6 +91,8 @@ export interface Booking {
   cancelled_at?: string
   series_id?: string
   series_skipped_dates?: string[] | null
+  resolves_series_id?: string | null
+  resolves_skipped_date?: string | null
   booked_for?: string
   booked_for_user_id?: number
   is_recipient?: boolean

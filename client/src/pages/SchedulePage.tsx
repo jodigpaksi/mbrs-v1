@@ -783,53 +783,15 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
 
 function ResolvedSkipRow({ date, booking }: { date: string; booking: Booking }) {
   const { language } = useSettings()
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-
-  function toggleOpen() {
-    if (!open) {
-      const rect = btnRef.current?.getBoundingClientRect()
-      if (rect) setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
-    }
-    setOpen(o => !o)
-  }
-
-  useEffect(() => {
-    if (!open) return
-    const fn = (e: MouseEvent) => {
-      if (btnRef.current?.contains(e.target as Node)) return
-      if (panelRef.current?.contains(e.target as Node)) return
-      setOpen(false)
-    }
-    document.addEventListener('mousedown', fn)
-    return () => document.removeEventListener('mousedown', fn)
-  }, [open])
-
   return (
     <div className="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-500/5">
-      <div className="flex items-center gap-2">
-        <span className="material-symbols-outlined text-green-500" style={{ fontSize: 13 }}>check_circle</span>
-        <span className="text-[11px] font-bold text-green-700 dark:text-green-400">{fmtSkipDate(date)} — rebooked</span>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="material-symbols-outlined text-green-500 shrink-0" style={{ fontSize: 13 }}>check_circle</span>
+        <span className="text-[11px] font-bold text-green-700 dark:text-green-400 shrink-0">{fmtSkipDate(date)} — rebooked:</span>
+        <span className="text-[10px] font-semibold text-green-600 dark:text-green-400/80 truncate">
+          {booking.title} · {booking.room?.name}{booking.room?.building?.name ? `, ${booking.room.building.name}` : ''} · {fmtTableDate(booking.start_at, language)} {fmtTime(booking.start_at, language)}–{fmtTime(booking.end_at, language)}
+        </span>
       </div>
-      <button ref={btnRef} onClick={toggleOpen}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide transition-all
-          bg-[var(--ds-bg-surface)] border border-green-300/60 dark:border-green-500/30 text-green-600 dark:text-green-400
-          hover:bg-green-500/10"
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>info</span>
-        View booking
-      </button>
-      {open && pos && createPortal(
-        <div ref={panelRef} className="fixed z-50 rounded-xl p-3 w-64 space-y-1"
-          style={{ top: pos.top, right: pos.right, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
-          <p className="text-[11px] font-black text-[var(--ds-text-1)]">{booking.title}</p>
-          <p className="text-[10px] font-bold text-[var(--ds-text-2)]">{booking.room?.name}{booking.room?.building?.name ? `, ${booking.room.building.name}` : ''}</p>
-          <p className="text-[10px] font-semibold text-[var(--ds-text-3)]">{fmtTableDate(booking.start_at, language)} · {fmtTime(booking.start_at, language)}–{fmtTime(booking.end_at, language)}</p>
-        </div>,
-        document.body
-      )}
     </div>
   )
 }
@@ -1139,16 +1101,18 @@ export default function SchedulePage() {
     return () => document.removeEventListener('mousedown', fn)
   }, [seriesExportOpen])
 
-  // Skipped-date resolution: "Find another slot" → booked elsewhere → row turns green + counts toward series export
-  const [resolvedSkips, setResolvedSkips] = useState<Record<string, Booking>>({})
-  useEffect(() => {
-    const fn = (e: Event) => {
-      const { seriesId, date, booking } = (e as CustomEvent<{ seriesId: string; date: string; booking: Booking }>).detail
-      setResolvedSkips(prev => ({ ...prev, [`${seriesId}:${date}`]: booking }))
-    }
-    document.addEventListener('series-skip-resolved', fn)
-    return () => document.removeEventListener('series-skip-resolved', fn)
-  }, [])
+  // Skipped-date resolution: "Find another slot" → booked elsewhere → row turns green + counts toward series export.
+  // Derived from myBookings (persists across reloads — the replacement booking is tagged with
+  // resolves_series_id/resolves_skipped_date in the DB, not tracked in local-only state).
+  const resolvedSkips = useMemo(() => {
+    const map: Record<string, Booking> = {}
+    ;(myBookings as Booking[]).forEach(b => {
+      if (b.resolves_series_id && b.resolves_skipped_date && b.status !== 'cancelled') {
+        map[`${b.resolves_series_id}:${b.resolves_skipped_date}`] = b
+      }
+    })
+    return map
+  }, [myBookings])
 
   function resolvedSkipsForSeries(seriesId: string): Booking[] {
     const prefix = `${seriesId}:`

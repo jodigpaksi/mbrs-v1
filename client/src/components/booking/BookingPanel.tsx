@@ -95,12 +95,13 @@ interface BookingPanelProps {
   prefillDate?: string
   prefillVersion?: number
   buildingId?: number | null
-  onSubmit?: (info?: Booking) => void
+  resolveSkipContext?: { seriesId: string; date: string } | null
+  onSubmit?: () => void
   onCancel?: (booking: Booking) => void
   onAfterHoursOpen?: (data: { buildingId?: number | null; workingHoursEnd: string }) => void
 }
 
-export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, prefillVersion, buildingId, onSubmit, onCancel, onAfterHoursOpen }: BookingPanelProps) {
+export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, prefillVersion, buildingId, resolveSkipContext, onSubmit, onCancel, onAfterHoursOpen }: BookingPanelProps) {
   const { user } = useAuth()
   const { defaultType, defaultBuilding, t, language } = useSettings()
   const REPEAT_LBL: Record<string, string> = { none: t('repeat_none'), daily: t('repeat_daily'), weekly: t('repeat_weekly') }
@@ -614,22 +615,16 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     if (isEdit && editBooking) {
       await updateBooking(editBooking.id, { ...base, start_at: startAt, end_at: endAt })
     } else {
-      await createBooking({ ...base, start_at: startAt, end_at: endAt })
+      await createBooking({
+        ...base,
+        start_at: startAt,
+        end_at: endAt,
+        resolves_series_id: resolveSkipContext?.seriesId,
+        resolves_skipped_date: resolveSkipContext?.date,
+      })
       clearDraft()
     }
-    onSubmit?.({
-      id: -Date.now(),
-      user_id: user?.id ?? 0,
-      room_id: selectedRoom.id,
-      room: selectedRoom,
-      title,
-      description: desc || undefined,
-      start_at: startAt,
-      end_at: endAt,
-      status,
-      type,
-      booked_for: bookFor.trim() || undefined,
-    })
+    onSubmit?.()
   }
 
   // knownSkipped: dates already known to conflict (pre-checked), so they get stored on each booking
