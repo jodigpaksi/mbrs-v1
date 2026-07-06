@@ -151,6 +151,7 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
         Route::patch('/settings/m365', [SettingController::class, 'updateM365Settings']);
         Route::post('/settings/m365/test', [SettingController::class, 'testM365Connection']);
         Route::post('/settings/m365/test-email', [SettingController::class, 'sendM365TestEmail']);
+        Route::post('/settings/smtp/test-email', [SettingController::class, 'sendSmtpTestEmail']);
         Route::patch('/users/{user}/special-access', [UserController::class, 'toggleSpecialAccess']);
         Route::get('/archive', [ArchiveController::class, 'index']);
         Route::post('/archive/run', [ArchiveController::class, 'run']);
