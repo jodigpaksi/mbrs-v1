@@ -16,9 +16,10 @@ import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, 
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
-import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo } from '../api/settings'
-import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive, runExport, listExports, getExportDownloadUrl, deleteAllExports } from '../api/archive'
+import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto, getM365Settings, updateM365Settings, testM365Connection, sendM365TestEmail } from '../api/settings'
+import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive } from '../api/archive'
 import type { ArchiveParams } from '../api/archive'
+import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBackupExports } from '../api/backup'
 import type { UserRole } from '../types/index'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import UserAvatar from '../components/ui/UserAvatar'
@@ -61,7 +62,6 @@ function BuildingModal({
   const [address, setAddress] = useState(initial?.address ?? '')
   const [locationId, setLocationId] = useState<number | ''>(initial?.location_id ?? '')
   const [floors, setFloors] = useState(String(initial?.floors ?? 1))
-  const [photo, setPhoto] = useState(initial?.photo ?? '')
   const [notes, setNotes] = useState(initial?.notes ?? '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -76,7 +76,6 @@ function BuildingModal({
         address: address.trim() || undefined,
         location_id: locationId !== '' ? locationId : undefined,
         floors: Number(floors) || 1,
-        photo: photo.trim() || undefined,
         notes: notes.trim() || undefined,
       })
       onClose()
@@ -119,11 +118,6 @@ function BuildingModal({
           <div className="col-span-2 space-y-1">
             <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Address</label>
             <input value={address} onChange={e => setAddress(e.target.value)} placeholder="e.g. 123 Main Street"
-              className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-          </div>
-          <div className="col-span-2 space-y-1">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Photo URL</label>
-            <input value={photo} onChange={e => setPhoto(e.target.value)} placeholder="https://..."
               className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
           </div>
           <div className="col-span-2 space-y-1">
@@ -1135,7 +1129,11 @@ function LocationModal({ initial, onSave, onClose }: {
 // ── Buildings Tab ────────────────────────────────────────────────────────────
 function BuildingsTab() {
   const qc = useQueryClient()
-  const { data: buildings = [], isLoading } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings })
+  const { user: currentUser } = useAuth()
+  const isBuildingAdminUser = currentUser?.role === 'building_admin'
+  const managedBuildingIds = new Set((currentUser?.buildings ?? []).map(b => b.id))
+  const { data: allBuildings = [], isLoading } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings })
+  const buildings = isBuildingAdminUser ? (allBuildings as Building[]).filter(b => managedBuildingIds.has(b.id)) : (allBuildings as Building[])
   const { data: allRooms = [] } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ['locations'], queryFn: getLocations })
   const { data: bldgGeneral } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 60_000 })
@@ -1233,6 +1231,7 @@ function BuildingsTab() {
           <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Admin Dashboard</p>
           <h1 className="text-3xl font-black italic tracking-tighter uppercase">Buildings</h1>
         </div>
+        {!isBuildingAdminUser && (
         <div className="flex gap-2">
           <button onClick={() => setBuildingIEModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
@@ -1243,6 +1242,7 @@ function BuildingsTab() {
             <span className="material-symbols-outlined" style={{ fontSize: 15 }}>import_export</span>Rooms
           </button>
         </div>
+        )}
       </div>
 
       {buildingIEModal && (
@@ -1270,11 +1270,9 @@ function BuildingsTab() {
             <div key={b.id} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
               {/* Building header row */}
               <div className="flex items-center gap-4 px-5 py-4">
-                {/* Photo or placeholder */}
+                {/* Placeholder icon */}
                 <div className="size-14 rounded-xl overflow-hidden shrink-0 bg-[var(--ds-bg-surface-2)] flex items-center justify-center">
-                  {b.photo
-                    ? <img src={b.photo} className="w-full h-full object-cover" />
-                    : <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 28 }}>domain</span>}
+                  <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 28 }}>domain</span>
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -1309,6 +1307,7 @@ function BuildingsTab() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {!isBuildingAdminUser && (<>
                   <button
                     onClick={() => setBuildingModal({ open: true, initial: b })}
                     className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-black hover:text-[#adee2b] transition-all"
@@ -1323,6 +1322,7 @@ function BuildingsTab() {
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 17 }}>delete</span>
                   </button>
+                  </>)}
                   <button
                     onClick={() => setExpanded(isExpanded ? null : b.id)}
                     className="size-9 flex items-center justify-center rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-all"
@@ -1368,6 +1368,7 @@ function BuildingsTab() {
         })}
 
         {/* Add Building — inline at bottom of list */}
+        {!isBuildingAdminUser && (
         <button
           onClick={() => setBuildingModal({ open: true })}
           className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-[11px] font-black uppercase tracking-wide transition-all"
@@ -1378,6 +1379,7 @@ function BuildingsTab() {
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
           Add Building
         </button>
+        )}
       </div>
 
       {/* Building modal */}
@@ -2093,7 +2095,7 @@ function ImportExportModal({ users, onImport, onClose }: {
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
+    const sql = `-- MRBS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
     download('users_export.sql', sql, 'text/plain')
   }
 
@@ -2500,11 +2502,11 @@ function applyDropdown(ws: ExcelJS.Worksheet, col: string, options: string[]) {
 }
 
 // ── Building Import / Export modal ────────────────────────────────────────────
-const BUILDING_COLS = ['name', 'code', 'location', 'address', 'floors', 'photo', 'notes', 'is_active']
+const BUILDING_COLS = ['name', 'code', 'location', 'address', 'floors', 'notes', 'is_active']
 
 type BuildingImportRow = {
   name: string; code?: string; location?: string; address?: string
-  floors?: string; photo?: string; notes?: string; is_active?: string
+  floors?: string; notes?: string; is_active?: string
 }
 
 function BuildingImportExportModal({ buildings, onImport, onClose }: {
@@ -2552,13 +2554,13 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Buildings Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO buildings (${BUILDING_COLS.join(', ')}) VALUES\n${rows};`
+    const sql = `-- MRBS Buildings Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO buildings (${BUILDING_COLS.join(', ')}) VALUES\n${rows};`
     download('buildings_export.sql', sql, 'text/plain')
   }
 
   const TEMPLATE_EXAMPLE: Record<string, string>[] = [
-    { name: 'Tower A', code: 'TWR-A', location: 'Jakarta', address: 'Jl. Sudirman No. 1', floors: '10', photo: '', notes: 'Main office tower', is_active: 'yes' },
-    { name: 'Tower B', code: 'TWR-B', location: 'Jakarta', address: 'Jl. Sudirman No. 2', floors: '5', photo: '', notes: '', is_active: 'yes' },
+    { name: 'Tower A', code: 'TWR-A', location: 'Jakarta', address: 'Jl. Sudirman No. 1', floors: '10', notes: 'Main office tower', is_active: 'yes' },
+    { name: 'Tower B', code: 'TWR-B', location: 'Jakarta', address: 'Jl. Sudirman No. 2', floors: '5', notes: '', is_active: 'yes' },
   ]
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
@@ -2595,7 +2597,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
         return {
           name: String(r[nameI] ?? '').trim(),
           code: get('code'), location: get('location'), address: get('address'),
-          floors: get('floors'), photo: get('photo'), notes: get('notes'), is_active: get('is_active'),
+          floors: get('floors'), notes: get('notes'), is_active: get('is_active'),
         }
       })
     }
@@ -2897,7 +2899,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MBRS Rooms Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO rooms (${ROOM_COLS.join(', ')}) VALUES\n${rows};`
+    const sql = `-- MRBS Rooms Export (${new Date().toISOString().slice(0, 10)})\nINSERT INTO rooms (${ROOM_COLS.join(', ')}) VALUES\n${rows};`
     download('rooms_export.sql', sql, 'text/plain')
   }
 
@@ -3356,6 +3358,8 @@ function DepartmentsSection({ departments, locations, qc }: {
 
 function UsersTab() {
   const qc = useQueryClient()
+  const { user: currentUser } = useAuth()
+  const isReadOnly = currentUser?.role === 'building_admin'
   const { data: users = [], isLoading } = useQuery<User[]>({ queryKey: ['users'], queryFn: getUsers })
   const { data: buildings = [] } = useQuery<Building[]>({ queryKey: ['buildings'], queryFn: getBuildings })
   const { data: locations = [] } = useQuery<Location[]>({ queryKey: ['locations'], queryFn: getLocations })
@@ -3494,6 +3498,7 @@ function UsersTab() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users..."
             className="w-56 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent text-[var(--ds-text-1)]" />
         </div>
+        {!isReadOnly && (<>
         {/* Import / Export */}
         <button onClick={() => setIEModal(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
@@ -3506,10 +3511,11 @@ function UsersTab() {
           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_add</span>
           Add User
         </button>
+        </>)}
       </div>
 
-      {/* ── Departments section ── */}
-      <DepartmentsSection departments={departments as Department[]} locations={locations as Location[]} qc={qc} />
+      {/* ── Departments section — admin only ── */}
+      {!isReadOnly && <DepartmentsSection departments={departments as Department[]} locations={locations as Location[]} qc={qc} />}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
@@ -3590,6 +3596,7 @@ function UsersTab() {
                             {role === 'user' && (
                               <td className="px-5 py-3.5">
                                 <button
+                                  disabled={isReadOnly}
                                   onClick={async () => { await toggleUserSpecialAccess(u.id); qc.invalidateQueries({ queryKey: ['users'] }) }}
                                   className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[11px] font-black uppercase tracking-wider whitespace-nowrap"
                                   style={u.can_book_special
@@ -3613,16 +3620,20 @@ function UsersTab() {
                               </td>
                             )}
                             <td className="px-2 py-3.5">
-                              <button onClick={() => openEdit(u)}
-                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors">
-                                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
-                              </button>
+                              {!isReadOnly && (
+                                <button onClick={() => openEdit(u)}
+                                  className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
+                                </button>
+                              )}
                             </td>
                             <td className="px-2 py-3.5">
-                              <button onClick={() => { setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('') }}
-                                className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
-                                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
-                              </button>
+                              {!isReadOnly && (
+                                <button onClick={() => { setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('') }}
+                                  className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -3653,7 +3664,7 @@ function UsersTab() {
                           }
                         </div>
                         {/* Special room access — only for regular users */}
-                        {u.role === 'user' && (
+                        {u.role === 'user' && !isReadOnly && (
                           <button
                             title={u.can_book_special ? 'Revoke special room access' : 'Grant special room access'}
                             onClick={async () => {
@@ -3667,6 +3678,7 @@ function UsersTab() {
                             {u.can_book_special ? 'Special' : 'Regular'}
                           </button>
                         )}
+                        {!isReadOnly && (<>
                         <button onClick={() => openEdit(u)}
                           className="size-9 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
@@ -3679,6 +3691,7 @@ function UsersTab() {
                           className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors shrink-0">
                           <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
                         </button>
+                        </>)}
                       </div>
                     ))}
                   </>
@@ -4134,37 +4147,6 @@ function ArchiveTab() {
     },
   })
 
-  const { mutate: doExportNow, isPending: exportingNow } = useMutation({
-    mutationFn: (formats: string[]) => runExport(formats),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['exports'] })
-      addInfoToast(`Export generated: ${res.files} file${res.files !== 1 ? 's' : ''} saved to server`)
-    },
-  })
-  const [deleteExportsConfirm, setDeleteExportsConfirm] = useState(false)
-  const [deleteExportsInput,   setDeleteExportsInput]   = useState('')
-  const [deletingExports,      setDeletingExports]      = useState(false)
-  async function doDeleteAllExports() {
-    setDeletingExports(true)
-    try {
-      const res = await deleteAllExports()
-      qc.invalidateQueries({ queryKey: ['exports'] })
-      addInfoToast(`${res.deleted} export batch${res.deleted !== 1 ? 'es' : ''} deleted`)
-      setDeleteExportsConfirm(false)
-      setDeleteExportsInput('')
-    } catch {
-      addInfoToast('Delete failed')
-    } finally {
-      setDeletingExports(false)
-    }
-  }
-
-  const { data: exports = [] } = useQuery({
-    queryKey: ['exports'],
-    queryFn: listExports,
-    staleTime: 30_000,
-  })
-
   function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   }
@@ -4232,7 +4214,7 @@ function ArchiveTab() {
         </div>
         <div className="flex items-center gap-2">
           {/* icon-only utility buttons */}
-          <button onClick={() => { qc.invalidateQueries({ queryKey: ['archive'] }); qc.invalidateQueries({ queryKey: ['exports'] }) }}
+          <button onClick={() => qc.invalidateQueries({ queryKey: ['archive'] })}
             title="Refresh" className="size-9 flex items-center justify-center rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors">
             <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
           </button>
@@ -4399,111 +4381,6 @@ function ArchiveTab() {
         )}
       </div>
 
-      {/* Server Exports */}
-      <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--ds-border-sub)]">
-          <div>
-            <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Server Exports</p>
-            <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Files generated by scheduler or manual export</p>
-          </div>
-          <button onClick={() => doExportNow(['excel', 'csv', 'pdf'])} disabled={exportingNow}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-40 transition-opacity">
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>save</span>
-            {exportingNow ? 'Exporting…' : 'Export Now'}
-          </button>
-        </div>
-        {exports.length === 0 ? (
-          <p className="px-6 py-8 text-center text-[var(--ds-text-3)] text-sm font-bold">No exports yet.</p>
-        ) : (
-          <div className="divide-y divide-[var(--ds-border-sub)]">
-            {exports.map(e => (
-              <div key={e.label} className="px-6 py-4 flex items-center justify-between">
-                <div>
-                  <p className="text-[14px] font-black text-[var(--ds-text-1)]">{e.label}</p>
-                  <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">{new Date(e.created_at * 1000).toLocaleString('en-GB')}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {e.files.map(f => (
-                    <a key={f.path} href={getExportDownloadUrl(f.path)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
-                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>
-                      {f.name.split('.').pop()?.toUpperCase()}
-                      <span className="text-[var(--ds-text-3)] font-normal">({(f.size / 1024).toFixed(0)}kb)</span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Danger zone */}
-        {exports.length > 0 && (
-          <div className="mx-6 mb-6 mt-2 rounded-2xl p-4 flex items-center justify-between gap-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
-            <div>
-              <p className="text-[11px] font-black text-red-500 uppercase tracking-wider">Danger Zone</p>
-              <p className="text-[10px] text-red-400 mt-0.5">Delete all {exports.length} export batch{exports.length !== 1 ? 'es' : ''} and their files permanently.</p>
-            </div>
-            <button onClick={() => { setDeleteExportsConfirm(true); setDeleteExportsInput('') }}
-              className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-300 bg-[var(--ds-bg-surface)] text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
-              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete_forever</span>
-              Delete All
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Delete all exports confirm modal */}
-      {deleteExportsConfirm && createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
-          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
-          onClick={() => setDeleteExportsConfirm(false)}>
-          <div className="w-[420px] rounded-[2rem] overflow-hidden shadow-2xl"
-            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px)', border: '1px solid rgba(128,128,128,0.15)' }}
-            onClick={e => e.stopPropagation()}>
-            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
-              <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
-              </div>
-              <div>
-                <p className="text-base font-black text-[var(--ds-text-1)]">Delete All Export Records</p>
-                <p className="text-[11px] text-[var(--ds-text-2)]">This will permanently delete all files from the server.</p>
-              </div>
-            </div>
-            <div className="px-7 py-6 space-y-5">
-              <p className="text-[12px] text-[var(--ds-text-2)] leading-relaxed">
-                All <span className="font-black text-[var(--ds-text-1)]">{exports.length} export batch{exports.length !== 1 ? 'es' : ''}</span> and their files will be permanently removed from the server. This action <span className="font-black text-red-500">cannot be undone</span>.
-              </p>
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-black text-[var(--ds-text-2)] uppercase tracking-wider">Confirm action</p>
-                <p className="text-[11px] text-[var(--ds-text-2)]">Type <span className="font-black text-red-500 font-mono">Delete all records</span> to confirm</p>
-                <input
-                  type="text"
-                  value={deleteExportsInput}
-                  onChange={e => setDeleteExportsInput(e.target.value)}
-                  placeholder="Delete all records"
-                  autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter' && deleteExportsInput === 'Delete all records') doDeleteAllExports() }}
-                  className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
-                />
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => setDeleteExportsConfirm(false)}
-                  className="px-5 py-2.5 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
-                  Cancel
-                </button>
-                <button onClick={doDeleteAllExports}
-                  disabled={deleteExportsInput !== 'Delete all records' || deletingExports}
-                  className="px-5 py-2.5 rounded-xl bg-red-500 text-white text-[11px] font-black uppercase hover:bg-red-600 disabled:opacity-40 transition-all">
-                  {deletingExports ? 'Deleting…' : 'Delete All Records'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
       {/* Purge confirm modal */}
       {purgeConfirm && createPortal(
         <div className="fixed inset-0 z-[1000] flex items-center justify-center"
@@ -4554,8 +4431,7 @@ const SETTINGS_SECTIONS = [
   { key: 'ghost',    label: 'Anti-Ghost',     icon: 'person_off' },
   { key: 'features', label: 'Features',       icon: 'tune' },
   { key: 'archive',  label: 'Archive',         icon: 'inventory_2' },
-  { key: 'export',   label: 'Export Schedule', icon: 'schedule_send' },
-  { key: 'logexport', label: 'Log Export',     icon: 'history' },
+  { key: 'backup',   label: 'Auto Backup',     icon: 'backup' },
 ] as const
 type SettingsSection = typeof SETTINGS_SECTIONS[number]['key']
 
@@ -4565,7 +4441,7 @@ function SettingsTab() {
   const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ branding: null, hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, archive: null, export: null, logexport: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ branding: null, hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, archive: null, backup: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
@@ -4625,10 +4501,98 @@ function SettingsTab() {
   // General — auto-save each field
   const { data: general } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings })
   const [appName,      setAppName]      = useState(general?.app_name ?? 'RoomSync Pro')
+  const [appFullName,  setAppFullName]  = useState(general?.app_full_name ?? '')
   const [appLogoUrl,   setAppLogoUrl]   = useState<string | null>(general?.app_logo_url ?? null)
   const [logoUploading, setLogoUploading] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const appNameDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const appFullNameDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const [loginPhotoUrl, setLoginPhotoUrl] = useState<string | null>(general?.login_photo_url ?? null)
+  const [loginPhotoUploading, setLoginPhotoUploading] = useState(false)
+  const loginPhotoInputRef = useRef<HTMLInputElement>(null)
+  const [loginPhotoPosX, setLoginPhotoPosX] = useState(general?.login_photo_pos_x ?? 50)
+  const [loginPhotoPosY, setLoginPhotoPosY] = useState(general?.login_photo_pos_y ?? 50)
+  const [loginHeadline,    setLoginHeadline]    = useState(general?.login_headline ?? 'Booking made easy')
+  const [loginSubheadline, setLoginSubheadline] = useState(general?.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
+  const loginPhotoPosDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const loginHeadlineDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const loginSubheadlineDebounce = useRef<ReturnType<typeof setTimeout>>()
+
+  // Microsoft 365 integration (Tenant/Client ID + Client Secret, used later for Teams/Email/Outlook Calendar)
+  const { data: m365 } = useQuery({ queryKey: ['settings-m365'], queryFn: getM365Settings })
+  const [m365TenantId, setM365TenantId] = useState('')
+  const [m365ClientId, setM365ClientId] = useState('')
+  const [m365ClientSecret, setM365ClientSecret] = useState('')
+  const [m365SenderEmail, setM365SenderEmail] = useState('')
+  const [m365Saving, setM365Saving] = useState(false)
+  const [m365Testing, setM365Testing] = useState(false)
+  const [m365TestResult, setM365TestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [m365TestingEmail, setM365TestingEmail] = useState(false)
+  const [m365EmailTestResult, setM365EmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  useEffect(() => {
+    if (m365) { setM365TenantId(m365.tenant_id); setM365ClientId(m365.client_id); setM365SenderEmail(m365.sender_email) }
+  }, [m365?.tenant_id, m365?.client_id, m365?.sender_email])
+  async function saveM365() {
+    setM365Saving(true)
+    setM365TestResult(null)
+    try {
+      const patch: { tenant_id: string; client_id: string; client_secret?: string; sender_email: string } = { tenant_id: m365TenantId, client_id: m365ClientId, sender_email: m365SenderEmail }
+      if (m365ClientSecret) patch.client_secret = m365ClientSecret
+      await updateM365Settings(patch)
+      setM365ClientSecret('')
+      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
+      addInfoToast('Microsoft 365 settings saved')
+    } catch {
+      addInfoToast('Failed to save Microsoft 365 settings')
+    } finally {
+      setM365Saving(false)
+    }
+  }
+  async function handleTestM365() {
+    setM365Testing(true)
+    setM365TestResult(null)
+    try {
+      const res = await testM365Connection()
+      setM365TestResult(res)
+    } catch (err: any) {
+      setM365TestResult({ success: false, message: err?.response?.data?.message ?? 'Test failed — please try again.' })
+    } finally {
+      setM365Testing(false)
+    }
+  }
+  async function toggleM365MailEnabled() {
+    const v = !m365?.mail_enabled
+    try {
+      await updateM365Settings({ mail_enabled: v })
+      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
+      addInfoToast(v ? 'App emails will now send via Microsoft 365' : 'App emails switched back to the default mailer')
+    } catch {
+      addInfoToast('Failed to update mail switch')
+    }
+  }
+  async function toggleM365CalendarSync() {
+    const v = !m365?.calendar_sync_enabled
+    try {
+      await updateM365Settings({ calendar_sync_enabled: v })
+      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
+      addInfoToast(v ? 'New bookings will now sync to Outlook/Teams Calendar' : 'Calendar sync turned off')
+    } catch {
+      addInfoToast('Failed to update calendar sync switch')
+    }
+  }
+  async function handleSendM365TestEmail() {
+    setM365TestingEmail(true)
+    setM365EmailTestResult(null)
+    try {
+      const res = await sendM365TestEmail()
+      setM365EmailTestResult(res)
+    } catch (err: any) {
+      setM365EmailTestResult({ success: false, message: err?.response?.data?.message ?? 'Test email failed — please try again.' })
+    } finally {
+      setM365TestingEmail(false)
+    }
+  }
+
   const [maxDays,      setMaxDays]      = useState(general?.max_advance_days ?? 30)
   const [allowBookFor,      setAllowBookFor]      = useState(general?.allow_book_for_others ?? true)
   const [allowPasswordChange, setAllowPasswordChange] = useState(general?.allow_password_change ?? true)
@@ -4639,12 +4603,6 @@ function SettingsTab() {
   const [roomsGrid,    setRoomsGrid]    = useState(general?.rooms_grid_cols ?? 3)
   const [archiveDays,      setArchiveDays]      = useState(general?.archive_after_days ?? 30)
   const [deleteDays,       setDeleteDays]       = useState(general?.archive_delete_after_days ?? 90)
-  const [exportEnabled,    setExportEnabled]    = useState(general?.export_enabled ?? false)
-  const [exportFrequency,  setExportFrequency]  = useState(general?.export_frequency ?? 'daily')
-  const [exportTime,       setExportTime]       = useState(general?.export_time ?? '06:00')
-  const [exportDow,        setExportDow]        = useState(general?.export_day_of_week ?? 1)
-  const [exportDom,        setExportDom]        = useState(general?.export_day_of_month ?? 1)
-  const [exportFormats,    setExportFormats]    = useState<string[]>((general?.export_formats ?? 'excel,csv').split(',').filter(Boolean))
   const [antiGhostEnabled,      setAntiGhostEnabled]      = useState(general?.anti_ghost_enabled ?? false)
   const [antiGhostModes,        setAntiGhostModes]        = useState<Set<string>>(() => new Set((general?.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
   const [ghostWindowBefore,     setGhostWindowBefore]     = useState(general?.anti_ghost_window_before ?? 5)
@@ -4655,23 +4613,23 @@ function SettingsTab() {
   const ghostWindowAfterDebounce  = useRef<ReturnType<typeof setTimeout>>()
   const archiveDaysDebounce    = useRef<ReturnType<typeof setTimeout>>()
   const deleteDaysDebounce     = useRef<ReturnType<typeof setTimeout>>()
-  const logIntervalDebounce    = useRef<ReturnType<typeof setTimeout>>()
-  const logTimeDebounce        = useRef<ReturnType<typeof setTimeout>>()
   const tzDebounce             = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
     if (general) {
       setAppName(general.app_name ?? 'RoomSync Pro')
+      setAppFullName(general.app_full_name ?? '')
       setAppLogoUrl(general.app_logo_url ?? null)
+      setLoginPhotoUrl(general.login_photo_url ?? null)
+      setLoginPhotoPosX(general.login_photo_pos_x ?? 50)
+      setLoginPhotoPosY(general.login_photo_pos_y ?? 50)
+      setLoginHeadline(general.login_headline ?? 'Booking made easy')
+      setLoginSubheadline(general.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
       setAllowPasswordChange(general.allow_password_change ?? true)
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
       setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
       setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
       setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
-      setExportEnabled(general.export_enabled); setExportFrequency(general.export_frequency)
-      setExportTime(general.export_time); setExportDow(general.export_day_of_week)
-      setExportDom(general.export_day_of_month)
-      setExportFormats((general.export_formats ?? 'excel,csv').split(',').filter(Boolean))
       setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
       setAntiGhostModes(new Set((general.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
       setGhostWindowBefore(general.anti_ghost_window_before ?? 5)
@@ -4679,7 +4637,7 @@ function SettingsTab() {
       setWebConfirmEnabled(general.web_confirm_enabled ?? false)
       setBusinessTz(general.business_timezone ?? 'Asia/Jakarta')
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.export_enabled, general?.export_frequency, general?.export_time, general?.export_day_of_week, general?.export_day_of_month, general?.export_formats, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone, general?.app_name, general?.app_logo_url])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone, general?.app_name, general?.app_full_name, general?.app_logo_url, general?.login_photo_url, general?.login_photo_pos_x, general?.login_photo_pos_y, general?.login_headline, general?.login_subheadline])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
@@ -4693,6 +4651,11 @@ function SettingsTab() {
     setAppName(v)
     clearTimeout(appNameDebounce.current)
     appNameDebounce.current = setTimeout(() => saveGeneral({ app_name: v }, `App name set to "${v}"`), 800)
+  }
+  function onAppFullNameChange(v: string) {
+    setAppFullName(v)
+    clearTimeout(appFullNameDebounce.current)
+    appFullNameDebounce.current = setTimeout(() => saveGeneral({ app_full_name: v }, v ? `App full name set to "${v}"` : 'App full name cleared'), 800)
   }
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -4716,6 +4679,48 @@ function SettingsTab() {
     queryClient.invalidateQueries({ queryKey: ['settings-general'] })
     addInfoToast('App logo removed')
   }
+  async function handleLoginPhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLoginPhotoUploading(true)
+    try {
+      const res = await uploadLoginPhoto(file)
+      setLoginPhotoUrl(res.login_photo_url)
+      queryClient.invalidateQueries({ queryKey: ['settings-general'] })
+      addInfoToast('Login page photo updated')
+    } catch {
+      addInfoToast('Photo upload failed')
+    } finally {
+      setLoginPhotoUploading(false)
+      if (loginPhotoInputRef.current) loginPhotoInputRef.current.value = ''
+    }
+  }
+  async function handleDeleteLoginPhoto() {
+    await deleteLoginPhoto()
+    setLoginPhotoUrl(null)
+    queryClient.invalidateQueries({ queryKey: ['settings-general'] })
+    addInfoToast('Login page photo removed')
+  }
+  function onLoginPhotoPosChange(axis: 'x' | 'y', v: number) {
+    if (axis === 'x') setLoginPhotoPosX(v); else setLoginPhotoPosY(v)
+    clearTimeout(loginPhotoPosDebounce.current)
+    loginPhotoPosDebounce.current = setTimeout(() => {
+      saveGeneral(
+        axis === 'x' ? { login_photo_pos_x: v } : { login_photo_pos_y: v },
+        'Login photo position updated'
+      )
+    }, 500)
+  }
+  function onLoginHeadlineChange(v: string) {
+    setLoginHeadline(v)
+    clearTimeout(loginHeadlineDebounce.current)
+    loginHeadlineDebounce.current = setTimeout(() => saveGeneral({ login_headline: v }, 'Login headline updated'), 800)
+  }
+  function onLoginSubheadlineChange(v: string) {
+    setLoginSubheadline(v)
+    clearTimeout(loginSubheadlineDebounce.current)
+    loginSubheadlineDebounce.current = setTimeout(() => saveGeneral({ login_subheadline: v }, 'Login subheadline updated'), 800)
+  }
   async function toggleAllowBookFor()        { const v = !allowBookFor;       setAllowBookFor(v);       await saveGeneral({ allow_book_for_others: v },    v ? 'Book for others enabled' : 'Book for others disabled') }
   async function toggleAllowPasswordChange() { const v = !allowPasswordChange; setAllowPasswordChange(v); await saveGeneral({ allow_password_change: v }, v ? 'Password change enabled' : 'Password change disabled') }
   async function toggleAllowAvatarUpload()   { const v = !allowAvatarUpload;   setAllowAvatarUpload(v);   await saveGeneral({ allow_avatar_upload: v },   v ? 'Avatar upload enabled' : 'Avatar upload disabled') }
@@ -4733,17 +4738,6 @@ function SettingsTab() {
     deleteDaysDebounce.current = setTimeout(() => saveGeneral({ archive_delete_after_days: v }, `Auto-delete archive after ${v} days`), 800)
   }
   async function onWorkEndChange(v: string) { setWorkEnd(v); await saveGeneral({ working_hours_end: v }, `Working hours end set to ${v}`) }
-  async function toggleExportEnabled() { const v = !exportEnabled; setExportEnabled(v); await saveGeneral({ export_enabled: v }, v ? 'Auto export enabled' : 'Auto export disabled') }
-  async function onExportFrequencyChange(v: string) { setExportFrequency(v); await saveGeneral({ export_frequency: v }, `Export frequency: ${v}`) }
-  async function onExportTimeChange(v: string) { setExportTime(v); await saveGeneral({ export_time: v }, `Export time set to ${v}`) }
-  async function onExportDowChange(v: number) { setExportDow(v); await saveGeneral({ export_day_of_week: v }, 'Export day updated') }
-  async function onExportDomChange(v: number) { setExportDom(v); await saveGeneral({ export_day_of_month: v }, 'Export day updated') }
-  async function toggleExportFormat(fmt: string) {
-    const next = exportFormats.includes(fmt) ? exportFormats.filter(f => f !== fmt) : [...exportFormats, fmt]
-    if (!next.length) return
-    setExportFormats(next)
-    await saveGeneral({ export_formats: next.join(',') }, `Export formats: ${next.join(', ')}`)
-  }
   function onMaxDaysChange(v: number) {
     setMaxDays(v)
     clearTimeout(maxDaysDebounce.current)
@@ -4805,31 +4799,87 @@ function SettingsTab() {
   }
   async function toggleWebConfirm() { const v = !webConfirmEnabled; setWebConfirmEnabled(v); await saveGeneral({ web_confirm_enabled: v }, v ? 'Web presence confirm enabled' : 'Web presence confirm disabled') }
 
-  const [logExportEnabled,  setLogExportEnabled]  = useState(general?.log_auto_export_enabled ?? false)
-  const [logExportInterval, setLogExportInterval] = useState(general?.log_auto_export_interval ?? 'daily')
-  const [logExportTime,     setLogExportTime]     = useState(general?.log_auto_export_time ?? '00:00')
-  useEffect(() => {
-    if (general) {
-      setLogExportEnabled(general.log_auto_export_enabled ?? false)
-      setLogExportInterval(general.log_auto_export_interval ?? 'daily')
-      setLogExportTime(general.log_auto_export_time ?? '00:00')
-    }
-  }, [general?.log_auto_export_enabled, general?.log_auto_export_interval, general?.log_auto_export_time])
-  async function toggleLogExport() { const v = !logExportEnabled; setLogExportEnabled(v); await saveGeneral({ log_auto_export_enabled: v }, v ? 'Log auto-export enabled' : 'Log auto-export disabled') }
-  function onLogIntervalChange(v: string) {
-    setLogExportInterval(v)
-    clearTimeout(logIntervalDebounce.current)
-    logIntervalDebounce.current = setTimeout(() => saveGeneral({ log_auto_export_interval: v }, `Log export interval: ${v}`), 4000)
-  }
-  function onLogTimeChange(v: string) {
-    setLogExportTime(v)
-    clearTimeout(logTimeDebounce.current)
-    logTimeDebounce.current = setTimeout(() => saveGeneral({ log_auto_export_time: v }, `Log export time: ${v}`), 4000)
-  }
   function onBusinessTzChange(v: string) {
     setBusinessTz(v)
     clearTimeout(tzDebounce.current)
     tzDebounce.current = setTimeout(() => saveGeneral({ business_timezone: v }, `Business timezone set to ${v}`), 800)
+  }
+
+  // Auto Backup — one bundled batch (archive, activity log, users/buildings/rooms), single schedule
+  const [backupEnabled,       setBackupEnabled]       = useState(general?.backup_enabled ?? false)
+  const [backupFrequency,     setBackupFrequency]     = useState(general?.backup_frequency ?? 'weekly')
+  const [backupTime,          setBackupTime]          = useState(general?.backup_time ?? '02:00')
+  const [backupDow,           setBackupDow]           = useState(general?.backup_day_of_week ?? 1)
+  const [backupDom,           setBackupDom]           = useState(general?.backup_day_of_month ?? 1)
+  const [backupFormats,       setBackupFormats]       = useState<string[]>((general?.backup_formats ?? 'excel,csv').split(',').filter(Boolean))
+  const [backupIncludeArchive, setBackupIncludeArchive] = useState(general?.backup_include_archive ?? true)
+  const [backupIncludeLog,     setBackupIncludeLog]     = useState(general?.backup_include_log ?? true)
+  const [backupIncludeData,    setBackupIncludeData]    = useState(general?.backup_include_data ?? true)
+  useEffect(() => {
+    if (general) {
+      setBackupEnabled(general.backup_enabled ?? false)
+      setBackupFrequency(general.backup_frequency ?? 'weekly')
+      setBackupTime(general.backup_time ?? '02:00')
+      setBackupDow(general.backup_day_of_week ?? 1)
+      setBackupDom(general.backup_day_of_month ?? 1)
+      setBackupFormats((general.backup_formats ?? 'excel,csv').split(',').filter(Boolean))
+      setBackupIncludeArchive(general.backup_include_archive ?? true)
+      setBackupIncludeLog(general.backup_include_log ?? true)
+      setBackupIncludeData(general.backup_include_data ?? true)
+    }
+  }, [general?.backup_enabled, general?.backup_frequency, general?.backup_time, general?.backup_day_of_week, general?.backup_day_of_month, general?.backup_formats, general?.backup_include_archive, general?.backup_include_log, general?.backup_include_data])
+  async function toggleBackupEnabled() { const v = !backupEnabled; setBackupEnabled(v); await saveGeneral({ backup_enabled: v }, v ? 'Auto backup enabled' : 'Auto backup disabled') }
+  async function onBackupFrequencyChange(v: string) { setBackupFrequency(v); await saveGeneral({ backup_frequency: v }, `Backup frequency: ${v}`) }
+  async function onBackupTimeChange(v: string) { setBackupTime(v); await saveGeneral({ backup_time: v }, `Backup time set to ${v}`) }
+  async function onBackupDowChange(v: number) { setBackupDow(v); await saveGeneral({ backup_day_of_week: v }, 'Backup day updated') }
+  async function onBackupDomChange(v: number) { setBackupDom(v); await saveGeneral({ backup_day_of_month: v }, 'Backup day updated') }
+  async function toggleBackupFormat(fmt: string) {
+    const next = backupFormats.includes(fmt) ? backupFormats.filter(f => f !== fmt) : [...backupFormats, fmt]
+    if (!next.length) return
+    setBackupFormats(next)
+    await saveGeneral({ backup_formats: next.join(',') }, `Backup formats: ${next.join(', ')}`)
+  }
+  async function toggleBackupInclude(key: 'archive' | 'log' | 'data') {
+    const cur = { archive: backupIncludeArchive, log: backupIncludeLog, data: backupIncludeData }
+    const next = !cur[key]
+    const wouldBeEmpty = !next && !Object.entries(cur).filter(([k]) => k !== key).some(([, v]) => v)
+    if (wouldBeEmpty) return
+    if (key === 'archive') setBackupIncludeArchive(next)
+    if (key === 'log')     setBackupIncludeLog(next)
+    if (key === 'data')    setBackupIncludeData(next)
+    const settingKey = key === 'archive' ? 'backup_include_archive' : key === 'log' ? 'backup_include_log' : 'backup_include_data'
+    const label = key === 'archive' ? 'Bookings archive' : key === 'log' ? 'Activity log' : 'Users/Buildings/Rooms'
+    await saveGeneral({ [settingKey]: next }, `${label} ${next ? 'included' : 'excluded'} in backup`)
+  }
+
+  const { data: backupExports = [] } = useQuery({
+    queryKey: ['backup-exports'],
+    queryFn: listBackupExports,
+    staleTime: 30_000,
+  })
+  const { mutate: doBackupNow, isPending: backupRunning } = useMutation({
+    mutationFn: () => runBackupExport(backupFormats.length ? backupFormats : ['excel', 'csv'], { archive: backupIncludeArchive, log: backupIncludeLog, data: backupIncludeData }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['backup-exports'] })
+      addInfoToast(`Backup generated: ${res.files} file${res.files !== 1 ? 's' : ''} saved to server`)
+    },
+  })
+  const [deleteBackupsConfirm, setDeleteBackupsConfirm] = useState(false)
+  const [deleteBackupsInput,   setDeleteBackupsInput]   = useState('')
+  const [deletingBackups,      setDeletingBackups]      = useState(false)
+  async function doDeleteAllBackups() {
+    setDeletingBackups(true)
+    try {
+      const res = await deleteAllBackupExports()
+      queryClient.invalidateQueries({ queryKey: ['backup-exports'] })
+      addInfoToast(`${res.deleted} backup batch${res.deleted !== 1 ? 'es' : ''} deleted`)
+      setDeleteBackupsConfirm(false)
+      setDeleteBackupsInput('')
+    } catch {
+      addInfoToast('Delete failed')
+    } finally {
+      setDeletingBackups(false)
+    }
   }
 
   return (
@@ -4865,13 +4915,27 @@ function SettingsTab() {
           <p className="text-[10px] text-[var(--ds-text-3)] px-1">Auto-saved. Updates navbar, page title, and all app references.</p>
         </div>
 
+        {/* App Full Name */}
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">App Full Name (optional)</label>
+          <input
+            type="text"
+            value={appFullName}
+            onChange={e => onAppFullNameChange(e.target.value)}
+            maxLength={150}
+            className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 text-[14px] font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] transition-all"
+            placeholder="e.g. Meeting Room Booking System"
+          />
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Shown as a subtitle next to the app name on the login page. Leave empty to hide it.</p>
+        </div>
+
         {/* Logo Upload */}
         <div className="space-y-2">
           <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Navbar Logo</label>
           {appLogoUrl ? (
             <div className="flex items-center gap-4">
-              <div className="size-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shrink-0">
-                <img src={appLogoUrl} alt="App logo" className="size-16 object-cover" />
+              <div className="h-16 min-w-16 max-w-[220px] rounded-2xl overflow-hidden bg-white flex items-center justify-center shrink-0 px-2">
+                <img src={appLogoUrl} alt="App logo" className="h-full w-auto max-w-[204px] object-contain" />
               </div>
               <div className="space-y-2">
                 <p className="text-[12px] font-semibold text-[var(--ds-text-2)]">Custom logo active</p>
@@ -4896,20 +4960,131 @@ function SettingsTab() {
               </div>
             </div>
           ) : (
-            <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:border-[#adee2b] hover:bg-[#adee2b]/5"
+            <label htmlFor="app-logo-upload-input" className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:border-[#adee2b] hover:bg-[#adee2b]/5"
               style={{ borderColor: 'var(--ds-border)', minHeight: 100 }}>
               {logoUploading
                 ? <span className="text-[12px] font-semibold text-[var(--ds-text-3)]">Uploading...</span>
                 : <>
                   <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 28 }}>add_photo_alternate</span>
                   <span className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">Click to upload logo</span>
-                  <span className="text-[9px] text-[var(--ds-text-4)]">PNG, SVG, JPG · max 2 MB · square recommended</span>
+                  <span className="text-[9px] text-[var(--ds-text-4)]">PNG, SVG, JPG · max 8 MB · square or rectangular</span>
                 </>
               }
-              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
             </label>
           )}
-          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Appears in the navbar. Use a square image (min 64×64 px). Leave empty to use the default icon.</p>
+          <input id="app-logo-upload-input" ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Appears in the navbar. Square or rectangular images both work (logo fits a 36px-tall slot, up to 160px wide). Leave empty to use the default icon.</p>
+        </div>
+
+        {/* Login Page */}
+        <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="pt-3">
+            <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Login Page</label>
+            <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Customize the photo and copy shown on the left panel of the login screen.</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-5">
+            {/* Live preview */}
+            <div className="shrink-0 mx-auto sm:mx-0">
+              <div
+                className="w-[200px] aspect-[4/5] rounded-2xl overflow-hidden relative border"
+                style={{
+                  borderColor: 'var(--ds-border)',
+                  backgroundImage: loginPhotoUrl
+                    ? `linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.8) 100%), url(${loginPhotoUrl})`
+                    : 'radial-gradient(130% 130% at 15% 10%, #1a1f08 0%, #0c0c0c 55%, #000 100%)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: loginPhotoUrl ? `${loginPhotoPosX}% ${loginPhotoPosY}%` : 'center',
+                }}
+              >
+                <div className="absolute inset-0 p-3.5 flex flex-col justify-end">
+                  <div>
+                    <p className="text-[6.5px] font-black uppercase tracking-[0.2em] text-[#adee2b] mb-1 truncate">{loginHeadline || 'Booking made easy'}</p>
+                    <p className="text-[9.5px] font-black italic uppercase leading-snug text-white line-clamp-3">{loginSubheadline || 'Book meeting rooms without the back-and-forth'}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[9px] text-[var(--ds-text-4)] text-center mt-1.5">Live preview</p>
+            </div>
+
+            {/* Controls */}
+            <div className="flex-1 space-y-4 min-w-0">
+              {/* Photo upload */}
+              {loginPhotoUrl ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-[12px] font-semibold text-[var(--ds-text-2)] flex-1 min-w-[120px]">Custom photo active</p>
+                  <button
+                    type="button"
+                    onClick={() => loginPhotoInputRef.current?.click()}
+                    disabled={loginPhotoUploading}
+                    className="px-3 py-1.5 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteLoginPhoto}
+                    disabled={loginPhotoUploading}
+                    className="px-3 py-1.5 text-[10px] font-black uppercase rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <label htmlFor="login-photo-upload-input" className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:border-[#adee2b] hover:bg-[#adee2b]/5"
+                  style={{ borderColor: 'var(--ds-border)', minHeight: 90 }}>
+                  {loginPhotoUploading
+                    ? <span className="text-[12px] font-semibold text-[var(--ds-text-3)]">Uploading...</span>
+                    : <>
+                      <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 24 }}>add_photo_alternate</span>
+                      <span className="text-[11px] font-black text-[var(--ds-text-3)] uppercase tracking-wide">Click to upload photo</span>
+                      <span className="text-[9px] text-[var(--ds-text-4)]">JPG or PNG · max 8 MB · any aspect ratio</span>
+                    </>
+                  }
+                </label>
+              )}
+              <input id="login-photo-upload-input" ref={loginPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLoginPhotoUpload} />
+
+              {/* Position adjustment */}
+              {loginPhotoUrl && (
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] px-1">Photo Position (fits the frame)</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-14 shrink-0">Horizontal</span>
+                    <input type="range" min={0} max={100} value={loginPhotoPosX} onChange={e => onLoginPhotoPosChange('x', Number(e.target.value))} className="flex-1 accent-[#adee2b]" />
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-8 text-right">{loginPhotoPosX}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-14 shrink-0">Vertical</span>
+                    <input type="range" min={0} max={100} value={loginPhotoPosY} onChange={e => onLoginPhotoPosChange('y', Number(e.target.value))} className="flex-1 accent-[#adee2b]" />
+                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] w-8 text-right">{loginPhotoPosY}%</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Copy */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Small headline</label>
+                <input
+                  type="text"
+                  value={loginHeadline}
+                  onChange={e => onLoginHeadlineChange(e.target.value)}
+                  maxLength={120}
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Headline</label>
+                <textarea
+                  value={loginSubheadline}
+                  onChange={e => onLoginSubheadlineChange(e.target.value)}
+                  maxLength={200}
+                  rows={2}
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] resize-none"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Favicon guide */}
@@ -4924,6 +5099,175 @@ function SettingsTab() {
             <li>Rename it to <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">favicon.svg</code>.</li>
             <li>Replace the file at <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">client/public/favicon.svg</code>.</li>
             <li>Rebuild the frontend (<code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">npm run build</code>) for the change to take effect.</li>
+          </ol>
+        </div>
+      </div>
+
+      {/* Microsoft 365 Integration */}
+      <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Microsoft 365 Integration</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">
+            Azure AD App Registration credentials, shared by future Teams, Email, and Outlook Calendar integrations.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Tenant ID</label>
+            <input
+              type="text"
+              value={m365TenantId}
+              onChange={e => setM365TenantId(e.target.value)}
+              placeholder="e.g. 3f2a1b8c-....-....-....-............"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client ID (Application ID)</label>
+            <input
+              type="text"
+              value={m365ClientId}
+              onChange={e => setM365ClientId(e.target.value)}
+              placeholder="e.g. 7c9d4e21-....-....-....-............"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client Secret</label>
+            <input
+              type="password"
+              value={m365ClientSecret}
+              onChange={e => setM365ClientSecret(e.target.value)}
+              placeholder={m365?.has_secret ? '•••••••• (already set — type to replace)' : 'Paste the client secret value'}
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+            <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. Leave blank when saving to keep the current secret unchanged.</p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Sender Mailbox</label>
+            <input
+              type="text"
+              value={m365SenderEmail}
+              onChange={e => setM365SenderEmail(e.target.value)}
+              placeholder="e.g. noreply@agc.com"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+            <p className="text-[10px] text-[var(--ds-text-3)] px-1">A real, licensed mailbox in this tenant that the app will send email as. Must have Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Mail.Send</code> permission granted.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={saveM365}
+            disabled={m365Saving}
+            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-50"
+          >
+            {m365Saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={handleTestM365}
+            disabled={m365Testing || !m365?.configured}
+            title={!m365?.configured ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
+            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+          >
+            {m365Testing ? 'Testing...' : 'Test Connection'}
+          </button>
+          {m365?.configured && (
+            <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex items-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+              Credentials saved
+            </span>
+          )}
+        </div>
+
+        {m365TestResult && (
+          <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
+            style={m365TestResult.success
+              ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
+              : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
+          >
+            {m365TestResult.message}
+          </div>
+        )}
+
+        {/* Email sending switch */}
+        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Send app emails via Microsoft 365</p>
+              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+                When off, the app keeps using its current mailer. Only flip this on once Test Connection succeeds <em>and</em> the Sender Mailbox has Mail.Send permission and a real license.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleM365MailEnabled}
+              disabled={!m365?.mail_ready}
+              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.mail_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
+            >
+              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.mail_enabled ? 26 : 4 }} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleSendM365TestEmail}
+              disabled={m365TestingEmail || !m365?.mail_ready}
+              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
+              className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+            >
+              {m365TestingEmail ? 'Sending...' : 'Send Test Email'}
+            </button>
+            <span className="text-[10px] text-[var(--ds-text-3)]">Sends to your own account email, regardless of the switch above.</span>
+          </div>
+
+          {m365EmailTestResult && (
+            <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
+              style={m365EmailTestResult.success
+                ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
+                : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
+            >
+              {m365EmailTestResult.message}
+            </div>
+          )}
+        </div>
+
+        {/* Calendar sync switch */}
+        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Sync new bookings to Outlook/Teams Calendar</p>
+              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+                Every booking automatically becomes a calendar event in the booker's mailbox — it shows up in both Outlook and Teams (same calendar, no extra setup). Requires Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Calendars.ReadWrite</code> permission on the App Registration. Edits/cancellations don't sync back yet — only booking creation.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleM365CalendarSync}
+              disabled={!m365?.calendar_sync_ready}
+              title={!m365?.calendar_sync_ready ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.calendar_sync_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
+            >
+              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.calendar_sync_enabled ? 26 : 4 }} />
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>info</span>
+            <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: '#6366f1' }}>Where to get these values</p>
+          </div>
+          <ol className="text-[11px] text-[var(--ds-text-2)] leading-relaxed list-decimal list-inside space-y-1">
+            <li>Go to <strong>entra.microsoft.com</strong> → <strong>App registrations</strong> → <strong>New registration</strong>.</li>
+            <li>After creating it, copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from its Overview page.</li>
+            <li>Go to <strong>Certificates &amp; secrets</strong> → <strong>New client secret</strong> — copy the secret <strong>Value</strong> (shown once).</li>
+            <li>Under <strong>API permissions</strong>, add the Microsoft Graph application permissions this app will need (e.g. <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Mail.Send</code>, <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Calendars.ReadWrite</code>), then click <strong>Grant admin consent</strong>.</li>
           </ol>
         </div>
       </div>
@@ -5455,31 +5799,31 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* Export Schedule */}
-      <div ref={el => { secRefs.current.export = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+      {/* ── Auto Backup (one bundled batch) ── */}
+      <div ref={el => { secRefs.current.backup = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Export Schedule</p>
-          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Auto-export archive to server storage on a schedule.</p>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Auto Backup</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Exports the bookings archive, activity log, and users/buildings/rooms together as a single scheduled batch.</p>
         </div>
 
         {/* Enable toggle */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: exportEnabled ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 20, color: exportEnabled ? '#4d7c00' : '#94a3b8' }}>schedule_send</span>
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: backupEnabled ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: backupEnabled ? '#4d7c00' : '#94a3b8' }}>backup</span>
             </div>
             <div>
-              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Auto Export</p>
-              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{exportEnabled ? 'Enabled — runs on schedule' : 'Disabled'}</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Auto Backup</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{backupEnabled ? 'Enabled — runs on schedule' : 'Disabled'}</p>
             </div>
           </div>
-          <button type="button" onClick={toggleExportEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: exportEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: exportEnabled ? 24 : 4 }} />
+          <button type="button" onClick={toggleBackupEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: backupEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: backupEnabled ? 24 : 4 }} />
           </button>
         </div>
 
-        {exportEnabled && (<>
+        {backupEnabled && (<>
           <div className="border-t border-[var(--ds-border-sub)]" />
 
           {/* Frequency */}
@@ -5492,9 +5836,9 @@ function SettingsTab() {
             </div>
             <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
               {(['daily', 'weekly', 'monthly'] as const).map(f => (
-                <button key={f} type="button" onClick={() => onExportFrequencyChange(f)}
+                <button key={f} type="button" onClick={() => onBackupFrequencyChange(f)}
                   className="px-3 h-7 rounded-lg text-[10px] font-black uppercase transition-all"
-                  style={exportFrequency === f ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
+                  style={backupFrequency === f ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
                   {f}
                 </button>
               ))}
@@ -5509,13 +5853,13 @@ function SettingsTab() {
               </div>
               <p className="text-[14px] font-black text-[var(--ds-text-1)]">Time</p>
             </div>
-            <GlassTimePicker value={exportTime} onChange={onExportTimeChange} min="00:00" max="23:30" step={30} panelWidth={140}>
-              {() => (<button type="button" className="flex items-center gap-2 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums text-[var(--ds-text-1)]"><span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>schedule</span>{exportTime}</button>)}
+            <GlassTimePicker value={backupTime} onChange={onBackupTimeChange} min="00:00" max="23:30" step={30} panelWidth={140}>
+              {() => (<button type="button" className="flex items-center gap-2 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl text-[12px] font-black px-3 py-2 hover:border-[#adee2b] transition-all tabular-nums text-[var(--ds-text-1)]"><span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>schedule</span>{backupTime}</button>)}
             </GlassTimePicker>
           </div>
 
           {/* Day of week (weekly) */}
-          {exportFrequency === 'weekly' && (
+          {backupFrequency === 'weekly' && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
@@ -5525,9 +5869,9 @@ function SettingsTab() {
               </div>
               <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
-                  <button key={i} type="button" onClick={() => onExportDowChange(i)}
+                  <button key={i} type="button" onClick={() => onBackupDowChange(i)}
                     className="w-8 h-7 rounded-lg text-[10px] font-black transition-all"
-                    style={exportDow === i ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
+                    style={backupDow === i ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
                     {d}
                   </button>
                 ))}
@@ -5536,7 +5880,7 @@ function SettingsTab() {
           )}
 
           {/* Day of month (monthly) */}
-          {exportFrequency === 'monthly' && (
+          {backupFrequency === 'monthly' && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
@@ -5545,8 +5889,8 @@ function SettingsTab() {
                 <p className="text-[14px] font-black text-[var(--ds-text-1)]">Day of Month</p>
               </div>
               <div className="flex items-center gap-2">
-                <input type="number" min={1} max={28} value={exportDom}
-                  onChange={e => onExportDomChange(Math.max(1, Math.min(28, Number(e.target.value))))}
+                <input type="number" min={1} max={28} value={backupDom}
+                  onChange={e => onBackupDomChange(Math.max(1, Math.min(28, Number(e.target.value))))}
                   className="w-14 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
                 <span className="text-[12px] font-bold text-[var(--ds-text-3)]">of month</span>
               </div>
@@ -5561,83 +5905,153 @@ function SettingsTab() {
               <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
                 <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>description</span>
               </div>
-              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Export Formats</p>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">File Formats</p>
             </div>
             <div className="flex items-center gap-2">
               {(['excel', 'csv', 'pdf'] as const).map(fmt => (
-                <button key={fmt} type="button" onClick={() => toggleExportFormat(fmt)}
+                <button key={fmt} type="button" onClick={() => toggleBackupFormat(fmt)}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase transition-all"
-                  style={exportFormats.includes(fmt)
+                  style={backupFormats.includes(fmt)
                     ? { background: 'rgba(173,238,43,0.1)', borderColor: 'rgba(173,238,43,0.5)', color: '#4d7c00' }
                     : { background: 'var(--ds-bg-raised)', borderColor: 'var(--ds-border)', color: '#94a3b8' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 11, fontVariationSettings: exportFormats.includes(fmt) ? "'FILL' 1" : "'FILL' 0" }}>check_circle</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: 11, fontVariationSettings: backupFormats.includes(fmt) ? "'FILL' 1" : "'FILL' 0" }}>check_circle</span>
                   {fmt}
                 </button>
               ))}
             </div>
           </div>
-        </>)}
-      </div>
+          <p className="text-[10px] text-[var(--ds-text-3)] -mt-2">PDF applies to the bookings archive only. Activity log is always <code className="text-[10px] bg-[var(--ds-bg-raised)] px-1 py-0.5 rounded">.txt</code>.</p>
 
-      {/* ── Log Auto-Export ── */}
-      <div ref={el => { secRefs.current.logexport = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
-        <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Activity Log Export</p>
-          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Automatically export the activity log to a <code className="text-[11px] bg-[var(--ds-bg-raised)] px-1 py-0.5 rounded">.txt</code> file on a schedule. Files are saved in <code className="text-[11px] bg-[var(--ds-bg-raised)] px-1 py-0.5 rounded">storage/logs/activity-exports/</code> (last 30 kept).</p>
-        </div>
-
-        {/* Enable toggle */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
-              <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>history</span>
-            </div>
-            <div>
-              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Auto-Export Log</p>
-              <p className="text-[11px] text-[var(--ds-text-3)]">Export all entries to .txt on a schedule</p>
-            </div>
-          </div>
-          <button type="button" onClick={toggleLogExport} className="relative shrink-0">
-            <div className="w-9 h-5 rounded-full transition-colors" style={{ background: logExportEnabled ? '#adee2b' : 'var(--ds-bg-surface-2)', border: '1px solid var(--ds-border)' }} />
-            <div className="absolute top-0.5 left-0.5 size-4 rounded-full bg-white transition-transform shadow-sm" style={{ transform: logExportEnabled ? 'translateX(16px)' : 'translateX(0)' }} />
-          </button>
-        </div>
-
-        {logExportEnabled && (<>
           <div className="border-t border-[var(--ds-border-sub)]" />
 
-          {/* Frequency */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
-                <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>repeat</span>
-              </div>
-              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Frequency</p>
-            </div>
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--ds-bg-raised)] border border-[var(--ds-border)]">
-              {(['daily', 'weekly', 'monthly'] as const).map(f => (
-                <button key={f} type="button" onClick={() => onLogIntervalChange(f)}
-                  className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all capitalize"
-                  style={logExportInterval === f ? { background: '#000', color: '#adee2b' } : { background: 'transparent', color: '#94a3b8' }}>
-                  {f}
+          {/* Include */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">Include in Batch</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {([
+                { key: 'archive' as const, label: 'Bookings Archive', on: backupIncludeArchive, icon: 'inventory_2' },
+                { key: 'log' as const,     label: 'Activity Log',     on: backupIncludeLog,     icon: 'history' },
+                { key: 'data' as const,    label: 'Users, Buildings & Rooms', on: backupIncludeData, icon: 'storage' },
+              ]).map(item => (
+                <button key={item.key} type="button" onClick={() => toggleBackupInclude(item.key)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-black transition-all"
+                  style={item.on
+                    ? { background: 'rgba(173,238,43,0.1)', borderColor: 'rgba(173,238,43,0.5)', color: '#4d7c00' }
+                    : { background: 'var(--ds-bg-raised)', borderColor: 'var(--ds-border)', color: '#94a3b8' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: item.on ? "'FILL' 1" : "'FILL' 0" }}>check_circle</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{item.icon}</span>
+                  {item.label}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Time */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-2xl flex items-center justify-center bg-[var(--ds-bg-raised)]">
-                <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--ds-text-2)' }}>schedule</span>
-              </div>
-              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Time</p>
-            </div>
-            <input type="time" value={logExportTime} onChange={e => onLogTimeChange(e.target.value)}
-              className="border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[12px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-          </div>
         </>)}
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Backup Log */}
+        <div className="rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-[var(--ds-bg-raised)]">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Backup Log</p>
+              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">Batches generated by scheduler or manual export</p>
+            </div>
+            <button onClick={() => doBackupNow()} disabled={backupRunning}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:opacity-80 disabled:opacity-40 transition-opacity">
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>save</span>
+              {backupRunning ? 'Backing up…' : 'Backup Now'}
+            </button>
+          </div>
+          {backupExports.length === 0 ? (
+            <p className="px-4 py-6 text-center text-[var(--ds-text-3)] text-sm font-bold">No backups yet.</p>
+          ) : (
+            <div className="divide-y divide-[var(--ds-border-sub)]">
+              {backupExports.map(e => (
+                <div key={e.label} className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-[13px] font-black text-[var(--ds-text-1)]">{e.label}</p>
+                    <p className="text-[11px] text-[var(--ds-text-3)] mt-0.5">{new Date(e.created_at * 1000).toLocaleString('en-GB')}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {e.files.map(f => (
+                      <a key={f.path} href={getBackupDownloadUrl(f.path)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[9px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
+                        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>download</span>
+                        {f.name.replace(/_.*\./, '.').split('.')[0]}.{f.name.split('.').pop()?.toUpperCase()}
+                        <span className="text-[var(--ds-text-3)] font-normal">({(f.size / 1024).toFixed(0)}kb)</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {backupExports.length > 0 && (
+            <div className="mx-4 mb-4 mt-2 rounded-2xl p-3.5 flex items-center justify-between gap-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
+              <div>
+                <p className="text-[10px] font-black text-red-500 uppercase tracking-wider">Danger Zone</p>
+                <p className="text-[10px] text-red-400 mt-0.5">Delete all {backupExports.length} backup batch{backupExports.length !== 1 ? 'es' : ''} and their files permanently.</p>
+              </div>
+              <button onClick={() => { setDeleteBackupsConfirm(true); setDeleteBackupsInput('') }}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-300 bg-[var(--ds-bg-surface)] text-red-500 text-[10px] font-black uppercase hover:bg-red-100 transition-colors">
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete_forever</span>
+                Delete All
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Delete all backups confirm modal */}
+      {deleteBackupsConfirm && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
+          onClick={() => setDeleteBackupsConfirm(false)}>
+          <div className="w-[420px] rounded-[2rem] overflow-hidden shadow-2xl"
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px)', border: '1px solid rgba(128,128,128,0.15)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
+              <div className="size-10 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_forever</span>
+              </div>
+              <div>
+                <p className="text-base font-black text-[var(--ds-text-1)]">Delete All Backup Records</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">This will permanently delete all files from the server.</p>
+              </div>
+            </div>
+            <div className="px-7 py-6 space-y-5">
+              <p className="text-[12px] text-[var(--ds-text-2)] leading-relaxed">
+                All <span className="font-black text-[var(--ds-text-1)]">{backupExports.length} backup batch{backupExports.length !== 1 ? 'es' : ''}</span> and their files will be permanently removed from the server. This action <span className="font-black text-red-500">cannot be undone</span>.
+              </p>
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-black text-[var(--ds-text-2)] uppercase tracking-wider">Confirm action</p>
+                <p className="text-[11px] text-[var(--ds-text-2)]">Type <span className="font-black text-red-500 font-mono">Delete all records</span> to confirm</p>
+                <input
+                  type="text"
+                  value={deleteBackupsInput}
+                  onChange={e => setDeleteBackupsInput(e.target.value)}
+                  placeholder="Delete all records"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter' && deleteBackupsInput === 'Delete all records') doDeleteAllBackups() }}
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setDeleteBackupsConfirm(false)}
+                  className="px-5 py-2.5 rounded-xl border border-[var(--ds-border)] text-[var(--ds-text-2)] text-[11px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors">
+                  Cancel
+                </button>
+                <button onClick={doDeleteAllBackups} disabled={deleteBackupsInput !== 'Delete all records' || deletingBackups}
+                  className="px-5 py-2.5 rounded-xl bg-red-500 text-white text-[11px] font-black uppercase hover:bg-red-600 disabled:opacity-40 transition-colors">
+                  {deletingBackups ? 'Deleting…' : 'Delete Permanently'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       </div>{/* end main sections */}
 
@@ -6144,7 +6558,8 @@ function DisputesTab() {
 export default function AdminPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
-  const [tab, setTab] = useState<Tab>('overview')
+  const isBuildingAdmin = user?.role === 'building_admin'
+  const [tab, setTab] = useState<Tab>(isBuildingAdmin ? 'buildings' : 'overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // Read anti_ghost_enabled to gate Disputes tab visibility
@@ -6251,16 +6666,24 @@ export default function AdminPage() {
     )
   }
 
-  const mainTabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
-    { key: 'buildings',  label: 'Buildings',  icon: 'domain' },
-    { key: 'users',      label: 'Users',      icon: 'group' },
-    { key: 'archive',    label: 'Archive',    icon: 'archive' },
-    { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
-    { key: 'sensor',     label: 'Sensor',     icon: 'sensors' },
-    { key: 'activity',   label: 'Activity',   icon: 'history' },
-    ...(antiGhostActive ? [{ key: 'disputes' as Tab, label: 'Disputes', icon: 'gavel' }] : []),
-  ]
+  // building_admin gets a reduced, building-scoped menu: Buildings & Rooms, Users (view-only), Activity Log.
+  // Everything else (Overview, Archive, Kiosk, Sensor, Settings, Disputes) is admin-only.
+  const mainTabs: { key: Tab; label: string; icon: string }[] = isBuildingAdmin
+    ? [
+        { key: 'buildings', label: 'Buildings', icon: 'domain' },
+        { key: 'users',     label: 'Users',     icon: 'group' },
+        { key: 'activity',  label: 'Activity',  icon: 'history' },
+      ]
+    : [
+        { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
+        { key: 'buildings',  label: 'Buildings',  icon: 'domain' },
+        { key: 'users',      label: 'Users',      icon: 'group' },
+        { key: 'archive',    label: 'Archive',    icon: 'archive' },
+        { key: 'kiosk',      label: 'Kiosk',      icon: 'tablet' },
+        { key: 'sensor',     label: 'Sensor',     icon: 'sensors' },
+        { key: 'activity',   label: 'Activity',   icon: 'history' },
+        ...(antiGhostActive ? [{ key: 'disputes' as Tab, label: 'Disputes', icon: 'gavel' }] : []),
+      ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
   const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
 
@@ -6458,7 +6881,7 @@ export default function AdminPage() {
                 {/* Storage */}
                 {overviewData.stats.storage && (() => {
                   const s = overviewData.stats.storage
-                  const fmtMb = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb} MB`
+                  const fmtMb = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(2)} MB`
                   const totalMb = s.db_mb + s.uploads_mb + (s.logs_mb ?? 0)
                   const usedPct = storageLimitMb > 0 ? Math.min(100, (totalMb / storageLimitMb) * 100) : 0
                   const isWarn = usedPct >= 70 && usedPct < 90
@@ -6468,7 +6891,7 @@ export default function AdminPage() {
                     { label: 'Database',    mb: s.db_mb,           color: '#6366f1' },
                     { label: 'Room Photos', mb: s.room_photos_mb,  color: '#3b82f6' },
                     { label: 'Avatars',     mb: s.avatars_mb,      color: '#a855f7' },
-                    { label: 'Logs',        mb: s.logs_mb ?? 0,    color: '#f59e0b' },
+                    { label: 'Activity Log', mb: s.logs_mb ?? 0,  color: '#f59e0b' },
                   ]
                   return (
                     <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"

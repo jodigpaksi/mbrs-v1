@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Navbar from './Navbar'
 import AiAgentFab from '../ai/AiAgentFab'
+import KeyboardShortcutsFab from '../ui/KeyboardShortcutsFab'
 import TodayPanel from '../booking/TodayPanel'
 import AvailableRoomsPanel from '../room/AvailableRoomsPanel'
 import BookingPanel from '../booking/BookingPanel'
@@ -75,6 +76,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
         {children}
       </main>
       {generalSettings?.feature_ai_chat !== false && <AiAgentFab />}
+      <KeyboardShortcutsFab stackAboveAiFab={generalSettings?.feature_ai_chat !== false} />
       <TodayPanel />
       <AvailableRoomsPanel
         open={availableOpen}

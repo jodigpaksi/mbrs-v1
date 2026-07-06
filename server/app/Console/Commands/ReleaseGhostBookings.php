@@ -3,12 +3,14 @@
 namespace App\Console\Commands;
 
 use App\Events\BookingChanged;
+use App\Mail\GhostBookingCancelled;
 use App\Models\ActivityLog;
 use App\Models\Booking;
 use App\Models\Notification;
 use App\Models\Setting;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Mail;
 
 class ReleaseGhostBookings extends Command
 {
@@ -62,6 +64,15 @@ class ReleaseGhostBookings extends Command
                 'type'       => 'ghost_released',
                 'message'    => "Your booking \"{$booking->title}\" at {$roomName} ({$timeStr}) was auto-cancelled — presence not confirmed in time.",
             ]);
+
+            $recipient = $booking->bookedForUser ?? $booking->user;
+            if ($recipient && $recipient->email) {
+                try {
+                    Mail::to($recipient->email)->send(new GhostBookingCancelled($booking, $recipient));
+                } catch (\Throwable $e) {
+                    $this->error("Failed to send ghost-cancel email for booking #{$booking->id}: {$e->getMessage()}");
+                }
+            }
 
             $count++;
         }

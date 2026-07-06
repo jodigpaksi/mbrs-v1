@@ -183,51 +183,56 @@ export default function TodayPanel() {
               return (
                 <div key={b.id} className="rounded-2xl px-4 py-3.5 space-y-2 transition-colors" style={cardStyle}>
                   {/* Title on its own line */}
-                  <p className="text-[12px] font-black leading-tight" style={{ color: 'var(--ds-text-1)' }}>{b.title}</p>
+                  <p className="text-[15px] font-black leading-tight" style={{ color: 'var(--ds-text-1)' }}>{b.title}</p>
 
                   {/* Badges row — wraps freely, never competes with title */}
                   <div className="flex flex-wrap items-center gap-1">
                     {ongoing && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-[#adee2b] text-black">
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-[#adee2b] text-black">
                         <span className="size-1.5 rounded-full bg-black/40 animate-pulse inline-block" />
                         {t('label_on_going')}
                       </span>
                     )}
-                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${statusBadgeClass}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${statusBadgeClass}`}>
                       {b.status}
                     </span>
                     {b.cancel_reason === 'ghost_release' && b.dispute_status !== 'approved' && (
-                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-orange-500/15 text-orange-600">
-                        <span className="material-symbols-outlined" style={{ fontSize: 9 }}>person_off</span>Auto-Released
+                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-orange-500/15 text-orange-600">
+                        <span className="material-symbols-outlined" style={{ fontSize: 10 }}>person_off</span>Auto-Released
                       </span>
                     )}
                     {b.dispute_status === 'approved' && (
-                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-green-500/15 text-green-600">
-                        <span className="material-symbols-outlined" style={{ fontSize: 9 }}>gavel</span>Reinstated
+                      <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-green-500/15 text-green-600">
+                        <span className="material-symbols-outlined" style={{ fontSize: 10 }}>gavel</span>Reinstated
                       </span>
                     )}
                   </div>
 
-                  {b.booked_for && (
-                    <div className="flex items-center gap-2 text-[10px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
-                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>person_pin</span>
+                  {b.is_recipient && b.user ? (
+                    <div className="flex items-center gap-2 text-[12px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
+                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15 }}>person_pin</span>
+                      <span className="truncate">By {b.user.name}</span>
+                    </div>
+                  ) : b.booked_for && (
+                    <div className="flex items-center gap-2 text-[12px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
+                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15 }}>person_pin</span>
                       <span className="truncate">for {b.booked_for}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 text-[10px] font-bold" style={{ color: 'var(--ds-text-2)' }}>
-                    <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>schedule</span>
+                  <div className="flex items-center gap-2 text-[13px] font-bold" style={{ color: 'var(--ds-text-2)' }}>
+                    <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15 }}>schedule</span>
                     <span className="tabular-nums">{fmtTime(b.start_at)} – {fmtTime(b.end_at)}</span>
                   </div>
                   {b.room && (
-                    <div className="flex items-center gap-2 text-[10px] font-medium" style={{ color: 'var(--ds-text-3)' }}>
-                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 13 }}>meeting_room</span>
+                    <div className="flex items-center gap-2 text-[12px] font-medium" style={{ color: 'var(--ds-text-3)' }}>
+                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15 }}>meeting_room</span>
                       <span className="truncate">{b.room.name}{b.room.building ? ` · ${b.room.building.code ?? b.room.building.name}` : ''}</span>
                     </div>
                   )}
 
                   {ongoing && b.presence_confirmed_at && (
-                    <div className="flex items-center gap-1.5 text-[10px] font-black" style={{ color: '#22c55e' }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                    <div className="flex items-center gap-1.5 text-[12px] font-black" style={{ color: '#22c55e' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 15, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
                       {t('presence_confirmed')}
                     </div>
                   )}
@@ -236,10 +241,10 @@ export default function TodayPanel() {
                     <button
                       onClick={() => handleConfirm(b)}
                       disabled={confirming === b.id}
-                      className="w-full mt-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-60"
+                      className="w-full mt-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all disabled:opacity-60"
                       style={{ background: 'rgba(99,102,241,0.12)', border: '1.5px solid rgba(99,102,241,0.35)', color: '#6366f1' }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>how_to_reg</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}>how_to_reg</span>
                       {confirming === b.id ? t('confirming') : t('confirm_presence')}
                     </button>
                   )}

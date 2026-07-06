@@ -27,7 +27,7 @@ export async function deleteBuilding(id: number): Promise<void> {
 
 export type BuildingExportRow = {
   name: string; code: string; location: string; address: string
-  floors: string; photo: string; notes: string; is_active: string
+  floors: string; notes: string; is_active: string
 }
 
 export async function exportBuildings(): Promise<BuildingExportRow[]> {
@@ -37,7 +37,7 @@ export async function exportBuildings(): Promise<BuildingExportRow[]> {
 
 export async function importBuildings(rows: {
   name: string; code?: string; location?: string; address?: string
-  floors?: string; photo?: string; notes?: string; is_active?: string
+  floors?: string; notes?: string; is_active?: string
 }[]): Promise<{ created: number; errors: string[] }> {
   const res = await axios.post('/buildings/import', { buildings: rows })
   return res.data

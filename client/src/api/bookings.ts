@@ -79,6 +79,11 @@ export async function cancelBooking(id: number) {
   return res.data
 }
 
+export async function transferBooking(id: number, bookedForUserId: number) {
+  const res = await api.post(`/bookings/${id}/transfer`, { booked_for_user_id: bookedForUserId })
+  return res.data
+}
+
 export async function clearCancelledBookings() {
   const res = await api.delete('/bookings/clear-cancelled')
   return res.data

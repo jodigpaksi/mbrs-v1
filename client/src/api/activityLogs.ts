@@ -26,6 +26,11 @@ export async function getActivityLogs(params: {
   return res.data
 }
 
+export async function clearAllActivityLogs(): Promise<{ deleted: number }> {
+  const res = await api.delete('/activity-logs/all')
+  return res.data
+}
+
 export async function exportActivityLogs(params: {
   format: 'excel' | 'pdf' | 'txt'
   category?: string

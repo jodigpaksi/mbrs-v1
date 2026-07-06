@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyBookings, getBookings } from '../../api/bookings'
 import { getRooms } from '../../api/rooms'
-import { getGeneralSettings } from '../../api/settings'
+import { getGeneralSettings, getCachedBranding } from '../../api/settings'
 import type { Booking, Room } from '../../types'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
@@ -39,8 +39,9 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const { openNotifications } = useNotification()
   const unreadCount = useNotificationUnreadCount()
   const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
-  const appName = appSettings?.app_name ?? 'RoomSync Pro'
-  const appLogoUrl = appSettings?.app_logo_url ?? null
+  const cachedBranding = appSettings ? null : getCachedBranding()
+  const appName = appSettings?.app_name ?? cachedBranding?.app_name ?? 'RoomSync Pro'
+  const appLogoUrl = appSettings?.app_logo_url ?? cachedBranding?.app_logo_url ?? null
   useEffect(() => { document.title = appName }, [appName])
 
   // — all useState / useRef declarations first, before any useQuery that references them —
@@ -149,11 +150,53 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
   const NAV_ITEMS = NAV_PATHS.map(n => ({ ...n, label: t(n.key as Parameters<typeof t>[0]) }))
   const isReceptionist = user?.role === 'receptionist' || user?.role === 'admin'
+  const isAdminPanelUser = user?.role === 'admin' || user?.role === 'building_admin'
   const allItems = [
     ...NAV_ITEMS,
     ...(isReceptionist ? [{ path: '/receptionist', label: 'Receptionist', icon: 'support_agent' }] : []),
-    ...(user?.role === 'admin' ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
+    ...(isAdminPanelUser ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
   ]
+
+  // Global keyboard shortcuts — Ctrl+F available rooms, N notifications, T today panel,
+  // Alt+N new booking (handled by TimelinePage via CustomEvent)
+  // Note: Ctrl+N is reserved by the browser (new window) and cannot be overridden — Alt+N used instead.
+  // Note: Tab/Shift+Tab nav-cycling was removed — it interfered with normal Tab-based focus navigation in forms.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement
+      const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
+
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (isTyping) return
+        if (e.key.toLowerCase() === 'n') {
+          e.preventDefault()
+          document.dispatchEvent(new CustomEvent('new-booking-shortcut'))
+        }
+        return
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        if (isTyping) return
+        if (e.key.toLowerCase() === 'f') {
+          e.preventDefault()
+          document.dispatchEvent(new CustomEvent('available-rooms-toggle'))
+        }
+        return
+      }
+
+      if (isTyping) return
+
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        openNotifications()
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault()
+        document.dispatchEvent(new CustomEvent('today-panel-toggle'))
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [user?.role, location.pathname, language])
 
   async function handleLogout() {
     setProfileOpen(false)
@@ -167,15 +210,20 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
         {/* Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-          <div className="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b] overflow-hidden">
+          <div className={`h-9 min-w-9 max-w-[160px] rounded-xl flex items-center justify-center text-[#adee2b] overflow-hidden px-1 ${appLogoUrl ? 'bg-white' : 'bg-black'}`}>
             {appLogoUrl
-              ? <img src={appLogoUrl} alt="logo" className="size-9 object-cover" />
+              ? <img src={appLogoUrl} alt="logo" className="h-full w-auto max-w-[152px] object-contain" />
               : <span className="material-symbols-outlined text-lg">sync_alt</span>
             }
           </div>
           <span className="text-xl font-black tracking-tighter italic uppercase" style={{ color: 'var(--ds-text-1)' }}>
             {appName}
           </span>
+          {user?.role === 'guest' && (
+            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-[#adee2b]/15 text-[#7ea816] dark:text-[#adee2b]">
+              Guest · Read-only
+            </span>
+          )}
         </div>
 
         {/* Page nav — segmented pill */}

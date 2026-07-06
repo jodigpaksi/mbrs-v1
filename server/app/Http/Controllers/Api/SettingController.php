@@ -9,6 +9,8 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 class SettingController extends Controller
@@ -57,12 +59,6 @@ class SettingController extends Controller
             'rooms_grid_cols'            => (int) $get('rooms_grid_cols', '3'),
             'archive_after_days'         => (int) $get('archive_after_days', '30'),
             'archive_delete_after_days'  => (int) $get('archive_delete_after_days', '90'),
-            'export_enabled'             => $get('export_enabled', 'false') === 'true',
-            'export_frequency'           => $get('export_frequency', 'daily'),
-            'export_time'                => $get('export_time', '06:00'),
-            'export_day_of_week'         => (int) $get('export_day_of_week', '1'),
-            'export_day_of_month'        => (int) $get('export_day_of_month', '1'),
-            'export_formats'             => $get('export_formats', 'excel,csv'),
             'chart_peak_hour_from'       => (int) $get('chart_peak_hour_from', '0'),
             'chart_peak_hour_to'         => (int) $get('chart_peak_hour_to', '23'),
             'chart_colors'               => $get('chart_colors', '{}'),
@@ -72,12 +68,24 @@ class SettingController extends Controller
             'anti_ghost_window_after'    => (int) $get('anti_ghost_window_after', '10'),
             'web_confirm_enabled'        => $get('web_confirm_enabled', 'false') === 'true',
             'sensor_api_token'           => $this->getOrCreateSensorToken(),
-            'log_auto_export_enabled'    => $get('log_auto_export_enabled', 'false') === 'true',
-            'log_auto_export_interval'   => $get('log_auto_export_interval', 'daily'),
-            'log_auto_export_time'       => $get('log_auto_export_time', '00:00'),
+            'backup_enabled'             => $get('backup_enabled', 'false') === 'true',
+            'backup_frequency'           => $get('backup_frequency', 'weekly'),
+            'backup_time'                => $get('backup_time', '02:00'),
+            'backup_day_of_week'         => (int) $get('backup_day_of_week', '1'),
+            'backup_day_of_month'        => (int) $get('backup_day_of_month', '1'),
+            'backup_formats'             => $get('backup_formats', 'excel,csv'),
+            'backup_include_archive'     => $get('backup_include_archive', 'true') === 'true',
+            'backup_include_log'         => $get('backup_include_log', 'true') === 'true',
+            'backup_include_data'        => $get('backup_include_data', 'true') === 'true',
             'business_timezone'          => $get('business_timezone', config('app.business_timezone', 'Asia/Jakarta')),
             'app_name'                   => $get('app_name', 'RoomSync Pro'),
+            'app_full_name'              => $get('app_full_name', ''),
             'app_logo_url'               => $get('app_logo_url', null),
+            'login_photo_url'            => $get('login_photo_url', null),
+            'login_photo_pos_x'          => (int) $get('login_photo_pos_x', '50'),
+            'login_photo_pos_y'          => (int) $get('login_photo_pos_y', '50'),
+            'login_headline'             => $get('login_headline', 'Booking made easy'),
+            'login_subheadline'          => $get('login_subheadline', 'Book meeting rooms without the back-and-forth'),
         ]);
     }
 
@@ -85,22 +93,28 @@ class SettingController extends Controller
     {
         $get = fn(string $key, mixed $default) => Setting::where('key', $key)->value('value') ?? $default;
         return response()->json([
-            'app_name'     => $get('app_name', 'RoomSync Pro'),
-            'app_logo_url' => $get('app_logo_url', null),
+            'app_name'           => $get('app_name', 'RoomSync Pro'),
+            'app_full_name'      => $get('app_full_name', ''),
+            'app_logo_url'       => $get('app_logo_url', null),
+            'login_photo_url'    => $get('login_photo_url', null),
+            'login_photo_pos_x'  => (int) $get('login_photo_pos_x', '50'),
+            'login_photo_pos_y'  => (int) $get('login_photo_pos_y', '50'),
+            'login_headline'     => $get('login_headline', 'Booking made easy'),
+            'login_subheadline'  => $get('login_subheadline', 'Book meeting rooms without the back-and-forth'),
         ]);
     }
 
     public function uploadLogo(Request $request): JsonResponse
     {
-        $request->validate(['logo' => 'required|image|max:2048']);
+        $request->validate(['logo' => 'required|image|max:8192']);
         // Remove old logo file if exists
         $old = Setting::where('key', 'app_logo_url')->value('value');
         if ($old) {
-            $oldPath = str_replace('/storage/', '', $old);
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
             Storage::disk('public')->delete($oldPath);
         }
         $path = $request->file('logo')->store('logo', 'public');
-        $url = Storage::url($path);
+        $url = Storage::disk('public')->url($path);
         Setting::updateOrCreate(['key' => 'app_logo_url'], ['value' => $url]);
         \App\Models\ActivityLog::record('settings.updated', 'Updated app logo', null, []);
         return response()->json(['app_logo_url' => $url]);
@@ -110,12 +124,165 @@ class SettingController extends Controller
     {
         $old = Setting::where('key', 'app_logo_url')->value('value');
         if ($old) {
-            $oldPath = str_replace('/storage/', '', $old);
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
             Storage::disk('public')->delete($oldPath);
         }
         Setting::where('key', 'app_logo_url')->delete();
         \App\Models\ActivityLog::record('settings.updated', 'Removed app logo', null, []);
         return response()->json(['app_logo_url' => null]);
+    }
+
+    public function uploadLoginPhoto(Request $request): JsonResponse
+    {
+        $request->validate(['photo' => 'required|image|max:8192']);
+        $old = Setting::where('key', 'login_photo_url')->value('value');
+        if ($old) {
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
+            Storage::disk('public')->delete($oldPath);
+        }
+        $path = $request->file('photo')->store('login-photo', 'public');
+        $url = Storage::disk('public')->url($path);
+        Setting::updateOrCreate(['key' => 'login_photo_url'], ['value' => $url]);
+        \App\Models\ActivityLog::record('settings.updated', 'Updated login page photo', null, []);
+        return response()->json(['login_photo_url' => $url]);
+    }
+
+    public function deleteLoginPhoto(): JsonResponse
+    {
+        $old = Setting::where('key', 'login_photo_url')->value('value');
+        if ($old) {
+            $oldPath = str_replace('/storage/', '', parse_url($old, PHP_URL_PATH) ?? $old);
+            Storage::disk('public')->delete($oldPath);
+        }
+        Setting::where('key', 'login_photo_url')->delete();
+        \App\Models\ActivityLog::record('settings.updated', 'Removed login page photo', null, []);
+        return response()->json(['login_photo_url' => null]);
+    }
+
+    public function m365Settings(): JsonResponse
+    {
+        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $tenantId = $get('m365_tenant_id');
+        $clientId = $get('m365_client_id');
+        $senderEmail = $get('m365_sender_email');
+        $hasSecret = (bool) $get('m365_client_secret');
+
+        return response()->json([
+            'tenant_id' => $tenantId ?? '',
+            'client_id' => $clientId ?? '',
+            'sender_email' => $senderEmail ?? '',
+            'has_secret' => $hasSecret,
+            'configured' => (bool) ($tenantId && $clientId && $hasSecret),
+            'mail_enabled' => $get('m365_mail_enabled') === 'true',
+            'mail_ready' => (bool) ($tenantId && $clientId && $hasSecret && $senderEmail),
+            'calendar_sync_enabled' => $get('m365_calendar_sync_enabled') === 'true',
+            'calendar_sync_ready' => (bool) ($tenantId && $clientId && $hasSecret),
+        ]);
+    }
+
+    public function updateM365Settings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id'     => 'sometimes|string|max:100',
+            'client_id'     => 'sometimes|string|max:100',
+            'client_secret' => 'sometimes|nullable|string|max:500',
+            'sender_email'  => 'sometimes|string|max:150',
+            'mail_enabled'  => 'sometimes|boolean',
+            'calendar_sync_enabled' => 'sometimes|boolean',
+        ]);
+
+        if (array_key_exists('tenant_id', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_tenant_id'], ['value' => $data['tenant_id']]);
+        }
+        if (array_key_exists('client_id', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_client_id'], ['value' => $data['client_id']]);
+        }
+        if (array_key_exists('sender_email', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_sender_email'], ['value' => $data['sender_email']]);
+        }
+        if (array_key_exists('mail_enabled', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_mail_enabled'], ['value' => $data['mail_enabled'] ? 'true' : 'false']);
+        }
+        if (array_key_exists('calendar_sync_enabled', $data)) {
+            Setting::updateOrCreate(['key' => 'm365_calendar_sync_enabled'], ['value' => $data['calendar_sync_enabled'] ? 'true' : 'false']);
+        }
+        // Only touch the secret if the client actually sent a new value (empty/omitted keeps the existing one).
+        if (!empty($data['client_secret'])) {
+            Setting::updateOrCreate(['key' => 'm365_client_secret'], ['value' => Crypt::encryptString($data['client_secret'])]);
+        }
+
+        \App\Models\ActivityLog::record('settings.updated', 'Updated Microsoft 365 integration settings', null, []);
+
+        return $this->m365Settings();
+    }
+
+    public function testM365Connection(): JsonResponse
+    {
+        $tenantId = Setting::where('key', 'm365_tenant_id')->value('value');
+        $clientId = Setting::where('key', 'm365_client_id')->value('value');
+        $encryptedSecret = Setting::where('key', 'm365_client_secret')->value('value');
+
+        if (!$tenantId || !$clientId || !$encryptedSecret) {
+            return response()->json(['success' => false, 'message' => 'Tenant ID, Client ID, and Client Secret must all be set first.'], 422);
+        }
+
+        try {
+            $clientSecret = Crypt::decryptString($encryptedSecret);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Stored client secret could not be decrypted. Please re-enter it.'], 422);
+        }
+
+        try {
+            $res = Http::asForm()->post("https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token", [
+                'client_id'     => $clientId,
+                'client_secret' => $clientSecret,
+                'scope'         => 'https://graph.microsoft.com/.default',
+                'grant_type'    => 'client_credentials',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Could not reach Microsoft login endpoint: ' . $e->getMessage()], 502);
+        }
+
+        if ($res->successful() && $res->json('access_token')) {
+            return response()->json(['success' => true, 'message' => 'Connected — Azure AD app credentials are valid and a Graph API token was issued.']);
+        }
+
+        $err = $res->json('error_description') ?? $res->json('error') ?? 'Unknown error from Microsoft.';
+        return response()->json(['success' => false, 'message' => $err], 200);
+    }
+
+    public function sendM365TestEmail(Request $request): JsonResponse
+    {
+        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $tenantId = $get('m365_tenant_id');
+        $clientId = $get('m365_client_id');
+        $senderEmail = $get('m365_sender_email');
+        $encryptedSecret = $get('m365_client_secret');
+
+        if (!$tenantId || !$clientId || !$senderEmail || !$encryptedSecret) {
+            return response()->json(['success' => false, 'message' => 'Tenant ID, Client ID, Client Secret, and Sender Mailbox must all be set first.'], 422);
+        }
+
+        try {
+            $clientSecret = Crypt::decryptString($encryptedSecret);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Stored client secret could not be decrypted. Please re-enter it.'], 422);
+        }
+
+        $to = $request->user()->email;
+
+        try {
+            \Illuminate\Support\Facades\Mail::mailer('graph')->html(
+                '<p>This is a test email sent via Microsoft Graph from MRBS Admin Settings. If you received this, the Microsoft 365 mail integration is working.</p>',
+                function ($message) use ($to, $senderEmail) {
+                    $message->to($to)->from($senderEmail)->subject('MRBS — Microsoft 365 test email');
+                }
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 200);
+        }
+
+        return response()->json(['success' => true, 'message' => "Test email sent to {$to}. Check your inbox (and spam folder)."]);
     }
 
     public function updateGeneralSettings(Request $request): JsonResponse
@@ -131,12 +298,6 @@ class SettingController extends Controller
             'rooms_grid_cols'           => 'sometimes|integer|min:2|max:5',
             'archive_after_days'        => 'sometimes|integer|min:1|max:365',
             'archive_delete_after_days' => 'sometimes|integer|min:1|max:730',
-            'export_enabled'            => 'sometimes|boolean',
-            'export_frequency'          => 'sometimes|in:daily,weekly,monthly',
-            'export_time'               => 'sometimes|date_format:H:i',
-            'export_day_of_week'        => 'sometimes|integer|min:0|max:6',
-            'export_day_of_month'       => 'sometimes|integer|min:1|max:31',
-            'export_formats'            => 'sometimes|string',
             'chart_peak_hour_from'      => 'sometimes|integer|min:0|max:23',
             'chart_peak_hour_to'        => 'sometimes|integer|min:0|max:23',
             'chart_colors'              => 'sometimes|string',
@@ -151,11 +312,22 @@ class SettingController extends Controller
             'anti_ghost_window_after'    => 'sometimes|integer|min:0|max:20',
             'web_confirm_enabled'        => 'sometimes|boolean',
             'sensor_api_token'           => 'sometimes|string|max:64',
-            'log_auto_export_enabled'    => 'sometimes|boolean',
-            'log_auto_export_interval'   => 'sometimes|in:daily,weekly,monthly',
-            'log_auto_export_time'       => 'sometimes|date_format:H:i',
+            'backup_enabled'             => 'sometimes|boolean',
+            'backup_frequency'           => 'sometimes|in:daily,weekly,monthly',
+            'backup_time'                => 'sometimes|date_format:H:i',
+            'backup_day_of_week'         => 'sometimes|integer|min:0|max:6',
+            'backup_day_of_month'        => 'sometimes|integer|min:1|max:31',
+            'backup_formats'             => 'sometimes|string',
+            'backup_include_archive'     => 'sometimes|boolean',
+            'backup_include_log'         => 'sometimes|boolean',
+            'backup_include_data'        => 'sometimes|boolean',
             'business_timezone'          => 'sometimes|string|timezone',
             'app_name'                   => 'sometimes|string|max:100',
+            'app_full_name'              => 'sometimes|string|max:150',
+            'login_photo_pos_x'          => 'sometimes|integer|min:0|max:100',
+            'login_photo_pos_y'          => 'sometimes|integer|min:0|max:100',
+            'login_headline'             => 'sometimes|string|max:120',
+            'login_subheadline'          => 'sometimes|string|max:200',
         ]);
 
         $changes = [];

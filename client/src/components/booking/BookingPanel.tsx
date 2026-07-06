@@ -18,7 +18,7 @@ function exportToICS(data: { title: string; description?: string; startAt: strin
   const esc = (s: string) => s.replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n')
   const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MBRS//RoomSync//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MRBS//RoomSync//EN', 'CALSCALE:GREGORIAN',
     'BEGIN:VEVENT',
     `DTSTART:${fmtDT(data.startAt)}`,
     `DTEND:${fmtDT(data.endAt)}`,
@@ -195,6 +195,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // after-hours restriction modal
 
   const isEdit = !!editBooking
+  // Recipient of someone else's booking (made FOR them, not BY them) — can edit meeting
+  // details but not reassign who it's for; only the original owner or a privileged user can.
+  const isRecipientOnly = isEdit && !isPrivileged
+    && !!editBooking?.booked_for_user_id
+    && editBooking.booked_for_user_id === user?.id
+    && editBooking.user_id !== user?.id
   const [glowActive, setGlowActive] = useState(false)
   const [availResult, setAvailResult] = useState<{ available: boolean; other_viewers: number } | null>(null)
   const [availChecking, setAvailChecking] = useState(false)
@@ -222,8 +228,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
   const isPastBookingTime = !isEdit && !!date && !!startTime && (() => {
     const now = new Date()
+    const PAST_TOLERANCE_MIN = 60 // allow booking up to 1 hour in the past
     if (date < today) return true
-    if (date === today) return toMin(startTime) < now.getHours() * 60 + now.getMinutes()
+    if (date === today) return toMin(startTime) < (now.getHours() * 60 + now.getMinutes() - PAST_TOLERANCE_MIN)
     return false
   })()
 
@@ -1043,7 +1050,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {/* Date */}
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_date')}</label>
-                <GlassDatePicker value={date} onChange={setDate} min={today} compact>
+                <GlassDatePicker value={date} onChange={setDate} min={today}>
                   {() => (
                     <button type="button"
                       className="w-full flex items-center gap-2 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-3 py-2 hover:border-[#adee2b] transition-all"
@@ -1182,8 +1189,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
               </div>
 
-              {/* Booking for — accordion (hidden if disabled by admin) */}
-              {allowBookForOthers && <div ref={bookForRef}>
+              {/* Booking for — accordion (hidden if disabled by admin, or if editing as a recipient) */}
+              {allowBookForOthers && !isRecipientOnly && <div ref={bookForRef}>
                 <button
                   type="button"
                   onClick={() => { setShowBookFor(v => !v); if (showBookFor) { setBookFor(''); setBookForUserId(null); setShowBookForDrop(false); setPendingBookFor(null) } }}
@@ -1527,7 +1534,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
                               />
                               <div ref={calendarBtnRef}>
-                                <GlassDatePicker value={repeatEndDate} onChange={val => { setRepeatEndDate(val) }} min={date || today} align="right" panelWidth={260}>
+                                <GlassDatePicker value={repeatEndDate} onChange={val => { setRepeatEndDate(val) }} min={date || today} align="right">
                                   {() => (
                                     <button
                                       type="button"

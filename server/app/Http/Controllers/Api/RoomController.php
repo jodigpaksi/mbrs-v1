@@ -16,6 +16,19 @@ use Illuminate\Support\Str;
 
 class RoomController extends Controller
 {
+    /**
+     * building_admin is scoped to their assigned buildings (admin_buildings pivot);
+     * admin/receptionist are unrestricted. Returns a 403 response if not allowed, else null.
+     */
+    private function authorizeRoomBuilding(Request $request, ?int $buildingId): ?JsonResponse
+    {
+        $user = $request->user();
+        if ($user->role === 'building_admin' && !$user->canManageBuilding((int) $buildingId)) {
+            return response()->json(['message' => 'You do not manage this building.'], 403);
+        }
+        return null;
+    }
+
     public function index(): JsonResponse
     {
         $rooms = Room::with('building')->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get();
@@ -39,6 +52,8 @@ class RoomController extends Controller
             'notes'            => 'nullable|string',
             'requires_contact' => 'nullable|boolean',
         ]);
+
+        if ($err = $this->authorizeRoomBuilding($request, $data['building_id'] ?? null)) return $err;
 
         // Auto-set sort_order to max within the building + 1
         $maxOrder = Room::where('building_id', $data['building_id'] ?? null)->max('sort_order') ?? 0;
@@ -64,6 +79,9 @@ class RoomController extends Controller
             'requires_contact' => 'sometimes|boolean',
         ]);
 
+        if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
+        if (isset($data['building_id']) && $err = $this->authorizeRoomBuilding($request, $data['building_id'])) return $err;
+
         $room->update($data);
         return response()->json($room->fresh('building'));
     }
@@ -71,9 +89,10 @@ class RoomController extends Controller
     public function updateStatus(Request $request, Room $room): JsonResponse
     {
         $role = $request->user()->role;
-        if (!in_array($role, ['admin', 'receptionist'])) {
+        if (!in_array($role, ['admin', 'receptionist', 'building_admin'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
 
         $data = $request->validate([
             'status' => 'required|in:active,maintenance',
@@ -86,9 +105,10 @@ class RoomController extends Controller
     public function updateSpecial(Request $request, Room $room): JsonResponse
     {
         $role = $request->user()->role;
-        if (!in_array($role, ['admin', 'receptionist'])) {
+        if (!in_array($role, ['admin', 'receptionist', 'building_admin'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
 
         $data = $request->validate([
             'requires_contact' => 'required|boolean',
@@ -106,6 +126,14 @@ class RoomController extends Controller
             'rooms.*.sort_order' => 'required|integer|min:1',
         ]);
 
+        if ($request->user()->role === 'building_admin') {
+            $roomIds = collect($data['rooms'])->pluck('id');
+            $buildingIds = Room::whereIn('id', $roomIds)->pluck('building_id')->unique();
+            foreach ($buildingIds as $bId) {
+                if ($err = $this->authorizeRoomBuilding($request, $bId)) return $err;
+            }
+        }
+
         foreach ($data['rooms'] as $item) {
             Room::where('id', $item['id'])->update(['sort_order' => $item['sort_order']]);
         }
@@ -115,9 +143,10 @@ class RoomController extends Controller
 
     public function uploadPhoto(Request $request, Room $room): JsonResponse
     {
+        if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
         $request->validate(['photo' => 'required|image|max:5120']);
         $path = $request->file('photo')->store('room-photos', 'public');
-        $url  = Storage::url($path);
+        $url  = Storage::disk('public')->url($path);
         $photos = $room->photos ?? [];
         $photos[] = $url;
         $room->update(['photos' => $photos]);
@@ -126,6 +155,7 @@ class RoomController extends Controller
 
     public function deletePhoto(Request $request, Room $room): JsonResponse
     {
+        if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
         $request->validate(['url' => 'required|string']);
         $url    = $request->url;
         $photos = array_values(array_filter($room->photos ?? [], fn ($p) => $p !== $url));
@@ -138,8 +168,9 @@ class RoomController extends Controller
         return response()->json(['photos' => $photos]);
     }
 
-    public function destroy(Room $room): JsonResponse
+    public function destroy(Request $request, Room $room): JsonResponse
     {
+        if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
         $room->update(['is_active' => false]);
         return response()->json(['message' => 'Room deactivated']);
     }
@@ -315,16 +346,21 @@ class RoomController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function regenerateSensorCode(Room $room): JsonResponse
+    public function regenerateSensorCode(Request $request, Room $room): JsonResponse
     {
+        if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;
         $code = Str::random(16);
         $room->update(['sensor_code' => $code]);
         return response()->json($room->fresh('building'));
     }
 
-    public function export(): JsonResponse
+    public function export(Request $request): JsonResponse
     {
-        $rows = Room::with('building')->orderBy('sort_order')->orderBy('id')->get();
+        $query = Room::with('building')->orderBy('sort_order')->orderBy('id');
+        if ($request->user()->role === 'building_admin') {
+            $query->whereIn('building_id', $request->user()->managedBuildingIds());
+        }
+        $rows = $query->get();
         ActivityLog::record(
             'data.exported',
             "Exported {$rows->count()} room records",
@@ -347,6 +383,9 @@ class RoomController extends Controller
 
     public function importRooms(Request $request): JsonResponse
     {
+        if ($request->user()->role === 'building_admin') {
+            return response()->json(['message' => 'Bulk import is admin-only.'], 403);
+        }
         $request->validate(['rooms' => 'required|array|min:1|max:500']);
 
         $created = 0;

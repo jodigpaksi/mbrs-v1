@@ -1,4 +1,4 @@
-# MBRS v1 — RoomSync Pro: Project Context for AI-Assisted Development
+# MRBS v1 — RoomSync Pro: Project Context for AI-Assisted Development
 
 > **Purpose of this file:** Full context handoff for Claude AI (or any AI assistant) to continue development of this project without losing any knowledge. Read this before making any changes.
 
@@ -6,7 +6,7 @@
 
 ## 1. Project Overview
 
-**Name:** MBRS v1 (Meeting Room Booking System) / "RoomSync Pro"  
+**Name:** MRBS v1 (Meeting Room Booking System) / "RoomSync Pro"  
 **Purpose:** Internal office/hotel meeting room booking system — staff can see a live timeline, drag-create/move/resize bookings, manage their schedule, and admins can see all bookings.  
 **Status:** Feature-complete MVP, actively developed. Not yet deployed — runs on XAMPP locally.  
 **Language default:** UI text is Indonesian (`id`). Code comments/identifiers are English.

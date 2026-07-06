@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getAvailableRooms } from '../../api/rooms'
 import { getBuildings } from '../../api/buildings'
+import { getGeneralSettings } from '../../api/settings'
 import { useSettings } from '../../context/SettingsContext'
 import { useBookingHours } from '../../hooks/useBookingHours'
 import { useAuth } from '../../context/AuthContext'
@@ -59,8 +60,7 @@ function splitSlotsByDay(
     for (const d of dates) {
       if (d < sDate || d > eDate) continue
       const segS = d === sDate ? Math.max(sTime, bsMin) : bsMin
-      const endCap = Math.min(beMin, 990)
-      const segE = d === eDate ? Math.min(eTime, endCap) : endCap
+      const segE = d === eDate ? Math.min(eTime, beMin) : beMin
       if (segE - segS < 30) continue
       byDate[d].push({ start: `${d}T${fromMin(segS)}:00`, end: `${d}T${fromMin(segE)}:00` })
     }
@@ -151,8 +151,13 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
   const { user } = useAuth()
   const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
   const { start: bsStr, end: beStr } = useBookingHours()
+  const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60_000 })
+  // After-Hours Restriction (if enabled, for non-privileged users) caps results earlier than Booking Hours end
+  const effectiveEndStr = (!isPrivileged && generalSettings?.restrict_after_hours)
+    ? (generalSettings?.working_hours_end ?? beStr)
+    : beStr
   const bookingStartMin = toMin(bsStr)
-  const bookingEndMin   = toMin(beStr)
+  const bookingEndMin   = toMin(effectiveEndStr)
 
   const [buildingId, setBuildingId]   = useState<number | null>(defaultBuilding)
   const [bDropOpen, setBDropOpen]     = useState(false)
@@ -207,6 +212,21 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, prefillDate, prefillStartTime, prefillEndTime])
+
+  // Default start/end time for the search fields — plain Booking Hours (start & end).
+  // Keeps re-syncing until the user manually touches a time field, so it still applies
+  // once async settings load. After-Hours Restriction only caps the *results*, not this field.
+  const userEditedTimeRef = useRef(false)
+  useEffect(() => {
+    if (!open) { userEditedTimeRef.current = false; return }
+    if (prefillDate || prefillStartTime || prefillEndTime) return
+    if (userEditedTimeRef.current) return
+    setStartTime(bsStr)
+    setEndTime(beStr)
+  }, [open, bsStr, beStr, prefillDate, prefillStartTime, prefillEndTime])
+
+  function onStartTimeChange(v: string) { userEditedTimeRef.current = true; setStartTime(v) }
+  function onEndTimeChange(v: string) { userEditedTimeRef.current = true; setEndTime(v) }
 
   function switchMode(next: 'day' | 'range') {
     if (next === mode) return
@@ -384,7 +404,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <div className="space-y-2">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Date</label>
-                  <GlassDatePicker value={startDate} onChange={setStartDate} compact align="left">
+                  <GlassDatePicker value={startDate} onChange={setStartDate} align="left">
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
@@ -397,7 +417,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')}</label>
-                    <GlassTimePicker value={startTime} onChange={setStartTime} min={bsStr} max={fromMin(bookingEndMin - 30)}>
+                    <GlassTimePicker value={startTime} onChange={onStartTimeChange} min={bsStr} max={fromMin(toMin(beStr) - 30)}>
                       {() => (
                         <button type="button" className={fieldBtn}>
                           <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>schedule</span>
@@ -408,7 +428,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')}</label>
-                    <GlassTimePicker value={endTime} onChange={setEndTime} min={fromMin(bookingStartMin + 30)} max={beStr} align="right">
+                    <GlassTimePicker value={endTime} onChange={onEndTimeChange} min={fromMin(toMin(bsStr) + 30)} max={beStr} align="right">
                       {() => (
                         <button type="button" className={fieldBtn}>
                           <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>schedule</span>
@@ -423,7 +443,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')} {t('panel_date')}</label>
-                  <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }} compact>
+                  <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }}>
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
@@ -434,7 +454,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')} {t('panel_date')}</label>
-                  <GlassDatePicker value={endDate} onChange={setEndDate} min={startDate} compact align="right">
+                  <GlassDatePicker value={endDate} onChange={setEndDate} min={startDate} align="right">
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
@@ -595,13 +615,13 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                   .filter((slot: AvailableSlot) => {
                     const s = toMin(slotTime(slot.start))
                     const e = toMin(slotTime(slot.end))
-                    const cappedE = Math.min(e, 990)
-                    return s >= bookingStartMin && s < 990 && cappedE - s >= 30
+                    const cappedE = Math.min(e, bookingEndMin)
+                    return s >= bookingStartMin && s < bookingEndMin && cappedE - s >= 30
                   })
                   .map((slot: AvailableSlot) => {
                     const e = toMin(slotTime(slot.end))
-                    if (e <= 990) return slot
-                    return { ...slot, end: `${slot.end.slice(0, 11)}${fromMin(990)}:00` }
+                    if (e <= bookingEndMin) return slot
+                    return { ...slot, end: `${slot.end.slice(0, 11)}${fromMin(bookingEndMin)}:00` }
                   })
               }
             })
@@ -771,7 +791,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 ? activeSessionPill : availableSessions[0].key
               const sessDef = sessionDefs.find(s => s.key === currentSession)!
 
-              const sessionEndCap = currentSession === 'morning' ? 720 : 990  // 12:00 or 16:30
+              const sessionEndCap = currentSession === 'morning' ? 720 : bookingEndMin  // 12:00 or effective end
               const roomsForSession = visibleRooms
                 .map((r: Room) => {
                   const slots = allSlotsFor(r)

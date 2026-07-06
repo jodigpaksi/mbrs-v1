@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Building extends Model
 {
     protected $fillable = [
-        'name', 'code', 'address', 'floors', 'photo', 'notes', 'is_active', 'location_id',
+        'name', 'code', 'address', 'floors', 'notes', 'is_active', 'location_id',
     ];
 
     protected $casts = [

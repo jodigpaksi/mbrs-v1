@@ -13,12 +13,6 @@ export interface GeneralSettings {
   rooms_grid_cols: number
   archive_after_days: number
   archive_delete_after_days: number
-  export_enabled: boolean
-  export_frequency: string
-  export_time: string
-  export_day_of_week: number
-  export_day_of_month: number
-  export_formats: string
   chart_peak_hour_from: number
   chart_peak_hour_to: number
   chart_colors: string
@@ -27,22 +21,65 @@ export interface GeneralSettings {
   anti_ghost_window_before: number
   anti_ghost_window_after: number
   web_confirm_enabled: boolean
-  log_auto_export_enabled: boolean
-  log_auto_export_interval: string
-  log_auto_export_time: string
+  backup_enabled: boolean
+  backup_frequency: string
+  backup_time: string
+  backup_day_of_week: number
+  backup_day_of_month: number
+  backup_formats: string
+  backup_include_archive: boolean
+  backup_include_log: boolean
+  backup_include_data: boolean
   sensor_api_token: string
   business_timezone: string
   app_name: string
+  app_full_name: string
   app_logo_url: string | null
+  login_photo_url: string | null
+  login_photo_pos_x: number
+  login_photo_pos_y: number
+  login_headline: string
+  login_subheadline: string
 }
 
 export interface AppBranding {
   app_name: string
+  app_full_name: string
   app_logo_url: string | null
+  login_photo_url: string | null
+  login_photo_pos_x: number
+  login_photo_pos_y: number
+  login_headline: string
+  login_subheadline: string
+}
+
+const BRANDING_CACHE_KEY = 'app_branding_cache'
+const DEFAULT_BRANDING: AppBranding = {
+  app_name: 'RoomSync Pro',
+  app_full_name: '',
+  app_logo_url: null,
+  login_photo_url: null,
+  login_photo_pos_x: 50,
+  login_photo_pos_y: 50,
+  login_headline: 'Booking made easy',
+  login_subheadline: 'Book meeting rooms without the back-and-forth',
+}
+
+export function getCachedBranding(): AppBranding {
+  try {
+    const raw = localStorage.getItem(BRANDING_CACHE_KEY)
+    if (raw) return { ...DEFAULT_BRANDING, ...JSON.parse(raw) }
+  } catch { /* ignore malformed cache */ }
+  return DEFAULT_BRANDING
+}
+
+export function setCachedBranding(branding: AppBranding) {
+  try { localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(branding)) } catch { /* storage unavailable */ }
 }
 
 export async function getBranding(): Promise<AppBranding> {
   const res = await api.get('/settings/branding')
+  setCachedBranding(res.data)
   return res.data
 }
 
@@ -55,6 +92,49 @@ export async function uploadAppLogo(file: File): Promise<{ app_logo_url: string 
 
 export async function deleteAppLogo(): Promise<void> {
   await api.delete('/settings/logo')
+}
+
+export async function uploadLoginPhoto(file: File): Promise<{ login_photo_url: string }> {
+  const form = new FormData()
+  form.append('photo', file)
+  const res = await api.post('/settings/login-photo', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  return res.data
+}
+
+export async function deleteLoginPhoto(): Promise<void> {
+  await api.delete('/settings/login-photo')
+}
+
+export interface M365Settings {
+  tenant_id: string
+  client_id: string
+  sender_email: string
+  has_secret: boolean
+  configured: boolean
+  mail_enabled: boolean
+  mail_ready: boolean
+  calendar_sync_enabled: boolean
+  calendar_sync_ready: boolean
+}
+
+export async function getM365Settings(): Promise<M365Settings> {
+  const res = await api.get('/settings/m365')
+  return res.data
+}
+
+export async function updateM365Settings(patch: { tenant_id?: string; client_id?: string; client_secret?: string; sender_email?: string; mail_enabled?: boolean; calendar_sync_enabled?: boolean }): Promise<M365Settings> {
+  const res = await api.patch('/settings/m365', patch)
+  return res.data
+}
+
+export async function testM365Connection(): Promise<{ success: boolean; message: string }> {
+  const res = await api.post('/settings/m365/test')
+  return res.data
+}
+
+export async function sendM365TestEmail(): Promise<{ success: boolean; message: string }> {
+  const res = await api.post('/settings/m365/test-email')
+  return res.data
 }
 
 export async function getBookingHours(): Promise<BookingHours> {
@@ -79,6 +159,16 @@ export async function updateWeekendSettings(saturday: boolean, sunday: boolean):
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
   const res = await api.get('/settings/general')
+  setCachedBranding({
+    app_name: res.data.app_name,
+    app_full_name: res.data.app_full_name,
+    app_logo_url: res.data.app_logo_url,
+    login_photo_url: res.data.login_photo_url,
+    login_photo_pos_x: res.data.login_photo_pos_x,
+    login_photo_pos_y: res.data.login_photo_pos_y,
+    login_headline: res.data.login_headline,
+    login_subheadline: res.data.login_subheadline,
+  })
   return res.data
 }
 

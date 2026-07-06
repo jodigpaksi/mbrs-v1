@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Route;
 
 // Auth
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login/guest', [AuthController::class, 'loginAsGuest']);
 
 // Public branding (no auth)
 Route::get('/settings/branding', [SettingController::class, 'branding']);
@@ -32,7 +33,7 @@ Route::prefix('kiosk')->group(function () {
     Route::post('{id}/confirm', [KioskController::class, 'confirmPresence']);
 });
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/me/avatar', [AuthController::class, 'updateAvatar']);
@@ -112,6 +113,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/bookings/{booking}', [BookingController::class, 'update']);
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
     Route::post('/bookings/{booking}/confirm-presence', [BookingController::class, 'confirmPresenceWeb']);
+    Route::post('/bookings/{booking}/transfer', [BookingController::class, 'transfer'])->middleware('can:receptionist');
     Route::post('/bookings/{booking}/dispute', [BookingController::class, 'submitDispute']);
 
     // Disputes — accessible to admin, receptionist, building_admin (controller enforces role)
@@ -143,6 +145,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/settings/general', [SettingController::class, 'updateGeneralSettings']);
         Route::post('/settings/logo', [SettingController::class, 'uploadLogo']);
         Route::delete('/settings/logo', [SettingController::class, 'deleteLogo']);
+        Route::post('/settings/login-photo', [SettingController::class, 'uploadLoginPhoto']);
+        Route::delete('/settings/login-photo', [SettingController::class, 'deleteLoginPhoto']);
+        Route::get('/settings/m365', [SettingController::class, 'm365Settings']);
+        Route::patch('/settings/m365', [SettingController::class, 'updateM365Settings']);
+        Route::post('/settings/m365/test', [SettingController::class, 'testM365Connection']);
+        Route::post('/settings/m365/test-email', [SettingController::class, 'sendM365TestEmail']);
         Route::patch('/users/{user}/special-access', [UserController::class, 'toggleSpecialAccess']);
         Route::get('/archive', [ArchiveController::class, 'index']);
         Route::post('/archive/run', [ArchiveController::class, 'run']);
@@ -150,19 +158,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/archive/restore-all', [ArchiveController::class, 'restoreAll']);
         Route::delete('/archive/purge', [ArchiveController::class, 'purge']);
         Route::post('/archive/import', [ArchiveController::class, 'import']);
-        Route::post('/archive/export', [ArchiveController::class, 'runExport']);
-        Route::get('/exports', [ArchiveController::class, 'listExports']);
-        Route::get('/exports/download', [ArchiveController::class, 'downloadExport']);
-        Route::delete('/exports/all', [ArchiveController::class, 'deleteAllExports']);
+        Route::post('/backup/export', [\App\Http\Controllers\Api\BackupController::class, 'runExport']);
+        Route::get('/backups', [\App\Http\Controllers\Api\BackupController::class, 'listExports']);
+        Route::get('/backups/download', [\App\Http\Controllers\Api\BackupController::class, 'downloadExport']);
+        Route::delete('/backups/all', [\App\Http\Controllers\Api\BackupController::class, 'deleteAllExports']);
         Route::post('/departments', [DepartmentController::class, 'store']);
         Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
         Route::post('/locations', [LocationController::class, 'store']);
         Route::patch('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
-        // Activity log (admin only)
-        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
+        // Activity log export/clear (admin only) — reading the list is also allowed for building_admin, scoped, see below
         Route::get('/activity-logs/export', [\App\Http\Controllers\Api\ActivityLogController::class, 'export']);
+        Route::delete('/activity-logs/all', [\App\Http\Controllers\Api\ActivityLogController::class, 'clearAll']);
 
         // Kiosk CRUD (admin only)
         Route::get('/kiosk-configs', [KioskController::class, 'index']);
@@ -175,7 +183,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/buildings/{building}', [BuildingController::class, 'destroy']);
         Route::get('/buildings/export', [BuildingController::class, 'export']);
         Route::post('/buildings/import', [BuildingController::class, 'importBuildings']);
-        Route::get('/users', [UserController::class, 'index']);
         Route::get('/users/export', function () {
             $rows = \App\Models\User::with('department.location', 'defaultBuilding', 'adminBuildings')->orderBy('role')->orderBy('name')->get();
             \App\Models\ActivityLog::record(
@@ -205,6 +212,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
         Route::put('/users/{user}/buildings', [UserController::class, 'assignBuildings']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
+    });
+
+    // Read-only, building-scoped for building_admin; unrestricted for admin
+    Route::middleware('can:building_admin')->group(function () {
+        Route::get('/users', [UserController::class, 'index']);
+        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
     });
 });
 

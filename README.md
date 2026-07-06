@@ -1,4 +1,4 @@
-# MBRS v1 (RoomSync Pro)
+# MRBS v1 (RoomSync Pro)
 
 Meeting Room Booking System — aplikasi internal untuk booking ruang meeting, lengkap dengan timeline drag-and-drop, notifikasi realtime, kiosk mode, analytics, dan panel admin.
 

@@ -926,6 +926,8 @@ export default function SchedulePage() {
   const minus7 = new Date(today); minus7.setDate(today.getDate() - 7)
   const plus7 = new Date(today); plus7.setDate(today.getDate() + 7)
   const past30 = new Date(today); past30.setDate(today.getDate() - 30)
+  const archiveAfterDays = generalSettings?.archive_after_days ?? 30
+  const archiveCutoff = new Date(today); archiveCutoff.setDate(today.getDate() - archiveAfterDays)
   const past90 = new Date(today); past90.setDate(today.getDate() - 90)
   const future90 = new Date(today); future90.setDate(today.getDate() + 90)
   const toDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -973,10 +975,10 @@ export default function SchedulePage() {
       }))
       .filter(g => {
         const last = g.bookings[g.bookings.length - 1]
-        return parseLocal(last.start_at) >= past30
+        return parseLocal(last.start_at) >= archiveCutoff
       })
       .sort((a, b) => parseLocal(a.bookings[0].start_at).getTime() - parseLocal(b.bookings[0].start_at).getTime())
-  }, [myBookings])
+  }, [myBookings, archiveCutoff])
 
   const hCalMonthStart = new Date(today.getFullYear(), 0, 1)
   const hCalMonthEnd   = new Date(today.getFullYear(), 11, 31)
@@ -1365,6 +1367,12 @@ export default function SchedulePage() {
     })
   }, [seriesList, buildingFilter, seriesSearch])
 
+  // A series is "past" once every occurrence in it has ended — grouped separately below the active ones.
+  // Fully-past series disappear entirely once their last occurrence crosses the admin's Archive-after-N-days
+  // setting (handled by the archiveCutoff filter on seriesList above).
+  const activeSeriesList = displaySeriesList.filter(g => g.bookings.some(b => parseLocal(b.end_at) >= now))
+  const pastSeriesList   = displaySeriesList.filter(g => g.bookings.every(b => parseLocal(b.end_at) < now))
+
   const grouped = groupByDate(displayList)
   const meta = TAB_META[activeTab]
   const isSecondary = visibleSecondaryTabs.includes(activeTab)
@@ -1398,13 +1406,15 @@ export default function SchedulePage() {
               {user?.role}{user?.department ? <> &middot; {user.department}</> : ''}{user?.ext ? <> &middot; Ext. {user.ext}</> : ''}
             </p>
           </div>
-          <button
-            onClick={() => { setEditBooking(null); setPanelOpen(true) }}
-            className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]"
-          >
-            <span className="material-symbols-outlined text-base">add</span>
-            <span className="hidden sm:inline">New Booking</span>
-          </button>
+          {user?.role !== 'guest' && (
+            <button
+              onClick={() => { setEditBooking(null); setPanelOpen(true) }}
+              className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]"
+            >
+              <span className="material-symbols-outlined text-base">add</span>
+              <span className="hidden sm:inline">New Booking</span>
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -2324,11 +2334,35 @@ export default function SchedulePage() {
                       ))}
                     </tr>
                   </thead>
-                  {displaySeriesList.map((group, idx) => (
+                  {activeSeriesList.map((group, idx) => (
                     <SeriesGroupRow
                       key={group.series_id}
                       group={group}
                       index={idx}
+                      pendingCancelIds={pendingCancelIds}
+                      onEdit={b => { setEditBooking(b); setPanelOpen(true) }}
+                      onCancel={handleCancel}
+                      onCancelSeries={setSeriesCancelTarget}
+                    />
+                  ))}
+                  {pastSeriesList.length > 0 && (
+                    <tbody>
+                      <tr>
+                        <td colSpan={7} className="px-3 pt-5 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-4)]">Past</span>
+                            <div className="flex-1 h-px bg-[var(--ds-border-sub)]" />
+                            <span className="text-[9px] font-black text-[var(--ds-text-4)]">{pastSeriesList.length}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  )}
+                  {pastSeriesList.map((group, idx) => (
+                    <SeriesGroupRow
+                      key={group.series_id}
+                      group={group}
+                      index={activeSeriesList.length + idx}
                       pendingCancelIds={pendingCancelIds}
                       onEdit={b => { setEditBooking(b); setPanelOpen(true) }}
                       onCancel={handleCancel}
@@ -2592,17 +2626,11 @@ export default function SchedulePage() {
                     <span className="text-[9px] font-black text-[var(--ds-text-4)]">{bookings.length}</span>
                   </div>
                   {viewMode === 'card' ? (
-                    <div className="flex gap-3">
-                      {([0, 1] as const).map(col => (
-                        <div key={col} className="flex-1 flex flex-col gap-3">
-                          {bookings
-                            .filter((_, i) => i % 2 === col)
-                            .map((b, colIdx) => (
-                              <SlideWrapper key={b.id} exiting={exitingCancelIds.has(b.id)}>
-                                <BookingCard b={b} index={colIdx * 2 + col} {...cardSharedProps} />
-                              </SlideWrapper>
-                            ))}
-                        </div>
+                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))' }}>
+                      {bookings.map((b, idx) => (
+                        <SlideWrapper key={b.id} exiting={exitingCancelIds.has(b.id)}>
+                          <BookingCard b={b} index={idx} {...cardSharedProps} />
+                        </SlideWrapper>
                       ))}
                     </div>
                   ) : (
@@ -2629,17 +2657,11 @@ export default function SchedulePage() {
                   </div>
                   <div className="opacity-50">
                     {viewMode === 'card' ? (
-                      <div className="flex gap-3">
-                        {([0, 1] as const).map(col => (
-                          <div key={col} className="flex-1 flex flex-col gap-3">
-                            {todayPastList
-                              .filter((_, i) => i % 2 === col)
-                              .map((b, colIdx) => (
-                                <SlideWrapper key={b.id} exiting={exitingCancelIds.has(b.id)}>
-                                  <BookingCard b={b} index={colIdx * 2 + col} {...cardSharedProps} />
-                                </SlideWrapper>
-                              ))}
-                          </div>
+                      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))' }}>
+                        {todayPastList.map((b, idx) => (
+                          <SlideWrapper key={b.id} exiting={exitingCancelIds.has(b.id)}>
+                            <BookingCard b={b} index={idx} {...cardSharedProps} />
+                          </SlideWrapper>
                         ))}
                       </div>
                     ) : (
