@@ -23,13 +23,15 @@ class BuildingController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
+            'name'        => 'required|string|max:255|unique:buildings,name',
             'code'        => 'nullable|string|max:20',
             'address'     => 'nullable|string|max:500',
             'location_id' => 'nullable|exists:locations,id',
             'floors'      => 'nullable|integer|min:1|max:200',
             'notes'       => 'nullable|string',
             'is_active'   => 'nullable|boolean',
+        ], [
+            'name.unique' => 'A building with that name already exists.',
         ]);
 
         return Building::create($data)->load('location');
@@ -38,13 +40,15 @@ class BuildingController extends Controller
     public function update(Request $request, Building $building)
     {
         $data = $request->validate([
-            'name'        => 'sometimes|string|max:255',
+            'name'        => ['sometimes', 'string', 'max:255', \Illuminate\Validation\Rule::unique('buildings', 'name')->ignore($building->id)],
             'code'        => 'nullable|string|max:20',
             'address'     => 'nullable|string|max:500',
             'location_id' => 'nullable|exists:locations,id',
             'floors'      => 'nullable|integer|min:1|max:200',
             'notes'       => 'nullable|string',
             'is_active'   => 'nullable|boolean',
+        ], [
+            'name.unique' => 'A building with that name already exists.',
         ]);
 
         $building->update($data);

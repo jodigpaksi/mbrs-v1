@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { updateAvatar, updatePassword, removeAvatar } from '../../api/auth'
 import { getGeneralSettings } from '../../api/settings'
 import UserAvatar from '../ui/UserAvatar'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 
 interface Props {
   open: boolean
@@ -31,6 +32,9 @@ export default function UserProfileModal({ open, onClose }: Props) {
   const [pwError,   setPwError]   = useState<string | null>(null)
   const [pwSuccess, setPwSuccess] = useState(false)
   const [copied,    setCopied]    = useState<string | null>(null)
+
+  // Enter already works natively via the password <form onSubmit> — only wire Escape here.
+  useModalHotkeys(open, undefined, onClose)
 
   const { data: generalSettings } = useQuery({
     queryKey: ['settings-general'],

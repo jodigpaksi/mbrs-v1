@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyBookings, getBookings } from '../../api/bookings'
 import { getRooms } from '../../api/rooms'
@@ -238,15 +238,15 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                 style={{ width: ITEM_W, transform: `translateX(${Math.max(0, activeIndex) * ITEM_W}px)`, background: 'var(--ds-pill-bg)' }}
               />
               {allItems.map(item => (
-                <button
+                <Link
                   key={item.path}
-                  onClick={() => navigate(item.path)}
+                  to={item.path}
                   style={{ width: ITEM_W, color: isActive(item.path) ? 'var(--ds-text-1)' : 'var(--ds-text-2)' }}
                   className="relative flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors duration-200 z-10 hover:text-[--ds-text-2]"
                 >
                   <span className="material-symbols-outlined text-sm">{item.icon}</span>
                   {item.label}
-                </button>
+                </Link>
               ))}
             </div>
           )

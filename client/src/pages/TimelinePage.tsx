@@ -18,6 +18,7 @@ import AfterHoursModal from '../components/booking/AfterHoursModal'
 import GlassDatePicker from '../components/ui/GlassDatePicker'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
+import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import { getDepartments } from '../api/departments'
 import { getGeneralSettings, getCachedBranding } from '../api/settings'
 import type { Department } from '../types'
@@ -82,7 +83,7 @@ async function exportSeriesToICS(seriesId: string) {
   exportToICS(bookings)
 }
 
-type CellDrag = { roomId: number; room: Room; startSlot: number; endSlot: number }
+type CellDrag = { roomId: number; room: Room; date: Date; startSlot: number; endSlot: number }
 type BarDrag  = { booking: Booking; origStartSlot: number; origSpan: number; offsetSlot: number; deltaSlot: number; origClientX: number; deltaPixels: number }
 type BarResize = { booking: Booking; edge: 'left' | 'right'; origStartSlot: number; origSpan: number; deltaSlot: number; origClientX: number; deltaPixels: number }
 
@@ -144,6 +145,12 @@ export default function TimelinePage() {
   const [dateOverlayShown, setDateOverlayShown] = useState(false)
   const dateOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Enter → confirm, Escape → dismiss, one modal at a time.
+  useModalHotkeys(!!cancelTarget, confirmCancel, () => setCancelTarget(null))
+  useModalHotkeys(!!transferBooking, undefined, () => { setTransferBooking(null); setTransferSearch('') })
+  useModalHotkeys(!!seriesCancelTarget, () => confirmSeriesCancel(seriesCancelTarget!), () => setSeriesCancelTarget(null))
+  useModalHotkeys(pastDateModalOpen, () => setPastDateModalOpen(false), () => setPastDateModalOpen(false))
+
   const [tooltip, setTooltip] = useState<{ booking: Booking | null; pos: { x: number; y: number }; visible: boolean }>({
     booking: null, pos: { x: 0, y: 0 }, visible: false,
   })
@@ -169,11 +176,16 @@ export default function TimelinePage() {
   // Dropdown click-outside refs
   const locationRef = useRef<HTMLDivElement>(null)
   const deptRef = useRef<HTMLDivElement>(null)
+  const weekRoomRef = useRef<HTMLDivElement>(null)
+
+  const [weekRoomOpen, setWeekRoomOpen] = useState(false)
+  const [weekSelectedRoom, setWeekSelectedRoom] = useState<Room | null>(null)
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
       if (locationRef.current && !locationRef.current.contains(e.target as Node)) setLocationOpen(false)
       if (deptRef.current && !deptRef.current.contains(e.target as Node)) { setDeptOpen(false); setDeptSearch('') }
+      if (weekRoomRef.current && !weekRoomRef.current.contains(e.target as Node)) setWeekRoomOpen(false)
     }
     function handleSearch(e: Event) { setSearch((e as CustomEvent<string>).detail) }
     document.addEventListener('mousedown', handleMouseDown)
@@ -217,17 +229,19 @@ export default function TimelinePage() {
     // whole gantt re-renders 100+×/s during a drag, making move/resize feel stiff.
     let rafId: number | null = null
     let lastEvent: MouseEvent | null = null
+    let lastClientX = 0
+    let autoScrollRafId: number | null = null
 
-    function applyMove(e: MouseEvent) {
+    function applyMove(clientX: number) {
       let changed = false
       if (cellDragRef.current) {
-        cellDragRef.current.endSlot = getSlotFromClientX(e.clientX)
+        cellDragRef.current.endSlot = getSlotFromClientX(clientX)
         changed = true
       }
       if (barDragRef.current) {
         const d = barDragRef.current
-        d.deltaPixels = e.clientX - d.origClientX
-        const s = getSlotFromClientX(e.clientX)
+        d.deltaPixels = clientX - d.origClientX
+        const s = getSlotFromClientX(clientX)
         const raw = s - d.offsetSlot - d.origStartSlot
         const maxDelta = slots - d.origStartSlot - d.origSpan
         const minDelta = -d.origStartSlot
@@ -236,8 +250,8 @@ export default function TimelinePage() {
       }
       if (barResizeRef.current) {
         const d = barResizeRef.current
-        d.deltaPixels = e.clientX - d.origClientX
-        const s = getSlotFromClientX(e.clientX)
+        d.deltaPixels = clientX - d.origClientX
+        const s = getSlotFromClientX(clientX)
         if (d.edge === 'right') {
           const origEnd = d.origStartSlot + d.origSpan
           d.deltaSlot = Math.max(1 - d.origSpan, s + 1 - origEnd)
@@ -251,24 +265,52 @@ export default function TimelinePage() {
 
     function onMove(e: MouseEvent) {
       lastEvent = e
+      lastClientX = e.clientX
       if (rafId !== null) return
       rafId = requestAnimationFrame(() => {
         rafId = null
-        if (lastEvent) applyMove(lastEvent)
+        if (lastEvent) applyMove(lastEvent.clientX)
       })
     }
+
+    // Auto-scroll the gantt container horizontally when a cell/bar drag is held near
+    // the left/right edge — needed on small screens where the day view needs horizontal
+    // scroll and the last columns are otherwise unreachable by drag.
+    function autoScrollTick() {
+      const dragging = cellDragRef.current || barDragRef.current || barResizeRef.current
+      const el = mainRef.current
+      if (dragging && el) {
+        const rect = el.getBoundingClientRect()
+        const EDGE = 60
+        const MAX_SPEED = 22
+        let dx = 0
+        if (lastClientX > rect.right - EDGE) {
+          dx = Math.min(1, (lastClientX - (rect.right - EDGE)) / EDGE) * MAX_SPEED
+        } else if (lastClientX < rect.left + EDGE) {
+          dx = -Math.min(1, ((rect.left + EDGE) - lastClientX) / EDGE) * MAX_SPEED
+        }
+        if (dx !== 0) {
+          const before = el.scrollLeft
+          el.scrollLeft += dx
+          if (el.scrollLeft !== before) applyMove(lastClientX)
+        }
+      }
+      autoScrollRafId = requestAnimationFrame(autoScrollTick)
+    }
+    autoScrollRafId = requestAnimationFrame(autoScrollTick)
 
     async function onUp() {
       const cd = cellDragRef.current
       if (cd) {
         const minSlot = Math.min(cd.startSlot, cd.endSlot)
         const maxSlot = Math.max(cd.startSlot, cd.endSlot)
+        const cellDate = cd.date
         cellDragRef.current = null
         setDragTick(t => t + 1)
         if (!canBookDirectly(cd.room)) {
           setContactRoom(cd.room); setContactOpen(true)
         } else {
-          const dragDateStr = toLocalDateStr(currentDate)
+          const dragDateStr = toLocalDateStr(cellDate)
           const todayStr = toLocalDateStr(new Date())
           const now = new Date()
           const slotStartMins = HOUR_START * 60 + minSlot * 30
@@ -281,6 +323,7 @@ export default function TimelinePage() {
           setPrefillEnd(slotToTimeStr(maxSlot + 1))
           setSelectedRoom(cd.room)
           setEditBooking(null)
+          setCurrentDate(cellDate)
           setBookingPanelOpen(true)
         }
       }
@@ -296,9 +339,12 @@ export default function TimelinePage() {
         })
       }
 
-      const dStr = toLocalDateStr(currentDate)
       const bd = barDragRef.current
       const br = barResizeRef.current
+      // Move/resize apply to the booking's own date (may differ from currentDate in the
+      // per-room week grid, where each row is a different date sharing one time header).
+      const activeDate = bd ? new Date(bd.booking.start_at.replace('Z', '')) : br ? new Date(br.booking.start_at.replace('Z', '')) : currentDate
+      const dStr = toLocalDateStr(activeDate)
       const needsCheck = (bd && bd.deltaSlot !== 0) || (br && br.deltaSlot !== 0)
       const allBkgs: Booking[] = needsCheck
         ? await queryClient.fetchQuery({ queryKey: ['bookings', dStr], queryFn: () => getBookings({ date: dStr }), staleTime: 0 })
@@ -314,8 +360,8 @@ export default function TimelinePage() {
         } else {
           try {
             await updateBookingApi(bd.booking.id, {
-              start_at: slotToDateTimeStr(currentDate, newStart),
-              end_at:   slotToDateTimeStr(currentDate, newEnd),
+              start_at: slotToDateTimeStr(activeDate, newStart),
+              end_at:   slotToDateTimeStr(activeDate, newEnd),
             })
             queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
             setToastMsg('Booking moved successfully')
@@ -344,8 +390,8 @@ export default function TimelinePage() {
           } else {
             try {
               await updateBookingApi(br.booking.id, {
-                start_at: slotToDateTimeStr(currentDate, newStart),
-                end_at:   slotToDateTimeStr(currentDate, newEnd),
+                start_at: slotToDateTimeStr(activeDate, newStart),
+                end_at:   slotToDateTimeStr(activeDate, newEnd),
               })
               queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
               setToastMsg('Booking resized successfully')
@@ -367,6 +413,7 @@ export default function TimelinePage() {
     document.addEventListener('mouseup', onUp)
     return () => {
       if (rafId !== null) cancelAnimationFrame(rafId)
+      if (autoScrollRafId !== null) cancelAnimationFrame(autoScrollRafId)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
     }
@@ -679,6 +726,7 @@ export default function TimelinePage() {
     setGanttAnim('up')
     setGanttKey(k => k + 1)
     setLocation(b)
+    setWeekSelectedRoom(null)
   }
 
   function switchDept(d: string) {
@@ -824,7 +872,8 @@ export default function TimelinePage() {
           )}
         </div>
 
-        {/* Location */}
+        {/* Location + Selected Room (week view) */}
+        <div className="flex justify-center items-center gap-3">
         <div ref={locationRef} className="flex justify-center relative">
           <button onClick={() => setLocationOpen(!locationOpen)}
             className="flex items-center min-w-[240px] bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
@@ -886,6 +935,36 @@ export default function TimelinePage() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Selected Room — week view only, per-room timeline (Time columns / Date rows) */}
+        {viewMode === 'week' && (
+          <div ref={weekRoomRef} className="flex justify-center relative">
+            <button onClick={() => setWeekRoomOpen(o => !o)}
+              className="flex items-center min-w-[200px] bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
+              <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base mr-2">meeting_room</span>
+              <span className="text-[10px] font-black uppercase text-[var(--ds-text-1)] flex-1 text-left truncate">
+                {weekSelectedRoom ? weekSelectedRoom.name : 'All Rooms'}
+              </span>
+              <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
+            </button>
+            {weekRoomOpen && (
+              <div className="dropdown-enter absolute top-full mt-2 w-[240px] rounded-2xl z-[200] p-1.5 max-h-80 overflow-y-auto"
+                style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+                <div
+                  className={`px-4 py-2.5 rounded-xl cursor-pointer transition-colors text-[10px] font-black uppercase ${!weekSelectedRoom ? 'bg-[#adee2b] text-black' : 'text-[var(--ds-text-1)] hover:bg-[#adee2b]/25 hover:text-black'}`}
+                  onClick={() => { setWeekSelectedRoom(null); setWeekRoomOpen(false) }}
+                >All Rooms</div>
+                {filteredRooms.map((r: Room) => (
+                  <div key={r.id}
+                    className={`px-4 py-2.5 rounded-xl cursor-pointer transition-colors text-[10px] font-black uppercase truncate ${weekSelectedRoom?.id === r.id ? 'bg-[#adee2b] text-black' : 'text-[var(--ds-text-1)] hover:bg-[#adee2b]/25 hover:text-black'}`}
+                    onClick={() => { setWeekSelectedRoom(r); setWeekRoomOpen(false) }}
+                  >{r.name}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         </div>
 
         {/* Filter group + New Booking */}
@@ -988,12 +1067,232 @@ export default function TimelinePage() {
 
       {/* Week view */}
       {viewMode === 'week' && (
-        <main key={ganttKey} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], scrollbarWidth: 'thin' }}>
+        <main key={ganttKey} ref={weekSelectedRoom ? mainRef : undefined} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: weekSelectedRoom ? 'var(--ds-bg-surface)' : 'var(--ds-bg-base)', scrollbarWidth: 'thin' }}>
           {roomsLoading && (
             <div className="absolute inset-0 bg-[var(--ds-bg-base)]/80 flex items-center justify-center z-50">
               <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
             </div>
           )}
+          {weekSelectedRoom ? (() => {
+            const room = weekSelectedRoom
+            return (
+              <div style={{ width: ROOM_W + slots * SLOT_W, minWidth: '100%' }}>
+                {/* Header: room name + Time columns */}
+                <div className="sticky top-0 z-40 border-b shadow-sm flex" style={{ background: 'var(--ds-bg-surface)', borderColor: 'var(--ds-border)' }}>
+                  <div className="shrink-0 flex items-center px-3 text-[11px] font-black text-[var(--ds-text-1)] uppercase tracking-widest border-r-2 border-[var(--ds-border)] truncate"
+                    style={{ width: ROOM_W, height: CELL_H }}>{room.name}</div>
+                  {(() => {
+                    const hDragMin = cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+                    const hDragMax = cellDragRef.current ? Math.max(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+                    return Array.from({ length: HOUR_END - HOUR_START }, (_, i) => {
+                      const h = HOUR_START + i
+                      const slot0 = i * 2
+                      const slot1 = i * 2 + 1
+                      const s0In = cellDragRef.current && slot0 >= hDragMin && slot0 <= hDragMax
+                      const s1In = cellDragRef.current && slot1 >= hDragMin && slot1 <= hDragMax
+                      const s0Hover = !cellDragRef.current && hoverSlot === slot0
+                      const s1Hover = !cellDragRef.current && hoverSlot === slot1
+                      return (
+                        <div key={h} style={{ width: SLOT_W * 2, height: CELL_H }} className="flex shrink-0">
+                          <div className="flex-1 flex items-center justify-center text-[13px] font-black border-r-2 border-[var(--ds-border)] transition-colors"
+                            style={{ color: 'var(--ds-text-1)', background: s0In ? 'rgba(173,238,43,0.18)' : s0Hover ? 'rgba(173,238,43,0.10)' : undefined, borderBottom: s0In ? '2px solid #adee2b' : s0Hover ? '2px solid rgba(173,238,43,0.4)' : '1px solid var(--ds-border-sub)' }}>
+                            {h}:00
+                          </div>
+                          <div className="flex-1 flex items-center justify-center text-[10px] font-medium border-r border-[var(--ds-border-sub)] transition-colors"
+                            style={{ color: s1In ? 'var(--ds-text-2)' : 'var(--ds-text-3)', background: s1In ? 'rgba(173,238,43,0.12)' : s1Hover ? 'rgba(173,238,43,0.07)' : undefined, borderBottom: s1In ? '2px solid rgba(173,238,43,0.5)' : s1Hover ? '2px solid rgba(173,238,43,0.3)' : '1px solid var(--ds-border-sub)' }}>
+                            {h}:30
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+
+                {/* Date rows — mirrors Day view's room rows exactly, one row per date instead of per room */}
+                {weekDates.map((d, dayIdx) => {
+                  const isTd = d.toDateString() === today.toDateString()
+                  const dow = d.getDay()
+                  const isWeekend = (dow === 6 && wkSat) || (dow === 0 && wkSun)
+                  const dayBookings = (weekData[dayIdx] ?? []).filter((b: Booking) => b.room_id === room.id && b.status !== 'cancelled')
+                  const isCellDragRow = cellDragRef.current?.roomId === room.id && cellDragRef.current?.date.toDateString() === d.toDateString()
+                  const cellDragMinSlot = isCellDragRow && cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+                  const cellDragMaxSlot = isCellDragRow && cellDragRef.current ? Math.max(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+                  return (
+                    <div key={dayIdx} className={`flex group/row relative border-b border-[var(--ds-border-sub)] ${isWeekend ? 'hover:bg-[var(--ds-bg-surface-2)]' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
+                      {/* Date label — sticky */}
+                      <div
+                        className={`shrink-0 flex flex-col items-center justify-center px-3 border-r-2 sticky left-0 z-20 ${isTd ? 'bg-[#adee2b]/10' : 'bg-[var(--ds-bg-surface)]'} border-[var(--ds-border)]`}
+                        style={{ width: ROOM_W, height: CELL_H }}
+                      >
+                        <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
+                          {d.toLocaleDateString('en-GB', { weekday: 'short' })}
+                        </span>
+                        <span className={`text-[13px] font-black ${isTd ? 'text-lime-600 dark:text-lime-400' : 'text-[var(--ds-text-1)]'}`}>
+                          {d.getDate()} {d.toLocaleDateString('en-GB', { month: 'short' })}
+                        </span>
+                      </div>
+
+                      {/* Slots */}
+                      <div className="flex-1 relative" style={{ height: CELL_H }} onMouseLeave={() => setHoverSlot(null)}>
+                        <div className="flex h-full absolute inset-0">
+                          {Array.from({ length: slots }, (_, s) => {
+                            const isCellSel = isCellDragRow && s >= cellDragMinSlot && s <= cellDragMaxSlot
+                            return (
+                              <div key={s}
+                                className={`shrink-0 border-r border-[var(--ds-border-sub)] transition-colors cursor-cell
+                                  ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#adee2b]/5'}
+                                  ${(s + 1) % 2 === 0 ? 'border-r-[var(--ds-border)]' : ''}`}
+                                style={{ width: SLOT_W, height: CELL_H }}
+                                onMouseEnter={() => setHoverSlot(s)}
+                                onMouseDown={e => {
+                                  if (e.button !== 0) return
+                                  e.preventDefault()
+                                  const s2 = getSlotFromClientX(e.clientX)
+                                  cellDragRef.current = { roomId: room.id, room, date: d, startSlot: s2, endSlot: s2 }
+                                  setDragTick(t => t + 1)
+                                }}
+                                onContextMenu={e => {
+                                  if (e.ctrlKey) return
+                                  e.preventDefault()
+                                  const slot = getSlotFromClientX(e.clientX)
+                                  setCellCtxMenu({ room, slot, date: d, x: e.clientX, y: e.clientY })
+                                }}
+                              />
+                            )
+                          })}
+                        </div>
+
+                        {/* Booking bars */}
+                        {dayBookings.map((b: Booking) => {
+                          const isMe = b.user_id === user?.id
+                          const matchesSearch = !search || bookingMatchesSearch(b, search)
+                          const bd = barDragRef.current
+                          const br = barResizeRef.current
+                          const isDragging = bd?.booking.id === b.id || br?.booking.id === b.id
+
+                          let { startSlot, span } = bookingToSlots(b)
+                          let fracPx = 0, resizeFracW = 0, resizeFracX = 0
+
+                          if (bd?.booking.id === b.id) {
+                            startSlot = Math.max(0, Math.min(slots - bd.origSpan, bd.origStartSlot + bd.deltaSlot))
+                            span = bd.origSpan
+                            fracPx = bd.deltaPixels - bd.deltaSlot * SLOT_W
+                          } else if (br?.booking.id === b.id) {
+                            if (br.edge === 'right') {
+                              span = Math.max(1, br.origSpan + br.deltaSlot)
+                              resizeFracW = br.deltaPixels - br.deltaSlot * SLOT_W
+                            } else {
+                              const origStart = br.origStartSlot
+                              const delta = Math.max(-(slots - origStart - br.origSpan), Math.min(br.origSpan - 1, br.deltaSlot))
+                              startSlot = Math.max(0, origStart - delta)
+                              span = Math.max(1, br.origSpan + delta)
+                              const f = Math.max(0, -br.deltaPixels - br.deltaSlot * SLOT_W)
+                              resizeFracW = f
+                              resizeFracX = -f
+                            }
+                          }
+
+                          const left = startSlot * SLOT_W + fracPx + resizeFracX
+                          const width = span * SLOT_W + resizeFracW
+
+                          let startS = startSlot, endS = startSlot + span
+                          if (bd?.booking.id === b.id) {
+                            startS = Math.max(0, bd.origStartSlot + bd.deltaSlot)
+                            endS = startS + bd.origSpan
+                          } else if (br?.booking.id === b.id) {
+                            if (br.edge === 'right') {
+                              startS = br.origStartSlot
+                              endS = Math.max(br.origStartSlot + 1, br.origStartSlot + br.origSpan + br.deltaSlot)
+                            } else {
+                              const dd = Math.max(-(slots - br.origStartSlot - br.origSpan), Math.min(br.origSpan - 1, br.deltaSlot))
+                              startS = Math.max(0, br.origStartSlot - dd)
+                              endS = br.origStartSlot + br.origSpan + dd
+                            }
+                          }
+
+                          return (
+                            <div key={b.id} className="absolute top-0 z-10"
+                              style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined }}
+                              onContextMenu={e => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                if (isMe) setCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                                else setOtherCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                              }}>
+                              <BookingBar
+                                booking={b}
+                                onMouseEnter={showTooltip}
+                                onMouseLeave={hideTooltip}
+                                isMe={isMe}
+                                isDragging={isDragging}
+                                showTitle={showBarTitle}
+                                onBarMouseDown={isMe ? (e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const { startSlot: ss, span: sp } = bookingToSlots(b)
+                                  const mouseSlot = getSlotFromClientX(e.clientX)
+                                  barDragRef.current = {
+                                    booking: b,
+                                    origStartSlot: ss,
+                                    origSpan: sp,
+                                    offsetSlot: mouseSlot - ss,
+                                    deltaSlot: 0,
+                                    origClientX: e.clientX,
+                                    deltaPixels: 0,
+                                  }
+                                  setDragTick(t => t + 1)
+                                } : undefined}
+                                onResizeMouseDown={isMe ? (e, edge) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const { startSlot: ss, span: sp } = bookingToSlots(b)
+                                  barResizeRef.current = {
+                                    booking: b, edge,
+                                    origStartSlot: ss,
+                                    origSpan: sp,
+                                    deltaSlot: 0,
+                                    origClientX: e.clientX,
+                                    deltaPixels: 0,
+                                  }
+                                  setDragTick(t => t + 1)
+                                } : undefined}
+                              />
+                              {isDragging && (
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                                  <div style={{ background: 'rgba(8,12,28,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 99, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+                                    <span className="text-white text-[9px] font-black">
+                                      {slotToTimeStr(Math.max(0, startS))} &ndash; {slotToTimeStr(Math.min(slots, endS))}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+
+                        {/* Now line */}
+                        {isTd && nowSlot > 0 && nowSlot < slots && (
+                          <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-25" style={{ left: nowSlot * SLOT_W }} />
+                        )}
+
+                        {/* Cell drag selection overlay */}
+                        {isCellDragRow && cellDragRef.current && (
+                          <div
+                            className="absolute top-2 bottom-2 bg-[#adee2b]/40 border-2 border-[#adee2b] rounded-xl pointer-events-none z-10 transition-none"
+                            style={{ left: cellDragMinSlot * SLOT_W + 2, width: (cellDragMaxSlot - cellDragMinSlot + 1) * SLOT_W - 4 }}
+                          >
+                            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-black text-black/70 whitespace-nowrap">
+                              {slotToTimeStr(cellDragMinSlot)} &ndash; {slotToTimeStr(cellDragMaxSlot + 1)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })() : (
           <div style={{ minWidth: ROOM_W + 7 * 140 }}>
             {/* Week header */}
             <div className="sticky top-0 z-40 bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)] shadow-sm flex">
@@ -1155,6 +1454,7 @@ export default function TimelinePage() {
               )
             })}
           </div>
+          )}
 
         </main>
       )}
@@ -1480,7 +1780,7 @@ export default function TimelinePage() {
                             if (e.button !== 0) return
                             e.preventDefault()
                             const s2 = getSlotFromClientX(e.clientX)
-                            cellDragRef.current = { roomId: room.id, room, startSlot: s2, endSlot: s2 }
+                            cellDragRef.current = { roomId: room.id, room, date: currentDate, startSlot: s2, endSlot: s2 }
                             setDragTick(t => t + 1)
                           }}
                           onContextMenu={e => {

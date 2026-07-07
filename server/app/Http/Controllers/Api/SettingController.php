@@ -177,14 +177,6 @@ class SettingController extends Controller
             'mail_ready' => (bool) ($tenantId && $clientId && $hasSecret && $senderEmail),
             'calendar_sync_enabled' => $get('m365_calendar_sync_enabled') === 'true',
             'calendar_sync_ready' => (bool) ($tenantId && $clientId && $hasSecret),
-            'mail_fallback_driver' => $get('mail_fallback_driver') ?? 'smtp',
-            'smtp_host' => $get('smtp_host') ?? config('mail.mailers.smtp.host') ?? '',
-            'smtp_port' => (int) ($get('smtp_port') ?? config('mail.mailers.smtp.port') ?? 587),
-            'smtp_encryption' => $get('smtp_encryption') ?? config('mail.mailers.smtp.encryption') ?? 'tls',
-            'smtp_username' => $get('smtp_username') ?? config('mail.mailers.smtp.username') ?? '',
-            'smtp_has_password' => (bool) $get('smtp_password'),
-            'smtp_from_address' => $get('smtp_from_address') ?? config('mail.from.address') ?? '',
-            'smtp_from_name' => $get('smtp_from_name') ?? config('mail.from.name') ?? '',
         ]);
     }
 
@@ -197,14 +189,6 @@ class SettingController extends Controller
             'sender_email'  => 'sometimes|string|max:150',
             'mail_enabled'  => 'sometimes|boolean',
             'calendar_sync_enabled' => 'sometimes|boolean',
-            'mail_fallback_driver' => 'sometimes|in:smtp,log,array',
-            'smtp_host' => 'sometimes|string|max:150',
-            'smtp_port' => 'sometimes|integer|min:1|max:65535',
-            'smtp_encryption' => 'sometimes|in:tls,ssl,none',
-            'smtp_username' => 'sometimes|string|max:150',
-            'smtp_password' => 'sometimes|nullable|string|max:500',
-            'smtp_from_address' => 'sometimes|string|max:150',
-            'smtp_from_name' => 'sometimes|string|max:150',
         ]);
 
         if (array_key_exists('tenant_id', $data)) {
@@ -221,31 +205,6 @@ class SettingController extends Controller
         }
         if (array_key_exists('calendar_sync_enabled', $data)) {
             Setting::updateOrCreate(['key' => 'm365_calendar_sync_enabled'], ['value' => $data['calendar_sync_enabled'] ? 'true' : 'false']);
-        }
-        if (array_key_exists('mail_fallback_driver', $data)) {
-            Setting::updateOrCreate(['key' => 'mail_fallback_driver'], ['value' => $data['mail_fallback_driver']]);
-        }
-        if (array_key_exists('smtp_host', $data)) {
-            Setting::updateOrCreate(['key' => 'smtp_host'], ['value' => $data['smtp_host']]);
-        }
-        if (array_key_exists('smtp_port', $data)) {
-            Setting::updateOrCreate(['key' => 'smtp_port'], ['value' => (string) $data['smtp_port']]);
-        }
-        if (array_key_exists('smtp_encryption', $data)) {
-            Setting::updateOrCreate(['key' => 'smtp_encryption'], ['value' => $data['smtp_encryption']]);
-        }
-        if (array_key_exists('smtp_username', $data)) {
-            Setting::updateOrCreate(['key' => 'smtp_username'], ['value' => $data['smtp_username']]);
-        }
-        if (array_key_exists('smtp_from_address', $data)) {
-            Setting::updateOrCreate(['key' => 'smtp_from_address'], ['value' => $data['smtp_from_address']]);
-        }
-        if (array_key_exists('smtp_from_name', $data)) {
-            Setting::updateOrCreate(['key' => 'smtp_from_name'], ['value' => $data['smtp_from_name']]);
-        }
-        // Only touch the SMTP password if the client actually sent a new value.
-        if (!empty($data['smtp_password'])) {
-            Setting::updateOrCreate(['key' => 'smtp_password'], ['value' => Crypt::encryptString($data['smtp_password'])]);
         }
         // Only touch the secret if the client actually sent a new value (empty/omitted keeps the existing one).
         if (!empty($data['client_secret'])) {
@@ -317,33 +276,6 @@ class SettingController extends Controller
                 '<p>This is a test email sent via Microsoft Graph from MRBS Admin Settings. If you received this, the Microsoft 365 mail integration is working.</p>',
                 function ($message) use ($to, $senderEmail) {
                     $message->to($to)->from($senderEmail)->subject('MRBS — Microsoft 365 test email');
-                }
-            );
-        } catch (\Throwable $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 200);
-        }
-
-        return response()->json(['success' => true, 'message' => "Test email sent to {$to}. Check your inbox (and spam folder)."]);
-    }
-
-    public function sendSmtpTestEmail(Request $request): JsonResponse
-    {
-        $get = fn(string $key) => Setting::where('key', $key)->value('value');
-        $host = $get('smtp_host');
-        $username = $get('smtp_username');
-        $encryptedPassword = $get('smtp_password');
-
-        if (!$host || !$username || !$encryptedPassword) {
-            return response()->json(['success' => false, 'message' => 'Host, Username, and Password must all be saved first.'], 422);
-        }
-
-        $to = $request->user()->email;
-
-        try {
-            \Illuminate\Support\Facades\Mail::mailer('smtp')->html(
-                '<p>This is a test email sent via SMTP from RoomSync Pro Admin Settings. If you received this, the SMTP configuration is working.</p>',
-                function ($message) use ($to) {
-                    $message->to($to)->subject('RoomSync Pro — SMTP test email');
                 }
             );
         } catch (\Throwable $e) {

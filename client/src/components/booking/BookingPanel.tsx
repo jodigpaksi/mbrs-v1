@@ -9,6 +9,7 @@ import { getGeneralSettings } from '../../api/settings'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
 import { useBookingHours } from '../../hooks/useBookingHours'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
@@ -297,9 +298,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const { data: buildings = [] } = useQuery({ queryKey: ['buildings'], queryFn: getBuildings })
   const { data: directory = [] } = useQuery({ queryKey: ['user-directory'], queryFn: getDirectory, staleTime: 60_000 })
   const miniEnabled = open && showMiniPanel && !!selectedRoom && !!date
+  // Same rule as Available Rooms: results capped by After-Hours Restriction end when it applies
+  // to this user, otherwise fall back to the plain Booking Hours end.
+  const miniEndStr = restrictAfterHours ? workingHoursEnd : beStr
   const { data: miniRooms = [], isFetching: miniFetching } = useQuery<import('../../types/index').Room[]>({
-    queryKey: ['avail-mini', selectedRoom?.id, date, bsStr, beStr],
-    queryFn: () => getAvailableRooms(`${date}T${bsStr}:00`, `${date}T${beStr}:00`),
+    queryKey: ['avail-mini', selectedRoom?.id, date, bsStr, miniEndStr],
+    queryFn: () => getAvailableRooms(`${date}T${bsStr}:00`, `${date}T${miniEndStr}:00`),
     enabled: miniEnabled,
     staleTime: 30_000,
   })
@@ -720,6 +724,44 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     onClose()
   }
 
+  async function handleSkipAndBook() {
+    if (!conflictInfo) return
+    const info = conflictInfo
+    setConflictInfo(null)
+    setSkipConflicts(true)
+    setSubmitting(true)
+    setError('')
+    try {
+      await doCreateBookings(info.available, info.seriesId, info.conflicting)
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { message?: string } } }
+      const status = e?.response?.status
+      const msg = e?.response?.data?.message
+      if (status === 422 && msg?.toLowerCase().includes('not available')) {
+        setError(t('err_room_taken'))
+        recheckAvailability()
+      } else {
+        setError(msg || t('err_save_booking'))
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function handleSkippedDone() {
+    setSkippedResult(null)
+    onSubmit?.()
+  }
+
+  // Enter → primary action, Escape → cancel/back, scoped so only the topmost visible layer reacts.
+  useModalHotkeys(
+    open && !showCancelModal && !conflictInfo,
+    skippedResult ? handleSkippedDone : handleSubmit,
+    skippedResult ? handleSkippedDone : handleClose,
+  )
+  useModalHotkeys(!!showCancelModal, undefined, () => setShowCancelModal(false))
+  useModalHotkeys(!!conflictInfo, conflictInfo && conflictInfo.available.length > 0 ? handleSkipAndBook : undefined, () => setConflictInfo(null))
+
   const filteredRooms = (rooms as Room[]).filter((r: Room) => {
     if (activeBuildingId && r.building_id !== activeBuildingId) return false
     const q = roomSearch.toLowerCase()
@@ -841,12 +883,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             <div className="px-3 space-y-2">
               {miniSlots.filter(slot => {
                 const sHH = slot.start.split('T')[1]?.slice(0,5) ?? slot.start.slice(11,16)
-                return sHH < '16:30'
+                return sHH < miniEndStr
               }).map((slot, i) => {
                 const sHH = slot.start.split('T')[1]?.slice(0,5) ?? slot.start.slice(11,16)
                 const rawEHH = slot.end.split('T')[1]?.slice(0,5) ?? slot.end.slice(11,16)
-                const eHH = rawEHH > '16:30' ? '16:30' : rawEHH
-                const cappedEnd = rawEHH > '16:30' ? `${slot.end.slice(0, 11)}16:30:00` : slot.end
+                const eHH = rawEHH > miniEndStr ? miniEndStr : rawEHH
+                const cappedEnd = rawEHH > miniEndStr ? `${slot.end.slice(0, 11)}${miniEndStr}:00` : slot.end
                 const durMin = (new Date(cappedEnd).getTime() - new Date(slot.start).getTime()) / 60000
                 const durH = Math.floor(durMin / 60)
                 const durM = durMin % 60
@@ -1874,28 +1916,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <div className={`${conflictInfo.available.length > 0 ? 'grid grid-cols-2 gap-3' : ''} pt-1`}>
                   {conflictInfo.available.length > 0 && (
                     <button
-                      onClick={async () => {
-                        const info = conflictInfo
-                        setConflictInfo(null)
-                        setSkipConflicts(true)
-                        setSubmitting(true)
-                        setError('')
-                        try {
-                          await doCreateBookings(info.available, info.seriesId, info.conflicting)
-                        } catch (err: unknown) {
-                          const e = err as { response?: { status?: number; data?: { message?: string } } }
-                          const status = e?.response?.status
-                          const msg = e?.response?.data?.message
-                          if (status === 422 && msg?.toLowerCase().includes('not available')) {
-                            setError(t('err_room_taken'))
-                            recheckAvailability()
-                          } else {
-                            setError(msg || t('err_save_booking'))
-                          }
-                        } finally {
-                          setSubmitting(false)
-                        }
-                      }}
+                      onClick={handleSkipAndBook}
                       className="py-3.5 rounded-2xl bg-black text-[#adee2b] text-[10px] font-black uppercase tracking-wide hover:bg-slate-800 transition-all"
                     >
                       {t('skip_and_book')} {conflictInfo.available.length}
@@ -1939,7 +1960,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   </div>
                 </div>
                 <button
-                  onClick={() => { setSkippedResult(null); onSubmit?.() }}
+                  onClick={handleSkippedDone}
                   className="px-3 py-1.5 rounded-xl bg-black text-[#adee2b] text-[9px] font-black uppercase tracking-wide hover:bg-slate-800 transition-all shrink-0"
                 >
                   {t('btn_done')}

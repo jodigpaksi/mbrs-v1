@@ -4,6 +4,7 @@ import type { Room, Booking } from '../../types/index'
 import { deptColors } from '../../data/mockData'
 import { getRoomStats } from '../../api/rooms'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 
 interface RoomDetailModalProps {
   room: Room | null
@@ -20,6 +21,8 @@ function fmtTime(iso: string) {
 
 export default function RoomDetailModal({ room, open, onClose, onBook, bookings = [] }: RoomDetailModalProps) {
   const [photoIdx, setPhotoIdx] = useState(0)
+
+  useModalHotkeys(open, room ? () => { onClose(); onBook(room) } : undefined, onClose)
 
   const { data: stats } = useQuery({
     queryKey: ['room-stats', room?.id],

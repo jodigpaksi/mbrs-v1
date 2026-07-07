@@ -44,13 +44,18 @@ class RoomController extends Controller
     {
         $data = $request->validate([
             'building_id'      => 'nullable|exists:buildings,id',
-            'name'             => 'required|string',
+            'name'             => [
+                'required', 'string',
+                \Illuminate\Validation\Rule::unique('rooms', 'name')->where(fn ($q) => $q->where('building_id', $request->input('building_id'))),
+            ],
             'capacity'         => 'required|integer|min:1',
             'floor'            => 'required|string',
             'facilities'       => 'nullable|array',
             'photos'           => 'nullable|array',
             'notes'            => 'nullable|string',
             'requires_contact' => 'nullable|boolean',
+        ], [
+            'name.unique' => 'A room with that name already exists in this building.',
         ]);
 
         if ($err = $this->authorizeRoomBuilding($request, $data['building_id'] ?? null)) return $err;
@@ -66,9 +71,13 @@ class RoomController extends Controller
 
     public function update(Request $request, Room $room): JsonResponse
     {
+        $effectiveBuildingId = $request->has('building_id') ? $request->input('building_id') : $room->building_id;
         $data = $request->validate([
             'building_id'      => 'nullable|exists:buildings,id',
-            'name'             => 'sometimes|string',
+            'name'             => [
+                'sometimes', 'string',
+                \Illuminate\Validation\Rule::unique('rooms', 'name')->where(fn ($q) => $q->where('building_id', $effectiveBuildingId))->ignore($room->id),
+            ],
             'capacity'         => 'sometimes|integer|min:1',
             'floor'            => 'sometimes|string',
             'facilities'       => 'nullable|array',
@@ -77,6 +86,8 @@ class RoomController extends Controller
             'is_active'        => 'sometimes|boolean',
             'status'           => 'sometimes|in:active,maintenance',
             'requires_contact' => 'sometimes|boolean',
+        ], [
+            'name.unique' => 'A room with that name already exists in this building.',
         ]);
 
         if ($err = $this->authorizeRoomBuilding($request, $room->building_id)) return $err;

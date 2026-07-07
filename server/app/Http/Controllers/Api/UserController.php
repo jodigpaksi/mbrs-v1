@@ -134,13 +134,15 @@ class UserController extends Controller
         if ($request->alias === '') $request->merge(['alias' => null]);
 
         $data = $request->validate([
-            'name'          => 'sometimes|string|max:255',
+            'name'          => 'sometimes|string|max:255|unique:users,name,' . $user->id,
             'email'         => 'sometimes|email|unique:users,email,' . $user->id,
             'alias'         => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9._-]+$/|unique:users,alias,' . $user->id,
             'department_id' => 'sometimes|nullable|exists:departments,id',
             'ext'           => 'sometimes|nullable|string|max:20',
             'password'      => 'sometimes|nullable|string|min:8',
             'avatar'        => 'sometimes|nullable|string|max:1000',
+        ], [
+            'name.unique' => 'A user with that name already exists.',
         ]);
 
         if (array_key_exists('password', $data) && $data['password'] === null) {
@@ -160,13 +162,15 @@ class UserController extends Controller
         if ($request->alias === '') $request->merge(['alias' => null]);
 
         $data = $request->validate([
-            'name'          => 'required|string|max:255',
+            'name'          => 'required|string|max:255|unique:users,name',
             'email'         => 'required|email|unique:users,email',
             'alias'         => 'nullable|string|max:100|regex:/^[a-zA-Z0-9._-]+$/|unique:users,alias',
             'password'      => 'required|string|min:8',
             'department_id' => 'nullable|exists:departments,id',
             'role'          => 'nullable|in:user,admin,receptionist,building_admin',
             'ext'           => 'nullable|string|max:20',
+        ], [
+            'name.unique' => 'A user with that name already exists.',
         ]);
 
         $data['alias'] = $this->resolveAlias($data['alias'] ?? null, $data['email']);

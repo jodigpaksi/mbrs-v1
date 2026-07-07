@@ -6,6 +6,7 @@ import { getAnalyticsOverview, downloadAnalyticsExport } from '../api/analytics'
 import type { SectionPeriod } from '../api/analytics'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
@@ -16,7 +17,7 @@ import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, 
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
-import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto, getM365Settings, updateM365Settings, testM365Connection, sendM365TestEmail, sendSmtpTestEmail } from '../api/settings'
+import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto, getM365Settings, updateM365Settings, testM365Connection, sendM365TestEmail } from '../api/settings'
 import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive } from '../api/archive'
 import type { ArchiveParams } from '../api/archive'
 import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBackupExports } from '../api/backup'
@@ -79,8 +80,14 @@ function BuildingModal({
         notes: notes.trim() || undefined,
       })
       onClose()
-    } catch { setErr('Failed to save building.') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; errors?: { name?: string[] } } } })?.response?.data?.errors?.name?.[0]
+        ?? (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setErr(msg || 'Failed to save building.')
+    } finally { setSaving(false) }
   }
+
+  useModalHotkeys(true, handleSave, onClose)
 
   return (
     <ModalPortal>
@@ -255,6 +262,7 @@ function IconPickerModal({ current, onSelect, onClose }: {
 }) {
   const [search, setSearch]   = useState('')
   const [cat, setCat]         = useState('All')
+  useModalHotkeys(true, undefined, onClose)
   const allIcons               = Object.values(ICON_CATEGORIES).flat()
   const cats                   = ['All', ...Object.keys(ICON_CATEGORIES)]
   const baseIcons              = cat === 'All' ? allIcons : (ICON_CATEGORIES[cat] ?? [])
@@ -386,7 +394,11 @@ function RoomModal({
     try {
       await onSave({ building_id: buildingId, name: name.trim(), capacity: Number(capacity), floor: floor.trim(), notes: notes.trim() || undefined, requires_contact: requiresContact })
       onClose()
-    } catch { setErr('Failed to save room.') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; errors?: { name?: string[] } } } })?.response?.data?.errors?.name?.[0]
+        ?? (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setErr(msg || 'Failed to save room.')
+    } finally { setSaving(false) }
   }
 
   function addPhoto() {
@@ -437,6 +449,12 @@ function RoomModal({
     try { await updateRoom(initial.id, { facilities }); qc.invalidateQueries({ queryKey: ['rooms'] }) }
     finally { setSavingFacilities(false) }
   }
+
+  useModalHotkeys(!iconPickerOpen, () => {
+    if (activeTab === 'basic') handleSave()
+    else if (activeTab === 'photos') savePhotos()
+    else if (activeTab === 'facilities') saveFacilities()
+  }, onClose)
 
   const TAB_ORDER: RoomTab[] = ['basic', 'photos', 'facilities']
   const animDirRef = useRef<'left' | 'right'>('right')
@@ -955,6 +973,12 @@ function LocationsSection() {
     finally { setDeleting(false) }
   }
 
+  useModalHotkeys(
+    !!deleteTarget,
+    deleteTarget && deleteLocConfirm === deleteTarget.name ? handleDelete : undefined,
+    () => { setDeleteTarget(null); setDeleteLocConfirm('') },
+  )
+
   return (
     <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
       <div className="flex items-center justify-between">
@@ -1092,8 +1116,14 @@ function LocationModal({ initial, onSave, onClose }: {
     try {
       await onSave({ name: name.trim(), code: code.trim() })
       onClose()
-    } catch { setErr('Failed to save.') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; errors?: { name?: string[] } } } })?.response?.data?.errors?.name?.[0]
+        ?? (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setErr(msg || 'Failed to save.')
+    } finally { setSaving(false) }
   }
+
+  useModalHotkeys(true, handleSave, onClose)
 
   return (
     <ModalPortal>
@@ -1156,6 +1186,15 @@ function BuildingsTab() {
 
   const effectiveRooms = localRooms ?? (allRooms as Room[])
 
+  // localRooms is an optimistic snapshot (reorder/status/special/sensor-code toggles show it
+  // immediately without waiting for a refetch). Once the underlying query actually refetches
+  // (e.g. after invalidateQueries from any room create/update/delete/import), drop the snapshot
+  // so the UI goes back to reflecting real server data — otherwise a stale snapshot permanently
+  // masks anything new (like a freshly created room) until a hard refresh clears component state.
+  useEffect(() => {
+    setLocalRooms(null)
+  }, [allRooms])
+
   async function handleImportBuildings(rows: Parameters<typeof importBuildings>[0]) {
     const result = await importBuildings(rows)
     qc.invalidateQueries({ queryKey: ['buildings'] })
@@ -1209,6 +1248,12 @@ function BuildingsTab() {
     finally { setDeletingRoom(false) }
   }
 
+  useModalHotkeys(
+    !!deleteRoomTarget,
+    deleteRoomTarget && confirmRoomInput === deleteRoomTarget.name ? handleDeleteRoom : undefined,
+    () => { setDeleteRoomTarget(null); setDeleteRoomErr(''); setConfirmRoomInput('') },
+  )
+
   async function handleDelete() {
     if (!deleteTarget) return
     setDeleting(true); setDeleteErr('')
@@ -1221,6 +1266,12 @@ function BuildingsTab() {
       setDeleteErr(msg || 'Failed to delete.')
     } finally { setDeleting(false) }
   }
+
+  useModalHotkeys(
+    !!deleteTarget,
+    deleteTarget && confirmBuildingInput === deleteTarget.name ? handleDelete : undefined,
+    () => { setDeleteTarget(null); setConfirmBuildingInput('') },
+  )
 
   if (isLoading) return <div className="flex items-center justify-center h-48 text-[var(--ds-text-3)] text-sm font-bold">Loading...</div>
 
@@ -1794,11 +1845,13 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
       await onSave({ name: name.trim(), email: email.trim(), alias: alias.trim(), password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds, default_building_id: defaultBldId })
       onClose()
     } catch (e: unknown) {
-      const errs = (e as { response?: { data?: { errors?: { email?: string[]; alias?: string[] } } } })?.response?.data?.errors
-      const msg = errs?.email?.[0] ?? errs?.alias?.[0]
+      const errs = (e as { response?: { data?: { errors?: { name?: string[]; email?: string[]; alias?: string[] } } } })?.response?.data?.errors
+      const msg = errs?.name?.[0] ?? errs?.email?.[0] ?? errs?.alias?.[0]
       setErr(msg ?? 'Failed to create user.')
     } finally { setSaving(false) }
   }
+
+  useModalHotkeys(true, handleSave, onClose)
 
   const inputBase = 'w-full bg-[var(--ds-bg-raised)] border rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:border-transparent transition-all text-[var(--ds-text-1)]'
 
@@ -2207,6 +2260,8 @@ function ImportExportModal({ users, onImport, onClose }: {
       if (fileRef.current) fileRef.current.value = ''
     } finally { setImporting(false) }
   }
+
+  useModalHotkeys(true, handleImport, onClose)
 
   const TABS: { key: ImportTab; label: string; icon: string }[] = [
     { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
@@ -2646,6 +2701,8 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
     } finally { setImporting(false) }
   }
 
+  useModalHotkeys(true, handleImport, onClose)
+
   const TABS: { key: ImportTab; label: string; icon: string }[] = [
     { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
     { key: 'csv',   label: 'CSV (.csv)',    icon: 'description' },
@@ -2995,6 +3052,8 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
       if (fileRef.current) fileRef.current.value = ''
     } finally { setImporting(false) }
   }
+
+  useModalHotkeys(true, handleImport, onClose)
 
   const TABS: { key: ImportTab; label: string; icon: string }[] = [
     { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
@@ -3438,10 +3497,12 @@ function UsersTab() {
       qc.invalidateQueries({ queryKey: ['users'] })
       setEditUser(null)
     } catch (e: unknown) {
-      const resp = (e as { response?: { data?: { message?: string; errors?: { email?: string[]; alias?: string[] } } } })?.response?.data
-      setEditErr(resp?.message ?? resp?.errors?.email?.[0] ?? resp?.errors?.alias?.[0] ?? 'Failed to save changes.')
+      const resp = (e as { response?: { data?: { message?: string; errors?: { name?: string[]; email?: string[]; alias?: string[] } } } })?.response?.data
+      setEditErr(resp?.errors?.name?.[0] ?? resp?.errors?.email?.[0] ?? resp?.errors?.alias?.[0] ?? resp?.message ?? 'Failed to save changes.')
     } finally { setSaving(false) }
   }
+
+  useModalHotkeys(!!editUser, handleSave, () => setEditUser(null))
 
   function toggleBuilding(id: number) {
     setBldIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -3468,6 +3529,12 @@ function UsersTab() {
       setDeleteUserErr(msg ?? 'Failed to delete user.')
     } finally { setDeletingUser(false) }
   }
+
+  useModalHotkeys(
+    !!deleteUserTarget,
+    deleteUserTarget && confirmUserInput === deleteUserTarget.name ? handleDeleteUser : undefined,
+    () => { setDeleteUserTarget(null); setConfirmUserInput('') },
+  )
 
   async function handleImport(rows: ImportRow[]) {
     const result = await importUsers(rows)
@@ -4530,55 +4597,9 @@ function SettingsTab() {
   const [m365TestResult, setM365TestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [m365TestingEmail, setM365TestingEmail] = useState(false)
   const [m365EmailTestResult, setM365EmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
-  const [smtpHost, setSmtpHost] = useState('')
-  const [smtpPort, setSmtpPort] = useState(587)
-  const [smtpEncryption, setSmtpEncryption] = useState<'tls' | 'ssl' | 'none'>('tls')
-  const [smtpUsername, setSmtpUsername] = useState('')
-  const [smtpPassword, setSmtpPassword] = useState('')
-  const [smtpFromName, setSmtpFromName] = useState('')
-  const [smtpSaving, setSmtpSaving] = useState(false)
-  const [smtpTesting, setSmtpTesting] = useState(false)
-  const [smtpTestResult, setSmtpTestResult] = useState<{ success: boolean; message: string } | null>(null)
   useEffect(() => {
     if (m365) { setM365TenantId(m365.tenant_id); setM365ClientId(m365.client_id); setM365SenderEmail(m365.sender_email) }
   }, [m365?.tenant_id, m365?.client_id, m365?.sender_email])
-  useEffect(() => {
-    if (m365) {
-      setSmtpHost(m365.smtp_host); setSmtpPort(m365.smtp_port); setSmtpEncryption(m365.smtp_encryption)
-      setSmtpUsername(m365.smtp_username); setSmtpFromName(m365.smtp_from_name)
-    }
-  }, [m365?.smtp_host, m365?.smtp_port, m365?.smtp_encryption, m365?.smtp_username, m365?.smtp_from_name])
-  async function saveSmtp() {
-    setSmtpSaving(true)
-    try {
-      // From Address always mirrors Username — Gmail (and most SMTP providers) reject or silently
-      // override a From address that doesn't match the authenticated account.
-      const patch: { smtp_host: string; smtp_port: number; smtp_encryption: 'tls' | 'ssl' | 'none'; smtp_username: string; smtp_from_address: string; smtp_from_name: string; smtp_password?: string } = {
-        smtp_host: smtpHost, smtp_port: smtpPort, smtp_encryption: smtpEncryption, smtp_username: smtpUsername, smtp_from_address: smtpUsername, smtp_from_name: smtpFromName,
-      }
-      if (smtpPassword) patch.smtp_password = smtpPassword
-      await updateM365Settings(patch)
-      setSmtpPassword('')
-      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
-      addInfoToast('SMTP settings saved')
-    } catch {
-      addInfoToast('Failed to save SMTP settings')
-    } finally {
-      setSmtpSaving(false)
-    }
-  }
-  async function handleSendSmtpTestEmail() {
-    setSmtpTesting(true)
-    setSmtpTestResult(null)
-    try {
-      const res = await sendSmtpTestEmail()
-      setSmtpTestResult(res)
-    } catch (err: any) {
-      setSmtpTestResult({ success: false, message: err?.response?.data?.message ?? 'Test failed — please try again.' })
-    } finally {
-      setSmtpTesting(false)
-    }
-  }
   async function saveM365() {
     setM365Saving(true)
     setM365TestResult(null)
@@ -4615,15 +4636,6 @@ function SettingsTab() {
       addInfoToast(v ? 'App emails will now send via Microsoft 365' : 'App emails switched back to the default mailer')
     } catch {
       addInfoToast('Failed to update mail switch')
-    }
-  }
-  async function changeMailFallbackDriver(driver: 'smtp' | 'log' | 'array') {
-    try {
-      await updateM365Settings({ mail_fallback_driver: driver })
-      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
-      addInfoToast('Fallback mailer updated')
-    } catch {
-      addInfoToast('Failed to update fallback mailer')
     }
   }
   async function toggleM365CalendarSync() {
@@ -5767,94 +5779,6 @@ function SettingsTab() {
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-4 pt-1">
-            <div>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)]">When Microsoft 365 mail is off, send via</p>
-              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">Used whenever the switch above is off — no <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">.env</code> edit needed.</p>
-            </div>
-            <select
-              value={m365?.mail_fallback_driver ?? 'smtp'}
-              onChange={e => changeMailFallbackDriver(e.target.value as 'smtp' | 'log' | 'array')}
-              className="shrink-0 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-black uppercase text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-            >
-              <option value="smtp">SMTP (Gmail)</option>
-              <option value="log">Log only (dev)</option>
-              <option value="array">Discard (testing)</option>
-            </select>
-          </div>
-
-          {m365?.mail_fallback_driver === 'smtp' && (
-            <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)]">SMTP Connection</p>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Host</label>
-                  <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com"
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Port &amp; Encryption</label>
-                  <select
-                    value={`${smtpPort}|${smtpEncryption}`}
-                    onChange={e => {
-                      const [port, enc] = e.target.value.split('|')
-                      setSmtpPort(Number(port))
-                      setSmtpEncryption(enc as 'tls' | 'ssl')
-                    }}
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-                  >
-                    <option value="587|tls">587 (TLS) — recommended</option>
-                    <option value="465|ssl">465 (SSL)</option>
-                  </select>
-                  <p className="text-[10px] text-[var(--ds-text-3)] px-1">Port and encryption always change together — Gmail (and most providers) only accept these two pairings.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Username</label>
-                  <input type="text" value={smtpUsername} onChange={e => setSmtpUsername(e.target.value)} placeholder="you@gmail.com"
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Password</label>
-                  <input type="password" value={smtpPassword} onChange={e => setSmtpPassword(e.target.value)}
-                    placeholder={m365?.smtp_has_password ? '•••••••• (already set — type to replace)' : 'App password'}
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                  <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. Leave blank when saving to keep the current password unchanged.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Address</label>
-                  <input type="text" value={smtpUsername} disabled readOnly
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-3)] opacity-60 cursor-not-allowed" />
-                  <p className="text-[10px] text-[var(--ds-text-3)] px-1">Always the same as Username — Gmail silently overrides a different From address anyway.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Name</label>
-                  <input type="text" value={smtpFromName} onChange={e => setSmtpFromName(e.target.value)} placeholder="RoomSync Pro"
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={saveSmtp} disabled={smtpSaving}
-                  className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-50">
-                  {smtpSaving ? 'Saving...' : 'Save SMTP Settings'}
-                </button>
-                <button type="button" onClick={handleSendSmtpTestEmail} disabled={smtpTesting || !m365?.smtp_has_password}
-                  title={!m365?.smtp_has_password ? 'Save Host, Username and Password first' : ''}
-                  className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50">
-                  {smtpTesting ? 'Sending...' : 'Send Test Email'}
-                </button>
-                <span className="text-[10px] text-[var(--ds-text-3)]">Sends to your own account email, using whatever is currently saved.</span>
-              </div>
-              {smtpTestResult && (
-                <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
-                  style={smtpTestResult.success
-                    ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
-                    : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
-                >
-                  {smtpTestResult.message}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Calendar sync switch */}
@@ -6274,6 +6198,12 @@ function SensorTab() {
     } finally { setRegenTokenLoading(false) }
   }
 
+  useModalHotkeys(
+    regenTokenModal,
+    regenTokenInput === 'Regenerate' ? handleRegenToken : undefined,
+    () => { setRegenTokenModal(false); setRegenTokenInput('') },
+  )
+
   async function handleRegenCode(room: Room) {
     setRegeneratingSensor(room.id)
     try {
@@ -6510,7 +6440,6 @@ function SensorTab() {
                   onChange={e => setRegenTokenInput(e.target.value)}
                   placeholder="Regenerate"
                   autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter' && regenTokenInput === 'Regenerate') handleRegenToken() }}
                   className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
                 />
               </div>
@@ -6797,6 +6726,9 @@ export default function AdminPage() {
       setExportModal(false)
     } finally { setExporting(false) }
   }
+
+  useModalHotkeys(exportModal, handleExport, () => setExportModal(false))
+  useModalHotkeys(chartSettingsOpen, undefined, () => setChartSettingsOpen(false))
 
   function SectionPill({ value, onChange }: { value: SectionPeriod; onChange: (v: SectionPeriod) => void }) {
     return (

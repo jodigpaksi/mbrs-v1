@@ -163,7 +163,7 @@ class KioskController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name'              => 'required|string|max:255',
+            'name'              => 'required|string|max:255|unique:kiosk_configs,name',
             'slug'              => 'nullable|string|max:40|regex:/^[a-z0-9][a-z0-9-]*$/|unique:kiosk_configs,slug',
             'room_id'           => 'nullable|exists:rooms,id',
             'pin'               => 'nullable|digits:4',
@@ -172,6 +172,7 @@ class KioskController extends Controller
             'resolution'        => 'nullable|array',
             'active'            => 'boolean',
         ], [
+            'name.unique' => 'A kiosk with that name already exists.',
             'slug.regex'  => 'Custom ID may only contain lowercase letters, numbers and hyphens.',
             'slug.unique' => 'That Custom ID is already taken.',
             'pin.digits'  => 'PIN must be exactly 4 digits.',
@@ -185,7 +186,7 @@ class KioskController extends Controller
     {
         $kiosk = KioskConfig::findOrFail($id);
         $data  = $request->validate([
-            'name'              => 'sometimes|string|max:255',
+            'name'              => ['sometimes', 'string', 'max:255', \Illuminate\Validation\Rule::unique('kiosk_configs', 'name')->ignore($kiosk->id)],
             'slug'              => ['sometimes', 'nullable', 'string', 'max:40', 'regex:/^[a-z0-9][a-z0-9-]*$/', \Illuminate\Validation\Rule::unique('kiosk_configs', 'slug')->ignore($kiosk->id)],
             'room_id'           => 'sometimes|nullable|exists:rooms,id',
             'pin'               => 'sometimes|nullable|digits:4',
@@ -194,6 +195,7 @@ class KioskController extends Controller
             'resolution'        => 'sometimes|nullable|array',
             'active'            => 'sometimes|boolean',
         ], [
+            'name.unique' => 'A kiosk with that name already exists.',
             'slug.regex'  => 'Custom ID may only contain lowercase letters, numbers and hyphens.',
             'slug.unique' => 'That Custom ID is already taken.',
             'pin.digits'  => 'PIN must be exactly 4 digits.',
