@@ -190,10 +190,6 @@ class BookingController extends Controller
             $query->where('user_id', $request->user_id);
         }
 
-        if ($request->series_id) {
-            $query->where('series_id', $request->series_id);
-        }
-
         if ($request->special_rooms) {
             $query->whereHas('room', fn($q) => $q->where('requires_contact', true));
         }
@@ -409,8 +405,6 @@ class BookingController extends Controller
             'series_id'             => 'nullable|string|max:36',
             'series_skipped_dates'  => 'nullable|array',
             'series_skipped_dates.*'=> 'date_format:Y-m-d',
-            'resolves_series_id'    => 'nullable|string|max:36',
-            'resolves_skipped_date' => 'nullable|date_format:Y-m-d',
             'booked_for'            => 'nullable|string|max:100',
             'booked_for_user_id' => 'nullable|exists:users,id',
         ]);

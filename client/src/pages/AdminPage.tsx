@@ -16,7 +16,7 @@ import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, 
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
-import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto, getM365Settings, updateM365Settings, testM365Connection, sendM365TestEmail, sendSmtpTestEmail } from '../api/settings'
+import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto, getM365Settings, updateM365Settings, testM365Connection, sendM365TestEmail } from '../api/settings'
 import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive } from '../api/archive'
 import type { ArchiveParams } from '../api/archive'
 import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBackupExports } from '../api/backup'
@@ -4430,7 +4430,6 @@ const SETTINGS_SECTIONS = [
   { key: 'rules',    label: 'Booking Rules',  icon: 'rule' },
   { key: 'ghost',    label: 'Anti-Ghost',     icon: 'person_off' },
   { key: 'features', label: 'Features',       icon: 'tune' },
-  { key: 'm365',     label: 'Microsoft 365',  icon: 'cloud' },
   { key: 'archive',  label: 'Archive',         icon: 'inventory_2' },
   { key: 'backup',   label: 'Auto Backup',     icon: 'backup' },
 ] as const
@@ -4442,7 +4441,7 @@ function SettingsTab() {
   const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ branding: null, hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, m365: null, archive: null, backup: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ branding: null, hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, archive: null, backup: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
@@ -4530,55 +4529,9 @@ function SettingsTab() {
   const [m365TestResult, setM365TestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [m365TestingEmail, setM365TestingEmail] = useState(false)
   const [m365EmailTestResult, setM365EmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
-  const [smtpHost, setSmtpHost] = useState('')
-  const [smtpPort, setSmtpPort] = useState(587)
-  const [smtpEncryption, setSmtpEncryption] = useState<'tls' | 'ssl' | 'none'>('tls')
-  const [smtpUsername, setSmtpUsername] = useState('')
-  const [smtpPassword, setSmtpPassword] = useState('')
-  const [smtpFromName, setSmtpFromName] = useState('')
-  const [smtpSaving, setSmtpSaving] = useState(false)
-  const [smtpTesting, setSmtpTesting] = useState(false)
-  const [smtpTestResult, setSmtpTestResult] = useState<{ success: boolean; message: string } | null>(null)
   useEffect(() => {
     if (m365) { setM365TenantId(m365.tenant_id); setM365ClientId(m365.client_id); setM365SenderEmail(m365.sender_email) }
   }, [m365?.tenant_id, m365?.client_id, m365?.sender_email])
-  useEffect(() => {
-    if (m365) {
-      setSmtpHost(m365.smtp_host); setSmtpPort(m365.smtp_port); setSmtpEncryption(m365.smtp_encryption)
-      setSmtpUsername(m365.smtp_username); setSmtpFromName(m365.smtp_from_name)
-    }
-  }, [m365?.smtp_host, m365?.smtp_port, m365?.smtp_encryption, m365?.smtp_username, m365?.smtp_from_name])
-  async function saveSmtp() {
-    setSmtpSaving(true)
-    try {
-      // From Address always mirrors Username — Gmail (and most SMTP providers) reject or silently
-      // override a From address that doesn't match the authenticated account.
-      const patch: { smtp_host: string; smtp_port: number; smtp_encryption: 'tls' | 'ssl' | 'none'; smtp_username: string; smtp_from_address: string; smtp_from_name: string; smtp_password?: string } = {
-        smtp_host: smtpHost, smtp_port: smtpPort, smtp_encryption: smtpEncryption, smtp_username: smtpUsername, smtp_from_address: smtpUsername, smtp_from_name: smtpFromName,
-      }
-      if (smtpPassword) patch.smtp_password = smtpPassword
-      await updateM365Settings(patch)
-      setSmtpPassword('')
-      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
-      addInfoToast('SMTP settings saved')
-    } catch {
-      addInfoToast('Failed to save SMTP settings')
-    } finally {
-      setSmtpSaving(false)
-    }
-  }
-  async function handleSendSmtpTestEmail() {
-    setSmtpTesting(true)
-    setSmtpTestResult(null)
-    try {
-      const res = await sendSmtpTestEmail()
-      setSmtpTestResult(res)
-    } catch (err: any) {
-      setSmtpTestResult({ success: false, message: err?.response?.data?.message ?? 'Test failed — please try again.' })
-    } finally {
-      setSmtpTesting(false)
-    }
-  }
   async function saveM365() {
     setM365Saving(true)
     setM365TestResult(null)
@@ -4615,15 +4568,6 @@ function SettingsTab() {
       addInfoToast(v ? 'App emails will now send via Microsoft 365' : 'App emails switched back to the default mailer')
     } catch {
       addInfoToast('Failed to update mail switch')
-    }
-  }
-  async function changeMailFallbackDriver(driver: 'smtp' | 'log' | 'array') {
-    try {
-      await updateM365Settings({ mail_fallback_driver: driver })
-      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
-      addInfoToast('Fallback mailer updated')
-    } catch {
-      addInfoToast('Failed to update fallback mailer')
     }
   }
   async function toggleM365CalendarSync() {
@@ -4812,8 +4756,7 @@ function SettingsTab() {
         await saveGeneral({ anti_ghost_enabled: true }, 'Anti-ghost booking enabled')
       }
     } else {
-      setWebConfirmEnabled(false)
-      await saveGeneral({ anti_ghost_enabled: false, web_confirm_enabled: false }, 'Anti-ghost booking disabled')
+      await saveGeneral({ anti_ghost_enabled: false }, 'Anti-ghost booking disabled')
     }
   }
   async function toggleMethod(key: 'kiosk' | 'sensor' | 'web') {
@@ -5156,6 +5099,175 @@ function SettingsTab() {
             <li>Rename it to <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">favicon.svg</code>.</li>
             <li>Replace the file at <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">client/public/favicon.svg</code>.</li>
             <li>Rebuild the frontend (<code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">npm run build</code>) for the change to take effect.</li>
+          </ol>
+        </div>
+      </div>
+
+      {/* Microsoft 365 Integration */}
+      <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Microsoft 365 Integration</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">
+            Azure AD App Registration credentials, shared by future Teams, Email, and Outlook Calendar integrations.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Tenant ID</label>
+            <input
+              type="text"
+              value={m365TenantId}
+              onChange={e => setM365TenantId(e.target.value)}
+              placeholder="e.g. 3f2a1b8c-....-....-....-............"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client ID (Application ID)</label>
+            <input
+              type="text"
+              value={m365ClientId}
+              onChange={e => setM365ClientId(e.target.value)}
+              placeholder="e.g. 7c9d4e21-....-....-....-............"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client Secret</label>
+            <input
+              type="password"
+              value={m365ClientSecret}
+              onChange={e => setM365ClientSecret(e.target.value)}
+              placeholder={m365?.has_secret ? '•••••••• (already set — type to replace)' : 'Paste the client secret value'}
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+            <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. Leave blank when saving to keep the current secret unchanged.</p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Sender Mailbox</label>
+            <input
+              type="text"
+              value={m365SenderEmail}
+              onChange={e => setM365SenderEmail(e.target.value)}
+              placeholder="e.g. noreply@agc.com"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+            <p className="text-[10px] text-[var(--ds-text-3)] px-1">A real, licensed mailbox in this tenant that the app will send email as. Must have Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Mail.Send</code> permission granted.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={saveM365}
+            disabled={m365Saving}
+            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-50"
+          >
+            {m365Saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={handleTestM365}
+            disabled={m365Testing || !m365?.configured}
+            title={!m365?.configured ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
+            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+          >
+            {m365Testing ? 'Testing...' : 'Test Connection'}
+          </button>
+          {m365?.configured && (
+            <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex items-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+              Credentials saved
+            </span>
+          )}
+        </div>
+
+        {m365TestResult && (
+          <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
+            style={m365TestResult.success
+              ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
+              : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
+          >
+            {m365TestResult.message}
+          </div>
+        )}
+
+        {/* Email sending switch */}
+        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Send app emails via Microsoft 365</p>
+              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+                When off, the app keeps using its current mailer. Only flip this on once Test Connection succeeds <em>and</em> the Sender Mailbox has Mail.Send permission and a real license.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleM365MailEnabled}
+              disabled={!m365?.mail_ready}
+              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.mail_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
+            >
+              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.mail_enabled ? 26 : 4 }} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleSendM365TestEmail}
+              disabled={m365TestingEmail || !m365?.mail_ready}
+              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
+              className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+            >
+              {m365TestingEmail ? 'Sending...' : 'Send Test Email'}
+            </button>
+            <span className="text-[10px] text-[var(--ds-text-3)]">Sends to your own account email, regardless of the switch above.</span>
+          </div>
+
+          {m365EmailTestResult && (
+            <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
+              style={m365EmailTestResult.success
+                ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
+                : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
+            >
+              {m365EmailTestResult.message}
+            </div>
+          )}
+        </div>
+
+        {/* Calendar sync switch */}
+        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Sync new bookings to Outlook/Teams Calendar</p>
+              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+                Every booking automatically becomes a calendar event in the booker's mailbox — it shows up in both Outlook and Teams (same calendar, no extra setup). Requires Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Calendars.ReadWrite</code> permission on the App Registration. Edits/cancellations don't sync back yet — only booking creation.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleM365CalendarSync}
+              disabled={!m365?.calendar_sync_ready}
+              title={!m365?.calendar_sync_ready ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.calendar_sync_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
+            >
+              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.calendar_sync_enabled ? 26 : 4 }} />
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>info</span>
+            <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: '#6366f1' }}>Where to get these values</p>
+          </div>
+          <ol className="text-[11px] text-[var(--ds-text-2)] leading-relaxed list-decimal list-inside space-y-1">
+            <li>Go to <strong>entra.microsoft.com</strong> → <strong>App registrations</strong> → <strong>New registration</strong>.</li>
+            <li>After creating it, copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from its Overview page.</li>
+            <li>Go to <strong>Certificates &amp; secrets</strong> → <strong>New client secret</strong> — copy the secret <strong>Value</strong> (shown once).</li>
+            <li>Under <strong>API permissions</strong>, add the Microsoft Graph application permissions this app will need (e.g. <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Mail.Send</code>, <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Calendars.ReadWrite</code>), then click <strong>Grant admin consent</strong>.</li>
           </ol>
         </div>
       </div>
@@ -5631,264 +5743,6 @@ function SettingsTab() {
               </button>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* Microsoft 365 Integration */}
-      <div ref={el => { secRefs.current.m365 = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
-        <div>
-          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Microsoft 365 Integration</p>
-          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">
-            Azure AD App Registration credentials, shared by future Teams, Email, and Outlook Calendar integrations.
-          </p>
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Tenant ID</label>
-            <input
-              type="text"
-              value={m365TenantId}
-              onChange={e => setM365TenantId(e.target.value)}
-              placeholder="e.g. 3f2a1b8c-....-....-....-............"
-              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client ID (Application ID)</label>
-            <input
-              type="text"
-              value={m365ClientId}
-              onChange={e => setM365ClientId(e.target.value)}
-              placeholder="e.g. 7c9d4e21-....-....-....-............"
-              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client Secret</label>
-            <input
-              type="password"
-              value={m365ClientSecret}
-              onChange={e => setM365ClientSecret(e.target.value)}
-              placeholder={m365?.has_secret ? '•••••••• (already set — type to replace)' : 'Paste the client secret value'}
-              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-            />
-            <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. Leave blank when saving to keep the current secret unchanged.</p>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Sender Mailbox</label>
-            <input
-              type="text"
-              value={m365SenderEmail}
-              onChange={e => setM365SenderEmail(e.target.value)}
-              placeholder="e.g. noreply@agc.com"
-              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-            />
-            <p className="text-[10px] text-[var(--ds-text-3)] px-1">A real, licensed mailbox in this tenant that the app will send email as. Must have Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Mail.Send</code> permission granted.</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={saveM365}
-            disabled={m365Saving}
-            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-50"
-          >
-            {m365Saving ? 'Saving...' : 'Save'}
-          </button>
-          <button
-            type="button"
-            onClick={handleTestM365}
-            disabled={m365Testing || !m365?.configured}
-            title={!m365?.configured ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
-            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
-          >
-            {m365Testing ? 'Testing...' : 'Test Connection'}
-          </button>
-          {m365?.configured && (
-            <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex items-center gap-1">
-              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
-              Credentials saved
-            </span>
-          )}
-        </div>
-
-        {m365TestResult && (
-          <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
-            style={m365TestResult.success
-              ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
-              : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
-          >
-            {m365TestResult.message}
-          </div>
-        )}
-
-        {/* Email sending switch */}
-        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Send app emails via Microsoft 365</p>
-              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
-                When off, the app keeps using its current mailer. Only flip this on once Test Connection succeeds <em>and</em> the Sender Mailbox has Mail.Send permission and a real license.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={toggleM365MailEnabled}
-              disabled={!m365?.mail_ready}
-              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
-              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.mail_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
-            >
-              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.mail_enabled ? 26 : 4 }} />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={handleSendM365TestEmail}
-              disabled={m365TestingEmail || !m365?.mail_ready}
-              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
-              className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
-            >
-              {m365TestingEmail ? 'Sending...' : 'Send Test Email'}
-            </button>
-            <span className="text-[10px] text-[var(--ds-text-3)]">Sends to your own account email, regardless of the switch above.</span>
-          </div>
-
-          {m365EmailTestResult && (
-            <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
-              style={m365EmailTestResult.success
-                ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
-                : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
-            >
-              {m365EmailTestResult.message}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-4 pt-1">
-            <div>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)]">When Microsoft 365 mail is off, send via</p>
-              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">Used whenever the switch above is off — no <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">.env</code> edit needed.</p>
-            </div>
-            <select
-              value={m365?.mail_fallback_driver ?? 'smtp'}
-              onChange={e => changeMailFallbackDriver(e.target.value as 'smtp' | 'log' | 'array')}
-              className="shrink-0 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-black uppercase text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-            >
-              <option value="smtp">SMTP (Gmail)</option>
-              <option value="log">Log only (dev)</option>
-              <option value="array">Discard (testing)</option>
-            </select>
-          </div>
-
-          {m365?.mail_fallback_driver === 'smtp' && (
-            <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)]">SMTP Connection</p>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Host</label>
-                  <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com"
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Port &amp; Encryption</label>
-                  <select
-                    value={`${smtpPort}|${smtpEncryption}`}
-                    onChange={e => {
-                      const [port, enc] = e.target.value.split('|')
-                      setSmtpPort(Number(port))
-                      setSmtpEncryption(enc as 'tls' | 'ssl')
-                    }}
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-                  >
-                    <option value="587|tls">587 (TLS) — recommended</option>
-                    <option value="465|ssl">465 (SSL)</option>
-                  </select>
-                  <p className="text-[10px] text-[var(--ds-text-3)] px-1">Port and encryption always change together — Gmail (and most providers) only accept these two pairings.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Username</label>
-                  <input type="text" value={smtpUsername} onChange={e => setSmtpUsername(e.target.value)} placeholder="you@gmail.com"
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Password</label>
-                  <input type="password" value={smtpPassword} onChange={e => setSmtpPassword(e.target.value)}
-                    placeholder={m365?.smtp_has_password ? '•••••••• (already set — type to replace)' : 'App password'}
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                  <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. Leave blank when saving to keep the current password unchanged.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Address</label>
-                  <input type="text" value={smtpUsername} disabled readOnly
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-3)] opacity-60 cursor-not-allowed" />
-                  <p className="text-[10px] text-[var(--ds-text-3)] px-1">Always the same as Username — Gmail silently overrides a different From address anyway.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Name</label>
-                  <input type="text" value={smtpFromName} onChange={e => setSmtpFromName(e.target.value)} placeholder="RoomSync Pro"
-                    className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={saveSmtp} disabled={smtpSaving}
-                  className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-50">
-                  {smtpSaving ? 'Saving...' : 'Save SMTP Settings'}
-                </button>
-                <button type="button" onClick={handleSendSmtpTestEmail} disabled={smtpTesting || !m365?.smtp_has_password}
-                  title={!m365?.smtp_has_password ? 'Save Host, Username and Password first' : ''}
-                  className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50">
-                  {smtpTesting ? 'Sending...' : 'Send Test Email'}
-                </button>
-                <span className="text-[10px] text-[var(--ds-text-3)]">Sends to your own account email, using whatever is currently saved.</span>
-              </div>
-              {smtpTestResult && (
-                <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
-                  style={smtpTestResult.success
-                    ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
-                    : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
-                >
-                  {smtpTestResult.message}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Calendar sync switch */}
-        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Sync new bookings to Outlook/Teams Calendar</p>
-              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
-                Every booking automatically becomes a calendar event in the booker's mailbox — it shows up in both Outlook and Teams (same calendar, no extra setup). Requires Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Calendars.ReadWrite</code> permission on the App Registration. Edits/cancellations don't sync back yet — only booking creation.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={toggleM365CalendarSync}
-              disabled={!m365?.calendar_sync_ready}
-              title={!m365?.calendar_sync_ready ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
-              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.calendar_sync_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
-            >
-              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.calendar_sync_enabled ? 26 : 4 }} />
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>info</span>
-            <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: '#6366f1' }}>Where to get these values</p>
-          </div>
-          <ol className="text-[11px] text-[var(--ds-text-2)] leading-relaxed list-decimal list-inside space-y-1">
-            <li>Go to <strong>entra.microsoft.com</strong> → <strong>App registrations</strong> → <strong>New registration</strong>.</li>
-            <li>After creating it, copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from its Overview page.</li>
-            <li>Go to <strong>Certificates &amp; secrets</strong> → <strong>New client secret</strong> — copy the secret <strong>Value</strong> (shown once).</li>
-            <li>Under <strong>API permissions</strong>, add the Microsoft Graph application permissions this app will need (e.g. <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Mail.Send</code>, <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Calendars.ReadWrite</code>), then click <strong>Grant admin consent</strong>.</li>
-          </ol>
         </div>
       </div>
 
