@@ -5693,7 +5693,7 @@ function SettingsTab() {
               type="text"
               value={m365SenderEmail}
               onChange={e => setM365SenderEmail(e.target.value)}
-              placeholder="e.g. noreply@agc.com"
+              placeholder="e.g. noreply@domain.com"
               className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
             />
             <p className="text-[10px] text-[var(--ds-text-3)] px-1">A real, licensed mailbox in this tenant that the app will send email as. Must have Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Mail.Send</code> permission granted.</p>
