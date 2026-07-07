@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>RoomSync Pro — Extended</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <style>
+        * { font-family: 'Manrope', sans-serif; }
+        body { background-color: #f7f8f6; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 20px; }
+
+        /* ── GRID ── */
+        .grid-container { display: grid; grid-template-columns: 160px repeat(24, 64px); width: fit-content; }
+        .cell { height: 60px; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; position: relative; transition: background-color 0.1s; cursor: cell; }
+        .grid-row-group:hover .cell { background-color: #f1f7ff; }
+        .grid-row-group:hover .room-sticky { background-color: #eef3ff; }
+
+        /* ── BOOKING BARS ── */
+        .booked-bar { position: absolute; inset: 8px 5px; cursor: pointer; transition: all 0.2s ease; z-index: 10; border-radius: 10px; display: flex; align-items: center; padding: 0 12px; gap: 8px; overflow: hidden; }
+        .booked-bar:hover { transform: scale(1.02); filter: brightness(1.05); z-index: 30; }
+        .my-booking-bar { outline: 3px solid #3b82f6; outline-offset: -3px; }
+        .tentative-bar { background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.06) 4px, rgba(0,0,0,0.06) 8px); }
+
+        /* ── NOW LINE ── */
+        .now-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #ef4444; z-index: 25; pointer-events: none; }
+        .now-dot { position: absolute; top: 50%; left: -4px; transform: translateY(-50%); width: 10px; height: 10px; background: #ef4444; border-radius: 50%; }
+
+        /* ── STICKY ROOM COL ── */
+        .room-sticky { position: sticky; left: 0; z-index: 20; background: white; border-right: 2px solid #e2e8f0 !important; cursor: pointer; transition: background-color 0.1s; }
+
+        /* ── TOOLTIP ── */
+        #smartTooltip { position: fixed; z-index: 999; pointer-events: auto; width: 300px; background: rgba(10,14,26,0.97); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); border-radius: 1.5rem; color: white; opacity: 0; visibility: hidden; overflow: hidden; box-shadow: 0 25px 60px -10px rgba(0,0,0,0.6); transition: opacity 0.15s, transform 0.15s; transform: translateY(4px); }
+        #smartTooltip.visible { visibility: visible; opacity: 1; transform: translateY(0); }
+
+        /* ── PANELS ── */
+        #bookingPanel, #todayPanel { transition: transform 0.45s cubic-bezier(0.32, 0.72, 0, 1); }
+        #bookingOverlay { transition: opacity 0.35s ease; }
+
+        /* ── LIME BUTTON ── */
+        .btn-lime { background: #adee2b; color: #000; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
+        .btn-lime:hover { background: #000; color: #adee2b; }
+        .btn-lime:active { transform: scale(0.97); }
+        .btn-lime:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; transform: none; }
+
+        /* ── PILL TOGGLES ── */
+        .pill-toggle { display: flex; background: rgba(197,197,197,0.5); padding: 3px; border-radius: 9999px; border: 1px solid rgba(0,0,0,0.05); gap: 2px; }
+        .pill-btn { flex: 1; padding: 5px 0; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 9999px; transition: all 0.2s; color: #94a3b8; cursor: pointer; border: none; background: transparent; }
+        .pill-btn.active { background: white; color: #000; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .pill-btn.active-dark { background: #000; color: #adee2b; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+        /* ── MATERIAL SYMBOLS ── */
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; display: inline-block; line-height: 1; vertical-align: middle; }
+
+        /* ── MINI CALENDAR (My Schedule page) ── */
+        .mini-cal-day { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; color: #475569; }
+        .mini-cal-day:hover:not(.empty) { background: #f1f5f9; }
+        .mini-cal-day.today { background: #000; color: #adee2b !important; }
+        .mini-cal-day.has-booking { position: relative; }
+        .mini-cal-day.has-booking::after { content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: #adee2b; }
+        .mini-cal-day.selected:not(.today) { background: #adee2b; color: #000 !important; }
+        .mini-cal-day.empty { cursor: default; color: #cbd5e1; }
+        .mini-cal-day.other-month { color: #cbd5e1; }
+
+        /* ── CUSTOM DATE PICKER ── */
+        #datePicker { transition: all 0.2s cubic-bezier(0.32,0.72,0,1); transform-origin: top left; }
+        #datePicker.hidden { opacity: 0; transform: scale(0.95) translateY(-8px); pointer-events: none; }
+        #datePicker:not(.hidden) { opacity: 1; transform: scale(1) translateY(0); }
+        .dp-day { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.12s; color: #475569; }
+        .dp-day:hover:not(.empty):not(.other-month) { background: #f1f5f9; }
+        .dp-day.today { background: #000; color: #adee2b !important; }
+        .dp-day.selected:not(.today) { background: #adee2b; color: #000 !important; }
+        .dp-day.other-month { color: #e2e8f0; cursor: default; }
+        .dp-day.empty { cursor: default; }
+        .dp-day.has-event { position: relative; }
+        .dp-day.has-event::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 3px; height: 3px; border-radius: 50%; background: #adee2b; }
+
+        /* ── PAGE VIEW ── */
+        .page { display: none; }
+        .page.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+        /* ── ANIMATIONS ── */
+        @keyframes fadeSlideUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+        .anim-in { animation: fadeSlideUp 0.25s ease forwards; opacity: 0; }
+
+        /* ── NAV ACTIVE ── */
+        .nav-btn { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 10px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.15s; color: #94a3b8; cursor: pointer; border: none; background: transparent; }
+        .nav-btn:hover { background: #f8fafc; color: #475569; }
+        .nav-btn.active { background: #000; color: #adee2b; }
+
+        /* ── TODAY SCHEDULE SLIDER ── */
+        .today-sched-item { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid #f1f5f9; position: relative; }
+        .today-sched-item:last-child { border-bottom: none; }
+        .time-col { width: 52px; text-align: right; flex-shrink: 0; }
+        .sched-bar { width: 3px; border-radius: 9999px; flex-shrink: 0; margin: 2px 0; }
+        .sched-content { flex: 1; }
+
+        /* ── DEPT FILTER PILLS ── */
+        .dept-pill { padding: 5px 14px; border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; border: none; background: transparent; color: #94a3b8; transition: all 0.15s; }
+        .dept-pill.active { background: white; color: #000; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+        /* ── PHOTO SLIDER ── */
+        .rd-photo-slider { position: relative; height: 192px; overflow: hidden; }
+        .rd-photo-track { display: flex; height: 100%; transition: transform 0.4s cubic-bezier(0.32,0.72,0,1); }
+        .rd-photo-slide { min-width: 100%; height: 100%; object-fit: cover; flex-shrink: 0; }
+        .rd-photo-dots { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; z-index: 5; }
+        .rd-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); transition: all 0.2s; cursor: pointer; border: none; padding: 0; }
+        .rd-dot.active { background: white; width: 18px; border-radius: 3px; }
+        .rd-photo-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 5; background: rgba(0,0,0,0.35); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s; }
+        .rd-photo-btn:hover { background: rgba(0,0,0,0.6); }
+        .rd-photo-btn.prev { left: 10px; }
+        .rd-photo-btn.next { right: 10px; }
+
+        /* ── FAQ MODAL ── */
+        .faq-cat { padding: 4px 12px; border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; border: 0.5px solid #e2e8f0; background: white; color: #94a3b8; transition: all 0.15s; }
+        .faq-cat.active { background: #000; color: #adee2b; border-color: #000; }
+        .faq-item { border: 0.5px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 8px; transition: all 0.15s; }
+        .faq-item:hover { border-color: #adee2b; }
+        .faq-q { width: 100%; text-align: left; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; background: white; border: none; }
+        .faq-q-text { font-size: 12px; font-weight: 800; color: #1e293b; line-height: 1.4; }
+        .faq-icon { width: 22px; height: 22px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+        .faq-item.open .faq-icon { background: #adee2b; transform: rotate(45deg); }
+        .faq-a { max-height: 0; overflow: hidden; transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1); }
+        .faq-item.open .faq-a { max-height: 300px; }
+        .faq-a-inner { padding: 0 16px 14px; font-size: 12px; color: #64748b; line-height: 1.7; font-weight: 500; border-top: 0.5px solid #f1f5f9; padding-top: 12px; }
+        .faq-a-inner strong { color: #1e293b; font-weight: 800; }
+        .faq-empty { text-align: center; padding: 40px 0; color: #94a3b8; font-size: 12px; font-weight: 700; }
+
+        /* ── MY SCHEDULE PAGE CALENDAR ── */
+        .schedule-booking-card { border-radius: 16px; padding: 16px; cursor: pointer; transition: all 0.15s; }
+        .schedule-booking-card:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -4px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="text-slate-900 antialiased flex flex-col h-screen overflow-hidden">
+
+<!-- ══ OVERLAY ══ -->
+<div id="bookingOverlay" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] opacity-0 pointer-events-none" onclick="handleOverlayClick()"></div>
+
+<!-- ══════════════════════════════════════
+     BOOKING PANEL (right slide)
+══════════════════════════════════════ -->
+<div id="bookingPanel" class="fixed top-0 right-0 h-full w-[440px] bg-white text-slate-900 z-[110] translate-x-full flex flex-col shadow-[-20px_0_80px_rgba(0,0,0,0.08)] border-l border-slate-100">
+    <div class="p-7 pb-4 flex items-start justify-between shrink-0">
+        <div>
+            <p id="bookingPanelLabel" class="text-[9px] font-black text-slate-400 uppercase tracking-[0.25em] leading-none">Create Booking</p>
+            <h3 id="selectedRoomDisplay" class="text-3xl font-black italic tracking-tighter text-blue-600 leading-none uppercase mt-1">Select a Room</h3>
+        </div>
+        <button onclick="closeBookingPanel()" class="size-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-900 hover:text-[#adee2b] transition-all group">
+            <span class="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">close</span>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-hidden relative flex flex-col">
+        <!-- Pantry pull tab -->
+        <button onclick="togglePantry()" class="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-black text-[#adee2b] py-8 px-2 rounded-l-2xl shadow-xl flex flex-col items-center gap-3 hover:pr-3 transition-all">
+            <span class="material-symbols-outlined text-sm">flatware</span>
+            <span class="[writing-mode:vertical-lr] text-[9px] font-black uppercase tracking-widest">Pantry</span>
+        </button>
+
+        <!-- MAIN FORM -->
+        <div class="flex-1 overflow-y-auto px-7 space-y-4 custom-scrollbar pb-4">
+            <!-- Date & Time -->
+            <div class="bg-slate-50 p-5 rounded-[1.8rem] border border-slate-100 space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Start Date</label>
+                        <input type="date" id="bDate" class="w-full bg-white border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">End Date</label>
+                        <input type="date" id="bEndDate" class="w-full bg-white border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none">
+                    </div>
+                </div>
+                <div class="relative">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Start Time</label>
+                            <input type="time" id="startTime" onchange="calculateDuration()" class="w-full bg-white border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none">
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">End Time</label>
+                            <input type="time" id="endTime" onchange="calculateDuration()" class="w-full bg-white border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="mt-3 flex justify-center">
+                        <div id="durationBadge" class="bg-black text-[#adee2b] text-[10px] font-black px-5 py-1.5 rounded-full border border-[#adee2b]/20">0.0 HOURS</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Details -->
+            <div class="bg-slate-50 p-5 rounded-[1.8rem] border border-slate-100 space-y-3">
+                <div class="space-y-1.5">
+                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Meeting Title *</label>
+                    <input type="text" id="bTitle" placeholder="e.g. Brand Strategy 2026" oninput="validateForm()" class="w-full bg-white border-slate-200 rounded-xl text-xs font-bold p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none">
+                </div>
+                <div class="space-y-1.5">
+                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Description</label>
+                    <textarea rows="2" id="bDesc" placeholder="Agenda, notes..." class="w-full bg-white border-slate-200 rounded-xl text-[11px] font-medium p-2.5 focus:ring-2 focus:ring-[#adee2b] focus:outline-none resize-none"></textarea>
+                </div>
+                <div id="pantrySummary" class="hidden">
+                    <button onclick="togglePantryDetails()" class="w-full flex items-center justify-between bg-slate-900 text-[#adee2b] px-4 py-3 rounded-2xl hover:scale-[1.01] transition-all">
+                        <div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm">shopping_bag</span><span class="text-[9px] font-black uppercase tracking-widest">Pantry Request Added</span></div>
+                        <div class="flex items-center gap-2"><span id="pantryItemCount" class="text-[9px] font-black bg-[#adee2b] text-black rounded-full w-5 h-5 flex items-center justify-center">0</span><span class="material-symbols-outlined text-sm">expand_more</span></div>
+                    </button>
+                    <div id="pantryDetailsPopover" class="hidden mt-2 bg-white border border-slate-100 shadow-xl rounded-2xl p-3 space-y-2"><div id="pantryDetailsList"></div></div>
+                </div>
+            </div>
+            <!-- Options -->
+            <div class="bg-slate-50 p-5 rounded-[1.8rem] border border-slate-100 space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Type</label>
+                        <div class="pill-toggle" id="toggleType">
+                            <button class="pill-btn active" onclick="setPill('toggleType',this)">Internal</button>
+                            <button class="pill-btn" onclick="setPill('toggleType',this)">External</button>
+                        </div>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Status</label>
+                        <div class="pill-toggle" id="toggleStatus">
+                            <button class="pill-btn active-dark" onclick="setPillDark('toggleStatus',this)">Confirm</button>
+                            <button class="pill-btn" onclick="setPillDark('toggleStatus',this)">Tentative</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-1.5">
+                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat Schedule</label>
+                    <div class="pill-toggle" id="toggleRepeat">
+                        <button class="pill-btn active" onclick="setRepeat('none',this)">None</button>
+                        <button class="pill-btn" onclick="setRepeat('daily',this)">Daily</button>
+                        <button class="pill-btn" onclick="setRepeat('weekly',this)">Weekly</button>
+                    </div>
+                </div>
+                <div id="repeatOptsWrap" class="hidden bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1" id="repeatEveryLabel">Every # Days</label>
+                            <div class="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                                <button type="button" onclick="adjRepeat(-1)" class="px-3 py-2 text-slate-400 hover:text-black text-sm font-black">−</button>
+                                <span id="repeatN" class="flex-1 text-center text-xs font-black">1</span>
+                                <button type="button" onclick="adjRepeat(1)" class="px-3 py-2 text-slate-400 hover:text-black text-sm font-black">+</button>
+                            </div>
+                        </div>
+                        <div class="space-y-1.5">
+                            <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat End Date</label>
+                            <input type="date" id="repeatEndDate" class="w-full bg-slate-50 border-slate-200 rounded-xl text-xs font-bold p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none">
+                        </div>
+                    </div>
+                    <div id="repeatWeekDays" class="hidden space-y-1.5">
+                        <label class="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Repeat Days</label>
+                        <div class="flex gap-1">
+                            <button type="button" onclick="toggleDay(this)" class="wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">Mon</button>
+                            <button type="button" onclick="toggleDay(this)" class="wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">Tue</button>
+                            <button type="button" onclick="toggleDay(this)" class="wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">Wed</button>
+                            <button type="button" onclick="toggleDay(this)" class="wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">Thu</button>
+                            <button type="button" onclick="toggleDay(this)" class="wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">Fri</button>
+                            <button type="button" onclick="toggleDay(this)" class="wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">Sat</button>
+                            <button type="button" onclick="toggleDay(this)" class="wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase bg-slate-100 text-slate-400 hover:bg-slate-200 transition-colors">Sun</button>
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input type="checkbox" id="skipConflicts" class="sr-only peer">
+                        <span class="w-4 h-4 rounded border-2 border-slate-300 peer-checked:bg-black peer-checked:border-black flex items-center justify-center transition-all shrink-0 bg-white">
+                            <span class="material-symbols-outlined text-[#adee2b] hidden peer-checked:block" style="font-size:10px">check</span>
+                        </span>
+                        <span class="text-[10px] font-black uppercase text-slate-500">Skip past conflicts</span>
+                    </label>
+                </div>
+            </div>
+            <!-- Availability -->
+            <div id="availabilityCard" class="flex items-center gap-3 px-4 py-3 rounded-2xl border border-slate-100 bg-slate-50">
+                <div id="availIcon" class="size-8 rounded-xl bg-slate-200 flex items-center justify-center text-slate-400 shrink-0"><span class="material-symbols-outlined text-base">sync</span></div>
+                <div>
+                    <p id="availStatus" class="text-[9px] font-black uppercase tracking-widest text-slate-400">Fill in time to check availability</p>
+                    <p id="availNote" class="text-[9px] text-slate-400 mt-0.5"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANTRY SLIDE -->
+        <div id="pantrySlide" class="absolute inset-0 bg-white z-30 translate-x-full transition-transform duration-500 flex flex-col border-l-4 border-[#adee2b]">
+            <div class="p-6 flex items-center justify-between border-b shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b]"><span class="material-symbols-outlined text-base">flatware</span></div>
+                    <h4 class="font-black uppercase tracking-tighter text-xl italic">Pantry Order</h4>
+                </div>
+                <button onclick="togglePantry()" class="size-8 bg-slate-100 rounded-full flex items-center justify-center hover:bg-black hover:text-[#adee2b] transition-all"><span class="material-symbols-outlined text-sm">arrow_back</span></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar bg-slate-50/50">
+                <div>
+                    <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1 mb-3">Hot Beverages</p>
+                    <div class="space-y-3">
+                        <div class="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3"><div class="size-10 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center"><span class="material-symbols-outlined text-lg">coffee</span></div><span class="text-xs font-black uppercase">Coffee</span></div>
+                                <div class="flex items-center bg-slate-100 rounded-full p-1 gap-1">
+                                    <button onclick="changeQty('coffeeQty',-1)" class="size-7 flex items-center justify-center text-sm font-black hover:bg-white rounded-full transition-colors">−</button>
+                                    <span id="coffeeQty" class="w-6 text-center text-xs font-black">2</span>
+                                    <button onclick="changeQty('coffeeQty',1)" class="size-7 flex items-center justify-center text-sm font-black hover:bg-white rounded-full transition-colors">+</button>
+                                </div>
+                            </div>
+                            <div class="pill-toggle" id="coffeeSugar"><button class="pill-btn active" onclick="setPill('coffeeSugar',this)">No Sugar</button><button class="pill-btn" onclick="setPill('coffeeSugar',this)">Less</button><button class="pill-btn" onclick="setPill('coffeeSugar',this)">Normal</button></div>
+                        </div>
+                        <div class="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3"><div class="size-10 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center"><span class="material-symbols-outlined text-lg">emoji_food_beverage</span></div><span class="text-xs font-black uppercase">Tea</span></div>
+                                <div class="flex items-center bg-slate-100 rounded-full p-1 gap-1">
+                                    <button onclick="changeQty('teaQty',-1)" class="size-7 flex items-center justify-center text-sm font-black hover:bg-white rounded-full transition-colors">−</button>
+                                    <span id="teaQty" class="w-6 text-center text-xs font-black">0</span>
+                                    <button onclick="changeQty('teaQty',1)" class="size-7 flex items-center justify-center text-sm font-black hover:bg-white rounded-full transition-colors">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1 mb-3">Others</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-white p-3 rounded-2xl border border-slate-100 flex flex-col gap-2">
+                            <div class="flex items-center gap-2"><span class="material-symbols-outlined text-blue-400 text-base">water_full</span><span class="text-[10px] font-black uppercase">Water</span></div>
+                            <div class="flex items-center gap-2"><button onclick="changeQty('waterQty',-1)" class="size-6 flex items-center justify-center text-sm font-black text-slate-400 hover:text-black">−</button><span id="waterQty" class="text-[10px] font-black text-blue-600">5</span><button onclick="changeQty('waterQty',1)" class="size-6 flex items-center justify-center text-sm font-black text-slate-400 hover:text-black">+</button></div>
+                        </div>
+                        <div class="bg-white p-3 rounded-2xl border border-slate-100 flex flex-col gap-2">
+                            <div class="flex items-center gap-2"><span class="material-symbols-outlined text-amber-400 text-base">cookie</span><span class="text-[10px] font-black uppercase">Snacks</span></div>
+                            <div class="flex items-center gap-2"><button onclick="changeQty('snackQty',-1)" class="size-6 flex items-center justify-center text-sm font-black text-slate-400 hover:text-black">−</button><span id="snackQty" class="text-[10px] font-black text-amber-600">0</span><button onclick="changeQty('snackQty',1)" class="size-6 flex items-center justify-center text-sm font-black text-slate-400 hover:text-black">+</button></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-[9px] font-black uppercase text-slate-400 px-1 tracking-widest">Special Request</label>
+                    <textarea rows="2" placeholder="e.g. Serve at 10:00 AM..." class="w-full bg-white border-slate-200 rounded-2xl text-[11px] p-3 focus:ring-2 focus:ring-[#adee2b] focus:outline-none resize-none"></textarea>
+                </div>
+            </div>
+            <div class="p-5 bg-white border-t shrink-0">
+                <button onclick="savePantry()" class="w-full py-4 bg-black text-[#adee2b] rounded-full text-[9px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-transform">Save & Return →</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-7 pt-3 shrink-0">
+        <button id="btnSubmitBooking" onclick="submitBooking()" disabled class="btn-lime w-full py-5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-lime-400/20">Confirm Booking</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TODAY SCHEDULE PANEL (right slide)
+══════════════════════════════════════ -->
+<div id="todayPanel" class="fixed top-0 right-0 h-full w-[380px] bg-white z-[110] translate-x-full flex flex-col shadow-[-20px_0_80px_rgba(0,0,0,0.08)] border-l border-slate-100">
+    <div class="p-6 border-b border-slate-100 flex items-start justify-between shrink-0">
+        <div>
+            <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Today's Date</p>
+            <h3 id="todayPanelDate" class="text-xl font-black tracking-tighter uppercase italic mt-0.5"></h3>
+        </div>
+        <button onclick="closeTodayPanel()" class="size-9 rounded-full bg-slate-100 flex items-center justify-center hover:bg-black hover:text-[#adee2b] transition-all">
+            <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+    </div>
+    <!-- Progress strip -->
+    <div class="px-6 py-3 border-b border-slate-100 shrink-0">
+        <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Day Progress</span>
+            <span id="todayProgressLabel" class="text-[9px] font-black text-slate-600"></span>
+        </div>
+        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div id="todayProgressBar" class="h-full bg-black rounded-full transition-all duration-700"></div>
+        </div>
+    </div>
+    <!-- Schedule list -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
+        <div id="todayScheduleList" class="space-y-0"></div>
+    </div>
+    <div class="p-5 border-t border-slate-100 shrink-0">
+        <button onclick="closeTodayPanel(); openBookingPanel();" class="btn-lime w-full py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">+ New Booking</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     NAV BAR
+══════════════════════════════════════ -->
+<nav class="flex items-center justify-between px-8 bg-white border-b border-slate-100 sticky top-0 z-50 shrink-0" style="height:60px">
+    <!-- Logo -->
+    <div class="flex items-center gap-2">
+        <div class="size-9 bg-black rounded-xl flex items-center justify-center text-[#adee2b]"><span class="material-symbols-outlined text-lg">sync_alt</span></div>
+        <span class="text-xl font-black tracking-tighter italic uppercase">RoomSync <span class="text-blue-600">Pro</span></span>
+    </div>
+
+    <!-- Page nav -->
+    <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+        <button class="nav-btn active" id="navTimeline" onclick="switchPage('timeline')">
+            <span class="material-symbols-outlined text-sm">grid_view</span> Timeline
+        </button>
+        <button class="nav-btn" id="navSchedule" onclick="switchPage('schedule')">
+            <span class="material-symbols-outlined text-sm">calendar_month</span> My Schedule
+        </button>
+    </div>
+
+    <!-- Right actions -->
+    <div class="flex items-center gap-3">
+        <!-- Search -->
+        <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-base">search</span>
+            <input id="globalSearch" type="text" placeholder="Search rooms..." oninput="filterGrid()"
+                class="w-36 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-[11px] font-bold focus:w-52 focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all">
+        </div>
+        <!-- Help -->
+        <button onclick="openHelp()" class="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all text-[10px] font-black uppercase">
+            <span class="material-symbols-outlined text-base">help_outline</span>
+            Help
+        </button>
+        <!-- Today Schedule button -->
+        <button onclick="openTodayPanel()" class="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all text-[10px] font-black uppercase">
+            <span class="material-symbols-outlined text-base">today</span>
+            Today
+        </button>
+        <!-- Admin Dashboard button (shown only in admin mode) -->
+        <a id="adminDashBtn" href="admin.html" class="hidden items-center gap-2 px-4 py-2 bg-black text-[#adee2b] rounded-xl hover:bg-[#adee2b] hover:text-black transition-all text-[10px] font-black uppercase">
+            <span class="material-symbols-outlined text-base">admin_panel_settings</span>
+            Dashboard
+        </a>
+        <!-- Avatar -->
+        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Anita" class="size-9 rounded-full border-2 border-[#adee2b] p-0.5 bg-slate-100 cursor-pointer" title="Anita Wijaya">
+    </div>
+</nav>
+
+<!-- ══════════════════════════════════════
+     PAGE: TIMELINE
+══════════════════════════════════════ -->
+<div id="pageTimeline" class="page active">
+    <!-- Toolbar -->
+    <div class="bg-white border-b border-slate-100 px-8 py-2.5 grid grid-cols-3 items-center shrink-0">
+        <!-- Date nav -->
+        <div class="flex items-center gap-2 relative">
+            <button onclick="goToday()" class="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-black transition-colors">Today</button>
+            <!-- Clickable date → custom picker -->
+            <div class="relative">
+                <button onclick="toggleDatePicker()" id="dateDisplayBtn"
+                    class="flex items-center gap-2 border-2 border-slate-100 rounded-xl px-3 py-2 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group">
+                    <span class="material-symbols-outlined text-base text-slate-400 group-hover:text-black">calendar_today</span>
+                    <span id="currentDateDisplay" class="text-[12px] font-black text-slate-800 uppercase"></span>
+                    <span class="material-symbols-outlined text-sm text-slate-300">expand_more</span>
+                </button>
+                <!-- Custom Date Picker Dropdown -->
+                <div id="datePicker" class="hidden absolute top-full left-0 mt-2 w-[300px] bg-white border border-slate-100 rounded-3xl shadow-2xl z-[300] p-5 overflow-hidden">
+                    <!-- Month nav -->
+                    <div class="flex items-center justify-between mb-4">
+                        <button onclick="dpPrevMonth()" class="size-8 rounded-xl hover:bg-slate-100 flex items-center justify-center transition-colors"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+                        <span id="dpMonthLabel" class="text-[12px] font-black uppercase tracking-widest text-slate-700"></span>
+                        <button onclick="dpNextMonth()" class="size-8 rounded-xl hover:bg-slate-100 flex items-center justify-center transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+                    </div>
+                    <!-- Day headers -->
+                    <div class="grid grid-cols-7 mb-2">
+                        <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Su</div>
+                        <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Mo</div>
+                        <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Tu</div>
+                        <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">We</div>
+                        <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Th</div>
+                        <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Fr</div>
+                        <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Sa</div>
+                    </div>
+                    <div id="dpGrid" class="grid grid-cols-7 gap-0.5"></div>
+                    <!-- Quick jumps -->
+                    <div class="flex gap-2 mt-4 pt-4 border-t border-slate-100">
+                        <button onclick="dpSelectToday()" class="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase tracking-wider hover:opacity-90 transition-opacity">Today</button>
+                        <button onclick="dpPrevWeek()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-slate-200 transition-colors">− 1 Week</button>
+                        <button onclick="dpNextWeek()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-slate-200 transition-colors">+ 1 Week</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Prev/Next arrows -->
+            <div class="flex items-center">
+                <button onclick="changeDay(-1)" class="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-l-xl border border-slate-200 transition-colors"><span class="material-symbols-outlined text-lg">chevron_left</span></button>
+                <button onclick="changeDay(1)" class="px-2.5 py-2 text-slate-400 hover:bg-slate-50 rounded-r-xl border border-slate-200 border-l-0 transition-colors"><span class="material-symbols-outlined text-lg">chevron_right</span></button>
+            </div>
+        </div>
+
+        <!-- Location dropdown -->
+        <div class="flex justify-center relative" id="dropdownParent">
+            <button onclick="toggleDropdown()" class="flex items-center min-w-[240px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 group hover:border-[#adee2b] transition-all">
+                <span class="material-symbols-outlined text-slate-400 text-base mr-2">apartment</span>
+                <span id="selectedOption" class="text-[10px] font-black uppercase text-slate-700 flex-1 text-left">Head Office – Jakarta</span>
+                <span class="material-symbols-outlined text-slate-400 text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
+            </button>
+            <div id="selectMenu" class="absolute top-full mt-2 w-[240px] bg-white border border-slate-100 rounded-2xl shadow-2xl opacity-0 invisible translate-y-2 transition-all z-[200] p-1.5">
+                <div onclick="selectOpt('Head Office – Jakarta')" class="px-4 py-2.5 hover:bg-[#adee2b] hover:text-black rounded-xl cursor-pointer text-[10px] font-black uppercase transition-colors">Head Office – Jakarta</div>
+                <div onclick="selectOpt('Creative Tower – Bandung')" class="px-4 py-2.5 hover:bg-[#adee2b] hover:text-black rounded-xl cursor-pointer text-[10px] font-black uppercase transition-colors">Creative Tower – Bandung</div>
+                <div onclick="selectOpt('South Hub – Surabaya')" class="px-4 py-2.5 hover:bg-[#adee2b] hover:text-black rounded-xl cursor-pointer text-[10px] font-black uppercase transition-colors">South Hub – Surabaya</div>
+            </div>
+        </div>
+
+        <!-- Dept filter + New Booking -->
+        <div class="flex justify-end items-center gap-3">
+            <div class="relative" id="deptDropParent">
+                <button onclick="toggleDeptDrop(event)" class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 hover:border-[#adee2b] hover:bg-[#f7fee7] transition-all group min-w-[130px]">
+                    <span class="material-symbols-outlined text-slate-400 text-sm">filter_list</span>
+                    <span id="deptDropLabel" class="text-[10px] font-black uppercase text-slate-700 flex-1 text-left">All Depts</span>
+                    <span class="material-symbols-outlined text-slate-300 text-sm transition-transform duration-200" id="deptChevron">expand_more</span>
+                </button>
+                <div id="deptDropMenu" class="hidden absolute top-full right-0 mt-2 w-[152px] bg-white border border-slate-100 rounded-2xl shadow-2xl z-[300] overflow-hidden py-1.5">
+                    <button onclick="selectDept(\'\',\'All Depts\')" class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left group/di">
+                        <span class="size-5 rounded-md bg-slate-100 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-slate-400" style="font-size:11px">layers</span></span>
+                        <span class="text-[10px] font-black uppercase text-slate-700">All Depts</span>
+                    </button>
+                    <button onclick="selectDept(\'GAA\',\'GAA\')" class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
+                        <span class="size-5 rounded-md bg-lime-100 flex items-center justify-center shrink-0"><span class="text-[8px] font-black text-lime-700">GA</span></span>
+                        <span class="text-[10px] font-black uppercase text-slate-700">GAA</span>
+                    </button>
+                    <button onclick="selectDept(\'HRD\',\'HRD\')" class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
+                        <span class="size-5 rounded-md bg-blue-100 flex items-center justify-center shrink-0"><span class="text-[8px] font-black text-blue-700">HR</span></span>
+                        <span class="text-[10px] font-black uppercase text-slate-700">HRD</span>
+                    </button>
+                    <button onclick="selectDept(\'MTC\',\'MTC\')" class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#adee2b] transition-colors text-left">
+                        <span class="size-5 rounded-md bg-orange-100 flex items-center justify-center shrink-0"><span class="text-[8px] font-black text-orange-700">MT</span></span>
+                        <span class="text-[10px] font-black uppercase text-slate-700">MTC</span>
+                    </button>
+                </div>
+            </div>
+            <button onclick="openBookingPanel()" class="btn-lime px-5 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 shadow-lg shadow-lime-300/30">
+                <span class="material-symbols-outlined text-base">add</span> New Booking
+            </button>
+        </div>
+    </div>
+
+    <!-- Grid -->
+    <main class="flex-1 overflow-auto custom-scrollbar bg-white relative">
+        <div id="gridPlaceholder"></div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-100 px-8 py-2.5 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-5">
+            <div class="flex items-center gap-1.5"><div class="size-2.5 rounded-md bg-blue-500"></div><span class="text-[8px] font-bold text-slate-400 uppercase">My Booking</span></div>
+            <div class="flex items-center gap-1.5"><div class="size-2.5 rounded-md bg-[#adee2b]"></div><span class="text-[8px] font-bold text-slate-400 uppercase">Confirmed</span></div>
+            <div class="flex items-center gap-1.5"><div class="size-2.5 rounded-md bg-slate-300" style="background-image:repeating-linear-gradient(45deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px)"></div><span class="text-[8px] font-bold text-slate-400 uppercase">Tentative</span></div>
+            <div class="flex items-center gap-1.5"><div class="size-2.5 rounded-md bg-orange-400"></div><span class="text-[8px] font-bold text-slate-400 uppercase">Maintenance</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-2.5 h-0.5 bg-red-500"></div><span class="text-[8px] font-bold text-slate-400 uppercase">Now</span></div>
+        </div>
+        <p class="text-[8px] font-black text-slate-300 uppercase tracking-widest italic">RoomSync Pro v2.1 · 2026</p>
+    </footer>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE: MY SCHEDULE
+══════════════════════════════════════ -->
+<div id="pageSchedule" class="page bg-[#f7f8f6]">
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Left: Calendar -->
+        <div class="w-[420px] border-r border-slate-100 bg-white flex flex-col shrink-0">
+            <div class="p-8 border-b border-slate-100">
+                <p class="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 mb-1">My Schedule</p>
+                <h2 class="text-3xl font-black tracking-tighter italic uppercase">Anita Wijaya</h2>
+                <p class="text-sm font-bold text-slate-400 mt-1">General Affairs · GAA</p>
+            </div>
+            <!-- Full calendar -->
+            <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
+                <div class="flex items-center justify-between mb-4">
+                    <button onclick="schedCalPrev()" class="size-8 rounded-xl hover:bg-slate-100 flex items-center justify-center transition-colors"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+                    <span id="schedCalTitle" class="text-[12px] font-black uppercase tracking-widest text-slate-700"></span>
+                    <button onclick="schedCalNext()" class="size-8 rounded-xl hover:bg-slate-100 flex items-center justify-center transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+                </div>
+                <div class="grid grid-cols-7 mb-1">
+                    <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Su</div>
+                    <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Mo</div>
+                    <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Tu</div>
+                    <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">We</div>
+                    <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Th</div>
+                    <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Fr</div>
+                    <div class="text-center text-[9px] font-black text-slate-300 uppercase py-1">Sa</div>
+                </div>
+                <div id="schedCalGrid" class="grid grid-cols-7 gap-0.5"></div>
+                <!-- Stats -->
+                <div class="mt-6 grid grid-cols-2 gap-3">
+                    <div class="bg-black p-4 rounded-2xl">
+                        <p class="text-[9px] font-black uppercase text-slate-500 tracking-widest">This Month</p>
+                        <p class="text-3xl font-black text-[#adee2b] italic mt-1">08</p>
+                        <p class="text-[9px] font-bold text-slate-500 mt-0.5">bookings</p>
+                    </div>
+                    <div class="border border-slate-100 p-4 rounded-2xl" style="background:#e4e4e4;">
+                        <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Hours Used</p>
+                        <p class="text-3xl font-black italic mt-1">14h</p>
+                        <p class="text-[9px] font-bold text-slate-400 mt-0.5">this month</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-slate-100">
+                <button onclick="openBookingPanel()" class="btn-lime w-full py-4 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">+ New Booking</button>
+            </div>
+        </div>
+
+        <!-- Right: Booking list -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-10">
+            <div id="schedBookingList" class="space-y-8 max-w-2xl"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ FAQ / HELP MODAL ══ -->
+<div id="helpModal" class="fixed inset-0 z-[200] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeHelp()"></div>
+    <div class="relative w-[680px] max-h-[85vh] bg-white rounded-[2rem] overflow-hidden shadow-2xl flex flex-col" style="transform:scale(0.97);transition:transform 0.3s cubic-bezier(0.32,0.72,0,1);" id="helpInner">
+        <!-- Header -->
+        <div class="bg-black px-8 py-6 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-4">
+                <div class="size-10 rounded-2xl bg-[#adee2b] flex items-center justify-center">
+                    <span class="material-symbols-outlined text-black text-xl">help_outline</span>
+                </div>
+                <div>
+                    <p class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">RoomSync Pro</p>
+                    <h2 class="text-xl font-black italic tracking-tighter text-white uppercase">Help & FAQ</h2>
+                </div>
+            </div>
+            <button onclick="closeHelp()" class="size-9 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-all">
+                <span class="material-symbols-outlined text-base">close</span>
+            </button>
+        </div>
+        <!-- Search -->
+        <div class="px-8 pt-5 pb-3 border-b border-slate-100 shrink-0">
+            <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-base">search</span>
+                <input id="faqSearch" type="text" placeholder="Search questions..." oninput="filterFaq()"
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-[12px] font-medium focus:outline-none focus:ring-2 focus:ring-[#adee2b] focus:border-transparent transition-all">
+            </div>
+            <!-- Category pills -->
+            <div class="flex items-center gap-2 mt-3 flex-wrap" id="faqCats">
+                <button class="faq-cat active" onclick="setFaqCat('',this)">All</button>
+                <button class="faq-cat" onclick="setFaqCat('booking',this)">Booking</button>
+                <button class="faq-cat" onclick="setFaqCat('room',this)">Rooms</button>
+                <button class="faq-cat" onclick="setFaqCat('pantry',this)">Pantry</button>
+                <button class="faq-cat" onclick="setFaqCat('account',this)">Account</button>
+            </div>
+        </div>
+        <!-- FAQ list -->
+        <div class="overflow-y-auto flex-1 px-8 py-4 custom-scrollbar" id="faqList"></div>
+        <!-- Footer -->
+        <div class="px-8 py-4 border-t border-slate-100 bg-slate-50 shrink-0 flex items-center justify-between">
+            <p class="text-[10px] font-bold text-slate-400">Can't find your answer? Contact <span class="text-black font-black">GA Team</span></p>
+            <a href="/cdn-cgi/l/email-protection#a2c5c3e2c1cdcfd2c3ccdb8cc1cdcf" class="btn-lime px-4 py-2 rounded-xl text-[9px] font-black uppercase">Email GA Team</a>
+        </div>
+    </div>
+</div>
+
+<!-- ══ ROOM DETAIL MODAL ══ -->
+<div id="roomDetailModal" class="fixed inset-0 z-[200] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeRoomDetail()"></div>
+    <div class="relative bg-[#f7f8f6] rounded-[2rem] overflow-hidden shadow-2xl flex flex-col custom-scrollbar overflow-y-auto" style="width:860px;max-height:90vh;transform:scale(0.97);transition:transform 0.3s cubic-bezier(0.32,0.72,0,1);" id="roomDetailInner">
+
+        <!-- ── BENTO GRID ── -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto auto;gap:10px;padding:10px;">
+
+            <!-- [A] Photo hero — spans 2 cols, row 1 -->
+            <div style="grid-column:1/3;grid-row:1/2;border-radius:20px;overflow:hidden;position:relative;height:220px;background:#0f172a;">
+                <div class="rd-photo-track" id="rdPhotoTrack" style="height:100%;"></div>
+                <button class="rd-photo-btn prev" onclick="rdSlide(-1)"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+                <button class="rd-photo-btn next" onclick="rdSlide(1)"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+                <div class="rd-photo-dots" id="rdPhotoDots"></div>
+                <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.7) 0%,transparent 50%);pointer-events:none;"></div>
+                <!-- Room name overlay -->
+                <div style="position:absolute;bottom:0;left:0;right:0;padding:20px 22px;z-index:10;">
+                    <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+                        <div>
+                            <p style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.2em;color:rgba(255,255,255,0.5);margin-bottom:2px;">Conference Room</p>
+                            <h2 id="rdName" style="font-size:26px;font-weight:800;font-style:italic;letter-spacing:-0.04em;color:white;text-transform:uppercase;line-height:1;margin:0;"></h2>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div id="rdAvailBadge" style="background:#adee2b;color:#000;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;padding:5px 12px;border-radius:99px;">Available Now</div>
+                            <button onclick="closeRoomDetail()" style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                                <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:16px;margin-top:8px;">
+                        <p style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:4px;margin:0;">
+                            <span class="material-symbols-outlined" style="font-size:13px;color:#adee2b;">groups</span>
+                            <span id="rdCap"></span> seats
+                        </p>
+                        <p id="rdLocation" style="font-size:9px;font-weight:700;color:rgba(255,255,255,0.4);margin:0;"></p>
+                        <div id="rdDot" style="width:8px;height:8px;border-radius:50%;background:#adee2b;margin-left:auto;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- [B] Stats — col 3, row 1 -->
+            <div style="grid-column:3/4;grid-row:1/2;display:flex;flex-direction:column;gap:10px;">
+                <!-- Bookings this month -->
+                <div style="background:#000;border-radius:20px;padding:18px 20px;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
+                    <p style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:#475569;margin:0 0 6px;">This Month</p>
+                    <p id="rdBookingCount" style="font-size:40px;font-weight:800;font-style:italic;color:#adee2b;line-height:1;margin:0;">24</p>
+                    <p style="font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;margin:4px 0 0;">bookings</p>
+                </div>
+                <!-- Utilization -->
+                <div style="background:white;border-radius:20px;padding:18px 20px;flex:1;border:0.5px solid #e2e8f0;display:flex;flex-direction:column;justify-content:space-between;">
+                    <p style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:#94a3b8;margin:0 0 6px;">Utilization</p>
+                    <p id="rdUtilization" style="font-size:40px;font-weight:800;font-style:italic;color:#1e293b;line-height:1;margin:0;">87%</p>
+                    <p style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin:4px 0 0;">this month</p>
+                </div>
+            </div>
+
+            <!-- [C] Facilities — col 1, row 2 -->
+            <div style="grid-column:1/2;grid-row:2/3;background:white;border-radius:20px;padding:18px 20px;border:0.5px solid #e2e8f0;">
+                <p style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:#94a3b8;margin:0 0 12px;">Facilities</p>
+                <div id="rdFacilities" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+
+            <!-- [D] Peak hours — col 2, row 2 -->
+            <div style="grid-column:2/3;grid-row:2/3;background:white;border-radius:20px;padding:18px 20px;border:0.5px solid #e2e8f0;">
+                <p style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:#94a3b8;margin:0 0 12px;">Peak Hours</p>
+                <div id="rdPeakBars" style="display:flex;align-items:flex-end;gap:3px;height:48px;"></div>
+                <div style="display:flex;justify-content:space-between;margin-top:6px;">
+                    <span style="font-size:8px;font-weight:700;color:#cbd5e1;">07</span>
+                    <span style="font-size:8px;font-weight:700;color:#cbd5e1;">13</span>
+                    <span style="font-size:8px;font-weight:700;color:#cbd5e1;">19</span>
+                </div>
+            </div>
+
+            <!-- [E] Actions — col 3, row 2 -->
+            <div style="grid-column:3/4;grid-row:2/3;background:#adee2b;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;justify-content:space-between;gap:10px;">
+                <div>
+                    <p style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:rgba(0,0,0,0.4);margin:0 0 6px;">Quick Action</p>
+                    <p style="font-size:13px;font-weight:800;color:#000;margin:0;line-height:1.3;">Ready to book this room?</p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <button onclick="closeRoomDetail(); openBookingPanel(currentDetailRoom?.rName);" style="width:100%;padding:11px;background:#000;color:#adee2b;border:none;border-radius:14px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:0.1em;cursor:pointer;font-family:Manrope,sans-serif;transition:all 0.15s;" onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background='#000'">Book This Room →</button>
+                    <button style="width:100%;padding:9px;background:rgba(0,0,0,0.08);color:rgba(0,0,0,0.5);border:none;border-radius:14px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;font-family:Manrope,sans-serif;transition:all 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.15)'" onmouseout="this.style.background='rgba(0,0,0,0.08)'">Report Issue</button>
+                </div>
+            </div>
+
+            <!-- [F] Occupancy bar — col 1+2, row 3 -->
+            <div style="grid-column:1/3;grid-row:3/4;background:white;border-radius:20px;padding:18px 20px;border:0.5px solid #e2e8f0;">
+                <p style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:#94a3b8;margin:0 0 12px;">Today's Occupancy</p>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:8px;font-weight:700;color:#cbd5e1;width:20px;text-align:right;">07</span>
+                    <div style="flex:1;height:28px;background:#f1f5f9;border-radius:10px;position:relative;overflow:hidden;" id="rdOccupancyBar"></div>
+                    <span style="font-size:8px;font-weight:700;color:#cbd5e1;width:20px;">19</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:14px;margin-top:10px;">
+                    <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:8px;border-radius:3px;background:#adee2b;"></div><span style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Confirmed</span></div>
+                    <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:8px;border-radius:3px;background:#d1d5db;background-image:repeating-linear-gradient(45deg,transparent,transparent 1px,rgba(0,0,0,0.15) 1px,rgba(0,0,0,0.15) 3px);"></div><span style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Tentative</span></div>
+                    <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:8px;border-radius:3px;background:#fb923c;"></div><span style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Maintenance</span></div>
+                    <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:2px;background:#ef4444;border-radius:1px;"></div><span style="font-size:8px;font-weight:700;color:#94a3b8;text-transform:uppercase;">Now</span></div>
+                </div>
+            </div>
+
+            <!-- [G] Notes — col 3, row 3 -->
+            <div style="grid-column:3/4;grid-row:3/4;background:white;border-radius:20px;padding:18px 20px;border:0.5px solid #e2e8f0;">
+                <p style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:0.15em;color:#94a3b8;margin:0 0 10px;">Notes</p>
+                <p id="rdNotes" style="font-size:11px;font-weight:500;color:#64748b;line-height:1.6;margin:0;"></p>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ══ SMART TOOLTIP ══ -->
+<div id="smartTooltip" onmouseenter="clearHideTimeout()" onmouseleave="hideTooltip()">
+    <div id="ttRoomContent" class="hidden">
+        <div class="relative h-28 w-full">
+            <img id="ttRoomPic" src="" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent"></div>
+            <div class="absolute bottom-3 left-4">
+                <h4 id="ttRoomNameLarge" class="font-black text-base text-white leading-tight"></h4>
+                <p class="text-[9px] text-white/70 font-bold uppercase flex items-center gap-1 mt-0.5"><span class="material-symbols-outlined text-xs text-[#adee2b]">groups</span><span id="ttCapacityLarge"></span> seats</p>
+            </div>
+        </div>
+        <div class="p-4 flex flex-wrap gap-1.5" id="ttFacilities"></div>
+        <div class="px-4 pb-4"><p class="text-[9px] text-white/40 font-bold">Click to book this room</p></div>
+    </div>
+    <div id="ttBookingContent" class="hidden p-5 space-y-3">
+        <div class="flex items-center justify-between">
+            <div id="ttYourBookingTag" class="hidden bg-blue-600 text-white text-[8px] font-black px-2.5 py-0.5 rounded-full uppercase">Your Booking</div>
+            <div id="ttStatusTag" class="text-[9px] font-black px-2.5 py-0.5 rounded-full uppercase"></div>
+        </div>
+        <div class="flex items-center gap-3"><img id="ttAvatar" src="" class="size-11 rounded-xl object-cover border border-white/10"><div><p id="ttUser" class="text-sm font-black text-white"></p><p id="ttDept" class="text-[10px] font-bold text-[#adee2b] uppercase mt-0.5"></p></div></div>
+        <div class="border-y border-white/5 py-2.5 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-outlined text-[14px] text-slate-500 shrink-0">phone_in_talk</span>
+                    <span class="text-[10px] font-bold text-slate-400">Ext</span>
+                    <span id="ttExt" class="text-[10px] font-black text-white"></span>
+                </div>
+                <button onclick="copyToClip('ttExt','ext')" class="shrink-0 flex items-center gap-1 bg-white/10 hover:bg-[#adee2b] hover:text-black text-white/60 px-2 py-1 rounded-lg transition-all text-[8px] font-black uppercase" id="copyExtBtn">
+                    <span class="material-symbols-outlined text-[11px]">content_copy</span>Copy
+                </button>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-outlined text-[14px] text-slate-500 shrink-0">mail</span>
+                    <span id="ttEmail" class="text-[10px] font-black text-white truncate"></span>
+                </div>
+                <button onclick="copyToClip('ttEmail','email')" class="shrink-0 flex items-center gap-1 bg-white/10 hover:bg-[#adee2b] hover:text-black text-white/60 px-2 py-1 rounded-lg transition-all text-[8px] font-black uppercase" id="copyEmailBtn">
+                    <span class="material-symbols-outlined text-[11px]">content_copy</span>Copy
+                </button>
+            </div>
+        </div>
+        <div class="space-y-1.5"><p id="ttTitle" class="text-sm font-black text-white leading-tight"></p><p id="ttDesc" class="text-[11px] text-slate-400 font-medium"></p></div>
+        <div class="flex items-center gap-3 text-[11px] font-black text-[#adee2b]"><span id="ttTimeDur"></span><span class="text-white/20">|</span><span id="ttRoomRef" class="text-white/60"></span></div>
+        <div id="ttEditActions" style="display:none;gap:8px;padding-top:4px" class="flex">
+            <button onclick="openBookingPanel(document.getElementById('ttRoomRef').textContent);tt.classList.remove('visible')" class="flex-1 bg-[#adee2b] text-black text-[9px] font-black uppercase rounded-xl py-2 hover:opacity-90 transition-opacity">Edit</button>
+            <button onclick="showToast('Booking cancelled');tt.classList.remove('visible')" class="flex-1 bg-white/10 text-white/70 text-[9px] font-black uppercase rounded-xl py-2 hover:bg-red-500/30 hover:text-white transition-colors">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div id="toastContainer" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[500] flex flex-col items-center gap-2 pointer-events-none"></div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ══ DATA ══════════════════════════════════════
+const roomData = {
+    "Ballroom":  { cap:100, floor:"B1", pics:["https://images.unsplash.com/photo-1517457373958-b7bdd4587205?q=80&w=800","https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=800","https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=800"], facilities:[{n:"Sound",i:"volume_up"},{n:"Stage",i:"layers"},{n:"Projector",i:"videocam"},{n:"AC",i:"ac_unit"}] },
+    "Executive": { cap:12,  floor:"5F", pics:["https://images.unsplash.com/photo-1497366811353-6870744d04b2?q=80&w=800","https://images.unsplash.com/photo-1462826303086-329426d1aef5?q=80&w=800","https://images.unsplash.com/photo-1560472354-b33ff0c44a43?q=80&w=800"], facilities:[{n:"4K TV",i:"tv"},{n:"Webcam",i:"photo_camera"},{n:"Wifi",i:"wifi"},{n:"Whiteboard",i:"border_color"}] },
+    "Focus":     { cap:4,   floor:"3F", pics:["https://images.unsplash.com/photo-1505409859467-3a799be57c8f?q=80&w=800","https://images.unsplash.com/photo-1521737711867-e3b97375f902?q=80&w=800","https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=800"], facilities:[{n:"AC",i:"ac_unit"},{n:"Glass",i:"visibility_off"},{n:"Wifi",i:"wifi"}] }
+};
+const deptMap = {
+    "GAA": { full:"General Affairs", user:"Anita Wijaya", ext:"102", email:"anita.w@corp.com", avatar:"Caden", status:"Confirmed",   color:"#adee2b", tagBg:"#adee2b", tagText:"#000", desc:"Weekly building facility audit.", isMe:true },
+    "HRD": { full:"Human Resources", user:"Jessica Miller", ext:"801", email:"jess.m@corp.com", avatar:"Aria", status:"Tentative",   color:"#d1d5db", tagBg:"#334155", tagText:"#fff", desc:"Internal recruitment interview.", isMe:false },
+    "MTC": { full:"Engineering", user:"Fixer Team", ext:"000", email:"mtc@corp.com", avatar:"Felix", status:"Maintenance", color:"#fb923c", tagBg:"#f97316", tagText:"#fff", desc:"Urgent AC repair session.", isMe:false }
+};
+const bookings = [
+    { dept:"GAA", roomIdx:0,  startSlot:4,  span:3 },
+    { dept:"HRD", roomIdx:2,  startSlot:10, span:2 },
+    { dept:"MTC", roomIdx:4,  startSlot:18, span:2 },
+    { dept:"GAA", roomIdx:6,  startSlot:6,  span:4 },
+    { dept:"HRD", roomIdx:9,  startSlot:14, span:3 },
+    { dept:"GAA", roomIdx:11, startSlot:2,  span:5 },
+];
+// My bookings for today panel & schedule page
+const myBookings = [
+    { title:"Weekly Facility Audit", room:"Ballroom 101", start:"09:00", end:"10:30", status:"confirmed", color:"#adee2b", statusLabel:"Confirmed" },
+    { title:"Vendor Meeting",         room:"Executive 103", start:"11:00", end:"12:00", status:"confirmed", color:"#adee2b", statusLabel:"Confirmed" },
+    { title:"Internal Recruitment",   room:"Focus 105",    start:"14:00", end:"15:00", status:"tentative", color:"#d1d5db", statusLabel:"Tentative" },
+    { title:"Budget Review",          room:"Executive 102", start:"15:30", end:"16:30", status:"confirmed", color:"#adee2b", statusLabel:"Confirmed" },
+];
+const futureBookings = [
+    { title:"Vendor Onboarding",      room:"Ballroom 101", date:"Tomorrow",   start:"10:00", end:"11:30", status:"confirmed", color:"#adee2b" },
+    { title:"Quarterly Review",       room:"Executive 101", date:"Fri, 14 Feb", start:"09:00", end:"11:00", status:"confirmed", color:"#adee2b" },
+    { title:"Safety Briefing",        room:"Ballroom 101", date:"Mon, 17 Feb", start:"08:30", end:"09:30", status:"tentative", color:"#d1d5db" },
+];
+
+const roomTypes = ["Ballroom","Executive","Focus"];
+let currentDate = new Date();
+let searchQuery = '';
+let deptFilter = '';
+let attendeeCount = 4;
+let dpDate = new Date(); // date picker internal month
+let schedCalDate = new Date();
+let datePickerOpen = false;
+
+// ══ PAGE SWITCHING ══════════════════════════
+function switchPage(p) {
+    document.getElementById('pageTimeline').classList.toggle('active', p==='timeline');
+    document.getElementById('pageSchedule').classList.toggle('active', p==='schedule');
+    document.getElementById('navTimeline').classList.toggle('active', p==='timeline');
+    document.getElementById('navSchedule').classList.toggle('active', p==='schedule');
+    if(p==='schedule') renderSchedPage();
+}
+
+// ══ DATE UTILS ══════════════════════════════
+function fmtDate(d) {
+    return d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short',year:'numeric'}).toUpperCase();
+}
+function fmtDateShort(d) {
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}).toUpperCase();
+}
+function updateDateDisplay() {
+    document.getElementById('currentDateDisplay').textContent = fmtDate(currentDate);
+}
+function goToday() { currentDate = new Date(); dpDate = new Date(); updateDateDisplay(); renderGrid(); renderDatePicker(); }
+function changeDay(d) { currentDate.setDate(currentDate.getDate()+d); updateDateDisplay(); renderGrid(); renderDatePicker(); }
+
+// ══ CUSTOM DATE PICKER ══════════════════════
+function toggleDatePicker() {
+    datePickerOpen = !datePickerOpen;
+    document.getElementById('datePicker').classList.toggle('hidden', !datePickerOpen);
+}
+function closeDatePicker() {
+    datePickerOpen = false;
+    document.getElementById('datePicker').classList.add('hidden');
+}
+function renderDatePicker() {
+    const y = dpDate.getFullYear(), m = dpDate.getMonth();
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('dpMonthLabel').textContent = `${months[m]} ${y}`;
+    const firstDay = new Date(y,m,1).getDay();
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    const prevDays = new Date(y,m,0).getDate();
+    const today = new Date();
+    const eventDays = [3,5,10,12,15,20,22];
+    let html = '';
+    // prev month filler
+    for(let i=firstDay-1;i>=0;i--) {
+        html += `<div class="dp-day other-month">${prevDays-i}</div>`;
+    }
+    for(let d=1;d<=daysInMonth;d++) {
+        const isToday = d===today.getDate()&&m===today.getMonth()&&y===today.getFullYear();
+        const isSel = d===currentDate.getDate()&&m===currentDate.getMonth()&&y===currentDate.getFullYear();
+        const hasEv = eventDays.includes(d);
+        html += `<div class="dp-day ${isToday?'today':''} ${isSel&&!isToday?'selected':''} ${hasEv&&!isToday&&!isSel?'has-event':''}" onclick="dpSelectDay(${y},${m},${d})">${d}</div>`;
+    }
+    // next month filler
+    const total = firstDay + daysInMonth;
+    const rem = total%7===0 ? 0 : 7-(total%7);
+    for(let d=1;d<=rem;d++) html += `<div class="dp-day other-month">${d}</div>`;
+    document.getElementById('dpGrid').innerHTML = html;
+}
+function dpSelectDay(y,m,d) {
+    currentDate = new Date(y,m,d);
+    updateDateDisplay();
+    renderGrid();
+    renderDatePicker();
+    closeDatePicker();
+}
+function dpPrevMonth() { dpDate.setMonth(dpDate.getMonth()-1); renderDatePicker(); }
+function dpNextMonth() { dpDate.setMonth(dpDate.getMonth()+1); renderDatePicker(); }
+function dpSelectToday() { currentDate=new Date(); dpDate=new Date(); updateDateDisplay(); renderGrid(); renderDatePicker(); closeDatePicker(); }
+function dpPrevWeek() { currentDate.setDate(currentDate.getDate()-7); dpDate=new Date(currentDate); updateDateDisplay(); renderGrid(); renderDatePicker(); closeDatePicker(); }
+function dpNextWeek() { currentDate.setDate(currentDate.getDate()+7); dpDate=new Date(currentDate); updateDateDisplay(); renderGrid(); renderDatePicker(); closeDatePicker(); }
+
+// Close date picker when clicking outside
+document.addEventListener('click', e => {
+    const dp = document.getElementById('datePicker');
+    const btn = document.getElementById('dateDisplayBtn');
+    if(datePickerOpen && !dp.contains(e.target) && !btn.contains(e.target)) closeDatePicker();
+});
+
+// ══ GRID RENDER ══════════════════════════════
+function renderGrid() {
+    let html = `<div class="grid-container sticky top-0 z-40 bg-white border-b shadow-sm">
+        <div class="cell room-sticky px-3 text-[9px] font-black text-slate-400 flex items-center uppercase tracking-widest">Room</div>`;
+    for(let h=7;h<19;h++) {
+        html += `<div class="cell flex items-center justify-center text-[10px] font-black text-slate-700 border-r-2 border-slate-200">${h}:00</div>`;
+        html += `<div class="cell flex items-center justify-center text-[9px] font-medium text-slate-300">${h}:30</div>`;
+    }
+    html += `</div>`;
+
+    const now = new Date();
+    const nowSlot = ((now.getHours()-7)*60+now.getMinutes())/30;
+    const isToday = now.toDateString()===currentDate.toDateString();
+
+    for(let i=1;i<=15;i++) {
+        const type = roomTypes[i%3];
+        const rName = `${type} ${100+i}`;
+        const rData = roomData[type];
+        if(searchQuery && !rName.toLowerCase().includes(searchQuery.toLowerCase()) && !type.toLowerCase().includes(searchQuery.toLowerCase())) continue;
+        // Dept filter: only show rows that have a booking matching the selected dept (or show all if no filter)
+        if(deptFilter) {
+            const rowBksCheck = bookings.filter(b=>b.roomIdx===i-1 && b.dept===deptFilter);
+            if(rowBksCheck.length === 0) continue;
+        }
+
+        const rowBookings = bookings.filter(b=>b.roomIdx===i-1);
+        html += `<div class="grid-row-group grid-container relative">
+            <div class="cell room-sticky px-3 flex items-center justify-between border-b group/room"
+                 onmouseleave="hideTooltip()">
+                <div class="flex items-center gap-2 min-w-0 cursor-pointer" onmouseenter="showRoomTooltip(event,'${type}')" onclick="openRoomDetail('${rName}','${type}')">
+                    <div class="size-1.5 rounded-full shrink-0 ${type==='Ballroom'?'bg-purple-400':type==='Executive'?'bg-blue-400':'bg-green-400'}"></div>
+                    <div class="min-w-0">
+                        <span class="text-[11px] font-bold text-slate-800 leading-none block truncate">${rName}</span>
+                        <span class="text-[9px] font-bold text-slate-400 flex items-center gap-1 mt-0.5"><span class="material-symbols-outlined text-[10px]">groups</span>${rData.cap} · ${rData.floor}</span>
+                    </div>
+                </div>
+                <button class="size-5 rounded-lg bg-slate-100 items-center justify-center hidden group-hover/room:flex transition-all hover:bg-[#adee2b] shrink-0" onclick="openRoomDetail('${rName}','${type}')" title="Room detail">
+                    <span class="material-symbols-outlined text-[11px]">open_in_new</span>
+                </button>
+            </div>`;
+
+        let s=0;
+        while(s<24) {
+            const bk = rowBookings.find(b=>b.startSlot===s);
+            if(bk) {
+                const info = deptMap[bk.dept];
+                const isTentative = info.status==='Tentative';
+                const isMtc = info.status==='Maintenance';
+                const dataStr = JSON.stringify({...info, room:rName, time:`${String(7+Math.floor(bk.startSlot/2)).padStart(2,'0')}:${bk.startSlot%2===0?'00':'30'} – ${String(7+Math.floor((bk.startSlot+bk.span)/2)).padStart(2,'0')}:${(bk.startSlot+bk.span)%2===0?'00':'30'}`}).replace(/"/g,'&quot;');
+                html += `<div class="cell relative border-b" style="grid-column:span ${bk.span}">
+                    <div class="booked-bar ${info.isMe?'my-booking-bar':''} ${isTentative?'tentative-bar':''}"
+                         style="background-color:${info.color};${isTentative?'opacity:0.7':''}"
+                         onmouseenter="showBookingTooltip(event,${dataStr})" onmouseleave="hideTooltip()" onclick="event.stopPropagation()">
+                        <span class="text-[10px] font-black ${isMtc?'text-white':'text-black'} truncate">${bk.dept}</span>
+                        ${info.isMe?'<span class="material-symbols-outlined text-[12px] text-blue-700 ml-auto shrink-0">person</span>':''}
+                    </div>
+                </div>`;
+                s+=bk.span;
+            } else {
+                html += `<div class="cell hover:bg-[#f7fee7] transition-colors cursor-cell border-b" onclick="openBookingPanel('${rName}')"></div>`;
+                s++;
+            }
+        }
+        if(isToday && nowSlot>0 && nowSlot<24) {
+            html += `<div class="now-line" style="left:calc(160px + ${nowSlot}*64px)"><div class="now-dot"></div></div>`;
+        }
+        html += `</div>`;
+    }
+    document.getElementById('gridPlaceholder').innerHTML = html;
+}
+
+function filterGrid() {
+    searchQuery = document.getElementById('globalSearch').value;
+    renderGrid();
+}
+function setDeptFilter(dept) {
+    deptFilter = dept;
+    renderGrid();
+}
+
+// ══ TODAY SCHEDULE PANEL ════════════════════
+function openTodayPanel() {
+    // Update date label
+    const now = new Date();
+    document.getElementById('todayPanelDate').textContent = now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}).toUpperCase();
+    // Progress bar
+    const totalMinutes = 12*60; // 07:00–19:00
+    const elapsed = Math.min(Math.max((now.getHours()-7)*60+now.getMinutes(), 0), totalMinutes);
+    const pct = Math.round((elapsed/totalMinutes)*100);
+    document.getElementById('todayProgressBar').style.width = pct+'%';
+    document.getElementById('todayProgressLabel').textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} · ${pct}% of day`;
+    // Build schedule
+    buildTodaySchedule();
+    // Open
+    const overlay = document.getElementById('bookingOverlay');
+    overlay.classList.remove('pointer-events-none');
+    requestAnimationFrame(()=>{
+        overlay.classList.add('opacity-100');
+        document.getElementById('todayPanel').classList.remove('translate-x-full');
+    });
+    overlay.dataset.target = 'today';
+}
+function closeTodayPanel() {
+    document.getElementById('todayPanel').classList.add('translate-x-full');
+    document.getElementById('bookingOverlay').classList.remove('opacity-100');
+    document.getElementById('bookingOverlay').classList.add('pointer-events-none');
+}
+function buildTodaySchedule() {
+    const now = new Date();
+    const nowMins = now.getHours()*60+now.getMinutes();
+    const colors = { confirmed:'#adee2b', tentative:'#d1d5db' };
+    let html = '';
+    myBookings.forEach((b,i) => {
+        const [sh,sm] = b.start.split(':').map(Number);
+        const bMins = sh*60+sm;
+        const isPast = nowMins > sh*60+parseInt(b.end.split(':')[0])*60+parseInt(b.end.split(':')[1]);
+        const isNow  = nowMins >= bMins && nowMins < parseInt(b.end)*60;
+        html += `<div class="today-sched-item anim-in" style="animation-delay:${i*0.06}s;${isPast?'opacity:0.45':''}">
+            <div class="time-col">
+                <p class="text-[11px] font-black ${isNow?'text-black':'text-slate-400'}">${b.start}</p>
+                <p class="text-[9px] font-bold text-slate-300 mt-0.5">${b.end}</p>
+            </div>
+            <div class="sched-bar" style="background:${b.color}"></div>
+            <div class="sched-content">
+                <div class="flex items-center gap-2 mb-1">
+                    ${isNow?'<span class="text-[8px] font-black bg-black text-[#adee2b] px-2 py-0.5 rounded-full uppercase">Now</span>':''}
+                    <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded-full" style="background:${b.color}20;color:${b.status==='tentative'?'#64748b':'#3a7c00'}">${b.statusLabel}</span>
+                </div>
+                <p class="text-[14px] font-black leading-tight uppercase tracking-tight">${b.title}</p>
+                <p class="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[11px]">location_on</span>${b.room}</p>
+            </div>
+        </div>`;
+    });
+    // Free slots
+    html += `<div class="today-sched-item opacity-40">
+        <div class="time-col"><p class="text-[11px] font-black text-slate-300">15:30</p></div>
+        <div class="sched-bar" style="background:#e2e8f0"></div>
+        <div class="sched-content"><p class="text-[13px] font-bold text-slate-300 uppercase">Free</p></div>
+    </div>`;
+    document.getElementById('todayScheduleList').innerHTML = html;
+}
+
+// ══ MY SCHEDULE PAGE ════════════════════════
+function renderSchedPage() {
+    renderSchedCal();
+    renderSchedBookings();
+}
+
+function renderSchedCal() {
+    const y=schedCalDate.getFullYear(), m=schedCalDate.getMonth();
+    const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('schedCalTitle').textContent=`${months[m]} ${y}`;
+    const firstDay=new Date(y,m,1).getDay();
+    const daysInMonth=new Date(y,m+1,0).getDate();
+    const today=new Date();
+    const eventDays=[3,5,10,12,15,20,22];
+    let html='';
+    for(let i=0;i<firstDay;i++) html+=`<div class="mini-cal-day empty"></div>`;
+    for(let d=1;d<=daysInMonth;d++) {
+        const isToday=d===today.getDate()&&m===today.getMonth()&&y===today.getFullYear();
+        const hasEv=eventDays.includes(d);
+        html+=`<div class="mini-cal-day ${isToday?'today':''} ${hasEv&&!isToday?'has-booking':''}" onclick="schedCalSelectDay(${y},${m},${d})">${d}</div>`;
+    }
+    document.getElementById('schedCalGrid').innerHTML=html;
+}
+function schedCalPrev(){schedCalDate.setMonth(schedCalDate.getMonth()-1);renderSchedCal();}
+function schedCalNext(){schedCalDate.setMonth(schedCalDate.getMonth()+1);renderSchedCal();}
+function schedCalSelectDay(y,m,d){currentDate=new Date(y,m,d);renderGrid();}
+
+function confirmCancel(title) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);z-index:999;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = `
+            <div style="background:white;border-radius:24px;padding:28px;width:340px;box-shadow:0 25px 60px -10px rgba(0,0,0,0.25);">
+                <div style="width:44px;height:44px;border-radius:14px;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+                    <span class="material-symbols-outlined" style="color:#ef4444;font-size:22px;">event_busy</span>
+                </div>
+                <p style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.15em;color:#94a3b8;margin-bottom:4px;">Cancel Booking</p>
+                <p style="font-size:15px;font-weight:800;color:#0f172a;line-height:1.3;margin-bottom:6px;">${title}</p>
+                <p style="font-size:11px;font-weight:600;color:#94a3b8;margin-bottom:24px;">This action cannot be undone. The room slot will be released.</p>
+                <div style="display:flex;gap:10px;">
+                    <button id="ccNo" style="flex:1;padding:11px;border-radius:14px;border:1.5px solid #e2e8f0;background:white;font-size:10px;font-weight:800;text-transform:uppercase;cursor:pointer;font-family:Manrope,sans-serif;transition:border-color 0.15s;" onmouseover="this.style.borderColor='#000'" onmouseout="this.style.borderColor='#e2e8f0'">Keep</button>
+                    <button id="ccYes" style="flex:1;padding:11px;border-radius:14px;border:none;background:#ef4444;color:white;font-size:10px;font-weight:800;text-transform:uppercase;cursor:pointer;font-family:Manrope,sans-serif;transition:background 0.15s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Yes, Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#ccNo').onclick = () => { document.body.removeChild(overlay); resolve(false); };
+        overlay.querySelector('#ccYes').onclick = () => { document.body.removeChild(overlay); resolve(true); };
+        overlay.onclick = (e) => { if(e.target===overlay){ document.body.removeChild(overlay); resolve(false); } };
+    });
+}
+
+function renderSchedBookings() {
+    const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const today=new Date();
+    const todayLabel=`${today.toLocaleDateString('en-GB',{weekday:'long'})}, ${today.getDate()} ${months[today.getMonth()]}`.toUpperCase();
+    function dur(s,e){const[h1,m1]=s.split(':').map(Number),[h2,m2]=e.split(':').map(Number);const d=(h2+m2/60)-(h1+m1/60);if(d<=0)return'';const h=Math.floor(d),m=Math.round((d-h)*60);return h&&m?`${h}h ${m}m`:h?`${h}h`:`${m}m`;}
+    const descMap={"Weekly Facility Audit":"Monthly walkthrough covering all floors, AV equipment checks, and GA coordination.","Vendor Meeting":"Q2 procurement discussion with external supplier reps. Bring updated vendor list.","Internal Recruitment":"Panel interview for 2 open positions in Operations. HR + Dept Head required.","Budget Review":"Finance sync — Q1 actuals vs. forecast. Bring department cost breakdown.","Vendor Onboarding":"Onboarding session for new vendor partnership. Coordinate with GA team for access.","Quarterly Review":"Quarterly performance and budget review with department heads.","Safety Briefing":"Annual safety drill and emergency response training for all staff."};
+
+    let html=`<div class="anim-in">
+        <p class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Today — ${todayLabel}</p>
+        <div class="space-y-3">`;
+    myBookings.forEach((b,i) => {
+        const isConf=b.status==='confirmed';
+        const d=dur(b.start,b.end);
+        const desc=descMap[b.title]||'';
+        const editPayload=JSON.stringify({title:b.title,room:b.room,start:b.start,end:b.end,status:b.status,desc:desc}).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+        html+=`<div class="schedule-booking-card ${isConf?'bg-[#adee2b]':'bg-white'}" style="position:relative;${isConf?'':'border:1.5px solid #d4d4d4;'}animation-delay:${i*0.07}s;cursor:pointer;" onclick="openBookingPanel(null, JSON.parse(this.dataset.edit))" data-edit='${editPayload}'>
+            <div class="flex items-start justify-between mb-2">
+                <span class="text-[8px] font-black uppercase px-2.5 py-1 rounded-full ${isConf?'bg-black text-[#adee2b]':'bg-slate-100 text-slate-500'}">${b.statusLabel}</span>
+                <div class="text-right"><p class="text-[11px] font-black ${isConf?'text-black/60':'text-slate-400'}">${b.start} – ${b.end}</p>${d?`<p class="text-[9px] font-bold ${isConf?'text-black/40':'text-slate-300'}">${d}</p>`:''}</div>
+            </div>
+            <h4 class="text-[16px] font-black uppercase tracking-tight leading-tight ${isConf?'':'text-slate-800'}">${b.title}</h4>
+            <p class="text-[10px] font-bold mt-1.5 flex items-center gap-1 ${isConf?'text-black/50':'text-slate-400'}"><span class="material-symbols-outlined text-xs">location_on</span>${b.room}</p>
+            ${desc?`<p class="text-[10px] font-medium mt-2 leading-relaxed ${isConf?'text-black/50':'text-slate-400'}">${desc}</p>`:''}
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:10px;border-top:1px solid ${isConf?'rgba(0,0,0,0.08)':'#f1f5f9'};">
+                <span class="text-[8px] font-black uppercase tracking-wider flex items-center gap-1 ${isConf?'text-black/40':'text-slate-300'}"><span class="material-symbols-outlined text-[11px]">edit</span>Tap to edit</span>
+                <button onclick="event.stopPropagation();confirmCancel('${b.title}').then(ok=>{if(ok){this.closest('.schedule-booking-card').style.opacity='0.4';this.disabled=true;showToast('Booking cancelled')}})"
+                    style="${isConf?'background:rgba(0,0,0,0.1);color:rgba(0,0,0,0.5);':'background:#f1f5f9;color:#94a3b8;'}border:none;padding:5px 12px;border-radius:10px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;font-family:Manrope,sans-serif;transition:all 0.15s;"
+                    onmouseover="this.style.background='${isConf?'#000':'#fef2f2'}';this.style.color='${isConf?'#adee2b':'#ef4444'}'"
+                    onmouseout="this.style.background='${isConf?'rgba(0,0,0,0.1)':'#f1f5f9'}';this.style.color='${isConf?'rgba(0,0,0,0.5)':'#94a3b8'}'">Cancel</button>
+            </div>
+        </div>`;
+    });
+    html+=`</div></div>`;
+
+    html+=`<div class="anim-in" style="animation-delay:0.2s">
+        <p class="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 mt-2">Upcoming</p>
+        <div class="space-y-3">`;
+    futureBookings.forEach((b,i) => {
+        const d=dur(b.start,b.end);
+        const desc=descMap[b.title]||'';
+        const editPayload=JSON.stringify({title:b.title,room:b.room,start:b.start,end:b.end,status:b.status,desc:desc}).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+        html+=`<div class="schedule-booking-card bg-white" style="position:relative;border:1.5px solid #d4d4d4;animation-delay:${(i+myBookings.length)*0.06}s;cursor:pointer;" onclick="openBookingPanel(null, JSON.parse(this.dataset.edit))" data-edit='${editPayload}'>
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#e2e8f0,transparent);border-radius:16px 16px 0 0;opacity:0.6;"></div>
+            <div class="flex items-start justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-[8px] font-black uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">${b.status==='confirmed'?'Confirmed':'Tentative'}</span>
+                    <span class="text-[8px] font-bold text-slate-400 uppercase">${b.date}</span>
+                </div>
+                <div class="text-right"><p class="text-[11px] font-black text-slate-400">${b.start} – ${b.end}</p>${d?`<p class="text-[9px] font-bold text-slate-300">${d}</p>`:''}</div>
+            </div>
+            <h4 class="text-[16px] font-black uppercase tracking-tight leading-tight text-slate-800">${b.title}</h4>
+            <p class="text-[10px] font-bold text-slate-400 mt-1.5 flex items-center gap-1"><span class="material-symbols-outlined text-xs">location_on</span>${b.room}</p>
+            ${desc?`<p class="text-[10px] font-medium mt-2 leading-relaxed text-slate-400">${desc}</p>`:''}
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:10px;border-top:1px solid #f1f5f9;">
+                <span class="text-[8px] font-black uppercase tracking-wider flex items-center gap-1 text-slate-300"><span class="material-symbols-outlined text-[11px]">edit</span>Tap to edit</span>
+                <button onclick="event.stopPropagation();confirmCancel('${b.title}').then(ok=>{if(ok){this.closest('.schedule-booking-card').style.opacity='0.4';this.disabled=true;showToast('Booking cancelled')}})"
+                    style="background:#f1f5f9;color:#94a3b8;border:none;padding:5px 12px;border-radius:10px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;font-family:Manrope,sans-serif;transition:all 0.15s;"
+                    onmouseover="this.style.background='#fef2f2';this.style.color='#ef4444'"
+                    onmouseout="this.style.background='#f1f5f9';this.style.color='#94a3b8'">Cancel</button>
+            </div>
+        </div>`;
+    });
+    html+=`</div></div>`;
+
+    document.getElementById('schedBookingList').innerHTML=html;
+}
+
+// ══ BOOKING PANEL ════════════════════════════
+window.openBookingPanel = function(roomName='Select a Room', editData=null) {
+    const panel = document.getElementById('bookingPanel');
+    const overlay = document.getElementById('bookingOverlay');
+    const panelLabel = document.getElementById('bookingPanelLabel');
+    const today = new Date().toISOString().split('T')[0];
+
+    if (editData) {
+        // ── EDIT MODE ──
+        panelLabel.textContent = 'Edit Booking';
+        document.getElementById('selectedRoomDisplay').textContent = editData.room;
+        document.getElementById('bDate').value = editData.date || today;
+        document.getElementById('bEndDate').value = editData.date || today;
+        document.getElementById('startTime').value = editData.start;
+        document.getElementById('endTime').value = editData.end;
+        document.getElementById('bTitle').value = editData.title;
+        document.getElementById('bDesc').value = editData.desc || '';
+        // Set status pill
+        const statusTarget = editData.status === 'tentative' ? 1 : 0;
+        document.querySelectorAll('#toggleStatus .pill-btn').forEach((b,i) => {
+            b.classList.toggle('active-dark', i === statusTarget);
+            b.classList.remove('active');
+        });
+        // Trigger duration + availability recalc
+        calculateDuration();
+        // Swap confirm button text
+        document.getElementById('btnSubmitBooking').textContent = 'Save Changes';
+    } else {
+        // ── CREATE MODE ──
+        panelLabel.textContent = 'Create Booking';
+        document.getElementById('selectedRoomDisplay').textContent = roomName;
+        document.getElementById('bDate').value = today;
+        document.getElementById('bEndDate').value = today;
+        document.getElementById('startTime').value = '';
+        document.getElementById('endTime').value = '';
+        document.getElementById('bTitle').value = '';
+        document.getElementById('bDesc').value = '';
+        document.getElementById('durationBadge').textContent = '0.0 HOURS';
+        document.getElementById('btnSubmitBooking').textContent = 'Confirm Booking';
+        validateForm();
+    }
+
+    overlay.classList.remove('pointer-events-none');
+    overlay.dataset.target = 'booking';
+    requestAnimationFrame(()=>{ overlay.classList.add('opacity-100'); panel.classList.remove('translate-x-full'); });
+};
+window.closeBookingPanel = function() {
+    document.getElementById('bookingPanel').classList.add('translate-x-full');
+    document.getElementById('pantrySlide').classList.add('translate-x-full');
+    document.getElementById('bookingOverlay').classList.remove('opacity-100');
+    document.getElementById('bookingOverlay').classList.add('pointer-events-none');
+};
+function handleOverlayClick() {
+    const t = document.getElementById('bookingOverlay').dataset.target;
+    if(t==='today') closeTodayPanel();
+    else closeBookingPanel();
+}
+
+// ══ FORM ═════════════════════════════════════
+window.calculateDuration = function() {
+    const s=document.getElementById('startTime').value, e=document.getElementById('endTime').value;
+    if(s&&e){ const [h1,m1]=s.split(':').map(Number),[h2,m2]=e.split(':').map(Number); const diff=(h2+m2/60)-(h1+m1/60); document.getElementById('durationBadge').textContent=diff>0?`${diff.toFixed(1)} HOURS`:'INVALID TIME'; if(diff>0) updateAvailability(true); else updateAvailability(false); }
+    validateForm();
+};
+function updateAvailability(ok) {
+    const card=document.getElementById('availabilityCard'),icon=document.getElementById('availIcon'),status=document.getElementById('availStatus'),note=document.getElementById('availNote');
+    if(ok){ card.className='flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-[#adee2b] bg-[#f7fee7]'; icon.className='size-8 rounded-xl bg-[#adee2b] flex items-center justify-center text-black shrink-0'; icon.innerHTML='<span class="material-symbols-outlined text-base">verified</span>'; status.className='text-[9px] font-black uppercase tracking-widest text-green-800'; status.textContent='Room Available'; note.textContent='No conflicts for this slot.'; }
+    else { card.className='flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-200 bg-red-50'; icon.className='size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0'; icon.innerHTML='<span class="material-symbols-outlined text-base">block</span>'; status.className='text-[9px] font-black uppercase tracking-widest text-red-800'; status.textContent='Conflict Detected'; note.textContent='Room is occupied at this time.'; }
+}
+function validateForm() {
+    const s=document.getElementById('startTime').value,e=document.getElementById('endTime').value,t=document.getElementById('bTitle').value.trim();
+    const valid=s&&e&&t&&(()=>{const[h1,m1]=s.split(':').map(Number),[h2,m2]=e.split(':').map(Number);return(h2+m2/60)-(h1+m1/60)>0;})();
+    document.getElementById('btnSubmitBooking').disabled=!valid;
+}
+function submitBooking(){ const isEdit=document.getElementById('btnSubmitBooking').textContent.trim()==='Save Changes'; closeBookingPanel(); setTimeout(()=>showToast(isEdit?'✓ Booking updated successfully.':'✓ Booking confirmed! Check your schedule.'),400); }
+window.changeAttendees=function(d){attendeeCount=Math.max(1,Math.min(100,attendeeCount+d));document.getElementById('attendeeCount').textContent=attendeeCount;};
+window.changeQty=function(id,d){const el=document.getElementById(id);el.textContent=Math.max(0,parseInt(el.textContent)+d);};
+window.setPill=function(g,btn){document.querySelectorAll(`#${g} .pill-btn`).forEach(b=>b.classList.remove('active'));btn.classList.add('active');};
+window.setPillDark=function(g,btn){document.querySelectorAll(`#${g} .pill-btn`).forEach(b=>b.classList.remove('active-dark'));btn.classList.add('active-dark');};
+
+// ══ PANTRY ═══════════════════════════════════
+window.togglePantry=function(){document.getElementById('pantrySlide').classList.toggle('translate-x-full');};
+window.savePantry=function(){
+    const items=[];
+    const cq=parseInt(document.getElementById('coffeeQty').textContent),tq=parseInt(document.getElementById('teaQty').textContent),wq=parseInt(document.getElementById('waterQty').textContent),sq=parseInt(document.getElementById('snackQty').textContent);
+    if(cq>0) items.push({icon:'coffee',label:`Coffee (${cq})`,color:'orange'});
+    if(tq>0) items.push({icon:'emoji_food_beverage',label:`Tea (${tq})`,color:'green'});
+    if(wq>0) items.push({icon:'water_full',label:`Water (${wq})`,color:'blue'});
+    if(sq>0) items.push({icon:'cookie',label:`Snacks (${sq})`,color:'amber'});
+    document.getElementById('pantryItemCount').textContent=items.length;
+    document.getElementById('pantryDetailsList').innerHTML=items.map(it=>`<div class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl"><div class="size-7 bg-${it.color}-100 text-${it.color}-600 rounded-lg flex items-center justify-center"><span class="material-symbols-outlined text-sm">${it.icon}</span></div><span class="text-[10px] font-black uppercase">${it.label}</span></div>`).join('');
+    document.getElementById('pantrySummary').classList.remove('hidden');
+    document.getElementById('pantrySlide').classList.add('translate-x-full');
+};
+window.togglePantryDetails=function(){document.getElementById('pantryDetailsPopover').classList.toggle('hidden');};
+
+// ══ TOOLTIP ══════════════════════════════════
+const tt=document.getElementById('smartTooltip'); let hideTimeout;
+function positionTooltip(e){clearHideTimeout();tt.classList.add('visible');let x=e.clientX+20,y=e.clientY+20;if(x+310>window.innerWidth)x=e.clientX-320;if(y+350>window.innerHeight)y=window.innerHeight-360;tt.style.left=`${x}px`;tt.style.top=`${y}px`;}
+window.showRoomTooltip=function(e,type){document.getElementById('ttBookingContent').classList.add('hidden');document.getElementById('ttRoomContent').classList.remove('hidden');const data=roomData[type];document.getElementById('ttRoomNameLarge').textContent=type+' Suite';document.getElementById('ttRoomPic').src=data.pics[0];document.getElementById('ttCapacityLarge').textContent=data.cap;document.getElementById('ttFacilities').innerHTML=data.facilities.map(f=>`<span class="bg-white/10 px-2 py-1 rounded-lg text-[8px] font-bold border border-white/5 flex items-center gap-1 uppercase"><span class="material-symbols-outlined text-[11px] text-[#adee2b]">${f.i}</span>${f.n}</span>`).join('');positionTooltip(e);};
+window.showBookingTooltip=function(e,data){
+    document.getElementById('ttRoomContent').classList.add('hidden');
+    document.getElementById('ttBookingContent').classList.remove('hidden');
+    document.getElementById('ttYourBookingTag').style.display=data.isMe?'inline-flex':'none';
+    const tag=document.getElementById('ttStatusTag');
+    tag.textContent=data.status;tag.style.background=data.tagBg;tag.style.color=data.tagText;
+    document.getElementById('ttAvatar').src=`https://api.dicebear.com/7.x/avataaars/svg?seed=${data.avatar}`;
+    document.getElementById('ttUser').textContent=data.user;
+    document.getElementById('ttDept').textContent=data.full;
+    document.getElementById('ttExt').textContent=data.ext;
+    document.getElementById('ttEmail').textContent=data.email;
+    document.getElementById('ttTitle').textContent=data.status==='Maintenance'?'Repair: Unit AC-201':'Project Sync Session';
+    document.getElementById('ttDesc').textContent=data.desc;
+    const m=data.time.match(/(\d+:\d+)\s*[–-]\s*(\d+:\d+)/);
+    let td=data.time;
+    if(m){const[,s,en]=m;const[h1,m1]=s.split(':').map(Number),[h2,m2]=en.split(':').map(Number);const diff=(h2+m2/60)-(h1+m1/60);if(diff>0){const h=Math.floor(diff),min=Math.round((diff-h)*60);const dur=h&&min?`${h}h ${min}m`:h?`${h}h`:`${min}m`;td=`${data.time} · ${dur}`;}}
+    document.getElementById('ttTimeDur').textContent=td;
+    document.getElementById('ttRoomRef').textContent=data.room;
+    document.getElementById('ttEditActions').style.display=data.isMe?'flex':'none';
+    positionTooltip(e);
+};
+
+// ══ COPY TO CLIPBOARD ══════════════════════
+window.copyToClip = function(elId, label) {
+    const text = document.getElementById(elId).textContent.trim();
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById(elId === 'ttExt' ? 'copyExtBtn' : 'copyEmailBtn');
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[11px]">check</span>Copied!';
+        btn.style.background = '#adee2b'; btn.style.color = '#000';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; btn.style.color = ''; }, 1500);
+    });
+};
+
+// ══ ROOM DETAIL MODAL ══════════════════════
+let currentDetailRoom = null;
+let rdSlideIdx = 0;
+const roomNotes = {
+    "Ballroom":  "Suitable for large-scale events, townhalls, and seminars. Please coordinate with GA team 48hrs before for stage/AV setup. Pantry service available on request.",
+    "Executive": "For senior leadership and external meetings. Please ensure room is returned to original configuration after use. Video conferencing pre-configured.",
+    "Focus":     "Quiet zone — no phone calls. Ideal for focused work sessions and small discussions. Max 4 pax strictly enforced."
+};
+const peakData = {
+    "Ballroom":  [10,20,85,95,90,50,55,80,85,40,20,10],
+    "Executive": [20,45,75,90,88,60,65,78,70,35,15,5],
+    "Focus":     [30,55,80,70,65,80,90,75,60,25,10,5]
+};
+
+window.openRoomDetail = function(rName, type) {
+    const data = roomData[type];
+    const modal = document.getElementById('roomDetailModal');
+    const inner = document.getElementById('roomDetailInner');
+    currentDetailRoom = { rName, type };
+    rdSlideIdx = 0;
+
+    document.getElementById('rdName').textContent = rName;
+    document.getElementById('rdCap').textContent = data.cap;
+    document.getElementById('rdLocation').textContent = `Floor ${data.floor} · Head Office Jakarta`;
+    document.getElementById('rdNotes').textContent = roomNotes[type] || '';
+
+    // Build photo slider
+    const pics = data.pics;
+    document.getElementById('rdPhotoTrack').innerHTML = pics.map(p =>
+        `<img src="${p}" class="rd-photo-slide">`
+    ).join('');
+    document.getElementById('rdPhotoDots').innerHTML = pics.map((_,i) =>
+        `<button class="rd-dot ${i===0?'active':''}" onclick="rdGoSlide(${i})"></button>`
+    ).join('');
+    document.getElementById('rdPhotoTrack').style.transform = 'translateX(0)';
+
+    // Dot color
+    const dotColor = type==='Ballroom'?'#c084fc':type==='Executive'?'#60a5fa':'#4ade80';
+    document.getElementById('rdDot').style.background = dotColor;
+
+    // Facilities
+    document.getElementById('rdFacilities').innerHTML = data.facilities.map(f =>
+        `<span class="flex items-center gap-1.5 bg-black text-[#adee2b] text-[9px] font-black uppercase px-3 py-1.5 rounded-full">
+            <span class="material-symbols-outlined text-[11px]">${f.i}</span>${f.n}
+        </span>`).join('') + data.facilities.map(() => '').join('');
+
+    // Stats (fake varied per type)
+    const counts = {"Ballroom":24,"Executive":31,"Focus":18};
+    const utils = {"Ballroom":"87%","Executive":"94%","Focus":"62%"};
+    document.getElementById('rdBookingCount').textContent = counts[type];
+    document.getElementById('rdUtilization').textContent = utils[type];
+
+    // Peak bars
+    const peaks = peakData[type];
+    const maxP = Math.max(...peaks);
+    document.getElementById('rdPeakBars').innerHTML = peaks.map((v,i) => {
+        const pct = Math.round((v/maxP)*100);
+        const isHigh = pct > 70;
+        return `<div style="flex:1;height:${pct}%;background:${isHigh?'#adee2b':'#e2e8f0'};border-radius:4px;transition:height 0.4s ease ${i*30}ms"></div>`;
+    }).join('');
+
+    // Occupancy mini-bar (today's bookings for this room idx)
+    const roomIdx = parseInt(rName.split(' ')[1]) - 101;
+    const rowBks = bookings.filter(b => b.roomIdx === roomIdx);
+    const now = new Date();
+    const nowPct = Math.min(100, Math.max(0, ((now.getHours()-7)*60+now.getMinutes())/(12*60)*100));
+    let barHTML = `<div style="position:absolute;left:${nowPct}%;width:2px;height:100%;background:#ef4444;z-index:10"></div>`;
+    rowBks.forEach(b => {
+        const left = (b.startSlot/24)*100;
+        const width = (b.span/24)*100;
+        const info = deptMap[b.dept];
+        barHTML += `<div style="position:absolute;left:${left}%;width:${width}%;height:100%;background:${info.color};border-radius:5px;display:flex;align-items:center;justify-content:center;">
+            <span style="font-size:8px;font-weight:800;color:${info.status==='Maintenance'?'white':'black'}">${b.dept}</span>
+        </div>`;
+    });
+    document.getElementById('rdOccupancyBar').innerHTML = barHTML;
+
+    // Show modal
+    modal.classList.remove('pointer-events-none');
+    requestAnimationFrame(() => {
+        modal.style.opacity = '1';
+        inner.style.transform = 'scale(1)';
+    });
+};
+
+window.closeRoomDetail = function() {
+    const modal = document.getElementById('roomDetailModal');
+    const inner = document.getElementById('roomDetailInner');
+    modal.style.opacity = '0';
+    inner.style.transform = 'scale(0.97)';
+    setTimeout(() => modal.classList.add('pointer-events-none'), 300);
+};
+
+window.rdGoSlide = function(idx) {
+    const pics = roomData[currentDetailRoom?.type]?.pics || [];
+    rdSlideIdx = Math.max(0, Math.min(pics.length - 1, idx));
+    document.getElementById('rdPhotoTrack').style.transform = `translateX(-${rdSlideIdx * 100}%)`;
+    document.querySelectorAll('.rd-dot').forEach((d, i) => d.classList.toggle('active', i === rdSlideIdx));
+};
+
+window.rdSlide = function(dir) {
+    const pics = roomData[currentDetailRoom?.type]?.pics || [];
+    rdGoSlide(rdSlideIdx + dir);
+};
+
+window.hideTooltip=function(){hideTimeout=setTimeout(()=>tt.classList.remove('visible'),180);};
+window.clearHideTimeout=function(){clearTimeout(hideTimeout);};
+
+// ══ FAQ / HELP ══════════════════════════════════
+const faqData = [
+    { cat:'booking', q:'How do I book a room?', a:'Click any empty slot on the timeline grid, or click <strong>+ New Booking</strong> in the toolbar. Fill in the title, date, time, and attendees, then hit <strong>Confirm Booking</strong>.' },
+    { cat:'booking', q:'Can I set a recurring booking?', a:'Yes! In the booking panel, find the <strong>Repeat</strong> toggle. Choose from Daily, Weekly, or Monthly. The system will auto-create all occurrences — you can cancel individual instances later.' },
+    { cat:'booking', q:'What\'s the difference between Confirmed and Tentative?', a:'<strong>Confirmed</strong> (lime green) means the slot is firmly reserved. <strong>Tentative</strong> (striped gray) is a placeholder — others can still request the slot. Upgrade to Confirmed once your meeting is finalised.' },
+    { cat:'booking', q:'How do I cancel a booking?', a:'Open the booking tooltip by hovering over the booking bar on the timeline. Click <strong>Cancel Booking</strong>. You\'ll be asked to confirm. Cancellations send a notification to all invited attendees.' },
+    { cat:'booking', q:'What happens if there\'s a time conflict?', a:'The booking panel shows a red <strong>Conflict Detected</strong> card when your selected time overlaps with an existing booking. You\'ll need to adjust the time before confirming.' },
+    { cat:'room', q:'How do I see full room details?', a:'Click the room name on the left column of the timeline, or click the <strong>↗ icon</strong> that appears when you hover over a room row. The room detail modal shows photos, facilities, occupancy, and monthly stats.' },
+    { cat:'room', q:'What do the room type colours mean?', a:'<strong>Purple dot</strong> = Ballroom (large events, B1 floor). <strong>Blue dot</strong> = Executive suite (leadership meetings, 5F). <strong>Green dot</strong> = Focus room (quiet work, max 4 pax, 3F).' },
+    { cat:'room', q:'How do I filter rooms by department?', a:'Use the <strong>All Depts</strong> dropdown in the toolbar above the grid. Select a department (GAA, HRD, MTC) to show only rooms that have bookings from that department.' },
+    { cat:'room', q:'Can I report a room issue?', a:'Open the room detail modal and scroll to the bottom of the right panel. Click <strong>Report Issue</strong> to send a maintenance request to the GA team with the room pre-filled.' },
+    { cat:'pantry', q:'How do I order pantry items for my meeting?', a:'In the booking panel, click the <strong>Pantry</strong> pull tab on the right edge. Select items (coffee, tea, water, snacks), set quantities, add any special requests, then tap <strong>Save & Return</strong>.' },
+    { cat:'pantry', q:'When will my pantry order be ready?', a:'Pantry orders are prepared <strong>15 minutes before</strong> your booking start time. Make sure to submit your order at least 30 minutes in advance. Orders submitted later may not be fulfilled.' },
+    { cat:'pantry', q:'Can I edit my pantry order after confirming?', a:'Yes — open your booking from <strong>My Schedule</strong>, tap the pantry summary chip, and modify quantities. Changes within 30 minutes of start time will trigger a GA team alert.' },
+    { cat:'account', q:'How do I view all my upcoming bookings?', a:'Click <strong>My Schedule</strong> in the top navigation. The right panel shows today\'s bookings and upcoming ones. The calendar on the left highlights days with bookings using dot indicators.' },
+    { cat:'account', q:'Can I book on behalf of someone else?', a:'Currently, bookings are tied to your account. To book for someone else, they need to log in and create the booking themselves. Multi-user booking is planned for a future update.' },
+    { cat:'account', q:'How do I change my profile or notification settings?', a:'Click your <strong>avatar</strong> in the top-right corner to access account settings. From there you can update your display name, email, and notification preferences.' },
+];
+
+let faqCat = '', faqQuery = '';
+
+function renderFaq() {
+    const list = document.getElementById('faqList');
+    const filtered = faqData.filter(f => {
+        const matchCat = !faqCat || f.cat === faqCat;
+        const matchQ = !faqQuery || f.q.toLowerCase().includes(faqQuery.toLowerCase()) || f.a.toLowerCase().includes(faqQuery.toLowerCase());
+        return matchCat && matchQ;
+    });
+    if(!filtered.length) { list.innerHTML = `<div class="faq-empty"><span class="material-symbols-outlined text-3xl block mb-2 mx-auto">search_off</span>No results found</div>`; return; }
+    list.innerHTML = filtered.map((f,i) => `
+        <div class="faq-item" id="faqItem${i}">
+            <button class="faq-q" onclick="toggleFaq('faqItem${i}')">
+                <span class="faq-q-text">${f.q}</span>
+                <span class="faq-icon"><span class="material-symbols-outlined text-sm">add</span></span>
+            </button>
+            <div class="faq-a"><div class="faq-a-inner">${f.a}</div></div>
+        </div>`).join('');
+}
+
+function toggleFaq(id) {
+    const el = document.getElementById(id);
+    const wasOpen = el.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(x => x.classList.remove('open'));
+    if(!wasOpen) el.classList.add('open');
+}
+
+function filterFaq() { faqQuery = document.getElementById('faqSearch').value; renderFaq(); }
+
+function setFaqCat(cat, btn) {
+    faqCat = cat;
+    document.querySelectorAll('.faq-cat').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderFaq();
+}
+
+window.openHelp = function() {
+    faqQuery = ''; faqCat = '';
+    document.getElementById('faqSearch').value = '';
+    document.querySelectorAll('.faq-cat').forEach((b,i) => b.classList.toggle('active', i===0));
+    renderFaq();
+    const modal = document.getElementById('helpModal');
+    modal.classList.remove('pointer-events-none');
+    requestAnimationFrame(() => { modal.style.opacity='1'; document.getElementById('helpInner').style.transform='scale(1)'; });
+};
+
+window.closeHelp = function() {
+    const modal = document.getElementById('helpModal');
+    modal.style.opacity='0';
+    document.getElementById('helpInner').style.transform='scale(0.97)';
+    setTimeout(() => modal.classList.add('pointer-events-none'), 300);
+};
+
+// ══ DEPT DROPDOWN ═════════════════════════════
+function toggleDeptDrop(e){e.stopPropagation();const m=document.getElementById('deptDropMenu');m.classList.toggle('hidden');document.getElementById('deptChevron').style.transform=m.classList.contains('hidden')?'':'rotate(180deg)';}
+function selectDept(val,label){deptFilter=val;document.getElementById('deptDropLabel').textContent=label;document.getElementById('deptDropMenu').classList.add('hidden');document.getElementById('deptChevron').style.transform='';renderGrid();}
+
+// ══ REPEAT SCHEDULE ════════════════════════════
+let repeatN=1;
+function setRepeat(mode,btn){
+    document.querySelectorAll('#toggleRepeat .pill-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const wrap=document.getElementById('repeatOptsWrap');
+    const wdays=document.getElementById('repeatWeekDays');
+    const lbl=document.getElementById('repeatEveryLabel');
+    if(mode==='none'){wrap.classList.add('hidden');}
+    else{wrap.classList.remove('hidden');wdays.classList.toggle('hidden',mode!=='weekly');if(lbl)lbl.textContent=mode==='weekly'?'Every # Weeks':'Every # Days';}
+}
+function adjRepeat(d){repeatN=Math.max(1,repeatN+d);document.getElementById('repeatN').textContent=repeatN;}
+function toggleDay(btn){const on=btn.classList.contains('bg-black');btn.className=`wday flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase transition-colors ${on?'bg-slate-100 text-slate-400 hover:bg-slate-200':'bg-black text-[#adee2b]'}`;}
+
+// ══ DROPDOWN (location) ═══════════════════════
+function toggleDropdown(){document.getElementById('dropdownParent').classList.toggle('menu-visible');}
+function selectOpt(v){document.getElementById('selectedOption').textContent=v;document.getElementById('dropdownParent').classList.remove('menu-visible');showToast(`Switched to ${v}`);}
+document.addEventListener('click',e=>{
+    if(!document.getElementById('dropdownParent').contains(e.target))document.getElementById('dropdownParent').classList.remove('menu-visible');
+    const dp=document.getElementById('deptDropParent');
+    if(dp&&!dp.contains(e.target)){document.getElementById('deptDropMenu').classList.add('hidden');document.getElementById('deptChevron').style.transform='';}
+});
+const menuStyle=document.createElement('style');
+menuStyle.textContent=`.menu-visible #selectMenu{opacity:1!important;visibility:visible!important;transform:translateY(0)!important;}`;
+document.head.appendChild(menuStyle);
+
+// ══ TOAST ══════════════════════════════════════
+function showToast(msg){const c=document.getElementById('toastContainer');const t=document.createElement('div');t.className='bg-slate-900 text-white text-[11px] font-black uppercase tracking-wider px-6 py-3.5 rounded-full shadow-2xl pointer-events-auto anim-in';t.textContent=msg;c.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity 0.3s';setTimeout(()=>t.remove(),300);},3000);}
+
+// ══ INIT ═══════════════════════════
+// ── ADMIN MODE ─────────────────────────────────────────────────────────
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    if(params.get('role') === 'admin') {
+        // Show Dashboard button
+        const btn = document.getElementById('adminDashBtn');
+        if(btn) btn.classList.replace('hidden','flex');
+        // Admin badge in page
+        const badge = document.createElement('div');
+        badge.id = 'adminModeBadge';
+        badge.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#000;color:#adee2b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:0.1em;padding:8px 18px;border-radius:99px;z-index:999;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);pointer-events:none;';
+        badge.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">admin_panel_settings</span>Admin Mode — Full Edit Access';
+        document.body.appendChild(badge);
+        // Make all booked bars editable — inject edit handler after grid renders
+        const origRender = window.renderGrid || function(){};
+        document.addEventListener('click', function(e) {
+            const bar = e.target.closest('.booked-bar');
+            if(!bar) return;
+            e.stopPropagation();
+            const dept = bar.querySelector('span')?.textContent?.trim() || '';
+            showAdminEditToast(dept);
+        }, true);
+    }
+})();
+
+function showAdminEditToast(dept) {
+    const c = document.getElementById('toastContainer');
+    const t = document.createElement('div');
+    t.className = 'bg-slate-900 text-white text-[11px] font-black uppercase tracking-wider px-6 py-3.5 rounded-full shadow-2xl pointer-events-auto anim-in';
+    t.style.cssText = 'display:flex;align-items:center;gap:10px;';
+    t.innerHTML = `<span class="material-symbols-outlined" style="font-size:14px;color:#adee2b;">edit</span>Edit booking: ${dept} dept &nbsp;<button onclick="this.parentElement.remove()" style="background:#adee2b;color:#000;border:none;border-radius:99px;padding:2px 10px;font-size:9px;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:Manrope,sans-serif;margin-left:4px;">Edit</button><button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:none;border-radius:99px;padding:2px 10px;font-size:9px;font-weight:900;text-transform:uppercase;cursor:pointer;font-family:Manrope,sans-serif;">Cancel</button>`;
+    c.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(()=>t.remove(),300); }, 5000);
+}
+
+updateDateDisplay();
+renderGrid();
+renderDatePicker();
+</script>
+</body>
+</html>

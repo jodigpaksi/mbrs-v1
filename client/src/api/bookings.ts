@@ -1,6 +1,6 @@
 import api from './axios'
 
-export async function getBookings(params?: { date?: string; date_from?: string; date_to?: string; room_id?: number; user_id?: number; special_rooms?: boolean; series_id?: string }) {
+export async function getBookings(params?: { date?: string; date_from?: string; date_to?: string; room_id?: number; user_id?: number; special_rooms?: boolean }) {
   const res = await api.get('/bookings', { params })
   return res.data
 }
@@ -40,8 +40,6 @@ export async function createBooking(data: {
   type?: string
   series_id?: string
   series_skipped_dates?: string[]
-  resolves_series_id?: string
-  resolves_skipped_date?: string
   booked_for?: string
   booked_for_user_id?: number
 }) {

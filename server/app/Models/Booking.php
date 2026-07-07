@@ -25,8 +25,6 @@ class Booking extends Model
         'dispute_resolved_by',
         'series_id',
         'series_skipped_dates',
-        'resolves_series_id',
-        'resolves_skipped_date',
         'booked_for',
         'booked_for_user_id',
         'archived_at',
@@ -43,7 +41,6 @@ class Booking extends Model
             'dispute_resolved_at'   => 'datetime',
             'archived_at'           => 'datetime',
             'series_skipped_dates'  => 'array',
-            'resolves_skipped_date' => 'date:Y-m-d',
             'reminder_sent'         => 'boolean',
         ];
     }
