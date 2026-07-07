@@ -13,6 +13,7 @@ import { useCancelToast } from '../context/CancelToastContext'
 import BookingPanel from '../components/booking/BookingPanel'
 import { useBookingHours } from '../hooks/useBookingHours'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
+import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import UserHoverCard from '../components/ui/UserHoverCard'
 
 function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
@@ -431,6 +432,32 @@ function SeriesGroupRow({
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout>>()
+  const [showAllSkipped, setShowAllSkipped] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportIncludePast, setExportIncludePast] = useState(false)
+  const [exportPos, setExportPos] = useState<{ top: number; right: number } | null>(null)
+  const exportBtnRef = useRef<HTMLButtonElement>(null)
+  const exportPanelRef = useRef<HTMLDivElement>(null)
+
+  function toggleExportOpen() {
+    if (!exportOpen) {
+      const rect = exportBtnRef.current?.getBoundingClientRect()
+      if (rect) setExportPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+    }
+    setExportOpen(o => !o)
+  }
+
+  useEffect(() => {
+    if (!exportOpen) return
+    const fn = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (exportBtnRef.current?.contains(target)) return
+      if (exportPanelRef.current?.contains(target)) return
+      setExportOpen(false)
+    }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [exportOpen])
 
   function toggleOpen() {
     if (open && !closing) {
@@ -572,10 +599,9 @@ function SeriesGroupRow({
       {(open || closing) && (() => {
         const skipped = first.series_skipped_dates
         if (!skipped || skipped.length === 0) return null
-        const fmtSkipDate = (iso: string) => {
-          const [y, m, d] = iso.split('-').map(Number)
-          return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-        }
+        const unresolvedCount = skipped.filter(d => !resolvedSkips[`${group.series_id}:${d}`]).length
+        const visibleSkipped = showAllSkipped ? skipped : skipped.slice(0, 2)
+        const hiddenCount = skipped.length - visibleSkipped.length
         return (
           <tr style={{
             animation: closing
@@ -586,34 +612,178 @@ function SeriesGroupRow({
             <td colSpan={7} className="px-0 pt-0 pb-1">
               <div className="mx-8 mb-2 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 overflow-hidden">
                 <div className="flex items-center gap-2 px-3 py-2 border-b border-red-200 dark:border-red-500/20">
-                  <span className="material-symbols-outlined text-red-400" style={{ fontSize: 13 }}>event_busy</span>
-                  <span className="text-[9px] font-black uppercase tracking-wider text-red-500">{skipped.length} date{skipped.length !== 1 ? 's' : ''} skipped — conflict at time of booking</span>
+                  <span className="material-symbols-outlined text-red-400" style={{ fontSize: 15 }}>event_busy</span>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-red-500">
+                    {unresolvedCount > 0 ? `${unresolvedCount} date${unresolvedCount !== 1 ? 's' : ''} skipped — conflict at time of booking` : `${skipped.length} date${skipped.length !== 1 ? 's' : ''} skipped — all rebooked`}
+                  </span>
                 </div>
                 <div className="divide-y divide-red-200/60 dark:divide-red-500/10">
-                  {skipped.map(d => (
-                    <div key={d} className="flex items-center justify-between px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-red-300" style={{ fontSize: 12 }}>block</span>
-                        <span className="text-[11px] font-bold text-red-600 dark:text-red-400">{fmtSkipDate(d)}</span>
-                      </div>
-                      <button
-                        onClick={() => document.dispatchEvent(new CustomEvent('available-rooms-prefill', { detail: { date: d, startTime: '07:00', endTime: '16:30' } }))}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide transition-all
-                          bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-2)]
-                          hover:border-[#adee2b] hover:text-[#adee2b] hover:bg-[#adee2b]/5"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>search</span>
-                        Find another slot
-                      </button>
-                    </div>
-                  ))}
+                  {visibleSkipped.map(d => {
+                    const resolved = resolvedSkips[`${group.series_id}:${d}`]
+                    return resolved
+                      ? <ResolvedSkipRow key={d} date={d} booking={resolved} pendingCancelIds={pendingCancelIds} onEdit={onEdit} onCancel={onCancel} />
+                      : <SkippedDateRow key={d} date={d} room={first.room} startTime={toHHMM(first.start_at)} endTime={toHHMM(first.end_at)} seriesId={group.series_id} />
+                  })}
                 </div>
+                {hiddenCount > 0 && (
+                  <button
+                    onClick={() => setShowAllSkipped(true)}
+                    className="w-full text-center py-2 text-[11px] font-black text-red-500 hover:text-red-600 uppercase tracking-wide border-t border-red-200/60 dark:border-red-500/10"
+                  >
+                    +{hiddenCount} more…
+                  </button>
+                )}
+                {showAllSkipped && skipped.length > 2 && (
+                  <button
+                    onClick={() => setShowAllSkipped(false)}
+                    className="w-full text-center py-2 text-[11px] font-black text-red-400 hover:text-red-500 uppercase tracking-wide border-t border-red-200/60 dark:border-red-500/10"
+                  >
+                    Show less
+                  </button>
+                )}
               </div>
             </td>
           </tr>
         )
       })()}
     </tbody>
+  )
+}
+
+function fmtSkipDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+function MoreTooltip({ label, items }: { label: string; items: string[] }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  function openTooltip() {
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (rect) setPos({ top: rect.bottom + 6, left: rect.left })
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const fn = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node)) return
+      if (panelRef.current?.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [open])
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onMouseEnter={openTooltip}
+        onMouseLeave={() => setOpen(false)}
+        onClick={() => (open ? setOpen(false) : openTooltip())}
+        className="text-[11px] font-black text-red-400 hover:text-red-500 underline decoration-dotted underline-offset-2"
+      >
+        {label}
+      </button>
+      {open && pos && createPortal(
+        <div ref={panelRef} className="fixed z-50 rounded-xl p-3 w-72 space-y-1.5"
+          style={{ top: pos.top, left: pos.left, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+          {items.map((it, i) => (
+            <p key={i} className="text-[12px] font-semibold text-[var(--ds-text-2)] leading-snug">{it}</p>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
+  date: string
+  room?: Room
+  startTime: string
+  endTime: string
+  seriesId: string
+}) {
+  const { language } = useSettings()
+  const { data } = useQuery({
+    queryKey: ['skip-conflicts', room?.id, date, startTime, endTime],
+    queryFn: () => checkAvailability(room!.id, `${date} ${startTime}:00`, `${date} ${endTime}:00`),
+    enabled: !!room,
+    staleTime: 60_000,
+  })
+  const conflicts = (data?.conflicts ?? []) as Booking[]
+  const shown = conflicts.slice(0, 2)
+  const rest = conflicts.slice(2)
+
+  const fmtConflict = (b: Booking) => {
+    const dept = b.user?.department_name
+    return `${b.title} - ${b.user?.name ?? '—'}${dept ? ` (${dept})` : ''} ${fmtTime(b.start_at, language)}-${fmtTime(b.end_at, language)}`
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-3 px-3 py-2">
+      <div className="flex items-start gap-2 min-w-0">
+        <span className="material-symbols-outlined text-red-300 mt-0.5" style={{ fontSize: 12 }}>block</span>
+        <div className="min-w-0">
+          <span className="text-[13px] font-bold text-red-600 dark:text-red-400 block">{fmtSkipDate(date)}</span>
+          {shown.length > 0 && (
+            <div className="mt-1 space-y-1">
+              {shown.map(c => (
+                <p key={c.id} className="text-[11.5px] font-semibold text-red-400/90 dark:text-red-400/80 truncate max-w-[320px]">{fmtConflict(c)}</p>
+              ))}
+              {rest.length > 0 && <MoreTooltip label={`+${rest.length} more…`} items={rest.map(fmtConflict)} />}
+            </div>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={() => document.dispatchEvent(new CustomEvent('available-rooms-prefill', {
+          detail: { date, startTime, endTime, resolveSkip: { seriesId, date } },
+        }))}
+        className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all
+          bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-2)]
+          hover:border-[#adee2b] hover:text-[#adee2b] hover:bg-[#adee2b]/5"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>search</span>
+        Find another slot
+      </button>
+    </div>
+  )
+}
+
+function ResolvedSkipRow({ date, booking, pendingCancelIds, onEdit, onCancel }: {
+  date: string
+  booking: Booking
+  pendingCancelIds: Set<number>
+  onEdit: (b: Booking) => void
+  onCancel: (b: Booking) => void
+}) {
+  const { language } = useSettings()
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2 bg-green-50 dark:bg-green-500/5">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="material-symbols-outlined text-green-500 shrink-0" style={{ fontSize: 13 }}>check_circle</span>
+        <span className="text-[13px] font-bold text-green-700 dark:text-green-400 shrink-0">{fmtSkipDate(date)} — rebooked:</span>
+        <span className="text-[12px] font-semibold text-green-600 dark:text-green-400/80 truncate">
+          {booking.title} · {booking.room?.name}{booking.room?.building?.name ? `, ${booking.room.building.name}` : ''} · {fmtTableDate(booking.start_at, language)} {fmtTime(booking.start_at, language)}–{fmtTime(booking.end_at, language)}
+        </span>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button onClick={() => onEdit(booking)} title="Edit this booking"
+          className="size-6 flex items-center justify-center rounded-md bg-[var(--ds-bg-raised)] text-green-600 dark:text-green-400 hover:bg-black hover:text-[#adee2b] transition-all">
+          <span className="material-symbols-outlined" style={{ fontSize: 12 }}>edit</span>
+        </button>
+        <button onClick={() => onCancel(booking)} disabled={pendingCancelIds.has(booking.id)} title="Cancel this booking"
+          className="size-6 flex items-center justify-center rounded-md bg-[var(--ds-bg-raised)] text-green-600 dark:text-green-400 hover:bg-red-500/15 hover:text-red-500 transition-all disabled:opacity-40">
+          <span className="material-symbols-outlined" style={{ fontSize: 12 }}>cancel</span>
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -787,6 +957,13 @@ export default function SchedulePage() {
   const [tentativeConfirming, setTentativeConfirming] = useState(false)
   const [buildingFilter, setBuildingFilter] = useState<number | null>(defaultBuilding)
   const [seriesCancelTarget, setSeriesCancelTarget] = useState<SeriesGroup | null>(null)
+
+  // Enter → confirm, Escape → dismiss, one modal at a time.
+  useModalHotkeys(!!cancelTarget, confirmCancel, () => setCancelTarget(null))
+  useModalHotkeys(!!tentativeTarget, undefined, () => setTentativeTarget(null))
+  useModalHotkeys(!!seriesCancelTarget, doConfirmSeriesCancel, () => setSeriesCancelTarget(null))
+  useModalHotkeys(clearConfirm, doClearCancelled, () => setClearConfirm(false))
+
   const [hCalDate, setHCalDate] = useState<string>(() => toDateKey(new Date()))
   const [hCalMonth, setHCalMonth] = useState<{ yr: number; mo: number }>(() => {
     const d = new Date()

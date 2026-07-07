@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getAfterHoursContacts } from '../../api/settings'
 import type { AfterHoursContact } from '../../api/settings'
 import UserAvatar from '../ui/UserAvatar'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 
 interface AfterHoursModalProps {
   open: boolean
@@ -70,12 +71,7 @@ export default function AfterHoursModal({ open, onClose, workingHoursEnd, buildi
     enabled: open,
   })
 
-  useEffect(() => {
-    if (!open) return
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  useModalHotkeys(open, onChangeTime ? () => { onClose(); onChangeTime() } : undefined, onClose)
 
   if (!open) return null
 

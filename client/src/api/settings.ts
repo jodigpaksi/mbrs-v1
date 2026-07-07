@@ -122,7 +122,10 @@ export async function getM365Settings(): Promise<M365Settings> {
   return res.data
 }
 
-export async function updateM365Settings(patch: { tenant_id?: string; client_id?: string; client_secret?: string; sender_email?: string; mail_enabled?: boolean; calendar_sync_enabled?: boolean }): Promise<M365Settings> {
+export async function updateM365Settings(patch: {
+  tenant_id?: string; client_id?: string; client_secret?: string; sender_email?: string
+  mail_enabled?: boolean; calendar_sync_enabled?: boolean
+}): Promise<M365Settings> {
   const res = await api.patch('/settings/m365', patch)
   return res.data
 }

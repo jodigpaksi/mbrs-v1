@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getSpecialRoomContacts } from '../../api/settings'
 import type { AfterHoursContact } from '../../api/settings'
 import UserAvatar from '../ui/UserAvatar'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 
 interface Props {
   open: boolean
@@ -69,12 +70,7 @@ export default function ContactReceptionistModal({ open, onClose, roomName, buil
     staleTime: 60_000,
   })
 
-  useEffect(() => {
-    if (!open) return
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  useModalHotkeys(open, undefined, onClose)
 
   if (!open) return null
 

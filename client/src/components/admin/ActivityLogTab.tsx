@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { getActivityLogs, exportActivityLogs, clearAllActivityLogs, type ActivityLog } from '../../api/activityLogs'
 import { useCancelToast } from '../../context/CancelToastContext'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 
 const CATEGORIES: { key: string; label: string }[] = [
   { key: '',         label: 'All' },
@@ -143,6 +144,12 @@ export default function ActivityLogTab() {
       setClearing(false)
     }
   }
+
+  useModalHotkeys(
+    clearConfirm,
+    clearInput === 'Delete all logs' ? doClearAll : undefined,
+    () => setClearConfirm(false),
+  )
 
   const logs = data?.data ?? []
   const meta = data?.meta
@@ -315,7 +322,6 @@ export default function ActivityLogTab() {
                   onChange={e => setClearInput(e.target.value)}
                   placeholder="Delete all logs"
                   autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter' && clearInput === 'Delete all logs') doClearAll() }}
                   className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
                 />
               </div>

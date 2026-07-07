@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { updateOnDutyStatus } from '../../api/auth'
 import { getBuildings } from '../../api/buildings'
 import type { Building } from '../../types/index'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 
 interface Props {
   open: boolean
@@ -175,6 +176,8 @@ export default function SettingModal({ open, onClose }: Props) {
   const [onDutySaving, setOnDutySaving] = useState(false)
   const isReceptionist = user?.role === 'receptionist'
   const onDuty = user?.on_duty ?? true
+
+  useModalHotkeys(open, undefined, onClose)
 
   async function toggleOnDuty() {
     if (!user || onDutySaving) return

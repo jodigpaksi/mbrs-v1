@@ -6,6 +6,7 @@ import { getAnalyticsOverview, downloadAnalyticsExport } from '../api/analytics'
 import type { SectionPeriod } from '../api/analytics'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
@@ -79,8 +80,14 @@ function BuildingModal({
         notes: notes.trim() || undefined,
       })
       onClose()
-    } catch { setErr('Failed to save building.') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; errors?: { name?: string[] } } } })?.response?.data?.errors?.name?.[0]
+        ?? (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setErr(msg || 'Failed to save building.')
+    } finally { setSaving(false) }
   }
+
+  useModalHotkeys(true, handleSave, onClose)
 
   return (
     <ModalPortal>
@@ -255,6 +262,7 @@ function IconPickerModal({ current, onSelect, onClose }: {
 }) {
   const [search, setSearch]   = useState('')
   const [cat, setCat]         = useState('All')
+  useModalHotkeys(true, undefined, onClose)
   const allIcons               = Object.values(ICON_CATEGORIES).flat()
   const cats                   = ['All', ...Object.keys(ICON_CATEGORIES)]
   const baseIcons              = cat === 'All' ? allIcons : (ICON_CATEGORIES[cat] ?? [])
@@ -386,7 +394,11 @@ function RoomModal({
     try {
       await onSave({ building_id: buildingId, name: name.trim(), capacity: Number(capacity), floor: floor.trim(), notes: notes.trim() || undefined, requires_contact: requiresContact })
       onClose()
-    } catch { setErr('Failed to save room.') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; errors?: { name?: string[] } } } })?.response?.data?.errors?.name?.[0]
+        ?? (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setErr(msg || 'Failed to save room.')
+    } finally { setSaving(false) }
   }
 
   function addPhoto() {
@@ -437,6 +449,12 @@ function RoomModal({
     try { await updateRoom(initial.id, { facilities }); qc.invalidateQueries({ queryKey: ['rooms'] }) }
     finally { setSavingFacilities(false) }
   }
+
+  useModalHotkeys(!iconPickerOpen, () => {
+    if (activeTab === 'basic') handleSave()
+    else if (activeTab === 'photos') savePhotos()
+    else if (activeTab === 'facilities') saveFacilities()
+  }, onClose)
 
   const TAB_ORDER: RoomTab[] = ['basic', 'photos', 'facilities']
   const animDirRef = useRef<'left' | 'right'>('right')
@@ -955,6 +973,12 @@ function LocationsSection() {
     finally { setDeleting(false) }
   }
 
+  useModalHotkeys(
+    !!deleteTarget,
+    deleteTarget && deleteLocConfirm === deleteTarget.name ? handleDelete : undefined,
+    () => { setDeleteTarget(null); setDeleteLocConfirm('') },
+  )
+
   return (
     <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-5 space-y-3">
       <div className="flex items-center justify-between">
@@ -1092,8 +1116,14 @@ function LocationModal({ initial, onSave, onClose }: {
     try {
       await onSave({ name: name.trim(), code: code.trim() })
       onClose()
-    } catch { setErr('Failed to save.') } finally { setSaving(false) }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; errors?: { name?: string[] } } } })?.response?.data?.errors?.name?.[0]
+        ?? (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setErr(msg || 'Failed to save.')
+    } finally { setSaving(false) }
   }
+
+  useModalHotkeys(true, handleSave, onClose)
 
   return (
     <ModalPortal>
@@ -1156,6 +1186,15 @@ function BuildingsTab() {
 
   const effectiveRooms = localRooms ?? (allRooms as Room[])
 
+  // localRooms is an optimistic snapshot (reorder/status/special/sensor-code toggles show it
+  // immediately without waiting for a refetch). Once the underlying query actually refetches
+  // (e.g. after invalidateQueries from any room create/update/delete/import), drop the snapshot
+  // so the UI goes back to reflecting real server data — otherwise a stale snapshot permanently
+  // masks anything new (like a freshly created room) until a hard refresh clears component state.
+  useEffect(() => {
+    setLocalRooms(null)
+  }, [allRooms])
+
   async function handleImportBuildings(rows: Parameters<typeof importBuildings>[0]) {
     const result = await importBuildings(rows)
     qc.invalidateQueries({ queryKey: ['buildings'] })
@@ -1209,6 +1248,12 @@ function BuildingsTab() {
     finally { setDeletingRoom(false) }
   }
 
+  useModalHotkeys(
+    !!deleteRoomTarget,
+    deleteRoomTarget && confirmRoomInput === deleteRoomTarget.name ? handleDeleteRoom : undefined,
+    () => { setDeleteRoomTarget(null); setDeleteRoomErr(''); setConfirmRoomInput('') },
+  )
+
   async function handleDelete() {
     if (!deleteTarget) return
     setDeleting(true); setDeleteErr('')
@@ -1221,6 +1266,12 @@ function BuildingsTab() {
       setDeleteErr(msg || 'Failed to delete.')
     } finally { setDeleting(false) }
   }
+
+  useModalHotkeys(
+    !!deleteTarget,
+    deleteTarget && confirmBuildingInput === deleteTarget.name ? handleDelete : undefined,
+    () => { setDeleteTarget(null); setConfirmBuildingInput('') },
+  )
 
   if (isLoading) return <div className="flex items-center justify-center h-48 text-[var(--ds-text-3)] text-sm font-bold">Loading...</div>
 
@@ -1794,11 +1845,13 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
       await onSave({ name: name.trim(), email: email.trim(), alias: alias.trim(), password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds, default_building_id: defaultBldId })
       onClose()
     } catch (e: unknown) {
-      const errs = (e as { response?: { data?: { errors?: { email?: string[]; alias?: string[] } } } })?.response?.data?.errors
-      const msg = errs?.email?.[0] ?? errs?.alias?.[0]
+      const errs = (e as { response?: { data?: { errors?: { name?: string[]; email?: string[]; alias?: string[] } } } })?.response?.data?.errors
+      const msg = errs?.name?.[0] ?? errs?.email?.[0] ?? errs?.alias?.[0]
       setErr(msg ?? 'Failed to create user.')
     } finally { setSaving(false) }
   }
+
+  useModalHotkeys(true, handleSave, onClose)
 
   const inputBase = 'w-full bg-[var(--ds-bg-raised)] border rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:border-transparent transition-all text-[var(--ds-text-1)]'
 
@@ -2207,6 +2260,8 @@ function ImportExportModal({ users, onImport, onClose }: {
       if (fileRef.current) fileRef.current.value = ''
     } finally { setImporting(false) }
   }
+
+  useModalHotkeys(true, handleImport, onClose)
 
   const TABS: { key: ImportTab; label: string; icon: string }[] = [
     { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
@@ -2646,6 +2701,8 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
     } finally { setImporting(false) }
   }
 
+  useModalHotkeys(true, handleImport, onClose)
+
   const TABS: { key: ImportTab; label: string; icon: string }[] = [
     { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
     { key: 'csv',   label: 'CSV (.csv)',    icon: 'description' },
@@ -2995,6 +3052,8 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
       if (fileRef.current) fileRef.current.value = ''
     } finally { setImporting(false) }
   }
+
+  useModalHotkeys(true, handleImport, onClose)
 
   const TABS: { key: ImportTab; label: string; icon: string }[] = [
     { key: 'excel', label: 'Excel (.xlsx)', icon: 'table' },
@@ -3438,10 +3497,12 @@ function UsersTab() {
       qc.invalidateQueries({ queryKey: ['users'] })
       setEditUser(null)
     } catch (e: unknown) {
-      const resp = (e as { response?: { data?: { message?: string; errors?: { email?: string[]; alias?: string[] } } } })?.response?.data
-      setEditErr(resp?.message ?? resp?.errors?.email?.[0] ?? resp?.errors?.alias?.[0] ?? 'Failed to save changes.')
+      const resp = (e as { response?: { data?: { message?: string; errors?: { name?: string[]; email?: string[]; alias?: string[] } } } })?.response?.data
+      setEditErr(resp?.errors?.name?.[0] ?? resp?.errors?.email?.[0] ?? resp?.errors?.alias?.[0] ?? resp?.message ?? 'Failed to save changes.')
     } finally { setSaving(false) }
   }
+
+  useModalHotkeys(!!editUser, handleSave, () => setEditUser(null))
 
   function toggleBuilding(id: number) {
     setBldIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -3468,6 +3529,12 @@ function UsersTab() {
       setDeleteUserErr(msg ?? 'Failed to delete user.')
     } finally { setDeletingUser(false) }
   }
+
+  useModalHotkeys(
+    !!deleteUserTarget,
+    deleteUserTarget && confirmUserInput === deleteUserTarget.name ? handleDeleteUser : undefined,
+    () => { setDeleteUserTarget(null); setConfirmUserInput('') },
+  )
 
   async function handleImport(rows: ImportRow[]) {
     const result = await importUsers(rows)
@@ -5746,6 +5813,176 @@ function SettingsTab() {
         </div>
       </div>
 
+      {/* Microsoft 365 Integration */}
+      <div ref={el => { secRefs.current.m365 = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Microsoft 365 Integration</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">
+            Azure AD App Registration credentials, shared by future Teams, Email, and Outlook Calendar integrations.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Tenant ID</label>
+            <input
+              type="text"
+              value={m365TenantId}
+              onChange={e => setM365TenantId(e.target.value)}
+              placeholder="e.g. 3f2a1b8c-....-....-....-............"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client ID (Application ID)</label>
+            <input
+              type="text"
+              value={m365ClientId}
+              onChange={e => setM365ClientId(e.target.value)}
+              placeholder="e.g. 7c9d4e21-....-....-....-............"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Client Secret</label>
+            <input
+              type="password"
+              value={m365ClientSecret}
+              onChange={e => setM365ClientSecret(e.target.value)}
+              placeholder={m365?.has_secret ? '•••••••• (already set — type to replace)' : 'Paste the client secret value'}
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+            <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. Leave blank when saving to keep the current secret unchanged.</p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Sender Mailbox</label>
+            <input
+              type="text"
+              value={m365SenderEmail}
+              onChange={e => setM365SenderEmail(e.target.value)}
+              placeholder="e.g. noreply@domain.com"
+              className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+            />
+            <p className="text-[10px] text-[var(--ds-text-3)] px-1">A real, licensed mailbox in this tenant that the app will send email as. Must have Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Mail.Send</code> permission granted.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={saveM365}
+            disabled={m365Saving}
+            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-50"
+          >
+            {m365Saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={handleTestM365}
+            disabled={m365Testing || !m365?.configured}
+            title={!m365?.configured ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
+            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+          >
+            {m365Testing ? 'Testing...' : 'Test Connection'}
+          </button>
+          {m365?.configured && (
+            <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex items-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>check_circle</span>
+              Credentials saved
+            </span>
+          )}
+        </div>
+
+        {m365TestResult && (
+          <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
+            style={m365TestResult.success
+              ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
+              : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
+          >
+            {m365TestResult.message}
+          </div>
+        )}
+
+        {/* Email sending switch */}
+        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Send app emails via Microsoft 365</p>
+              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+                When off, the app keeps using its current mailer. Only flip this on once Test Connection succeeds <em>and</em> the Sender Mailbox has Mail.Send permission and a real license.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleM365MailEnabled}
+              disabled={!m365?.mail_ready}
+              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.mail_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
+            >
+              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.mail_enabled ? 26 : 4 }} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleSendM365TestEmail}
+              disabled={m365TestingEmail || !m365?.mail_ready}
+              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
+              className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50"
+            >
+              {m365TestingEmail ? 'Sending...' : 'Send Test Email'}
+            </button>
+            <span className="text-[10px] text-[var(--ds-text-3)]">Sends to your own account email, regardless of the switch above.</span>
+          </div>
+
+          {m365EmailTestResult && (
+            <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
+              style={m365EmailTestResult.success
+                ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
+                : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}
+            >
+              {m365EmailTestResult.message}
+            </div>
+          )}
+
+        </div>
+
+        {/* Calendar sync switch */}
+        <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Sync new bookings to Outlook/Teams Calendar</p>
+              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+                Every booking automatically becomes a calendar event in the booker's mailbox — it shows up in both Outlook and Teams (same calendar, no extra setup). Requires Graph <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[9px]">Calendars.ReadWrite</code> permission on the App Registration. Edits/cancellations don't sync back yet — only booking creation.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleM365CalendarSync}
+              disabled={!m365?.calendar_sync_ready}
+              title={!m365?.calendar_sync_ready ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.calendar_sync_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
+            >
+              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.calendar_sync_enabled ? 26 : 4 }} />
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#6366f1' }}>info</span>
+            <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: '#6366f1' }}>Where to get these values</p>
+          </div>
+          <ol className="text-[11px] text-[var(--ds-text-2)] leading-relaxed list-decimal list-inside space-y-1">
+            <li>Go to <strong>entra.microsoft.com</strong> → <strong>App registrations</strong> → <strong>New registration</strong>.</li>
+            <li>After creating it, copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from its Overview page.</li>
+            <li>Go to <strong>Certificates &amp; secrets</strong> → <strong>New client secret</strong> — copy the secret <strong>Value</strong> (shown once).</li>
+            <li>Under <strong>API permissions</strong>, add the Microsoft Graph application permissions this app will need (e.g. <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Mail.Send</code>, <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Calendars.ReadWrite</code>), then click <strong>Grant admin consent</strong>.</li>
+          </ol>
+        </div>
+      </div>
+
       {/* Archive settings */}
       <div ref={el => { secRefs.current.archive = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
@@ -6128,6 +6365,12 @@ function SensorTab() {
     } finally { setRegenTokenLoading(false) }
   }
 
+  useModalHotkeys(
+    regenTokenModal,
+    regenTokenInput === 'Regenerate' ? handleRegenToken : undefined,
+    () => { setRegenTokenModal(false); setRegenTokenInput('') },
+  )
+
   async function handleRegenCode(room: Room) {
     setRegeneratingSensor(room.id)
     try {
@@ -6364,7 +6607,6 @@ function SensorTab() {
                   onChange={e => setRegenTokenInput(e.target.value)}
                   placeholder="Regenerate"
                   autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter' && regenTokenInput === 'Regenerate') handleRegenToken() }}
                   className="w-full px-4 py-3 rounded-xl border border-[var(--ds-border)] text-[13px] font-semibold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300 placeholder:text-[var(--ds-text-3)] bg-[var(--ds-bg-raised)] text-[var(--ds-text-1)]"
                 />
               </div>
@@ -6651,6 +6893,9 @@ export default function AdminPage() {
       setExportModal(false)
     } finally { setExporting(false) }
   }
+
+  useModalHotkeys(exportModal, handleExport, () => setExportModal(false))
+  useModalHotkeys(chartSettingsOpen, undefined, () => setChartSettingsOpen(false))
 
   function SectionPill({ value, onChange }: { value: SectionPeriod; onChange: (v: SectionPeriod) => void }) {
     return (

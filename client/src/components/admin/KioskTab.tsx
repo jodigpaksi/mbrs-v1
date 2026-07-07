@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createPortal } from 'react-dom'
 import { getKioskConfigs, createKioskConfig, updateKioskConfig, deleteKioskConfig } from '../../api/kiosk'
 import { getRooms } from '../../api/rooms'
+import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 import type { KioskConfig, KioskTheme, KioskLayout } from '../../types'
 
 // ── Presets ───────────────────────────────────────────────────────────────────
@@ -311,9 +312,12 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
       })
       onClose()
     } catch (e: any) {
-      setErr(e?.response?.data?.message ?? 'Failed to save')
+      const errs = e?.response?.data?.errors
+      setErr(errs?.name?.[0] ?? errs?.slug?.[0] ?? e?.response?.data?.message ?? 'Failed to save')
     } finally { setSaving(false) }
   }
+
+  useModalHotkeys(true, handleSave, onClose)
 
   const inputCls = 'w-full px-3 py-2 rounded-xl text-[12px] font-bold bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-1)] focus:outline-none focus:border-[#adee2b]/60 placeholder:text-[var(--ds-text-4)]'
   const labelCls = 'text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-1.5 block'
@@ -528,6 +532,8 @@ export default function KioskTab() {
     mutationFn: (id: number) => deleteKioskConfig(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['kiosk-configs'] }); setDeleteTarget(null) },
   })
+
+  useModalHotkeys(!!deleteTarget, () => deleteTarget && deleteMut.mutate(deleteTarget.id), () => setDeleteTarget(null))
 
   function kioskUrl(k: { id: number; slug: string | null }) {
     return `${window.location.origin}/kiosk/${k.slug || k.id}`

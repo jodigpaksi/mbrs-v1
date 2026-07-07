@@ -37,7 +37,11 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // Switch the default mailer to Microsoft 365 (Graph API) only once an admin has
-        // explicitly enabled it in Settings — keeps the existing SMTP mailer as the safe default.
+        // explicitly enabled it in Settings. No SMTP fallback/override is configured here —
+        // SMTP (Gmail) sending was intentionally removed (ban/rate-limit risk on a free account
+        // sending to many users). With M365 off, mail.default stays whatever .env's MAIL_MAILER
+        // says (currently 'array' — mail is discarded, not sent, until M365 or another provider
+        // like Brevo is wired up).
         try {
             if (Schema::hasTable('settings') && Setting::where('key', 'm365_mail_enabled')->value('value') === 'true') {
                 config(['mail.default' => 'graph']);
