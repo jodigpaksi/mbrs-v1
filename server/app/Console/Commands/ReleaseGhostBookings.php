@@ -65,8 +65,10 @@ class ReleaseGhostBookings extends Command
                 'message'    => "Your booking \"{$booking->title}\" at {$roomName} ({$timeStr}) was auto-cancelled — presence not confirmed in time.",
             ]);
 
+            // Default enabled (missing key = never configured yet, not explicitly disabled).
+            $emailEnabled = Setting::where('key', 'ghost_cancel_email_enabled')->value('value') !== 'false';
             $recipient = $booking->bookedForUser ?? $booking->user;
-            if ($recipient && $recipient->email) {
+            if ($emailEnabled && $recipient && $recipient->email) {
                 try {
                     Mail::to($recipient->email)->send(new GhostBookingCancelled($booking, $recipient));
                 } catch (\Throwable $e) {

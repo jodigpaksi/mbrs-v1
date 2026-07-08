@@ -23,6 +23,12 @@ class SendBookingReminders extends Command
 
     public function handle(): void
     {
+        // Default enabled (missing key = never configured yet, not explicitly disabled) so
+        // reminders keep working for existing installs after this setting was introduced.
+        if (Setting::where('key', 'reminder_enabled')->value('value') === 'false') {
+            return;
+        }
+
         $reminderMinutes = (int) (Setting::where('key', 'reminder_minutes')->value('value')
             ?? env('BOOKING_REMINDER_MINUTES', 10));
 

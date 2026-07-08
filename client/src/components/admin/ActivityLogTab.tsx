@@ -139,7 +139,7 @@ export default function ActivityLogTab() {
       setClearInput('')
       setPage(1)
     } catch {
-      addInfoToast('Clear failed')
+      addInfoToast('Clear failed', true)
     } finally {
       setClearing(false)
     }

@@ -17,7 +17,7 @@ import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, 
 import { getUsers, createUser, updateUser, importUsers, updateUserRole, assignUserBuildings, deleteUser, exportUsers } from '../api/users'
 import { getLocations, createLocation, updateLocation, deleteLocation } from '../api/locations'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../api/departments'
-import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto, getM365Settings, updateM365Settings, testM365Connection, sendM365TestEmail } from '../api/settings'
+import { getBookingHours, updateBookingHours, getWeekendSettings, updateWeekendSettings, getGeneralSettings, updateGeneralSettings, toggleUserSpecialAccess, uploadAppLogo, deleteAppLogo, uploadLoginPhoto, deleteLoginPhoto, getM365Settings, updateM365Settings, testM365Connection, sendM365TestEmail, getMailerSettings, updateMailerSettings, sendMailerTestEmail, type ActiveMailer } from '../api/settings'
 import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchive, importArchive } from '../api/archive'
 import type { ArchiveParams } from '../api/archive'
 import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBackupExports } from '../api/backup'
@@ -4186,7 +4186,7 @@ function ArchiveTab() {
       addInfoToast(`${res.restored} booking${res.restored !== 1 ? 's' : ''} restored`)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-      addInfoToast('Restore all failed: ' + (msg ?? 'unknown error'))
+      addInfoToast('Restore all failed: ' + (msg ?? 'unknown error'), true)
     } finally {
       setRestoringAll(false)
     }
@@ -4200,7 +4200,7 @@ function ArchiveTab() {
       addInfoToast('Booking restored and active again')
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-      addInfoToast('Restore failed: ' + (msg ?? 'unknown error'))
+      addInfoToast('Restore failed: ' + (msg ?? 'unknown error'), true)
     } finally {
       setRestoringId(null)
     }
@@ -4497,6 +4497,9 @@ const SETTINGS_SECTIONS = [
   { key: 'rules',    label: 'Booking Rules',  icon: 'rule' },
   { key: 'ghost',    label: 'Anti-Ghost',     icon: 'person_off' },
   { key: 'features', label: 'Features',       icon: 'tune' },
+  { key: 'm365',     label: 'Microsoft 365',  icon: 'cloud' },
+  { key: 'mailer',   label: 'Mailer',         icon: 'mail' },
+  { key: 'reminders', label: 'Reminders',     icon: 'notifications_active' },
   { key: 'archive',  label: 'Archive',         icon: 'inventory_2' },
   { key: 'backup',   label: 'Auto Backup',     icon: 'backup' },
 ] as const
@@ -4505,10 +4508,11 @@ type SettingsSection = typeof SETTINGS_SECTIONS[number]['key']
 function SettingsTab() {
   const queryClient = useQueryClient()
   const { addInfoToast } = useCancelToast()
-  const maxDaysDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const [dirty, setDirty] = useState(false)
+  const [applying, setApplying] = useState(false)
 
   // Section refs + active tracking
-  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ branding: null, hours: null, weekend: null, system: null, rules: null, ghost: null, features: null, archive: null, backup: null })
+  const secRefs = useRef<Record<SettingsSection, HTMLDivElement | null>>({ branding: null, hours: null, weekend: null, system: null, rules: null, reminders: null, ghost: null, features: null, m365: null, mailer: null, archive: null, backup: null })
   const [activeSection, setActiveSection] = useState<SettingsSection>('hours')
 
   useEffect(() => {
@@ -4553,27 +4557,21 @@ function SettingsTab() {
     },
   })
 
-  // Weekend — auto-save on toggle
+  // Weekend — draft, applied via the global Apply button
   const { data: weekend } = useQuery({ queryKey: ['weekend-settings'], queryFn: getWeekendSettings })
   const [wkSat, setWkSat] = useState(weekend?.saturday ?? true)
   const [wkSun, setWkSun] = useState(weekend?.sunday   ?? true)
   useEffect(() => { if (weekend) { setWkSat(weekend.saturday); setWkSun(weekend.sunday) } }, [weekend?.saturday, weekend?.sunday])
-  const { mutateAsync: doSaveWeekend } = useMutation({
-    mutationFn: (vals: { sat: boolean; sun: boolean }) => updateWeekendSettings(vals.sat, vals.sun),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['weekend-settings'] }); addInfoToast('Weekend settings saved') },
-  })
-  async function toggleSat() { const v = !wkSat; setWkSat(v); await doSaveWeekend({ sat: v, sun: wkSun }) }
-  async function toggleSun() { const v = !wkSun; setWkSun(v); await doSaveWeekend({ sat: wkSat, sun: v }) }
+  function toggleSat() { setWkSat(v => !v); setDirty(true) }
+  function toggleSun() { setWkSun(v => !v); setDirty(true) }
 
-  // General — auto-save each field
+  // General — draft, applied via the global Apply button
   const { data: general } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings })
   const [appName,      setAppName]      = useState(general?.app_name ?? 'RoomSync Pro')
   const [appFullName,  setAppFullName]  = useState(general?.app_full_name ?? '')
   const [appLogoUrl,   setAppLogoUrl]   = useState<string | null>(general?.app_logo_url ?? null)
   const [logoUploading, setLogoUploading] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
-  const appNameDebounce = useRef<ReturnType<typeof setTimeout>>()
-  const appFullNameDebounce = useRef<ReturnType<typeof setTimeout>>()
   const [loginPhotoUrl, setLoginPhotoUrl] = useState<string | null>(general?.login_photo_url ?? null)
   const [loginPhotoUploading, setLoginPhotoUploading] = useState(false)
   const loginPhotoInputRef = useRef<HTMLInputElement>(null)
@@ -4581,39 +4579,26 @@ function SettingsTab() {
   const [loginPhotoPosY, setLoginPhotoPosY] = useState(general?.login_photo_pos_y ?? 50)
   const [loginHeadline,    setLoginHeadline]    = useState(general?.login_headline ?? 'Booking made easy')
   const [loginSubheadline, setLoginSubheadline] = useState(general?.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
-  const loginPhotoPosDebounce = useRef<ReturnType<typeof setTimeout>>()
-  const loginHeadlineDebounce = useRef<ReturnType<typeof setTimeout>>()
-  const loginSubheadlineDebounce = useRef<ReturnType<typeof setTimeout>>()
 
-  // Microsoft 365 integration (Tenant/Client ID + Client Secret, used later for Teams/Email/Outlook Calendar)
+  // Microsoft 365 integration (Tenant/Client ID + Client Secret, used later for Teams/Email/Outlook Calendar) — draft, applied via the global Apply button
   const { data: m365 } = useQuery({ queryKey: ['settings-m365'], queryFn: getM365Settings })
   const [m365TenantId, setM365TenantId] = useState('')
   const [m365ClientId, setM365ClientId] = useState('')
   const [m365ClientSecret, setM365ClientSecret] = useState('')
   const [m365SenderEmail, setM365SenderEmail] = useState('')
-  const [m365Saving, setM365Saving] = useState(false)
+  const [m365CalendarSync, setM365CalendarSync] = useState(false)
   const [m365Testing, setM365Testing] = useState(false)
   const [m365TestResult, setM365TestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [m365TestingEmail, setM365TestingEmail] = useState(false)
   const [m365EmailTestResult, setM365EmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
   useEffect(() => {
-    if (m365) { setM365TenantId(m365.tenant_id); setM365ClientId(m365.client_id); setM365SenderEmail(m365.sender_email) }
-  }, [m365?.tenant_id, m365?.client_id, m365?.sender_email])
-  async function saveM365() {
-    setM365Saving(true)
-    setM365TestResult(null)
-    try {
-      const patch: { tenant_id: string; client_id: string; client_secret?: string; sender_email: string } = { tenant_id: m365TenantId, client_id: m365ClientId, sender_email: m365SenderEmail }
-      if (m365ClientSecret) patch.client_secret = m365ClientSecret
-      await updateM365Settings(patch)
-      setM365ClientSecret('')
-      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
-      addInfoToast('Microsoft 365 settings saved')
-    } catch {
-      addInfoToast('Failed to save Microsoft 365 settings')
-    } finally {
-      setM365Saving(false)
+    if (m365) {
+      setM365TenantId(m365.tenant_id); setM365ClientId(m365.client_id); setM365SenderEmail(m365.sender_email)
+      setM365CalendarSync(m365.calendar_sync_enabled)
     }
+  }, [m365?.tenant_id, m365?.client_id, m365?.sender_email, m365?.calendar_sync_enabled])
+  function onM365Field(setter: (v: string) => void) {
+    return (v: string) => { setter(v); setDirty(true) }
   }
   async function handleTestM365() {
     setM365Testing(true)
@@ -4627,26 +4612,7 @@ function SettingsTab() {
       setM365Testing(false)
     }
   }
-  async function toggleM365MailEnabled() {
-    const v = !m365?.mail_enabled
-    try {
-      await updateM365Settings({ mail_enabled: v })
-      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
-      addInfoToast(v ? 'App emails will now send via Microsoft 365' : 'App emails switched back to the default mailer')
-    } catch {
-      addInfoToast('Failed to update mail switch')
-    }
-  }
-  async function toggleM365CalendarSync() {
-    const v = !m365?.calendar_sync_enabled
-    try {
-      await updateM365Settings({ calendar_sync_enabled: v })
-      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
-      addInfoToast(v ? 'New bookings will now sync to Outlook/Teams Calendar' : 'Calendar sync turned off')
-    } catch {
-      addInfoToast('Failed to update calendar sync switch')
-    }
-  }
+  function toggleM365CalendarSync() { setM365CalendarSync(v => !v); setDirty(true) }
   async function handleSendM365TestEmail() {
     setM365TestingEmail(true)
     setM365EmailTestResult(null)
@@ -4657,6 +4623,45 @@ function SettingsTab() {
       setM365EmailTestResult({ success: false, message: err?.response?.data?.message ?? 'Test email failed — please try again.' })
     } finally {
       setM365TestingEmail(false)
+    }
+  }
+
+  // Mailer — active provider (Default/M365/Resend/Brevo), draft applied via the global Apply button
+  const { data: mailer } = useQuery({ queryKey: ['settings-mailer'], queryFn: getMailerSettings })
+  const [activeMailer, setActiveMailer] = useState<ActiveMailer>('default')
+  const [resendApiKey, setResendApiKey] = useState('')
+  const [resendFromAddress, setResendFromAddress] = useState('')
+  const [resendFromName, setResendFromName] = useState('')
+  const [brevoApiKey, setBrevoApiKey] = useState('')
+  const [brevoFromAddress, setBrevoFromAddress] = useState('')
+  const [brevoFromName, setBrevoFromName] = useState('')
+  const [mailerTestingEmail, setMailerTestingEmail] = useState(false)
+  const [mailerEmailTestResult, setMailerEmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  useEffect(() => {
+    if (mailer) {
+      setActiveMailer(mailer.active_mailer)
+      setResendFromAddress(mailer.resend.from_address); setResendFromName(mailer.resend.from_name)
+      setBrevoFromAddress(mailer.brevo.from_address); setBrevoFromName(mailer.brevo.from_name)
+    }
+  }, [mailer?.active_mailer, mailer?.resend.from_address, mailer?.resend.from_name, mailer?.brevo.from_address, mailer?.brevo.from_name])
+  function onMailerField(setter: (v: string) => void) {
+    return (v: string) => { setter(v); setDirty(true) }
+  }
+  function selectActiveMailer(v: ActiveMailer) {
+    setActiveMailer(v)
+    if (v === 'default') setReminderEnabled(false)
+    setDirty(true)
+  }
+  async function handleSendMailerTestEmail() {
+    setMailerTestingEmail(true)
+    setMailerEmailTestResult(null)
+    try {
+      const res = await sendMailerTestEmail()
+      setMailerEmailTestResult(res)
+    } catch (err: any) {
+      setMailerEmailTestResult({ success: false, message: err?.response?.data?.message ?? 'Test email failed — please try again.' })
+    } finally {
+      setMailerTestingEmail(false)
     }
   }
 
@@ -4675,12 +4680,11 @@ function SettingsTab() {
   const [ghostWindowBefore,     setGhostWindowBefore]     = useState(general?.anti_ghost_window_before ?? 5)
   const [ghostWindowAfter,      setGhostWindowAfter]      = useState(general?.anti_ghost_window_after ?? 10)
   const [webConfirmEnabled,     setWebConfirmEnabled]      = useState(general?.web_confirm_enabled ?? false)
+  const [antiGhostEmailEnabled, setAntiGhostEmailEnabled]  = useState(general?.anti_ghost_email_enabled ?? false)
+  const [ghostCancelEmailEnabled, setGhostCancelEmailEnabled] = useState(general?.ghost_cancel_email_enabled ?? true)
+  const [reminderEnabled,       setReminderEnabled]        = useState(general?.reminder_enabled ?? true)
+  const [reminderMinutes,       setReminderMinutes]        = useState(general?.reminder_minutes ?? 10)
   const [businessTz,            setBusinessTz]             = useState(general?.business_timezone ?? 'Asia/Jakarta')
-  const ghostWindowBeforeDebounce = useRef<ReturnType<typeof setTimeout>>()
-  const ghostWindowAfterDebounce  = useRef<ReturnType<typeof setTimeout>>()
-  const archiveDaysDebounce    = useRef<ReturnType<typeof setTimeout>>()
-  const deleteDaysDebounce     = useRef<ReturnType<typeof setTimeout>>()
-  const tzDebounce             = useRef<ReturnType<typeof setTimeout>>()
   useEffect(() => {
     if (general) {
       setAppName(general.app_name ?? 'RoomSync Pro')
@@ -4702,28 +4706,24 @@ function SettingsTab() {
       setGhostWindowBefore(general.anti_ghost_window_before ?? 5)
       setGhostWindowAfter(general.anti_ghost_window_after ?? 10)
       setWebConfirmEnabled(general.web_confirm_enabled ?? false)
+      setAntiGhostEmailEnabled(general.anti_ghost_email_enabled ?? false)
+      setGhostCancelEmailEnabled(general.ghost_cancel_email_enabled ?? true)
+      setReminderEnabled(general.reminder_enabled ?? true)
+      setReminderMinutes(general.reminder_minutes ?? 10)
       setBusinessTz(general.business_timezone ?? 'Asia/Jakarta')
     }
-  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.business_timezone, general?.app_name, general?.app_full_name, general?.app_logo_url, general?.login_photo_url, general?.login_photo_pos_x, general?.login_photo_pos_y, general?.login_headline, general?.login_subheadline])
+  }, [general?.max_advance_days, general?.allow_book_for_others, general?.allow_password_change, general?.restrict_after_hours, general?.working_hours_end, general?.feature_ai_chat, general?.rooms_grid_cols, general?.archive_after_days, general?.archive_delete_after_days, general?.anti_ghost_enabled, general?.anti_ghost_mode, general?.anti_ghost_window_before, general?.anti_ghost_window_after, general?.web_confirm_enabled, general?.anti_ghost_email_enabled, general?.ghost_cancel_email_enabled, general?.reminder_enabled, general?.reminder_minutes, general?.business_timezone, general?.app_name, general?.app_full_name, general?.app_logo_url, general?.login_photo_url, general?.login_photo_pos_x, general?.login_photo_pos_y, general?.login_headline, general?.login_subheadline])
 
   const { mutateAsync: doSaveGeneral } = useMutation({
     mutationFn: (patch: Parameters<typeof updateGeneralSettings>[0]) => updateGeneralSettings(patch),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings-general'] }),
   })
-  async function saveGeneral(patch: Parameters<typeof updateGeneralSettings>[0], msg: string) {
+  async function saveGeneralNow(patch: Parameters<typeof updateGeneralSettings>[0], msg: string) {
     await doSaveGeneral(patch)
     addInfoToast(msg)
   }
-  function onAppNameChange(v: string) {
-    setAppName(v)
-    clearTimeout(appNameDebounce.current)
-    appNameDebounce.current = setTimeout(() => saveGeneral({ app_name: v }, `App name set to "${v}"`), 800)
-  }
-  function onAppFullNameChange(v: string) {
-    setAppFullName(v)
-    clearTimeout(appFullNameDebounce.current)
-    appFullNameDebounce.current = setTimeout(() => saveGeneral({ app_full_name: v }, v ? `App full name set to "${v}"` : 'App full name cleared'), 800)
-  }
+  function onAppNameChange(v: string) { setAppName(v); setDirty(true) }
+  function onAppFullNameChange(v: string) { setAppFullName(v); setDirty(true) }
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -4734,7 +4734,7 @@ function SettingsTab() {
       queryClient.invalidateQueries({ queryKey: ['settings-general'] })
       addInfoToast('App logo updated')
     } catch {
-      addInfoToast('Logo upload failed')
+      addInfoToast('Logo upload failed', true)
     } finally {
       setLogoUploading(false)
       if (logoInputRef.current) logoInputRef.current.value = ''
@@ -4744,7 +4744,7 @@ function SettingsTab() {
     await deleteAppLogo()
     setAppLogoUrl(null)
     queryClient.invalidateQueries({ queryKey: ['settings-general'] })
-    addInfoToast('App logo removed')
+    addInfoToast('App logo removed', true)
   }
   async function handleLoginPhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -4756,7 +4756,7 @@ function SettingsTab() {
       queryClient.invalidateQueries({ queryKey: ['settings-general'] })
       addInfoToast('Login page photo updated')
     } catch {
-      addInfoToast('Photo upload failed')
+      addInfoToast('Photo upload failed', true)
     } finally {
       setLoginPhotoUploading(false)
       if (loginPhotoInputRef.current) loginPhotoInputRef.current.value = ''
@@ -4766,111 +4766,66 @@ function SettingsTab() {
     await deleteLoginPhoto()
     setLoginPhotoUrl(null)
     queryClient.invalidateQueries({ queryKey: ['settings-general'] })
-    addInfoToast('Login page photo removed')
+    addInfoToast('Login page photo removed', true)
   }
   function onLoginPhotoPosChange(axis: 'x' | 'y', v: number) {
     if (axis === 'x') setLoginPhotoPosX(v); else setLoginPhotoPosY(v)
-    clearTimeout(loginPhotoPosDebounce.current)
-    loginPhotoPosDebounce.current = setTimeout(() => {
-      saveGeneral(
-        axis === 'x' ? { login_photo_pos_x: v } : { login_photo_pos_y: v },
-        'Login photo position updated'
-      )
-    }, 500)
+    setDirty(true)
   }
-  function onLoginHeadlineChange(v: string) {
-    setLoginHeadline(v)
-    clearTimeout(loginHeadlineDebounce.current)
-    loginHeadlineDebounce.current = setTimeout(() => saveGeneral({ login_headline: v }, 'Login headline updated'), 800)
-  }
-  function onLoginSubheadlineChange(v: string) {
-    setLoginSubheadline(v)
-    clearTimeout(loginSubheadlineDebounce.current)
-    loginSubheadlineDebounce.current = setTimeout(() => saveGeneral({ login_subheadline: v }, 'Login subheadline updated'), 800)
-  }
-  async function toggleAllowBookFor()        { const v = !allowBookFor;       setAllowBookFor(v);       await saveGeneral({ allow_book_for_others: v },    v ? 'Book for others enabled' : 'Book for others disabled') }
-  async function toggleAllowPasswordChange() { const v = !allowPasswordChange; setAllowPasswordChange(v); await saveGeneral({ allow_password_change: v }, v ? 'Password change enabled' : 'Password change disabled') }
-  async function toggleAllowAvatarUpload()   { const v = !allowAvatarUpload;   setAllowAvatarUpload(v);   await saveGeneral({ allow_avatar_upload: v },   v ? 'Avatar upload enabled' : 'Avatar upload disabled') }
-  async function toggleRestrictAH()  { const v = !restrictAH;   setRestrictAH(v);   await saveGeneral({ restrict_after_hours: v }, v ? 'After-hours restriction enabled' : 'After-hours restriction disabled') }
-  async function toggleAiChat()      { const v = !aiChat;       setAiChat(v);       await saveGeneral({ feature_ai_chat: v }, v ? 'AI Chat enabled' : 'AI Chat disabled') }
-  async function setRoomsGridCols(v: number) { setRoomsGrid(v); await saveGeneral({ rooms_grid_cols: v }, `Rooms grid set to ${v} columns`) }
-  function onArchiveDaysChange(v: number) {
-    setArchiveDays(v)
-    clearTimeout(archiveDaysDebounce.current)
-    archiveDaysDebounce.current = setTimeout(() => saveGeneral({ archive_after_days: v }, `Archive after ${v} days`), 800)
-  }
-  function onDeleteDaysChange(v: number) {
-    setDeleteDays(v)
-    clearTimeout(deleteDaysDebounce.current)
-    deleteDaysDebounce.current = setTimeout(() => saveGeneral({ archive_delete_after_days: v }, `Auto-delete archive after ${v} days`), 800)
-  }
-  async function onWorkEndChange(v: string) { setWorkEnd(v); await saveGeneral({ working_hours_end: v }, `Working hours end set to ${v}`) }
-  function onMaxDaysChange(v: number) {
-    setMaxDays(v)
-    clearTimeout(maxDaysDebounce.current)
-    maxDaysDebounce.current = setTimeout(() => saveGeneral({ max_advance_days: v }, `Max advance booking set to ${v} days`), 800)
-  }
-  async function toggleAntiGhost() {
+  function onLoginHeadlineChange(v: string) { setLoginHeadline(v); setDirty(true) }
+  function onLoginSubheadlineChange(v: string) { setLoginSubheadline(v); setDirty(true) }
+  function toggleAllowBookFor()        { setAllowBookFor(v => !v);       setDirty(true) }
+  function toggleAllowPasswordChange() { setAllowPasswordChange(v => !v); setDirty(true) }
+  function toggleAllowAvatarUpload()   { setAllowAvatarUpload(v => !v);   setDirty(true) }
+  function toggleRestrictAH()  { setRestrictAH(v => !v);   setDirty(true) }
+  function toggleAiChat()      { setAiChat(v => !v);       setDirty(true) }
+  function setRoomsGridCols(v: number) { setRoomsGrid(v); setDirty(true) }
+  function onArchiveDaysChange(v: number) { setArchiveDays(v); setDirty(true) }
+  function onDeleteDaysChange(v: number) { setDeleteDays(v); setDirty(true) }
+  function onWorkEndChange(v: string) { setWorkEnd(v); setDirty(true) }
+  function onMaxDaysChange(v: number) { setMaxDays(v); setDirty(true) }
+  function toggleAntiGhost() {
     const v = !antiGhostEnabled
     setAntiGhostEnabled(v)
     if (v) {
       // Re-enabling: if no methods selected, auto-pick web confirm as safe default
-      const noMethods = antiGhostModes.size === 0 && !webConfirmEnabled
-      if (noMethods) {
-        setWebConfirmEnabled(true)
-        await saveGeneral({ anti_ghost_enabled: true, web_confirm_enabled: true }, 'Anti-ghost enabled (web confirm auto-selected)')
-      } else {
-        await saveGeneral({ anti_ghost_enabled: true }, 'Anti-ghost booking enabled')
-      }
+      const noMethods = antiGhostModes.size === 0 && !webConfirmEnabled && !antiGhostEmailEnabled
+      if (noMethods) setWebConfirmEnabled(true)
     } else {
-      await saveGeneral({ anti_ghost_enabled: false }, 'Anti-ghost booking disabled')
+      setWebConfirmEnabled(false)
+      setAntiGhostEmailEnabled(false)
     }
+    setDirty(true)
   }
-  async function toggleMethod(key: 'kiosk' | 'sensor' | 'web') {
-    if (key === 'web') {
-      const newVal = !webConfirmEnabled
-      const anyLeft = newVal || antiGhostModes.has('kiosk') || antiGhostModes.has('sensor')
-      if (!anyLeft) {
-        setWebConfirmEnabled(false)
-        setAntiGhostEnabled(false)
-        await saveGeneral({ web_confirm_enabled: false, anti_ghost_enabled: false }, 'Anti-ghost disabled (no method selected)')
-      } else {
-        setWebConfirmEnabled(newVal)
-        await saveGeneral({ web_confirm_enabled: newVal }, newVal ? 'Web confirm enabled' : 'Web confirm disabled')
-      }
+  function toggleMethod(key: 'kiosk' | 'sensor' | 'web' | 'email') {
+    if (key === 'web' || key === 'email') {
+      const newVal = key === 'web' ? !webConfirmEnabled : !antiGhostEmailEnabled
+      const otherBoolean = key === 'web' ? antiGhostEmailEnabled : webConfirmEnabled
+      const anyLeft = newVal || otherBoolean || antiGhostModes.has('kiosk') || antiGhostModes.has('sensor')
+      if (key === 'web') setWebConfirmEnabled(anyLeft ? newVal : false)
+      else setAntiGhostEmailEnabled(anyLeft ? newVal : false)
+      if (!anyLeft) setAntiGhostEnabled(false)
     } else {
       const next = new Set(antiGhostModes)
       if (next.has(key)) next.delete(key); else next.add(key)
-      const anyLeft = next.size > 0 || webConfirmEnabled
-      if (!anyLeft) {
-        setAntiGhostModes(new Set())
-        setAntiGhostEnabled(false)
-        await saveGeneral({ anti_ghost_mode: '', anti_ghost_enabled: false }, 'Anti-ghost disabled (no method selected)')
-      } else {
-        setAntiGhostModes(next)
-        await saveGeneral({ anti_ghost_mode: [...next].sort().join(',') }, `Anti-ghost mode: ${[...next].sort().join(', ')}`)
-      }
+      const anyLeft = next.size > 0 || webConfirmEnabled || antiGhostEmailEnabled
+      setAntiGhostModes(anyLeft ? next : new Set())
+      if (!anyLeft) setAntiGhostEnabled(false)
     }
+    setDirty(true)
   }
-  function onGhostWindowBeforeChange(v: number) {
-    const clamped = Math.max(0, Math.min(20, v))
-    setGhostWindowBefore(clamped)
-    clearTimeout(ghostWindowBeforeDebounce.current)
-    ghostWindowBeforeDebounce.current = setTimeout(() => saveGeneral({ anti_ghost_window_before: clamped }, `Confirm window: opens ${clamped}min before start`), 800)
-  }
-  function onGhostWindowAfterChange(v: number) {
-    const clamped = Math.max(0, Math.min(20, v))
-    setGhostWindowAfter(clamped)
-    clearTimeout(ghostWindowAfterDebounce.current)
-    ghostWindowAfterDebounce.current = setTimeout(() => saveGeneral({ anti_ghost_window_after: clamped }, `Confirm window: closes ${clamped}min after start`), 800)
-  }
-  async function toggleWebConfirm() { const v = !webConfirmEnabled; setWebConfirmEnabled(v); await saveGeneral({ web_confirm_enabled: v }, v ? 'Web presence confirm enabled' : 'Web presence confirm disabled') }
+  function onGhostWindowBeforeChange(v: number) { setGhostWindowBefore(Math.max(0, Math.min(20, v))); setDirty(true) }
+  function onGhostWindowAfterChange(v: number) { setGhostWindowAfter(Math.max(0, Math.min(20, v))); setDirty(true) }
+  function toggleGhostCancelEmailEnabled() { setGhostCancelEmailEnabled(v => !v); setDirty(true) }
 
-  function onBusinessTzChange(v: string) {
-    setBusinessTz(v)
-    clearTimeout(tzDebounce.current)
-    tzDebounce.current = setTimeout(() => saveGeneral({ business_timezone: v }, `Business timezone set to ${v}`), 800)
+  function toggleReminderEnabled() {
+    if (activeMailer === 'default') return
+    setReminderEnabled(v => !v)
+    setDirty(true)
   }
+  function onReminderMinutesChange(v: number) { setReminderMinutes(Math.max(1, Math.min(120, v))); setDirty(true) }
+
+  function onBusinessTzChange(v: string) { setBusinessTz(v); setDirty(true) }
 
   // Auto Backup — one bundled batch (archive, activity log, users/buildings/rooms), single schedule
   const [backupEnabled,       setBackupEnabled]       = useState(general?.backup_enabled ?? false)
@@ -4895,18 +4850,18 @@ function SettingsTab() {
       setBackupIncludeData(general.backup_include_data ?? true)
     }
   }, [general?.backup_enabled, general?.backup_frequency, general?.backup_time, general?.backup_day_of_week, general?.backup_day_of_month, general?.backup_formats, general?.backup_include_archive, general?.backup_include_log, general?.backup_include_data])
-  async function toggleBackupEnabled() { const v = !backupEnabled; setBackupEnabled(v); await saveGeneral({ backup_enabled: v }, v ? 'Auto backup enabled' : 'Auto backup disabled') }
-  async function onBackupFrequencyChange(v: string) { setBackupFrequency(v); await saveGeneral({ backup_frequency: v }, `Backup frequency: ${v}`) }
-  async function onBackupTimeChange(v: string) { setBackupTime(v); await saveGeneral({ backup_time: v }, `Backup time set to ${v}`) }
-  async function onBackupDowChange(v: number) { setBackupDow(v); await saveGeneral({ backup_day_of_week: v }, 'Backup day updated') }
-  async function onBackupDomChange(v: number) { setBackupDom(v); await saveGeneral({ backup_day_of_month: v }, 'Backup day updated') }
-  async function toggleBackupFormat(fmt: string) {
+  function toggleBackupEnabled() { setBackupEnabled(v => !v); setDirty(true) }
+  function onBackupFrequencyChange(v: string) { setBackupFrequency(v); setDirty(true) }
+  function onBackupTimeChange(v: string) { setBackupTime(v); setDirty(true) }
+  function onBackupDowChange(v: number) { setBackupDow(v); setDirty(true) }
+  function onBackupDomChange(v: number) { setBackupDom(v); setDirty(true) }
+  function toggleBackupFormat(fmt: string) {
     const next = backupFormats.includes(fmt) ? backupFormats.filter(f => f !== fmt) : [...backupFormats, fmt]
     if (!next.length) return
     setBackupFormats(next)
-    await saveGeneral({ backup_formats: next.join(',') }, `Backup formats: ${next.join(', ')}`)
+    setDirty(true)
   }
-  async function toggleBackupInclude(key: 'archive' | 'log' | 'data') {
+  function toggleBackupInclude(key: 'archive' | 'log' | 'data') {
     const cur = { archive: backupIncludeArchive, log: backupIncludeLog, data: backupIncludeData }
     const next = !cur[key]
     const wouldBeEmpty = !next && !Object.entries(cur).filter(([k]) => k !== key).some(([, v]) => v)
@@ -4914,9 +4869,7 @@ function SettingsTab() {
     if (key === 'archive') setBackupIncludeArchive(next)
     if (key === 'log')     setBackupIncludeLog(next)
     if (key === 'data')    setBackupIncludeData(next)
-    const settingKey = key === 'archive' ? 'backup_include_archive' : key === 'log' ? 'backup_include_log' : 'backup_include_data'
-    const label = key === 'archive' ? 'Bookings archive' : key === 'log' ? 'Activity log' : 'Users/Buildings/Rooms'
-    await saveGeneral({ [settingKey]: next }, `${label} ${next ? 'included' : 'excluded'} in backup`)
+    setDirty(true)
   }
 
   const { data: backupExports = [] } = useQuery({
@@ -4943,10 +4896,122 @@ function SettingsTab() {
       setDeleteBackupsConfirm(false)
       setDeleteBackupsInput('')
     } catch {
-      addInfoToast('Delete failed')
+      addInfoToast('Delete failed', true)
     } finally {
       setDeletingBackups(false)
     }
+  }
+
+  async function handleApplyAll() {
+    setApplying(true)
+    try {
+      const generalPatch: Parameters<typeof updateGeneralSettings>[0] = {
+        app_name: appName, app_full_name: appFullName,
+        login_photo_pos_x: loginPhotoPosX, login_photo_pos_y: loginPhotoPosY,
+        login_headline: loginHeadline, login_subheadline: loginSubheadline,
+        max_advance_days: maxDays, allow_book_for_others: allowBookFor,
+        allow_password_change: allowPasswordChange, allow_avatar_upload: allowAvatarUpload,
+        restrict_after_hours: restrictAH, working_hours_end: workEnd,
+        feature_ai_chat: aiChat, rooms_grid_cols: roomsGrid,
+        archive_after_days: archiveDays, archive_delete_after_days: deleteDays,
+        anti_ghost_enabled: antiGhostEnabled, anti_ghost_mode: [...antiGhostModes].sort().join(','),
+        anti_ghost_window_before: ghostWindowBefore, anti_ghost_window_after: ghostWindowAfter,
+        web_confirm_enabled: webConfirmEnabled, anti_ghost_email_enabled: antiGhostEmailEnabled,
+        ghost_cancel_email_enabled: ghostCancelEmailEnabled,
+        reminder_enabled: reminderEnabled, reminder_minutes: reminderMinutes,
+        business_timezone: businessTz,
+        backup_enabled: backupEnabled, backup_frequency: backupFrequency, backup_time: backupTime,
+        backup_day_of_week: backupDow, backup_day_of_month: backupDom,
+        backup_formats: backupFormats.join(','), backup_include_archive: backupIncludeArchive,
+        backup_include_log: backupIncludeLog, backup_include_data: backupIncludeData,
+      }
+      const m365Patch: Parameters<typeof updateM365Settings>[0] = {
+        tenant_id: m365TenantId, client_id: m365ClientId, sender_email: m365SenderEmail,
+        calendar_sync_enabled: m365CalendarSync,
+      }
+      if (m365ClientSecret) m365Patch.client_secret = m365ClientSecret
+
+      const mailerPatch: Parameters<typeof updateMailerSettings>[0] = {
+        active_mailer: activeMailer,
+        resend_from_address: resendFromAddress, resend_from_name: resendFromName,
+        brevo_from_address: brevoFromAddress, brevo_from_name: brevoFromName,
+      }
+      if (resendApiKey) mailerPatch.resend_api_key = resendApiKey
+      if (brevoApiKey) mailerPatch.brevo_api_key = brevoApiKey
+
+      await Promise.all([
+        updateGeneralSettings(generalPatch),
+        updateWeekendSettings(wkSat, wkSun),
+        updateM365Settings(m365Patch),
+        updateMailerSettings(mailerPatch),
+      ])
+      setM365ClientSecret('')
+      setResendApiKey('')
+      setBrevoApiKey('')
+      queryClient.invalidateQueries({ queryKey: ['settings-general'] })
+      queryClient.invalidateQueries({ queryKey: ['weekend-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['settings-m365'] })
+      queryClient.invalidateQueries({ queryKey: ['settings-mailer'] })
+      setDirty(false)
+      addInfoToast('Settings applied')
+    } catch (e: unknown) {
+      console.error('Apply settings failed:', e)
+      const msg = (e as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })?.response?.data
+      const firstFieldError = msg?.errors ? Object.values(msg.errors)[0]?.[0] : undefined
+      addInfoToast(firstFieldError ?? msg?.message ?? 'Failed to apply settings — please try again', true)
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  function handleDiscardAll() {
+    if (general) {
+      setAppName(general.app_name ?? 'RoomSync Pro')
+      setAppFullName(general.app_full_name ?? '')
+      setLoginPhotoPosX(general.login_photo_pos_x ?? 50)
+      setLoginPhotoPosY(general.login_photo_pos_y ?? 50)
+      setLoginHeadline(general.login_headline ?? 'Booking made easy')
+      setLoginSubheadline(general.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
+      setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
+      setAllowPasswordChange(general.allow_password_change ?? true)
+      setAllowAvatarUpload(general.allow_avatar_upload ?? true)
+      setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
+      setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
+      setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
+      setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
+      setAntiGhostModes(new Set((general.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
+      setGhostWindowBefore(general.anti_ghost_window_before ?? 5)
+      setGhostWindowAfter(general.anti_ghost_window_after ?? 10)
+      setWebConfirmEnabled(general.web_confirm_enabled ?? false)
+      setAntiGhostEmailEnabled(general.anti_ghost_email_enabled ?? false)
+      setGhostCancelEmailEnabled(general.ghost_cancel_email_enabled ?? true)
+      setReminderEnabled(general.reminder_enabled ?? true)
+      setReminderMinutes(general.reminder_minutes ?? 10)
+      setBusinessTz(general.business_timezone ?? 'Asia/Jakarta')
+      setBackupEnabled(general.backup_enabled ?? false)
+      setBackupFrequency(general.backup_frequency ?? 'weekly')
+      setBackupTime(general.backup_time ?? '02:00')
+      setBackupDow(general.backup_day_of_week ?? 1)
+      setBackupDom(general.backup_day_of_month ?? 1)
+      setBackupFormats((general.backup_formats ?? 'excel,csv').split(',').filter(Boolean))
+      setBackupIncludeArchive(general.backup_include_archive ?? true)
+      setBackupIncludeLog(general.backup_include_log ?? true)
+      setBackupIncludeData(general.backup_include_data ?? true)
+    }
+    if (weekend) { setWkSat(weekend.saturday); setWkSun(weekend.sunday) }
+    if (m365) {
+      setM365TenantId(m365.tenant_id); setM365ClientId(m365.client_id); setM365SenderEmail(m365.sender_email)
+      setM365CalendarSync(m365.calendar_sync_enabled)
+    }
+    if (mailer) {
+      setActiveMailer(mailer.active_mailer)
+      setResendFromAddress(mailer.resend.from_address); setResendFromName(mailer.resend.from_name)
+      setBrevoFromAddress(mailer.brevo.from_address); setBrevoFromName(mailer.brevo.from_name)
+    }
+    setM365ClientSecret('')
+    setResendApiKey('')
+    setBrevoApiKey('')
+    setDirty(false)
   }
 
   return (
@@ -4979,7 +5044,7 @@ function SettingsTab() {
             className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 text-[14px] font-black text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] transition-all"
             placeholder="RoomSync Pro"
           />
-          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Auto-saved. Updates navbar, page title, and all app references.</p>
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">Updates navbar, page title, and all app references.</p>
         </div>
 
         {/* App Full Name */}
@@ -5378,7 +5443,7 @@ function SettingsTab() {
         </button>
       </div>
 
-      {/* Weekend — auto-save */}
+      {/* Weekend */}
       <div ref={el => { secRefs.current.weekend = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
           <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Weekend (Red Dates)</p>
@@ -5408,7 +5473,7 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* System — auto-save */}
+      {/* System */}
       <div ref={el => { secRefs.current.system = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
           <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">System</p>
@@ -5466,7 +5531,7 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* Booking Rules — auto-save */}
+      {/* Booking Rules */}
       <div ref={el => { secRefs.current.rules = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
           <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Booking Rules</p>
@@ -5573,13 +5638,14 @@ function SettingsTab() {
             <div>
               <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)] mb-1">Confirmation Method</p>
               <p className="text-[10px] font-medium text-[var(--ds-text-4)] mb-3">At least one must be selected — booking confirmed if any method detects presence. Deselecting all disables Anti-Ghost.</p>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {([
                   { key: 'kiosk',  label: 'Kiosk',       icon: 'tablet',      desc: 'User taps Confirm on the room kiosk device' },
                   { key: 'sensor', label: 'Sensor',       icon: 'sensors',     desc: 'Motion/occupancy sensor auto-confirms via ESP32 ping' },
                   { key: 'web',    label: 'Web Confirm',  icon: 'how_to_reg',  desc: 'User confirms from My Schedule or notification in the app' },
+                  { key: 'email',  label: 'Email',        icon: 'mail',        desc: 'Confirm/Cancel link sent in the reminder email, no login needed' },
                 ] as const).map(opt => {
-                  const sel = opt.key === 'web' ? webConfirmEnabled : antiGhostModes.has(opt.key)
+                  const sel = opt.key === 'web' ? webConfirmEnabled : opt.key === 'email' ? antiGhostEmailEnabled : antiGhostModes.has(opt.key)
                   return (
                     <button key={opt.key} type="button"
                       onClick={() => toggleMethod(opt.key)}
@@ -5698,7 +5764,7 @@ function SettingsTab() {
                   <button type="button"
                     onClick={async () => {
                       const newToken = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('')
-                      await saveGeneral({ sensor_api_token: newToken }, 'Sensor API token regenerated')
+                      await saveGeneralNow({ sensor_api_token: newToken }, 'Sensor API token regenerated')
                     }}
                     className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-colors"
                     style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}
@@ -5714,6 +5780,20 @@ function SettingsTab() {
               </div>
             )}
 
+            <div className="border-t border-[var(--ds-border-sub)]" />
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[12px] font-black text-[var(--ds-text-1)]">Send auto-cancel notification email</p>
+                <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+                  Emails the recipient when a booking is auto-cancelled for a missed presence confirmation. The in-app notification and Activity Log entry always happen regardless of this toggle.
+                </p>
+              </div>
+              <button type="button" onClick={toggleGhostCancelEmailEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
+                <div className="absolute inset-0 rounded-full transition-colors" style={{ background: ghostCancelEmailEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+                <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: ghostCancelEmailEnabled ? 24 : 4 }} />
+              </button>
+            </div>
+
             <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', color: '#818cf8' }}>
               <span className="font-black">How it works:</span> Every minute, the system checks for bookings past the window close with no presence confirmed. Those bookings are auto-cancelled and logged in Activity Log. The kiosk display updates immediately.
             </div>
@@ -5721,7 +5801,7 @@ function SettingsTab() {
         )}
       </div>
 
-      {/* Features — auto-save */}
+      {/* Features */}
       <div ref={el => { secRefs.current.features = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
         <div>
           <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Features</p>
@@ -5828,7 +5908,7 @@ function SettingsTab() {
             <input
               type="text"
               value={m365TenantId}
-              onChange={e => setM365TenantId(e.target.value)}
+              onChange={e => onM365Field(setM365TenantId)(e.target.value)}
               placeholder="e.g. 3f2a1b8c-....-....-....-............"
               className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
             />
@@ -5838,7 +5918,7 @@ function SettingsTab() {
             <input
               type="text"
               value={m365ClientId}
-              onChange={e => setM365ClientId(e.target.value)}
+              onChange={e => onM365Field(setM365ClientId)(e.target.value)}
               placeholder="e.g. 7c9d4e21-....-....-....-............"
               className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
             />
@@ -5848,7 +5928,7 @@ function SettingsTab() {
             <input
               type="password"
               value={m365ClientSecret}
-              onChange={e => setM365ClientSecret(e.target.value)}
+              onChange={e => onM365Field(setM365ClientSecret)(e.target.value)}
               placeholder={m365?.has_secret ? '•••••••• (already set — type to replace)' : 'Paste the client secret value'}
               className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
             />
@@ -5859,7 +5939,7 @@ function SettingsTab() {
             <input
               type="text"
               value={m365SenderEmail}
-              onChange={e => setM365SenderEmail(e.target.value)}
+              onChange={e => onM365Field(setM365SenderEmail)(e.target.value)}
               placeholder="e.g. noreply@domain.com"
               className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
             />
@@ -5868,14 +5948,6 @@ function SettingsTab() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={saveM365}
-            disabled={m365Saving}
-            className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-50"
-          >
-            {m365Saving ? 'Saving...' : 'Save'}
-          </button>
           <button
             type="button"
             onClick={handleTestM365}
@@ -5903,24 +5975,13 @@ function SettingsTab() {
           </div>
         )}
 
-        {/* Email sending switch */}
+        {/* Email sending test — the on/off switch for which mailer actually sends app emails now lives in the Mailer section below */}
         <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-[12px] font-black text-[var(--ds-text-1)]">Send app emails via Microsoft 365</p>
-              <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
-                When off, the app keeps using its current mailer. Only flip this on once Test Connection succeeds <em>and</em> the Sender Mailbox has Mail.Send permission and a real license.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={toggleM365MailEnabled}
-              disabled={!m365?.mail_ready}
-              title={!m365?.mail_ready ? 'Set Tenant ID, Client ID, Client Secret, and Sender Mailbox first' : ''}
-              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.mail_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
-            >
-              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.mail_enabled ? 26 : 4 }} />
-            </button>
+          <div>
+            <p className="text-[12px] font-black text-[var(--ds-text-1)]">Test Graph Mail Sending</p>
+            <p className="text-[10px] text-[var(--ds-text-3)] mt-0.5">
+              Sends a one-off test email via Microsoft Graph, regardless of which mailer is currently active. To make M365 the app's active mailer, select it in the Mailer section below.
+            </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -5962,9 +6023,9 @@ function SettingsTab() {
               onClick={toggleM365CalendarSync}
               disabled={!m365?.calendar_sync_ready}
               title={!m365?.calendar_sync_ready ? 'Save Tenant ID, Client ID and Client Secret first' : ''}
-              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365?.calendar_sync_enabled ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
+              className={`shrink-0 w-12 h-7 rounded-full relative transition-all disabled:opacity-40 ${m365CalendarSync ? 'bg-[#adee2b]' : 'bg-[var(--ds-border)]'}`}
             >
-              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365?.calendar_sync_enabled ? 26 : 4 }} />
+              <span className="absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all" style={{ left: m365CalendarSync ? 26 : 4 }} />
             </button>
           </div>
         </div>
@@ -5981,6 +6042,168 @@ function SettingsTab() {
             <li>Under <strong>API permissions</strong>, add the Microsoft Graph application permissions this app will need (e.g. <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Mail.Send</code>, <code className="bg-black/10 dark:bg-white/10 px-1 rounded text-[10px]">Calendars.ReadWrite</code>), then click <strong>Grant admin consent</strong>.</li>
           </ol>
         </div>
+      </div>
+
+      {/* Mailer */}
+      <div ref={el => { secRefs.current.mailer = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Mailer</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Choose which provider actually sends app emails (reminders, cancellations, etc). Only one can be active at a time.</p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {([
+            { key: 'default' as const, label: 'Default', icon: 'block', ready: true },
+            { key: 'm365' as const,    label: 'Microsoft 365', icon: 'cloud', ready: mailer?.m365.ready ?? false },
+            { key: 'resend' as const,  label: 'Resend', icon: 'send', ready: mailer?.resend.ready ?? false },
+            { key: 'brevo' as const,   label: 'Brevo', icon: 'forward_to_inbox', ready: mailer?.brevo.ready ?? false },
+          ]).map(opt => (
+            <button key={opt.key} type="button" onClick={() => selectActiveMailer(opt.key)}
+              className="flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-all"
+              style={{
+                background: activeMailer === opt.key ? 'rgba(173,238,43,0.07)' : 'var(--ds-bg-raised)',
+                border: activeMailer === opt.key ? '2px solid rgba(173,238,43,0.55)' : '2px solid var(--ds-border)',
+              }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: activeMailer === opt.key ? '#4d7c00' : 'var(--ds-text-3)' }}>{opt.icon}</span>
+              <span className="text-[11px] font-black" style={{ color: activeMailer === opt.key ? 'var(--ds-text-1)' : 'var(--ds-text-2)' }}>{opt.label}</span>
+              {opt.key !== 'default' && (
+                <span className="text-[8px] font-black uppercase tracking-wider" style={{ color: opt.ready ? '#4d7c00' : 'var(--ds-text-4)' }}>
+                  {opt.ready ? 'Configured' : 'Not set up'}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        {activeMailer === 'default' && (
+          <p className="text-[10px] text-[var(--ds-text-3)] px-1">No provider selected — app emails use the server's default mailer (currently discards mail unless configured in `.env`).</p>
+        )}
+
+        {activeMailer === 'resend' && (
+          <div className="pt-4 border-t space-y-4" style={{ borderColor: 'var(--ds-border-sub)' }}>
+            <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">Resend</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">API Key</label>
+                <input type="password" value={resendApiKey} onChange={e => onMailerField(setResendApiKey)(e.target.value)}
+                  placeholder={mailer?.resend.has_key ? '•••••••• (already set — type to replace)' : 're_...'}
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. From <strong>resend.com</strong> → API Keys.</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Address</label>
+                <input type="text" value={resendFromAddress} onChange={e => onMailerField(setResendFromAddress)(e.target.value)}
+                  placeholder="e.g. noreply@domain.com"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                <p className="text-[10px] text-[var(--ds-text-3)] px-1">Must be on a domain verified in your Resend account.</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Name (optional)</label>
+                <input type="text" value={resendFromName} onChange={e => onMailerField(setResendFromName)(e.target.value)}
+                  placeholder="e.g. RoomSync Pro"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeMailer === 'brevo' && (
+          <div className="pt-4 border-t space-y-4" style={{ borderColor: 'var(--ds-border-sub)' }}>
+            <p className="text-[11px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">Brevo</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">API Key</label>
+                <input type="password" value={brevoApiKey} onChange={e => onMailerField(setBrevoApiKey)(e.target.value)}
+                  placeholder={mailer?.brevo.has_key ? '•••••••• (already set — type to replace)' : 'xkeysib-...'}
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. From <strong>app.brevo.com</strong> → SMTP &amp; API → API Keys.</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Address</label>
+                <input type="text" value={brevoFromAddress} onChange={e => onMailerField(setBrevoFromAddress)(e.target.value)}
+                  placeholder="e.g. noreply@domain.com"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+                <p className="text-[10px] text-[var(--ds-text-3)] px-1">Must be a verified sender in your Brevo account.</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">From Name (optional)</label>
+                <input type="text" value={brevoFromName} onChange={e => onMailerField(setBrevoFromName)(e.target.value)}
+                  placeholder="e.g. RoomSync Pro"
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeMailer !== 'default' && (
+          <div className="pt-4 border-t space-y-3" style={{ borderColor: 'var(--ds-border-sub)' }}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" onClick={handleSendMailerTestEmail} disabled={mailerTestingEmail || dirty}
+                title={dirty ? 'Apply your changes first' : ''}
+                className="px-4 py-2 text-[10px] font-black uppercase rounded-lg bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] text-[var(--ds-text-2)] hover:border-[#adee2b] transition-all disabled:opacity-50">
+                {mailerTestingEmail ? 'Sending...' : 'Send Test Email'}
+              </button>
+              <span className="text-[10px] text-[var(--ds-text-3)]">Sends to your own account email, using whichever mailer is currently active (applied &amp; saved).</span>
+            </div>
+            {mailerEmailTestResult && (
+              <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed"
+                style={mailerEmailTestResult.success
+                  ? { background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.25)', color: '#16a34a' }
+                  : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.20)', color: '#ef4444' }}>
+                {mailerEmailTestResult.message}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Reminders */}
+      <div ref={el => { secRefs.current.reminders = el }} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] p-6 space-y-5">
+        <div>
+          <p className="text-[13px] font-black uppercase tracking-wider text-[var(--ds-text-1)]">Reminders</p>
+          <p className="text-[12px] text-[var(--ds-text-3)] mt-0.5">Email a booking's recipient shortly before it starts.</p>
+        </div>
+
+        {activeMailer === 'default' && (
+          <div className="rounded-xl p-3.5 text-[11px] font-semibold leading-relaxed" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', color: '#ef4444' }}>
+            Select an active mailer above (Microsoft 365, Resend, or Brevo) before you can enable reminders — there's currently nothing configured to send them.
+          </div>
+        )}
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: reminderEnabled ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: reminderEnabled ? '#4d7c00' : '#94a3b8' }}>notifications_active</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Reminder Email</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{reminderEnabled ? `Sent ${reminderMinutes} min before start` : 'Disabled'}</p>
+            </div>
+          </div>
+          <button type="button" onClick={toggleReminderEnabled} disabled={activeMailer === 'default'}
+            title={activeMailer === 'default' ? 'Select an active mailer first' : ''}
+            className="relative shrink-0 disabled:opacity-40" style={{ width: 44, height: 24 }}>
+            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: reminderEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
+            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: reminderEnabled ? 24 : 4 }} />
+          </button>
+        </div>
+
+        {reminderEnabled && (
+          <>
+            <div className="border-t border-[var(--ds-border-sub)]" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[14px] font-black text-[var(--ds-text-1)]">Send Before Start</p>
+                <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">How many minutes ahead to email the reminder</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="number" min={1} max={120} value={reminderMinutes}
+                  onChange={e => onReminderMinutesChange(Number(e.target.value))}
+                  className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+                <span className="text-[12px] font-bold text-[var(--ds-text-3)]">min</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Archive settings */}
@@ -6327,6 +6550,34 @@ function SettingsTab() {
       </div>
 
       </div>{/* end flex 2-col */}
+
+      {dirty && createPortal(
+        <div className="fixed z-[9997] flex items-center gap-3 px-5 py-3.5 rounded-[1.5rem]" style={{
+          bottom: 40, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(15,20,45,0.55)',
+          backdropFilter: 'blur(48px) saturate(200%)',
+          WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: '0 24px 56px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+          animation: 'ds-apply-bar-in 0.24s cubic-bezier(0.34,1.04,0.64,1)',
+        }}>
+          <style>{`@keyframes ds-apply-bar-in{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
+          <span className="text-[12px] font-bold whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.85)' }}>You have unsaved changes</span>
+          <button type="button" onClick={handleDiscardAll} disabled={applying}
+            className="text-[11px] font-black uppercase px-2 disabled:opacity-40 transition-colors"
+            style={{ color: 'rgba(255,255,255,0.45)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.85)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.45)')}>
+            Discard
+          </button>
+          <button type="button" onClick={handleApplyAll} disabled={applying}
+            className="px-5 py-2 rounded-full text-[11px] font-black uppercase whitespace-nowrap transition-all disabled:opacity-50"
+            style={{ background: '#adee2b', color: '#000' }}>
+            {applying ? 'Applying...' : 'Apply Changes'}
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

@@ -21,6 +21,10 @@ export interface GeneralSettings {
   anti_ghost_window_before: number
   anti_ghost_window_after: number
   web_confirm_enabled: boolean
+  anti_ghost_email_enabled: boolean
+  ghost_cancel_email_enabled: boolean
+  reminder_enabled: boolean
+  reminder_minutes: number
   backup_enabled: boolean
   backup_frequency: string
   backup_time: string
@@ -111,7 +115,6 @@ export interface M365Settings {
   sender_email: string
   has_secret: boolean
   configured: boolean
-  mail_enabled: boolean
   mail_ready: boolean
   calendar_sync_enabled: boolean
   calendar_sync_ready: boolean
@@ -124,7 +127,7 @@ export async function getM365Settings(): Promise<M365Settings> {
 
 export async function updateM365Settings(patch: {
   tenant_id?: string; client_id?: string; client_secret?: string; sender_email?: string
-  mail_enabled?: boolean; calendar_sync_enabled?: boolean
+  calendar_sync_enabled?: boolean
 }): Promise<M365Settings> {
   const res = await api.patch('/settings/m365', patch)
   return res.data
@@ -137,6 +140,34 @@ export async function testM365Connection(): Promise<{ success: boolean; message:
 
 export async function sendM365TestEmail(): Promise<{ success: boolean; message: string }> {
   const res = await api.post('/settings/m365/test-email')
+  return res.data
+}
+
+export type ActiveMailer = 'default' | 'm365' | 'resend' | 'brevo'
+
+export interface MailerSettings {
+  active_mailer: ActiveMailer
+  m365: { ready: boolean }
+  resend: { from_address: string; from_name: string; has_key: boolean; ready: boolean }
+  brevo: { from_address: string; from_name: string; has_key: boolean; ready: boolean }
+}
+
+export async function getMailerSettings(): Promise<MailerSettings> {
+  const res = await api.get('/settings/mailer')
+  return res.data
+}
+
+export async function updateMailerSettings(patch: {
+  active_mailer?: ActiveMailer
+  resend_api_key?: string; resend_from_address?: string; resend_from_name?: string
+  brevo_api_key?: string; brevo_from_address?: string; brevo_from_name?: string
+}): Promise<MailerSettings> {
+  const res = await api.patch('/settings/mailer', patch)
+  return res.data
+}
+
+export async function sendMailerTestEmail(): Promise<{ success: boolean; message: string }> {
+  const res = await api.post('/settings/mailer/test-email')
   return res.data
 }
 

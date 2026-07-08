@@ -7,6 +7,7 @@ import ReceptionistPage from './pages/ReceptionistPage'
 import RoomsPage from './pages/RoomsPage'
 import LoginPage from './pages/LoginPage'
 import KioskPage from './pages/KioskPage'
+import PublicBookingPage from './pages/PublicBookingPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import NotificationPanel from './components/layout/NotificationPanel'
 import NotificationToast from './components/layout/NotificationToast'
@@ -21,6 +22,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/kiosk/:id" element={<KioskPage />} />
+      <Route path="/booking/:id" element={<PublicBookingPage />} />
       <Route
         path="/"
         element={
