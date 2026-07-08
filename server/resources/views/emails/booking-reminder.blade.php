@@ -190,22 +190,22 @@
             @endif
         </div>
 
-        @if($booking->room->requires_contact)
+        @if($showActions)
         <div class="divider"></div>
-        <p class="cta-text">Please confirm your attendance so the room stays reserved for you:</p>
-        <a href="{{ env('FRONTEND_URL', 'http://localhost:5173') }}/confirm/{{ $booking->id }}" class="btn">
-            Confirm Attendance
+        <p class="cta-text">Confirm your presence when you arrive, or cancel if you can no longer attend:</p>
+        <a href="{{ $actionUrl }}" class="btn">
+            View Booking &amp; Manage
         </a>
+        <p style="font-size:11px; color:#9ca3af; margin-top:10px; text-align:center;">This link is valid for 48 hours.</p>
         @else
         <p class="cta-text" style="color:#6b7280; font-size:13px;">
             Head to the room a few minutes early. No confirmation needed for this booking.
         </p>
-        @endif
-
         <div class="divider"></div>
         <p style="font-size:13px; color:#6b7280;">
             If you can no longer attend, please cancel your booking in the system so others can use the room.
         </p>
+        @endif
     </div>
 
     <div class="footer">

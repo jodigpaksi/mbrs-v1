@@ -10,6 +10,7 @@ export interface ToastItem {
   msg: string
   countdown: number
   isUndo: boolean
+  negative: boolean
 }
 
 export interface SeriesUndoToast {
@@ -30,7 +31,7 @@ interface Ctx {
   toasts: ToastItem[]
   seriesUndoToast: SeriesUndoToast | null
   addCancelToast: (booking: Booking) => void
-  addInfoToast: (msg: string) => void
+  addInfoToast: (msg: string, negative?: boolean) => void
   undoCancel: (toastId: string, bookingId: number) => void
   confirmSeriesCancel: (target: SeriesCancelTarget) => void
   undoSeriesCancel: () => void
@@ -73,7 +74,7 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
     let count = 5
 
     setPendingCancelIds(prev => new Set([...prev, bid]))
-    setToasts(prev => [...prev, { id: toastId, bookingId: bid, msg: `"${booking.title}" will be cancelled`, countdown: count, isUndo: true }])
+    setToasts(prev => [...prev, { id: toastId, bookingId: bid, msg: `"${booking.title}" will be cancelled`, countdown: count, isUndo: true, negative: true }])
 
     const interval = setInterval(() => {
       count -= 1
@@ -96,9 +97,9 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
     cancelTimers.current.set(bid, { timer, interval })
   }
 
-  function addInfoToast(msg: string) {
+  function addInfoToast(msg: string, negative = false) {
     const id = `info-${Date.now()}`
-    setToasts(prev => [...prev, { id, bookingId: 0, msg, countdown: 0, isUndo: false }])
+    setToasts(prev => [...prev, { id, bookingId: 0, msg, countdown: 0, isUndo: false, negative }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
   }
 
@@ -173,7 +174,7 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
           display: 'flex', alignItems: 'center', gap: 12, minWidth: 300,
           animation: 'ct-in 0.22s cubic-bezier(0.34,1.04,0.64,1)',
         }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 22, color: t.isUndo ? '#f87171' : '#adee2b', flexShrink: 0 }}>{t.isUndo ? 'cancel' : 'check_circle'}</span>
+          <span className="material-symbols-outlined" style={{ fontSize: 22, color: (t.isUndo || t.negative) ? '#f87171' : '#adee2b', flexShrink: 0 }}>{(t.isUndo || t.negative) ? 'cancel' : 'check_circle'}</span>
           <span style={{ color: 'white', fontSize: 12, fontWeight: 900, flex: 1 }}>{t.msg}</span>
           {t.isUndo && (
             <>

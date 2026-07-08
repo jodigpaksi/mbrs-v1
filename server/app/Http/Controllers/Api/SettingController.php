@@ -67,6 +67,10 @@ class SettingController extends Controller
             'anti_ghost_window_before'   => (int) $get('anti_ghost_window_before', '5'),
             'anti_ghost_window_after'    => (int) $get('anti_ghost_window_after', '10'),
             'web_confirm_enabled'        => $get('web_confirm_enabled', 'false') === 'true',
+            'anti_ghost_email_enabled'   => $get('anti_ghost_email_enabled', 'false') === 'true',
+            'ghost_cancel_email_enabled' => $get('ghost_cancel_email_enabled', 'true') !== 'false',
+            'reminder_enabled'           => $get('reminder_enabled', 'true') !== 'false',
+            'reminder_minutes'           => (int) $get('reminder_minutes', '10'),
             'sensor_api_token'           => $this->getOrCreateSensorToken(),
             'backup_enabled'             => $get('backup_enabled', 'false') === 'true',
             'backup_frequency'           => $get('backup_frequency', 'weekly'),
@@ -173,7 +177,6 @@ class SettingController extends Controller
             'sender_email' => $senderEmail ?? '',
             'has_secret' => $hasSecret,
             'configured' => (bool) ($tenantId && $clientId && $hasSecret),
-            'mail_enabled' => $get('m365_mail_enabled') === 'true',
             'mail_ready' => (bool) ($tenantId && $clientId && $hasSecret && $senderEmail),
             'calendar_sync_enabled' => $get('m365_calendar_sync_enabled') === 'true',
             'calendar_sync_ready' => (bool) ($tenantId && $clientId && $hasSecret),
@@ -183,25 +186,21 @@ class SettingController extends Controller
     public function updateM365Settings(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'tenant_id'     => 'sometimes|string|max:100',
-            'client_id'     => 'sometimes|string|max:100',
+            'tenant_id'     => 'sometimes|nullable|string|max:100',
+            'client_id'     => 'sometimes|nullable|string|max:100',
             'client_secret' => 'sometimes|nullable|string|max:500',
-            'sender_email'  => 'sometimes|string|max:150',
-            'mail_enabled'  => 'sometimes|boolean',
+            'sender_email'  => 'sometimes|nullable|string|max:150',
             'calendar_sync_enabled' => 'sometimes|boolean',
         ]);
 
         if (array_key_exists('tenant_id', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_tenant_id'], ['value' => $data['tenant_id']]);
+            Setting::updateOrCreate(['key' => 'm365_tenant_id'], ['value' => $data['tenant_id'] ?? '']);
         }
         if (array_key_exists('client_id', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_client_id'], ['value' => $data['client_id']]);
+            Setting::updateOrCreate(['key' => 'm365_client_id'], ['value' => $data['client_id'] ?? '']);
         }
         if (array_key_exists('sender_email', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_sender_email'], ['value' => $data['sender_email']]);
-        }
-        if (array_key_exists('mail_enabled', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_mail_enabled'], ['value' => $data['mail_enabled'] ? 'true' : 'false']);
+            Setting::updateOrCreate(['key' => 'm365_sender_email'], ['value' => $data['sender_email'] ?? '']);
         }
         if (array_key_exists('calendar_sync_enabled', $data)) {
             Setting::updateOrCreate(['key' => 'm365_calendar_sync_enabled'], ['value' => $data['calendar_sync_enabled'] ? 'true' : 'false']);
@@ -285,6 +284,120 @@ class SettingController extends Controller
         return response()->json(['success' => true, 'message' => "Test email sent to {$to}. Check your inbox (and spam folder)."]);
     }
 
+    public function mailerSettings(): JsonResponse
+    {
+        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+
+        $m365TenantId = $get('m365_tenant_id');
+        $m365ClientId = $get('m365_client_id');
+        $m365HasSecret = (bool) $get('m365_client_secret');
+        $m365SenderEmail = $get('m365_sender_email');
+
+        $resendFromAddress = $get('resend_from_address');
+        $resendHasKey = (bool) $get('resend_api_key');
+
+        $brevoFromAddress = $get('brevo_from_address');
+        $brevoHasKey = (bool) $get('brevo_api_key');
+
+        return response()->json([
+            'active_mailer' => $get('active_mailer') ?? 'default',
+            'm365' => [
+                'ready' => (bool) ($m365TenantId && $m365ClientId && $m365HasSecret && $m365SenderEmail),
+            ],
+            'resend' => [
+                'from_address' => $resendFromAddress ?? '',
+                'from_name'    => $get('resend_from_name') ?? '',
+                'has_key'      => $resendHasKey,
+                'ready'        => (bool) ($resendHasKey && $resendFromAddress),
+            ],
+            'brevo' => [
+                'from_address' => $brevoFromAddress ?? '',
+                'from_name'    => $get('brevo_from_name') ?? '',
+                'has_key'      => $brevoHasKey,
+                'ready'        => (bool) ($brevoHasKey && $brevoFromAddress),
+            ],
+        ]);
+    }
+
+    public function updateMailerSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'active_mailer'      => 'sometimes|in:default,m365,resend,brevo',
+            'resend_api_key'     => 'sometimes|nullable|string|max:500',
+            'resend_from_address' => 'sometimes|nullable|email|max:150',
+            'resend_from_name'    => 'sometimes|nullable|string|max:150',
+            'brevo_api_key'      => 'sometimes|nullable|string|max:500',
+            'brevo_from_address' => 'sometimes|nullable|email|max:150',
+            'brevo_from_name'    => 'sometimes|nullable|string|max:150',
+        ]);
+
+        if (array_key_exists('active_mailer', $data)) {
+            Setting::updateOrCreate(['key' => 'active_mailer'], ['value' => $data['active_mailer']]);
+        }
+        if (array_key_exists('resend_from_address', $data)) {
+            Setting::updateOrCreate(['key' => 'resend_from_address'], ['value' => $data['resend_from_address'] ?? '']);
+        }
+        if (array_key_exists('resend_from_name', $data)) {
+            Setting::updateOrCreate(['key' => 'resend_from_name'], ['value' => $data['resend_from_name'] ?? '']);
+        }
+        if (!empty($data['resend_api_key'])) {
+            Setting::updateOrCreate(['key' => 'resend_api_key'], ['value' => Crypt::encryptString($data['resend_api_key'])]);
+        }
+        if (array_key_exists('brevo_from_address', $data)) {
+            Setting::updateOrCreate(['key' => 'brevo_from_address'], ['value' => $data['brevo_from_address'] ?? '']);
+        }
+        if (array_key_exists('brevo_from_name', $data)) {
+            Setting::updateOrCreate(['key' => 'brevo_from_name'], ['value' => $data['brevo_from_name'] ?? '']);
+        }
+        if (!empty($data['brevo_api_key'])) {
+            Setting::updateOrCreate(['key' => 'brevo_api_key'], ['value' => Crypt::encryptString($data['brevo_api_key'])]);
+        }
+
+        \App\Models\ActivityLog::record('settings.updated', 'Updated Mailer settings', null, []);
+
+        return $this->mailerSettings();
+    }
+
+    public function sendMailerTestEmail(Request $request): JsonResponse
+    {
+        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $activeMailer = $get('active_mailer') ?? 'default';
+        $to = $request->user()->email;
+
+        if ($activeMailer === 'default') {
+            return response()->json(['success' => false, 'message' => 'No mailer is currently active. Select Microsoft 365, Resend, or Brevo first.'], 422);
+        }
+
+        $mailerMap = ['m365' => 'graph', 'resend' => 'resend', 'brevo' => 'brevo'];
+        $mailerName = $mailerMap[$activeMailer] ?? null;
+        if (!$mailerName) {
+            return response()->json(['success' => false, 'message' => 'Unknown active mailer.'], 422);
+        }
+
+        $fromAddress = match ($activeMailer) {
+            'm365'   => $get('m365_sender_email'),
+            'resend' => $get('resend_from_address'),
+            'brevo'  => $get('brevo_from_address'),
+            default  => null,
+        };
+        if (!$fromAddress) {
+            return response()->json(['success' => false, 'message' => 'The active mailer is missing a From Address — set it first.'], 422);
+        }
+
+        try {
+            \Illuminate\Support\Facades\Mail::mailer($mailerName)->html(
+                "<p>This is a test email sent via {$activeMailer} from RoomSync Pro Admin Settings. If you received this, the mailer is working.</p>",
+                function ($message) use ($to, $fromAddress) {
+                    $message->to($to)->from($fromAddress)->subject('RoomSync Pro — Mailer test email');
+                }
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 200);
+        }
+
+        return response()->json(['success' => true, 'message' => "Test email sent to {$to}. Check your inbox (and spam folder)."]);
+    }
+
     public function updateGeneralSettings(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -300,34 +413,38 @@ class SettingController extends Controller
             'archive_delete_after_days' => 'sometimes|integer|min:1|max:730',
             'chart_peak_hour_from'      => 'sometimes|integer|min:0|max:23',
             'chart_peak_hour_to'        => 'sometimes|integer|min:0|max:23',
-            'chart_colors'              => 'sometimes|string',
+            'chart_colors'              => 'sometimes|nullable|string',
             'anti_ghost_enabled'          => 'sometimes|boolean',
-            'anti_ghost_mode'            => ['sometimes', 'string', function ($attr, $val, $fail) {
+            'anti_ghost_mode'            => ['sometimes', 'nullable', 'string', function ($attr, $val, $fail) {
                 $valid = ['kiosk', 'sensor'];
-                foreach (array_filter(explode(',', $val)) as $m) {
+                foreach (array_filter(explode(',', $val ?? '')) as $m) {
                     if (!in_array(trim($m), $valid)) $fail("Invalid mode: $m");
                 }
             }],
             'anti_ghost_window_before'   => 'sometimes|integer|min:0|max:20',
             'anti_ghost_window_after'    => 'sometimes|integer|min:0|max:20',
             'web_confirm_enabled'        => 'sometimes|boolean',
+            'anti_ghost_email_enabled'   => 'sometimes|boolean',
+            'ghost_cancel_email_enabled' => 'sometimes|boolean',
+            'reminder_enabled'           => 'sometimes|boolean',
+            'reminder_minutes'           => 'sometimes|integer|min:1|max:120',
             'sensor_api_token'           => 'sometimes|string|max:64',
             'backup_enabled'             => 'sometimes|boolean',
             'backup_frequency'           => 'sometimes|in:daily,weekly,monthly',
             'backup_time'                => 'sometimes|date_format:H:i',
             'backup_day_of_week'         => 'sometimes|integer|min:0|max:6',
             'backup_day_of_month'        => 'sometimes|integer|min:1|max:31',
-            'backup_formats'             => 'sometimes|string',
+            'backup_formats'             => 'sometimes|nullable|string',
             'backup_include_archive'     => 'sometimes|boolean',
             'backup_include_log'         => 'sometimes|boolean',
             'backup_include_data'        => 'sometimes|boolean',
             'business_timezone'          => 'sometimes|string|timezone',
-            'app_name'                   => 'sometimes|string|max:100',
-            'app_full_name'              => 'sometimes|string|max:150',
+            'app_name'                   => 'sometimes|nullable|string|max:100',
+            'app_full_name'              => 'sometimes|nullable|string|max:150',
             'login_photo_pos_x'          => 'sometimes|integer|min:0|max:100',
             'login_photo_pos_y'          => 'sometimes|integer|min:0|max:100',
-            'login_headline'             => 'sometimes|string|max:120',
-            'login_subheadline'          => 'sometimes|string|max:200',
+            'login_headline'             => 'sometimes|nullable|string|max:120',
+            'login_subheadline'          => 'sometimes|nullable|string|max:200',
         ]);
 
         $changes = [];

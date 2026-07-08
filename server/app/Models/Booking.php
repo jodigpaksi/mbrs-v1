@@ -31,6 +31,7 @@ class Booking extends Model
         'booked_for_user_id',
         'archived_at',
         'reminder_sent',
+        'presence_confirmed_at',
     ];
 
     protected function casts(): array
@@ -42,6 +43,7 @@ class Booking extends Model
             'disputed_at'           => 'datetime',
             'dispute_resolved_at'   => 'datetime',
             'archived_at'           => 'datetime',
+            'presence_confirmed_at' => 'datetime',
             'series_skipped_dates'  => 'array',
             'resolves_skipped_date' => 'date:Y-m-d',
             'reminder_sent'         => 'boolean',
@@ -63,5 +65,20 @@ class Booking extends Model
         return $this->belongsTo(User::class, 'booked_for_user_id');
     }
 
-
+    /**
+     * A signed, expiring link to the public booking-action page (view details,
+     * confirm presence, cancel) — safe to put in an email since the signature
+     * itself is the authorization, not a guessable numeric id.
+     */
+    public function publicActionUrl(int $hours = 48): string
+    {
+        $signed = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+            'public.bookings.show',
+            now()->addHours($hours),
+            ['booking' => $this->id],
+        );
+        $query = parse_url($signed, PHP_URL_QUERY);
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
+        return "{$frontendUrl}/booking/{$this->id}?{$query}";
+    }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\BuildingController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PublicBookingController;
 use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\SensorController;
 use App\Http\Controllers\Api\SettingController;
@@ -31,6 +32,17 @@ Route::prefix('kiosk')->group(function () {
     Route::post('{id}/verify', [KioskController::class, 'verifyPin']);
     Route::get('{id}/status', [KioskController::class, 'publicStatus']);
     Route::post('{id}/confirm', [KioskController::class, 'confirmPresence']);
+});
+
+// Public booking-action page — reached via a signed, expiring link emailed to the
+// booking's recipient (reminder email). No login required; the URL signature
+// itself is the authorization. Laravel's signature covers the full path + query
+// string only (not the HTTP verb), so GET (view) and POST (confirm/cancel) must
+// share the exact same URI — the action is picked via a body param instead of
+// separate sub-paths, otherwise the signature would fail to validate.
+Route::middleware('signed')->group(function () {
+    Route::get('/public/bookings/{booking}', [PublicBookingController::class, 'show'])->name('public.bookings.show');
+    Route::post('/public/bookings/{booking}', [PublicBookingController::class, 'act']);
 });
 
 Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
@@ -151,6 +163,9 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
         Route::patch('/settings/m365', [SettingController::class, 'updateM365Settings']);
         Route::post('/settings/m365/test', [SettingController::class, 'testM365Connection']);
         Route::post('/settings/m365/test-email', [SettingController::class, 'sendM365TestEmail']);
+        Route::get('/settings/mailer', [SettingController::class, 'mailerSettings']);
+        Route::patch('/settings/mailer', [SettingController::class, 'updateMailerSettings']);
+        Route::post('/settings/mailer/test-email', [SettingController::class, 'sendMailerTestEmail']);
         Route::patch('/users/{user}/special-access', [UserController::class, 'toggleSpecialAccess']);
         Route::get('/archive', [ArchiveController::class, 'index']);
         Route::post('/archive/run', [ArchiveController::class, 'run']);
