@@ -40,8 +40,10 @@ class SettingController extends Controller
             'sunday'   => 'required|boolean',
         ]);
 
-        Setting::updateOrCreate(['key' => 'weekend_saturday'], ['value' => $data['saturday'] ? 'true' : 'false']);
-        Setting::updateOrCreate(['key' => 'weekend_sunday'],   ['value' => $data['sunday']   ? 'true' : 'false']);
+        Setting::upsert([
+            ['key' => 'weekend_saturday', 'value' => $data['saturday'] ? 'true' : 'false'],
+            ['key' => 'weekend_sunday',   'value' => $data['sunday']   ? 'true' : 'false'],
+        ], ['key'], ['value']);
 
         return response()->json(['saturday' => $data['saturday'], 'sunday' => $data['sunday']]);
     }
@@ -211,21 +213,25 @@ class SettingController extends Controller
             'calendar_sync_enabled' => 'sometimes|boolean',
         ]);
 
+        $rows = [];
         if (array_key_exists('tenant_id', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_tenant_id'], ['value' => $data['tenant_id'] ?? '']);
+            $rows[] = ['key' => 'm365_tenant_id', 'value' => $data['tenant_id'] ?? ''];
         }
         if (array_key_exists('client_id', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_client_id'], ['value' => $data['client_id'] ?? '']);
+            $rows[] = ['key' => 'm365_client_id', 'value' => $data['client_id'] ?? ''];
         }
         if (array_key_exists('sender_email', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_sender_email'], ['value' => $data['sender_email'] ?? '']);
+            $rows[] = ['key' => 'm365_sender_email', 'value' => $data['sender_email'] ?? ''];
         }
         if (array_key_exists('calendar_sync_enabled', $data)) {
-            Setting::updateOrCreate(['key' => 'm365_calendar_sync_enabled'], ['value' => $data['calendar_sync_enabled'] ? 'true' : 'false']);
+            $rows[] = ['key' => 'm365_calendar_sync_enabled', 'value' => $data['calendar_sync_enabled'] ? 'true' : 'false'];
         }
         // Only touch the secret if the client actually sent a new value (empty/omitted keeps the existing one).
         if (!empty($data['client_secret'])) {
-            Setting::updateOrCreate(['key' => 'm365_client_secret'], ['value' => Crypt::encryptString($data['client_secret'])]);
+            $rows[] = ['key' => 'm365_client_secret', 'value' => Crypt::encryptString($data['client_secret'])];
+        }
+        if ($rows) {
+            Setting::upsert($rows, ['key'], ['value']);
         }
 
         \App\Models\ActivityLog::record('settings.updated', 'Updated Microsoft 365 integration settings', null, []);
@@ -357,26 +363,30 @@ class SettingController extends Controller
             'brevo_from_name'    => 'sometimes|nullable|string|max:150',
         ]);
 
+        $rows = [];
         if (array_key_exists('active_mailer', $data)) {
-            Setting::updateOrCreate(['key' => 'active_mailer'], ['value' => $data['active_mailer']]);
+            $rows[] = ['key' => 'active_mailer', 'value' => $data['active_mailer']];
         }
         if (array_key_exists('resend_from_address', $data)) {
-            Setting::updateOrCreate(['key' => 'resend_from_address'], ['value' => $data['resend_from_address'] ?? '']);
+            $rows[] = ['key' => 'resend_from_address', 'value' => $data['resend_from_address'] ?? ''];
         }
         if (array_key_exists('resend_from_name', $data)) {
-            Setting::updateOrCreate(['key' => 'resend_from_name'], ['value' => $data['resend_from_name'] ?? '']);
+            $rows[] = ['key' => 'resend_from_name', 'value' => $data['resend_from_name'] ?? ''];
         }
         if (!empty($data['resend_api_key'])) {
-            Setting::updateOrCreate(['key' => 'resend_api_key'], ['value' => Crypt::encryptString($data['resend_api_key'])]);
+            $rows[] = ['key' => 'resend_api_key', 'value' => Crypt::encryptString($data['resend_api_key'])];
         }
         if (array_key_exists('brevo_from_address', $data)) {
-            Setting::updateOrCreate(['key' => 'brevo_from_address'], ['value' => $data['brevo_from_address'] ?? '']);
+            $rows[] = ['key' => 'brevo_from_address', 'value' => $data['brevo_from_address'] ?? ''];
         }
         if (array_key_exists('brevo_from_name', $data)) {
-            Setting::updateOrCreate(['key' => 'brevo_from_name'], ['value' => $data['brevo_from_name'] ?? '']);
+            $rows[] = ['key' => 'brevo_from_name', 'value' => $data['brevo_from_name'] ?? ''];
         }
         if (!empty($data['brevo_api_key'])) {
-            Setting::updateOrCreate(['key' => 'brevo_api_key'], ['value' => Crypt::encryptString($data['brevo_api_key'])]);
+            $rows[] = ['key' => 'brevo_api_key', 'value' => Crypt::encryptString($data['brevo_api_key'])];
+        }
+        if ($rows) {
+            Setting::upsert($rows, ['key'], ['value']);
         }
 
         \App\Models\ActivityLog::record('settings.updated', 'Updated Mailer settings', null, []);
@@ -474,14 +484,20 @@ class SettingController extends Controller
             'login_subheadline'          => 'sometimes|nullable|string|max:200',
         ]);
 
+        $oldValues = Setting::getMany(array_keys($data));
+
         $changes = [];
+        $rows = [];
         foreach ($data as $key => $value) {
             $stored = is_bool($value) ? ($value ? 'true' : 'false') : (string) $value;
-            $old = Setting::where('key', $key)->value('value');
+            $old = $oldValues[$key] ?? null;
             if ($old !== $stored) {
                 $changes[$key] = ['old' => $old, 'new' => $stored];
             }
-            Setting::updateOrCreate(['key' => $key], ['value' => $stored]);
+            $rows[] = ['key' => $key, 'value' => $stored];
+        }
+        if ($rows) {
+            Setting::upsert($rows, ['key'], ['value']);
         }
 
         if ($changes) {
