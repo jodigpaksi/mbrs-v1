@@ -5,6 +5,7 @@ import { deptColors } from '../../data/mockData'
 import { getRoomStats } from '../../api/rooms'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 import { useModalHotkeys } from '../../hooks/useModalHotkeys'
+import { parseLocal } from '../../utils/date'
 
 interface RoomDetailModalProps {
   room: Room | null
@@ -14,7 +15,6 @@ interface RoomDetailModalProps {
   bookings?: Booking[]
 }
 
-function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
 function fmtTime(iso: string) {
   return parseLocal(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }

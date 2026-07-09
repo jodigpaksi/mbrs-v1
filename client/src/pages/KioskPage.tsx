@@ -19,9 +19,6 @@ function fmtSec(d: Date) {
 function fmtLongDate(d: Date) {
   return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
-function fmtShortDate(d: Date) {
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-}
 function dur(start: string, end: string) {
   const m = (new Date(end.replace('Z', '')).getTime() - new Date(start.replace('Z', '')).getTime()) / 60000
   const h = Math.floor(m / 60); const min = m % 60
@@ -318,7 +315,7 @@ function LandscapeLayout({ now, theme, layout, room, status, current, isOccupied
 // PORTRAIT — "door sign"
 // ════════════════════════════════════════════════════════════════════════════
 
-function PortraitLayout({ now, theme, layout, room, status, current, isOccupied, accent, kioskId, onPresenceConfirmed }: LayoutProps) {
+function PortraitLayout({ now, layout, room, status, current, isOccupied, accent, kioskId, onPresenceConfirmed }: LayoutProps) {
   const ok = isOccupied ? '#ef4444' : '#22c55e'
   const upcomingCount = Math.min(2, Math.max(1, layout.upcoming_count ?? 2))
 

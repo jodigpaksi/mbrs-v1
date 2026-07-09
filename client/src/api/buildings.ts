@@ -6,11 +6,6 @@ export async function getBuildings(): Promise<Building[]> {
   return res.data
 }
 
-export async function getBuilding(id: number): Promise<Building> {
-  const res = await axios.get(`/buildings/${id}`)
-  return res.data
-}
-
 export async function createBuilding(data: Partial<Building>): Promise<Building> {
   const res = await axios.post('/buildings', data)
   return res.data

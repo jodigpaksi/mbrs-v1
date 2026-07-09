@@ -83,18 +83,6 @@ export async function getAnalyticsOverview(
   return data
 }
 
-export async function getAnalyticsReport(filters: AnalyticsFilters = {}): Promise<AnalyticsReport> {
-  const params: Record<string, unknown> = {}
-  if (filters.from) params.from = filters.from
-  if (filters.to) params.to = filters.to
-  if (filters.room_id) params.room_id = filters.room_id
-  if (filters.building_id) params.building_id = filters.building_id
-  if (filters.dept_id) params.dept_id = filters.dept_id
-  if (filters.page && filters.page > 1) params.page = filters.page
-  const { data } = await api.get('/analytics/report', { params })
-  return data
-}
-
 export async function downloadAnalyticsExport(filters: AnalyticsFilters = {}): Promise<void> {
   const params: Record<string, unknown> = {}
   if (filters.from) params.from = filters.from

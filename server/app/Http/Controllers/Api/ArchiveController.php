@@ -157,18 +157,30 @@ class ArchiveController extends Controller
         $created = 0;
         $errors  = [];
 
+        // Pre-cache rooms (keyed by "name|building name", plus a name-only key for rows with
+        // no Building column — first match wins, same as the original ->first() query order)
+        // and users (keyed by lowercased email), once, instead of a query per row.
+        $roomsByKey = [];
+        foreach (\App\Models\Room::with('building')->get() as $room) {
+            $buildingName = $room->building?->name;
+            if (!array_key_exists($room->name, $roomsByKey)) $roomsByKey[$room->name] = $room;
+            if ($buildingName) $roomsByKey["{$room->name}|{$buildingName}"] = $room;
+        }
+        $usersByEmail = \App\Models\User::get()->keyBy(fn ($u) => strtolower($u->email));
+
         foreach ($rows as $i => $row) {
             $rowNum = $i + 2;
             try {
                 // Resolve room by name + building
-                $room = \App\Models\Room::where('name', trim($row['Room'] ?? ''))
-                    ->when($row['Building'] ?? null, fn($q, $b) =>
-                        $q->whereHas('building', fn($q) => $q->where('name', $b))
-                    )->first();
+                $roomName = trim($row['Room'] ?? '');
+                $buildingName = $row['Building'] ?? null;
+                $room = $buildingName
+                    ? ($roomsByKey["{$roomName}|{$buildingName}"] ?? null)
+                    : ($roomsByKey[$roomName] ?? null);
 
                 if (!$room) { $errors[] = "Row {$rowNum}: Room \"{$row['Room']}\" not found."; continue; }
 
-                $user = \App\Models\User::where('email', trim($row['Booked By Email'] ?? ''))->first();
+                $user = $usersByEmail[strtolower(trim($row['Booked By Email'] ?? ''))] ?? null;
                 if (!$user) { $errors[] = "Row {$rowNum}: User \"{$row['Booked By Email']}\" not found."; continue; }
 
                 $date     = trim($row['Start Date'] ?? '');

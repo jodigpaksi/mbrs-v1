@@ -297,13 +297,19 @@ class RoomController extends Controller
             $query->where('building_id', $request->building_id);
         }
 
-        $result = $query->get()->map(function (Room $room) use ($searchStart, $searchEnd, $minMinutes) {
-            $bookings = Booking::where('room_id', $room->id)
-                ->where('status', '!=', 'cancelled')
-                ->where('start_at', '<', $searchEnd)
-                ->where('end_at',   '>', $searchStart)
-                ->orderBy('start_at')
-                ->get(['start_at', 'end_at']);
+        $rooms = $query->get();
+
+        // One query for every room's bookings in the window instead of one query per room.
+        $bookingsByRoom = Booking::whereIn('room_id', $rooms->pluck('id'))
+            ->where('status', '!=', 'cancelled')
+            ->where('start_at', '<', $searchEnd)
+            ->where('end_at',   '>', $searchStart)
+            ->orderBy('start_at')
+            ->get(['room_id', 'start_at', 'end_at'])
+            ->groupBy('room_id');
+
+        $result = $rooms->map(function (Room $room) use ($searchStart, $searchEnd, $minMinutes, $bookingsByRoom) {
+            $bookings = $bookingsByRoom->get($room->id, collect());
 
             $slots  = [];
             $cursor = $searchStart->copy();

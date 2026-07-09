@@ -26,9 +26,12 @@ class ReleaseGhostBookings extends Command
 
     public function handle(): void
     {
-        if (Setting::where('key', 'anti_ghost_enabled')->value('value') !== 'true') return;
+        $settings = Setting::getMany(['anti_ghost_enabled', 'anti_ghost_window_after', 'ghost_cancel_email_enabled']);
+        if (($settings['anti_ghost_enabled'] ?? null) !== 'true') return;
 
-        $windowAfter = (int) (Setting::where('key', 'anti_ghost_window_after')->value('value') ?? 10);
+        $windowAfter = (int) ($settings['anti_ghost_window_after'] ?? 10);
+        // Default enabled (missing key = never configured yet, not explicitly disabled).
+        $emailEnabled = ($settings['ghost_cancel_email_enabled'] ?? null) !== 'false';
 
         $now      = $this->localNow();
         $cutoff   = $now->copy()->subMinutes($windowAfter);
@@ -40,11 +43,11 @@ class ReleaseGhostBookings extends Command
             ->whereDate('start_at', $today)
             ->where('start_at', '<=', $cutoff)
             ->where(fn ($q) => $q->whereNull('dispute_status')->orWhere('dispute_status', '!=', 'approved'))
+            ->with(['room', 'user', 'bookedForUser'])
             ->get();
 
         $count = 0;
         foreach ($ghosts as $booking) {
-            $booking->load('room');
             $booking->update(['status' => 'cancelled', 'cancelled_at' => $now, 'cancel_reason' => 'ghost_release']);
 
             ActivityLog::record(
@@ -65,8 +68,6 @@ class ReleaseGhostBookings extends Command
                 'message'    => "Your booking \"{$booking->title}\" at {$roomName} ({$timeStr}) was auto-cancelled — presence not confirmed in time.",
             ]);
 
-            // Default enabled (missing key = never configured yet, not explicitly disabled).
-            $emailEnabled = Setting::where('key', 'ghost_cancel_email_enabled')->value('value') !== 'false';
             $recipient = $booking->bookedForUser ?? $booking->user;
             if ($emailEnabled && $recipient && $recipient->email) {
                 try {
