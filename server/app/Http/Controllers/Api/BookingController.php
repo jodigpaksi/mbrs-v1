@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Events\BookingChanged;
+use App\Http\Controllers\Concerns\BroadcastsBookingChanges;
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\Notification;
@@ -12,30 +12,7 @@ use Illuminate\Http\Request;
 
 class BookingController extends Controller
 {
-    /**
-     * Broadcast a booking change to connected clients. Wrapped so a Reverb
-     * outage never breaks the booking request itself.
-     */
-    private function broadcastChange(string $action, ?Booking $booking = null): void
-    {
-        try {
-            $date = $booking ? Carbon::parse($booking->start_at)->format('Y-m-d') : null;
-            BookingChanged::dispatch($action, $booking?->id, $date);
-        } catch (\Throwable $e) {
-            report($e);
-        }
-    }
-
-    private function logCancellation(Booking $booking): void
-    {
-        $room = $booking->room?->name ?? $booking->load('room')->room?->name ?? 'a room';
-        \App\Models\ActivityLog::record(
-            'booking.cancelled',
-            "Cancelled \"{$booking->title}\" in {$room} (" . Carbon::parse($booking->start_at)->format('d M, H:i') . ')',
-            $booking,
-            ['room' => $room, 'title' => $booking->title, 'start_at' => (string) $booking->start_at],
-        );
-    }
+    use BroadcastsBookingChanges;
 
     private function notifyCancelRecipient(Booking $booking, Request $request): void
     {
@@ -120,7 +97,8 @@ class BookingController extends Controller
 
     private function validateGeneralRules(array $data, Request $request, bool $isPrivileged, \App\Models\Room $room): ?JsonResponse
     {
-        $get = fn(string $key, mixed $default) => \App\Models\Setting::where('key', $key)->value('value') ?? $default;
+        $m = \App\Models\Setting::getMany(['max_advance_days', 'allow_book_for_others', 'restrict_after_hours', 'working_hours_end']);
+        $get = fn(string $key, mixed $default) => $m[$key] ?? $default;
 
         // Max advance days
         $maxDays = (int) $get('max_advance_days', '30');

@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Events\BookingChanged;
+use App\Http\Controllers\Concerns\BroadcastsBookingChanges;
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
 use App\Models\Booking;
 use App\Models\Setting;
 use Carbon\Carbon;
@@ -18,14 +17,7 @@ use Illuminate\Http\Request;
  */
 class PublicBookingController extends Controller
 {
-    private function broadcastChange(string $action, Booking $booking): void
-    {
-        try {
-            BookingChanged::dispatch($action, $booking->id, Carbon::parse($booking->start_at)->format('Y-m-d'));
-        } catch (\Throwable $e) {
-            report($e);
-        }
-    }
+    use BroadcastsBookingChanges;
 
     public function show(Booking $booking): JsonResponse
     {
@@ -99,14 +91,7 @@ class PublicBookingController extends Controller
 
         $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
 
-        $room = $booking->room?->name ?? $booking->load('room')->room?->name ?? 'a room';
-        ActivityLog::record(
-            'booking.cancelled',
-            "Cancelled \"{$booking->title}\" in {$room} (" . Carbon::parse($booking->start_at)->format('d M, H:i') . ') via emailed link',
-            $booking,
-            ['room' => $room, 'title' => $booking->title, 'start_at' => (string) $booking->start_at],
-        );
-
+        $this->logCancellation($booking, ' via emailed link');
         $this->broadcastChange('updated', $booking);
 
         return response()->json(['message' => 'Booking cancelled']);

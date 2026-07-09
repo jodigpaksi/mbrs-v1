@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Booking } from '../../types/index'
 import { getDirectory } from '../../api/users'
 import UserAvatar from '../ui/UserAvatar'
+import { parseLocal } from '../../utils/date'
 
 interface TooltipPos { x: number; y: number }
 
@@ -17,8 +18,6 @@ interface BookingTooltipProps {
   onCancel?: (booking: Booking) => void
   onCancelSeries?: (booking: Booking) => void
 }
-
-function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
 
 export default function BookingTooltip({ booking, pos, visible, onMouseEnter, onMouseLeave, currentUserId, onEdit, onCancel, onCancelSeries }: BookingTooltipProps) {
   const ref = useRef<HTMLDivElement>(null)

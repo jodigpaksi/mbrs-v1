@@ -41,24 +41,35 @@ class AnalyticsController extends Controller
         // Closure to scope bookings by building when needed
         $byBuilding = fn ($q) => $q->when($buildingId, fn ($q2) => $q2->whereHas('room', fn ($r) => $r->where('building_id', $buildingId)));
 
+        $statusCounts = $byBuilding(Booking::query())
+            ->selectRaw("COUNT(*) as total, SUM(status = 'confirmed') as confirmed, SUM(status = 'tentative') as tentative, SUM(status = 'cancelled') as cancelled")
+            ->first();
+
+        // Unique-visitor counts are always global (not per building) — one query with
+        // conditional date buckets instead of 4 separate distinct-count queries.
+        $visitorCounts = ActivityLog::whereNotNull('user_id')
+            ->selectRaw(
+                'COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as today,
+                 COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as week,
+                 COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as month,
+                 COUNT(DISTINCT user_id) as all_time',
+                [$today . ' 00:00:00', $weekStart, $monthStart]
+            )->first();
+
         $stats = [
-            'total_bookings' => $byBuilding(Booking::query())->count(),
-            'confirmed'      => $byBuilding(Booking::query())->where('status', 'confirmed')->count(),
-            'tentative'      => $byBuilding(Booking::query())->where('status', 'tentative')->count(),
-            'cancelled'      => $byBuilding(Booking::query())->where('status', 'cancelled')->count(),
+            'total_bookings' => (int) $statusCounts->total,
+            'confirmed'      => (int) $statusCounts->confirmed,
+            'tentative'      => (int) $statusCounts->tentative,
+            'cancelled'      => (int) $statusCounts->cancelled,
             'active_rooms'   => Room::where('is_active', true)
                 ->when($buildingId, fn ($q) => $q->where('building_id', $buildingId))
                 ->count(),
             'total_users'    => User::count(),
 
-            // Unique visitors: always global (not per building)
-            'unique_visitors_today' => ActivityLog::whereDate('created_at', $today)
-                ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
-            'unique_visitors_week'  => ActivityLog::where('created_at', '>=', $weekStart)
-                ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
-            'unique_visitors_month' => ActivityLog::where('created_at', '>=', $monthStart)
-                ->whereNotNull('user_id')->distinct('user_id')->count('user_id'),
-            'unique_visitors_all'   => ActivityLog::whereNotNull('user_id')->distinct('user_id')->count('user_id'),
+            'unique_visitors_today' => (int) $visitorCounts->today,
+            'unique_visitors_week'  => (int) $visitorCounts->week,
+            'unique_visitors_month' => (int) $visitorCounts->month,
+            'unique_visitors_all'   => (int) $visitorCounts->all_time,
 
             // Storage: always global
             'storage' => $this->storageStats(),
@@ -175,12 +186,15 @@ class AnalyticsController extends Controller
             ->when($data['dept_id'] ?? null, fn ($q, $v) => $q->whereHas('user', fn ($u) => $u->where('department_id', $v)))
             ->orderByDesc('start_at');
 
+        $summaryRow = (clone $q)->reorder()->selectRaw(
+            "COUNT(*) as total, SUM(status = 'confirmed') as confirmed, SUM(status = 'cancelled') as cancelled, COUNT(DISTINCT user_id) as unique_users, COUNT(DISTINCT room_id) as unique_rooms"
+        )->first();
         $summary = [
-            'total'        => (clone $q)->count(),
-            'confirmed'    => (clone $q)->where('status', 'confirmed')->count(),
-            'cancelled'    => (clone $q)->where('status', 'cancelled')->count(),
-            'unique_users' => (clone $q)->distinct('user_id')->count('user_id'),
-            'unique_rooms' => (clone $q)->distinct('room_id')->count('room_id'),
+            'total'        => (int) $summaryRow->total,
+            'confirmed'    => (int) $summaryRow->confirmed,
+            'cancelled'    => (int) $summaryRow->cancelled,
+            'unique_users' => (int) $summaryRow->unique_users,
+            'unique_rooms' => (int) $summaryRow->unique_rooms,
         ];
 
         $page      = max(1, (int) ($data['page'] ?? 1));
@@ -224,13 +238,16 @@ class AnalyticsController extends Controller
             ->when($to,   fn ($q) => $q->whereDate('start_at', '<=', $to))
             ->when($buildingIds, fn ($q) => $q->whereHas('room', fn ($r) => $r->whereIn('building_id', $buildingIds)));
 
-        // ── Summary ──────────────────────────────────────────────────────────────
-        $total     = (clone $baseQ())->count();
-        $confirmed = (clone $baseQ())->where('status', 'confirmed')->count();
-        $tentative = (clone $baseQ())->where('status', 'tentative')->count();
-        $cancelled = (clone $baseQ())->where('status', 'cancelled')->count();
-        $uniqueRooms = (clone $baseQ())->distinct('room_id')->count('room_id');
-        $uniqueUsers = (clone $baseQ())->distinct('user_id')->count('user_id');
+        // ── Summary (one query instead of six) ──────────────────────────────────────
+        $summaryRow = (clone $baseQ())->selectRaw(
+            "COUNT(*) as total, SUM(status = 'confirmed') as confirmed, SUM(status = 'tentative') as tentative, SUM(status = 'cancelled') as cancelled, COUNT(DISTINCT room_id) as unique_rooms, COUNT(DISTINCT user_id) as unique_users"
+        )->first();
+        $total       = (int) $summaryRow->total;
+        $confirmed   = (int) $summaryRow->confirmed;
+        $tentative   = (int) $summaryRow->tentative;
+        $cancelled   = (int) $summaryRow->cancelled;
+        $uniqueRooms = (int) $summaryRow->unique_rooms;
+        $uniqueUsers = (int) $summaryRow->unique_users;
 
         // ── Daily trend ───────────────────────────────────────────────────────────
         $trend = (clone $baseQ())
@@ -255,8 +272,9 @@ class AnalyticsController extends Controller
             ->get();
 
         // ── Peak hours ────────────────────────────────────────────────────────────
-        $peakHourFrom = (int) (Setting::where('key', 'chart_peak_hour_from')->value('value') ?? 0);
-        $peakHourTo   = (int) (Setting::where('key', 'chart_peak_hour_to')->value('value')   ?? 23);
+        $peakHourSettings = Setting::getMany(['chart_peak_hour_from', 'chart_peak_hour_to']);
+        $peakHourFrom = (int) ($peakHourSettings['chart_peak_hour_from'] ?? 0);
+        $peakHourTo   = (int) ($peakHourSettings['chart_peak_hour_to'] ?? 23);
         $peakHours = (clone $baseQ())
             ->selectRaw('HOUR(start_at) as hour, COUNT(*) as count')
             ->groupByRaw('HOUR(start_at)')

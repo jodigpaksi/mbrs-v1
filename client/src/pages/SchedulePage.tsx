@@ -17,8 +17,8 @@ import { useBookingHours } from '../hooks/useBookingHours'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import UserHoverCard from '../components/ui/UserHoverCard'
+import { parseLocal } from '../utils/date'
 
-function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
 function dur(start: string, end: string) {
   const diff = (parseLocal(end).getTime() - parseLocal(start).getTime()) / 60000
   const h = Math.floor(diff / 60), m = diff % 60
@@ -985,7 +985,7 @@ export default function SchedulePage() {
   const [animateCards, setAnimateCards] = useState(true)
   const [overviewOpen, setOverviewOpen] = useState(false)
   const overviewHideRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const { pendingCancelIds, exitingCancelIds, addCancelToast, addInfoToast, undoCancel, confirmSeriesCancel, undoSeriesCancel } = useCancelToast()
+  const { pendingCancelIds, exitingCancelIds, addCancelToast, addInfoToast, confirmSeriesCancel } = useCancelToast()
   const [descTooltip, setDescTooltip] = useState<{ text: string; x: number; y: number } | null>(null)
   const [allSortKey, setAllSortKey] = useState<AllSortKey>('start_at')
   const [allSortDir, setAllSortDir] = useState<AllSortDir>('asc')
@@ -2182,7 +2182,6 @@ export default function SchedulePage() {
                 const hCalPast = hCalDayBkgs
                   .filter(b => parseLocal(b.end_at) < _hCalNow)
                   .sort((a, b2) => parseLocal(a.start_at).getTime() - parseLocal(b2.start_at).getTime())
-                const hCalHasBoth = hCalUpcoming.length > 0 && hCalPast.length > 0
                 const hCalParsed = new Date(hCalDate + 'T00:00:00')
                 const hCalLabel = hCalParsed.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()
                 // Months accessible = ceil(maxAdvanceDays / 30), always rounded up to a whole month count.

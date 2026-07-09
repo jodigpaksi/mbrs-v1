@@ -17,17 +17,19 @@ class SettingController extends Controller
 {
     public function bookingHours(): JsonResponse
     {
+        $m = Setting::getMany(['booking_start_time', 'booking_end_time']);
         return response()->json([
-            'start' => Setting::where('key', 'booking_start_time')->value('value') ?? '07:00',
-            'end'   => Setting::where('key', 'booking_end_time')->value('value')   ?? '19:00',
+            'start' => $m['booking_start_time'] ?? '07:00',
+            'end'   => $m['booking_end_time'] ?? '19:00',
         ]);
     }
 
     public function weekendSettings(): JsonResponse
     {
+        $m = Setting::getMany(['weekend_saturday', 'weekend_sunday']);
         return response()->json([
-            'saturday' => Setting::where('key', 'weekend_saturday')->value('value') !== 'false',
-            'sunday'   => Setting::where('key', 'weekend_sunday')->value('value')   !== 'false',
+            'saturday' => ($m['weekend_saturday'] ?? null) !== 'false',
+            'sunday'   => ($m['weekend_sunday'] ?? null) !== 'false',
         ]);
     }
 
@@ -44,9 +46,23 @@ class SettingController extends Controller
         return response()->json(['saturday' => $data['saturday'], 'sunday' => $data['sunday']]);
     }
 
+    private const GENERAL_KEYS = [
+        'max_advance_days', 'allow_book_for_others', 'allow_password_change', 'allow_avatar_upload',
+        'restrict_after_hours', 'working_hours_end', 'feature_ai_chat', 'rooms_grid_cols',
+        'archive_after_days', 'archive_delete_after_days', 'chart_peak_hour_from', 'chart_peak_hour_to',
+        'chart_colors', 'anti_ghost_enabled', 'anti_ghost_mode', 'anti_ghost_window_before',
+        'anti_ghost_window_after', 'web_confirm_enabled', 'anti_ghost_email_enabled', 'ghost_cancel_email_enabled',
+        'reminder_enabled', 'reminder_minutes', 'sensor_api_token', 'backup_enabled', 'backup_frequency',
+        'backup_time', 'backup_day_of_week', 'backup_day_of_month', 'backup_formats', 'backup_include_archive',
+        'backup_include_log', 'backup_include_data', 'business_timezone', 'app_name', 'app_full_name',
+        'app_logo_url', 'login_photo_url', 'login_photo_pos_x', 'login_photo_pos_y', 'login_headline',
+        'login_subheadline',
+    ];
+
     public function generalSettings(): JsonResponse
     {
-        $get = fn(string $key, mixed $default) => Setting::where('key', $key)->value('value') ?? $default;
+        $m = Setting::getMany(self::GENERAL_KEYS);
+        $get = fn(string $key, mixed $default) => $m[$key] ?? $default;
 
         return response()->json([
             'max_advance_days'      => (int) $get('max_advance_days', '30'),
@@ -71,7 +87,7 @@ class SettingController extends Controller
             'ghost_cancel_email_enabled' => $get('ghost_cancel_email_enabled', 'true') !== 'false',
             'reminder_enabled'           => $get('reminder_enabled', 'true') !== 'false',
             'reminder_minutes'           => (int) $get('reminder_minutes', '10'),
-            'sensor_api_token'           => $this->getOrCreateSensorToken(),
+            'sensor_api_token'           => $this->getOrCreateSensorToken($m['sensor_api_token'] ?? null),
             'backup_enabled'             => $get('backup_enabled', 'false') === 'true',
             'backup_frequency'           => $get('backup_frequency', 'weekly'),
             'backup_time'                => $get('backup_time', '02:00'),
@@ -95,7 +111,8 @@ class SettingController extends Controller
 
     public function branding(): JsonResponse
     {
-        $get = fn(string $key, mixed $default) => Setting::where('key', $key)->value('value') ?? $default;
+        $m = Setting::getMany(['app_name', 'app_full_name', 'app_logo_url', 'login_photo_url', 'login_photo_pos_x', 'login_photo_pos_y', 'login_headline', 'login_subheadline']);
+        $get = fn(string $key, mixed $default) => $m[$key] ?? $default;
         return response()->json([
             'app_name'           => $get('app_name', 'RoomSync Pro'),
             'app_full_name'      => $get('app_full_name', ''),
@@ -165,7 +182,8 @@ class SettingController extends Controller
 
     public function m365Settings(): JsonResponse
     {
-        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $m = Setting::getMany(['m365_tenant_id', 'm365_client_id', 'm365_sender_email', 'm365_client_secret', 'm365_calendar_sync_enabled']);
+        $get = fn(string $key) => $m[$key] ?? null;
         $tenantId = $get('m365_tenant_id');
         $clientId = $get('m365_client_id');
         $senderEmail = $get('m365_sender_email');
@@ -217,9 +235,10 @@ class SettingController extends Controller
 
     public function testM365Connection(): JsonResponse
     {
-        $tenantId = Setting::where('key', 'm365_tenant_id')->value('value');
-        $clientId = Setting::where('key', 'm365_client_id')->value('value');
-        $encryptedSecret = Setting::where('key', 'm365_client_secret')->value('value');
+        $m = Setting::getMany(['m365_tenant_id', 'm365_client_id', 'm365_client_secret']);
+        $tenantId = $m['m365_tenant_id'] ?? null;
+        $clientId = $m['m365_client_id'] ?? null;
+        $encryptedSecret = $m['m365_client_secret'] ?? null;
 
         if (!$tenantId || !$clientId || !$encryptedSecret) {
             return response()->json(['success' => false, 'message' => 'Tenant ID, Client ID, and Client Secret must all be set first.'], 422);
@@ -252,7 +271,8 @@ class SettingController extends Controller
 
     public function sendM365TestEmail(Request $request): JsonResponse
     {
-        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $m = Setting::getMany(['m365_tenant_id', 'm365_client_id', 'm365_sender_email', 'm365_client_secret']);
+        $get = fn(string $key) => $m[$key] ?? null;
         $tenantId = $get('m365_tenant_id');
         $clientId = $get('m365_client_id');
         $senderEmail = $get('m365_sender_email');
@@ -286,7 +306,13 @@ class SettingController extends Controller
 
     public function mailerSettings(): JsonResponse
     {
-        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $m = Setting::getMany([
+            'm365_tenant_id', 'm365_client_id', 'm365_client_secret', 'm365_sender_email',
+            'resend_from_address', 'resend_api_key', 'resend_from_name',
+            'brevo_from_address', 'brevo_api_key', 'brevo_from_name',
+            'active_mailer',
+        ]);
+        $get = fn(string $key) => $m[$key] ?? null;
 
         $m365TenantId = $get('m365_tenant_id');
         $m365ClientId = $get('m365_client_id');
@@ -360,7 +386,8 @@ class SettingController extends Controller
 
     public function sendMailerTestEmail(Request $request): JsonResponse
     {
-        $get = fn(string $key) => Setting::where('key', $key)->value('value');
+        $m = Setting::getMany(['active_mailer', 'm365_sender_email', 'resend_from_address', 'brevo_from_address']);
+        $get = fn(string $key) => $m[$key] ?? null;
         $activeMailer = $get('active_mailer') ?? 'default';
         $to = $request->user()->email;
 
@@ -469,9 +496,9 @@ class SettingController extends Controller
         return $this->generalSettings();
     }
 
-    private function getOrCreateSensorToken(): string
+    private function getOrCreateSensorToken(?string $prefetched = null): string
     {
-        $token = Setting::where('key', 'sensor_api_token')->value('value');
+        $token = $prefetched ?? Setting::where('key', 'sensor_api_token')->value('value');
         if (!$token) {
             $token = \Illuminate\Support\Str::random(32);
             Setting::updateOrCreate(['key' => 'sensor_api_token'], ['value' => $token]);

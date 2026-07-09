@@ -1355,8 +1355,6 @@ export default function TimelinePage() {
 
             {/* Room rows */}
             {filteredRooms.map((room: Room) => {
-              const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : 'bg-slate-300'
-              const occupied = isRoomOccupied(room)
               const isMaintRoom = room.status === 'maintenance'
               return (
                 <div key={room.id} className={`flex border-b border-[var(--ds-border-sub)] group/row ${isMaintRoom ? 'hover:bg-orange-50/40 dark:hover:bg-orange-900/10' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
@@ -1591,9 +1589,6 @@ export default function TimelinePage() {
                         const isTentative = b.status === 'tentative'
                         const isMaint = b.type === 'maintenance' || b.type === 'repairment'
                         const bg = isMaint ? '#fb923c' : isMe ? (isTentative ? '#b0e8f8' : '#72ddf7') : (isTentative ? '#d1d5db' : '#adee2b')
-                        const start = new Date(b.start_at.replace('Z', ''))
-                        const hh = String(start.getHours()).padStart(2, '0')
-                        const mm = String(start.getMinutes()).padStart(2, '0')
                         return (
                           <div
                             key={b.id}
@@ -1716,8 +1711,6 @@ export default function TimelinePage() {
           {/* Room rows */}
           {filteredRooms.map((room: Room) => {
             const roomBookings = getBookingsForRoom(room.id)
-            const dotColor = room.status === 'maintenance' ? 'bg-orange-400' : 'bg-green-400'
-            const occupied  = isRoomOccupied(room)
             const isMaintRoom = room.status === 'maintenance'
 
             const isCellDragRow = cellDragRef.current?.roomId === room.id

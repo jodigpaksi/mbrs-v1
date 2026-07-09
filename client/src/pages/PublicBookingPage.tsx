@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { getPublicBooking, confirmPublicBookingPresence, cancelPublicBooking, type PublicBookingDetail } from '../api/publicBookings'
+import { parseLocal } from '../utils/date'
 
-function parseLocal(iso: string) { return new Date(iso.replace('Z', '')) }
 function fmtDate(iso: string) { return parseLocal(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }
 function fmtTime(iso: string) { return parseLocal(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }
 

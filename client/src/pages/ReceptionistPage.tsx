@@ -11,6 +11,7 @@ import { getDirectory } from '../api/users'
 import type { Booking, User } from '../types'
 import UserAvatar from '../components/ui/UserAvatar'
 import { useSettings } from '../context/SettingsContext'
+import { parseLocal } from '../utils/date'
 
 type Tab = 'contacts' | 'disputes'
 
@@ -277,7 +278,6 @@ function DisputesSection() {
   })
 
   const loc = language === 'id' ? 'id-ID' : 'en-GB'
-  function parseLocal(s: string) { return new Date(s.replace('T', ' ').replace('Z', '')) }
   function fmtDt(s: string) {
     const d = parseLocal(s)
     return d.toLocaleDateString(loc, { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' +

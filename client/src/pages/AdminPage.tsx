@@ -7,10 +7,11 @@ import type { SectionPeriod } from '../api/analytics'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
+import { parseLocal } from '../utils/date'
+import ToggleSwitch from '../components/ui/ToggleSwitch'
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { mockBookings, mockRooms, mockUsers } from '../data/mockData'
 import type { Building, Room, Location, User, Department } from '../types/index'
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding, exportBuildings, importBuildings } from '../api/buildings'
 import { getRooms, createRoom, updateRoom, updateRoomStatus, updateRoomSpecial, deleteRoom, reorderRooms, uploadRoomPhoto, deleteRoomPhoto, regenerateSensorCode, exportRooms, importRooms } from '../api/rooms'
@@ -22,7 +23,6 @@ import { getArchive, runArchive, restoreBooking, restoreAllBookings, purgeArchiv
 import type { ArchiveParams } from '../api/archive'
 import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBackupExports } from '../api/backup'
 import type { UserRole } from '../types/index'
-import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
 import UserAvatar from '../components/ui/UserAvatar'
 import GlassTimePicker from '../components/ui/GlassTimePicker'
 import { useAuth } from '../context/AuthContext'
@@ -774,7 +774,7 @@ function RoomModal({
 }
 
 // ── Drag & Drop Room List ─────────────────────────────────────────────────────
-function RoomList({ rooms, buildingId, sensorMode, onEdit, onDelete, onReordered, onStatusChange, onSpecialChange, onSensorCodeChange }: {
+function RoomList({ rooms, sensorMode, onEdit, onDelete, onReordered, onStatusChange, onSpecialChange, onSensorCodeChange }: {
   rooms: Room[]
   buildingId: number
   sensorMode: boolean
@@ -4137,7 +4137,6 @@ function ArchiveTab() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]   = useState('')
   const [purgeConfirm, setPurgeConfirm] = useState(false)
-  const [activeSection, setActiveSection] = useState<'bookings' | 'exports'>('bookings')
   const importRef = useRef<HTMLInputElement>(null)
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>()
 
@@ -5294,10 +5293,7 @@ function SettingsTab() {
                     <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{val ? 'Shown as red / weekend' : 'Regular day'}</p>
                   </div>
                 </div>
-                <button type="button" onClick={toggle} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-                  <div className="absolute inset-0 rounded-full transition-colors" style={{ background: val ? '#ef4444' : 'var(--ds-bg-raised)' }} />
-                  <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, left: val ? 24 : 4, background: 'var(--ds-bg-surface)' }} />
-                </button>
+                <ToggleSwitch checked={val} onChange={toggle} onColor="#ef4444" />
               </div>
             </div>
           ))}
@@ -5401,10 +5397,7 @@ function SettingsTab() {
               <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowBookFor ? 'Users can book for others' : 'Disabled — own bookings only'}</p>
             </div>
           </div>
-          <button type="button" onClick={toggleAllowBookFor} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowBookFor ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowBookFor ? 24 : 4 }} />
-          </button>
+          <ToggleSwitch checked={allowBookFor} onChange={toggleAllowBookFor} />
         </div>
 
         <div className="border-t border-[var(--ds-border-sub)]" />
@@ -5619,10 +5612,7 @@ function SettingsTab() {
                   Emails the recipient when a booking is auto-cancelled for a missed presence confirmation. The in-app notification and Activity Log entry always happen regardless of this toggle.
                 </p>
               </div>
-              <button type="button" onClick={toggleGhostCancelEmailEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-                <div className="absolute inset-0 rounded-full transition-colors" style={{ background: ghostCancelEmailEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-                <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: ghostCancelEmailEnabled ? 24 : 4 }} />
-              </button>
+              <ToggleSwitch checked={ghostCancelEmailEnabled} onChange={toggleGhostCancelEmailEnabled} />
             </div>
 
             <div className="p-3.5 rounded-xl text-[10px] font-semibold leading-relaxed" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', color: '#818cf8' }}>
@@ -5648,10 +5638,7 @@ function SettingsTab() {
               <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{aiChat ? 'AI FAB visible to all users' : 'Hidden — reduce server load'}</p>
             </div>
           </div>
-          <button type="button" onClick={toggleAiChat} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: aiChat ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: aiChat ? 24 : 4 }} />
-          </button>
+          <ToggleSwitch checked={aiChat} onChange={toggleAiChat} />
         </div>
 
         <div className="border-t border-[var(--ds-border-sub)]" />
@@ -5667,10 +5654,7 @@ function SettingsTab() {
               <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowPasswordChange ? 'Users can change their own password' : 'Disabled — superadmin only'}</p>
             </div>
           </div>
-          <button type="button" onClick={toggleAllowPasswordChange} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowPasswordChange ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowPasswordChange ? 24 : 4 }} />
-          </button>
+          <ToggleSwitch checked={allowPasswordChange} onChange={toggleAllowPasswordChange} />
         </div>
 
         <div className="border-t border-[var(--ds-border-sub)]" />
@@ -5686,10 +5670,7 @@ function SettingsTab() {
               <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{allowAvatarUpload ? 'Users can upload & change their photo' : 'Disabled — photo upload locked'}</p>
             </div>
           </div>
-          <button type="button" onClick={toggleAllowAvatarUpload} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: allowAvatarUpload ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: allowAvatarUpload ? 24 : 4 }} />
-          </button>
+          <ToggleSwitch checked={allowAvatarUpload} onChange={toggleAllowAvatarUpload} />
         </div>
 
         <div className="border-t border-[var(--ds-border-sub)]" />
@@ -6010,12 +5991,8 @@ function SettingsTab() {
               <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{reminderEnabled ? `Sent ${reminderMinutes} min before start` : 'Disabled'}</p>
             </div>
           </div>
-          <button type="button" onClick={toggleReminderEnabled} disabled={activeMailer === 'default'}
-            title={activeMailer === 'default' ? 'Select an active mailer first' : ''}
-            className="relative shrink-0 disabled:opacity-40" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: reminderEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: reminderEnabled ? 24 : 4 }} />
-          </button>
+          <ToggleSwitch checked={reminderEnabled} onChange={toggleReminderEnabled} disabled={activeMailer === 'default'}
+            title={activeMailer === 'default' ? 'Select an active mailer first' : ''} />
         </div>
 
         {reminderEnabled && (
@@ -6108,10 +6085,7 @@ function SettingsTab() {
               <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">{backupEnabled ? 'Enabled — runs on schedule' : 'Disabled'}</p>
             </div>
           </div>
-          <button type="button" onClick={toggleBackupEnabled} className="relative shrink-0" style={{ width: 44, height: 24 }}>
-            <div className="absolute inset-0 rounded-full transition-colors" style={{ background: backupEnabled ? '#adee2b' : 'var(--ds-bg-raised)' }} />
-            <div className="absolute top-1 transition-all rounded-full shadow-sm" style={{ width: 16, height: 16, background: 'var(--ds-bg-surface)', left: backupEnabled ? 24 : 4 }} />
-          </button>
+          <ToggleSwitch checked={backupEnabled} onChange={toggleBackupEnabled} />
         </div>
 
         {backupEnabled && (<>
@@ -6724,7 +6698,6 @@ function DisputesTab() {
     staleTime: 30_000,
   })
 
-  function parseLocal(s: string) { return new Date(s.replace('T', ' ').replace('Z', '')) }
   function fmtDt(s: string) {
     const d = parseLocal(s)
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' +
@@ -6740,8 +6713,6 @@ function DisputesTab() {
     } catch { /* ignore */ }
     finally { setResolvingId(null) }
   }
-
-  const pendingCount = statusFilter === 'pending' ? disputes.length : 0
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -7012,7 +6983,6 @@ export default function AdminPage() {
         ...(antiGhostActive ? [{ key: 'disputes' as Tab, label: 'Disputes', icon: 'gavel' }] : []),
       ]
   const settingsTabDef = isAdmin ? { key: 'settings' as Tab, label: 'Settings', icon: 'tune' } : null
-  const tabs = [...mainTabs, ...(settingsTabDef ? [settingsTabDef] : [])]
 
   // Sidebar sliding pill
   const sidebarNavRef  = useRef<HTMLDivElement>(null)

@@ -14,13 +14,7 @@ import { useNotification } from '../../context/NotificationContext'
 import { useCancelToast } from '../../context/CancelToastContext'
 import { useSettings } from '../../context/SettingsContext'
 import type { AppNotification, Booking } from '../../types'
-
-function parseLocal(s: string): Date {
-  const [date, time] = s.replace('T', ' ').split(' ')
-  const [y, mo, d] = date.split('-').map(Number)
-  const [h, mi] = (time ?? '').split(':').map(Number)
-  return new Date(y, mo - 1, d, h || 0, mi || 0)
-}
+import { parseLocal } from '../../utils/date'
 
 function timeAgo(iso: string) {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)

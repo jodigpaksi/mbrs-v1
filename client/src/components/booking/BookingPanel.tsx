@@ -79,9 +79,6 @@ function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); retur
 function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
 const DOW_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-const DOW_LABELS: Record<string, string> = { mon: 'Sen', tue: 'Sel', wed: 'Rab', thu: 'Kam', fri: 'Jum', sat: 'Sab', sun: 'Min' }
-const DOW_FULL: Record<string, string> = { mon: 'Senin', tue: 'Selasa', wed: 'Rabu', thu: 'Kamis', fri: 'Jumat', sat: 'Sabtu', sun: 'Minggu' }
-const REPEAT_LABELS: Record<string, string> = { none: 'Tidak', daily: 'Harian', weekly: 'Mingguan' }
 // JS getDay() returns 0=Sun,1=Mon,...,6=Sat; our array index in DOW_KEYS: mon=0,...,sun=6
 const JS_DOW_TO_KEY: Record<number, string> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' }
 const KEY_TO_JS_DOW: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
@@ -116,7 +113,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const allowBookForOthers = isPrivileged || (generalSettings?.allow_book_for_others !== false)
   const restrictAfterHours = !isPrivileged && (generalSettings?.restrict_after_hours === true)
   const workingHoursEnd = generalSettings?.working_hours_end ?? '17:00'
-  const maxAdvanceDays = generalSettings?.max_advance_days ?? 30
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -568,13 +564,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     return []
   }
 
-  function getRepeatSummary(): string {
-    const dates = generateRepeatDates()
-    if (dates.length === 0) return ''
-    const last = dates[dates.length - 1]
-    return `${dates.length} ${t('series_label')} · ${t('series_ends')} ${fmtShortDate(last, language)}`
-  }
-
   function isTimeValid() {
     if (!startTime || !endTime) return null
     const [h1, m1] = startTime.split(':').map(Number)
@@ -769,7 +758,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   })
 
   const repeatDates = generateRepeatDates()
-  const repeatSummary = getRepeatSummary()
 
   return (
     <>
