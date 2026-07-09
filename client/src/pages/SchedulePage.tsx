@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { Booking } from '../types/index'
+import type { Booking, Room } from '../types/index'
 import { getMyBookings, clearCancelledBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
+import { checkAvailability } from '../api/rooms'
 import { getGeneralSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
@@ -24,6 +26,10 @@ function dur(start: string, end: string) {
 }
 function fmtTime(iso: string, lang = 'en') {
   return parseLocal(iso).toLocaleTimeString(lang === 'id' ? 'id-ID' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+function toHHMM(iso: string) {
+  const d = parseLocal(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 function fmtGroupLabel(iso: string, todayLabel: string, tomorrowLabel: string, lang = 'en') {
   const d = parseLocal(iso), today = new Date(), tomorrow = new Date()
@@ -419,6 +425,8 @@ function SeriesGroupRow({
   onEdit,
   onCancel,
   onCancelSeries,
+  onExport,
+  resolvedSkips,
   index,
 }: {
   group: SeriesGroup
@@ -426,6 +434,8 @@ function SeriesGroupRow({
   onEdit: (b: Booking) => void
   onCancel: (b: Booking) => void
   onCancelSeries: (group: SeriesGroup) => void
+  onExport: (group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) => void
+  resolvedSkips: Record<string, Booking>
   index: number
 }) {
   const { language } = useSettings()
@@ -533,6 +543,41 @@ function SeriesGroupRow({
               <span className="material-symbols-outlined" style={{ fontSize: 12 }}>edit</span>
               Series
             </button>
+            <div className="relative shrink-0">
+              <button
+                ref={exportBtnRef}
+                onClick={toggleExportOpen}
+                title="Export this series"
+                className="size-7 flex items-center justify-center rounded-lg bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] hover:bg-black hover:text-[#adee2b] transition-all"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span>
+              </button>
+              {exportOpen && exportPos && createPortal(
+                <div ref={exportPanelRef} className="fixed z-50 rounded-2xl p-4 w-64 dropdown-enter-right"
+                  style={{ top: exportPos.top, right: exportPos.right, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export this series</p>
+                  <label className="flex items-center gap-2.5 cursor-pointer mb-4">
+                    <input type="checkbox" checked={exportIncludePast} onChange={e => setExportIncludePast(e.target.checked)} className="accent-black w-4 h-4" />
+                    <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
+                  </label>
+                  <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
+                    <button
+                      onClick={() => { onExport(group, 'excel', exportIncludePast); setExportOpen(false) }}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] font-black uppercase hover:bg-emerald-500/25 transition-colors border border-emerald-500/25 flex-1 justify-center"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
+                    </button>
+                    <button
+                      onClick={() => { onExport(group, 'pdf', exportIncludePast); setExportOpen(false) }}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-black uppercase hover:bg-red-500/25 transition-colors border border-red-500/25 flex-1 justify-center"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
+                    </button>
+                  </div>
+                </div>,
+                document.body
+              )}
+            </div>
             {!allCancelled && (
               <button
                 onClick={() => onCancelSeries(group)}
@@ -1074,6 +1119,10 @@ export default function SchedulePage() {
   const [allExportGroups, setAllExportGroups] = useState({ upcoming: true, past: true, cancelled: false })
   const allExportRef = useRef<HTMLDivElement>(null)
 
+  const [seriesExportOpen, setSeriesExportOpen]           = useState(false)
+  const [seriesIncludePastAll, setSeriesIncludePastAll]   = useState(false)
+  const seriesExportRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!spExportOpen) return
     const fn = (e: MouseEvent) => { if (spExportRef.current && !spExportRef.current.contains(e.target as Node)) setSpExportOpen(null) }
@@ -1087,6 +1136,31 @@ export default function SchedulePage() {
     document.addEventListener('mousedown', fn)
     return () => document.removeEventListener('mousedown', fn)
   }, [allExportOpen])
+
+  useEffect(() => {
+    if (!seriesExportOpen) return
+    const fn = (e: MouseEvent) => { if (seriesExportRef.current && !seriesExportRef.current.contains(e.target as Node)) setSeriesExportOpen(false) }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [seriesExportOpen])
+
+  // Skipped-date resolution: "Find another slot" → booked elsewhere → row turns green + counts toward series export.
+  // Derived from myBookings (persists across reloads — the replacement booking is tagged with
+  // resolves_series_id/resolves_skipped_date in the DB, not tracked in local-only state).
+  const resolvedSkips = useMemo(() => {
+    const map: Record<string, Booking> = {}
+    ;(myBookings as Booking[]).forEach(b => {
+      if (b.resolves_series_id && b.resolves_skipped_date && b.status !== 'cancelled') {
+        map[`${b.resolves_series_id}:${b.resolves_skipped_date}`] = b
+      }
+    })
+    return map
+  }, [myBookings])
+
+  function resolvedSkipsForSeries(seriesId: string): Booking[] {
+    const prefix = `${seriesId}:`
+    return Object.entries(resolvedSkips).filter(([k]) => k.startsWith(prefix)).map(([, b]) => b)
+  }
 
   // Global search: open booking edit panel when triggered from navbar search
   useEffect(() => {
@@ -1478,6 +1552,67 @@ export default function SchedulePage() {
       columnStyles: { 0: { cellWidth: 12, halign: 'center' } },
     })
     doc.save(`special-room-bookings-${toDateStr(today)}.pdf`)
+  }
+
+  function seriesExportRows(bookings: Booking[], includePast: boolean): Booking[] {
+    return includePast ? bookings : bookings.filter(b => !isActuallyPast(b))
+  }
+
+  function exportSeriesExcel(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const exportedAt = today.toLocaleDateString('en-GB')
+    const headers = ['No.', 'Date', 'Day', 'Start Time', 'End Time', 'Duration', 'Room', 'Building', 'Title', 'Description', 'Booked For', 'Status', 'Type']
+    const aoa: (string | number)[][] = [
+      [label],
+      [`${includePast ? 'All dates' : 'Upcoming dates only'}   ·   Exported ${exportedAt}   ·   Total: ${rows.length}`],
+      [],
+      headers,
+      ...rows.map((b: Booking, i: number) => [
+        i + 1,
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        fmtTime(b.start_at, language), fmtTime(b.end_at, language),
+        dur(b.start_at, b.end_at), b.room?.name ?? '',
+        b.room?.building?.code || b.room?.building?.name || '',
+        b.title, b.description ?? '', b.booked_for ?? '',
+        b.status, b.type,
+      ]),
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 10 }, { wch: 12 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Series')
+    XLSX.writeFile(wb, `${fileSlug}.xlsx`)
+  }
+
+  function exportSeriesPDF(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const doc = new jsPDF()
+    doc.setFontSize(14); doc.text(label, 14, 16)
+    doc.setFontSize(9); doc.setTextColor(150)
+    doc.text(`${includePast ? 'All dates' : 'Upcoming dates only'}   ·   Exported ${today.toLocaleDateString('en-GB')}   ·   Total: ${rows.length}`, 14, 22)
+    autoTable(doc, {
+      startY: 30,
+      head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status']],
+      body: rows.map((b: Booking, i: number) => [
+        i + 1,
+        fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
+        `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
+        b.room?.name ?? '', b.title, b.booked_for ?? '', b.status,
+      ]),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [0, 0, 0], textColor: [173, 238, 43], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { cellWidth: 12, halign: 'center' } },
+    })
+    doc.save(`${fileSlug}.pdf`)
+  }
+
+  function handleExportSeriesRow(group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) {
+    const first = group.bookings[0]
+    const rebooked = seriesExportRows(resolvedSkipsForSeries(group.series_id), includePast)
+    const rows = [...seriesExportRows(group.bookings, includePast), ...rebooked]
+    const label = `${first.title} — ${first.room?.name ?? ''}`
+    const slug = `series-${first.title.replace(/\s+/g, '-').toLowerCase()}-${toDateStr(parseLocal(first.start_at))}`
+    if (format === 'excel') exportSeriesExcel(rows, label, includePast, slug)
+    else exportSeriesPDF(rows, label, includePast, slug)
   }
 
   function getActiveList(): Booking[] {
@@ -2498,6 +2633,50 @@ export default function SchedulePage() {
                       </button>
                     )}
                   </div>
+                  <div className="relative shrink-0" ref={seriesExportRef}>
+                    <button
+                      onClick={() => setSeriesExportOpen(o => !o)}
+                      disabled={displaySeriesList.length === 0}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-colors border disabled:opacity-40 disabled:cursor-not-allowed ${seriesExportOpen ? 'bg-slate-800 text-white border-slate-700' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] border-[var(--ds-border)] hover:bg-[var(--ds-bg-raised)]'}`}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>download</span>Export All
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{seriesExportOpen ? 'expand_less' : 'expand_more'}</span>
+                    </button>
+                    {seriesExportOpen && (
+                      <div className="absolute right-0 top-full mt-2 z-50 rounded-2xl p-4 w-72 dropdown-enter-right"
+                        style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export all {displaySeriesList.length} series</p>
+                        <label className="flex items-center gap-2.5 cursor-pointer mb-4">
+                          <input type="checkbox" checked={seriesIncludePastAll} onChange={e => setSeriesIncludePastAll(e.target.checked)} className="accent-black w-4 h-4" />
+                          <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
+                        </label>
+                        <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              const allRebooked = displaySeriesList.flatMap(g => resolvedSkipsForSeries(g.series_id))
+                              const rows = seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll)
+                              exportSeriesExcel(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
+                              setSeriesExportOpen(false)
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] font-black uppercase hover:bg-emerald-500/25 transition-colors border border-emerald-500/25 flex-1 justify-center"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
+                          </button>
+                          <button
+                            onClick={() => {
+                              const allRebooked = displaySeriesList.flatMap(g => resolvedSkipsForSeries(g.series_id))
+                              const rows = seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll)
+                              exportSeriesPDF(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
+                              setSeriesExportOpen(false)
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-black uppercase hover:bg-red-500/25 transition-colors border border-red-500/25 flex-1 justify-center"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border)] overflow-hidden">
                 <div className="overflow-x-auto">
@@ -2519,6 +2698,8 @@ export default function SchedulePage() {
                       onEdit={b => { setEditBooking(b); setPanelOpen(true) }}
                       onCancel={handleCancel}
                       onCancelSeries={setSeriesCancelTarget}
+                      onExport={handleExportSeriesRow}
+                      resolvedSkips={resolvedSkips}
                     />
                   ))}
                   {pastSeriesList.length > 0 && (
@@ -2543,6 +2724,8 @@ export default function SchedulePage() {
                       onEdit={b => { setEditBooking(b); setPanelOpen(true) }}
                       onCancel={handleCancel}
                       onCancelSeries={setSeriesCancelTarget}
+                      onExport={handleExportSeriesRow}
+                      resolvedSkips={resolvedSkips}
                     />
                   ))}
                 </table>

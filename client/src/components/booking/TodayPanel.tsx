@@ -55,7 +55,7 @@ export default function TodayPanel() {
     staleTime: 5 * 60_000,
     enabled: open,
   })
-  const webConfirmEnabled  = generalSettings?.web_confirm_enabled       ?? false
+  const webConfirmEnabled  = (generalSettings?.anti_ghost_enabled ?? false) && (generalSettings?.web_confirm_enabled ?? false)
   const windowBefore       = generalSettings?.anti_ghost_window_before  ?? 5
   const windowAfter        = generalSettings?.anti_ghost_window_after   ?? 10
 

@@ -267,7 +267,7 @@ class RoomController extends Controller
             $query->where('id', '!=', $request->exclude_booking_id);
         }
 
-        $conflicts = $query->with('user')->get();
+        $conflicts = $query->with('user.department')->get();
 
         return response()->json([
             'available'      => $conflicts->isEmpty(),

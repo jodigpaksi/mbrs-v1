@@ -25,6 +25,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
   const [availPrefillDate, setAvailPrefillDate]   = useState<string | undefined>(undefined)
   const [availPrefillStart, setAvailPrefillStart] = useState<string | undefined>(undefined)
   const [availPrefillEnd, setAvailPrefillEnd]     = useState<string | undefined>(undefined)
+  const [resolvingSkip, setResolvingSkip] = useState<{ seriesId: string; date: string } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -36,10 +37,11 @@ function MainLayoutInner({ children }: MainLayoutProps) {
 
   useEffect(() => {
     const fn = (e: Event) => {
-      const { date, startTime, endTime } = (e as CustomEvent<{ date: string; startTime: string; endTime: string }>).detail
+      const { date, startTime, endTime, resolveSkip } = (e as CustomEvent<{ date: string; startTime: string; endTime: string; resolveSkip?: { seriesId: string; date: string } }>).detail
       setAvailPrefillDate(date)
       setAvailPrefillStart(startTime)
       setAvailPrefillEnd(endTime)
+      setResolvingSkip(resolveSkip ?? null)
       setAvailableOpen(true)
     }
     document.addEventListener('available-rooms-prefill', fn)
@@ -63,6 +65,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
 
   function handleBookingSubmit() {
     const bookedDate = prefillDate
+    setResolvingSkip(null)
     setSelectedRoom(null)
     setAvailableOpen(false)
     queryClient.invalidateQueries({ queryKey: ['bookings', bookedDate] })
@@ -81,7 +84,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
       <AvailableRoomsPanel
         open={availableOpen}
         bookingOpen={selectedRoom !== null}
-        onClose={() => { setAvailableOpen(false); setSelectedRoom(null); setAvailPrefillDate(undefined); setAvailPrefillStart(undefined); setAvailPrefillEnd(undefined) }}
+        onClose={() => { setAvailableOpen(false); setSelectedRoom(null); setAvailPrefillDate(undefined); setAvailPrefillStart(undefined); setAvailPrefillEnd(undefined); setResolvingSkip(null) }}
         onRoomSelect={handleRoomSelect}
         prefillDate={availPrefillDate}
         prefillStartTime={availPrefillStart}
@@ -95,6 +98,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
         prefillStart={prefillStart}
         prefillEnd={prefillEnd}
         prefillVersion={prefillVersion}
+        resolveSkipContext={resolvingSkip}
         onSubmit={handleBookingSubmit}
       />
 

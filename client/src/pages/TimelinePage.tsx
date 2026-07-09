@@ -41,26 +41,38 @@ function toLocalDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function exportToICS(booking: { title: string; description?: string; start_at: string; end_at: string; id?: number; room?: { name?: string; building?: { name?: string } } }) {
+type ICSBooking = { title: string; description?: string; start_at: string; end_at: string; id?: number; room?: { name?: string; building?: { name?: string } } }
+
+function exportToICS(input: ICSBooking | ICSBooking[]) {
+  const bookings = Array.isArray(input) ? input : [input]
+  if (bookings.length === 0) return
   const fmtDT = (dt: string) => dt.replace(/-/g, '').replace(/:/g, '').replace(' ', 'T').substring(0, 15)
   const esc = (s: string) => s.replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n')
   const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-  const loc = [booking.room?.name, booking.room?.building?.name].filter(Boolean).join(', ')
+  const events = bookings.map(booking => {
+    const loc = [booking.room?.name, booking.room?.building?.name].filter(Boolean).join(', ')
+    return [
+      'BEGIN:VEVENT',
+      `DTSTART:${fmtDT(booking.start_at)}`,
+      `DTEND:${fmtDT(booking.end_at)}`,
+      `DTSTAMP:${stamp}`,
+      `UID:booking-${booking.id ?? Date.now()}@mbrs`,
+      `SUMMARY:${esc(booking.title)}`,
+      booking.description ? `DESCRIPTION:${esc(booking.description)}` : '',
+      loc ? `LOCATION:${esc(loc)}` : '',
+      'END:VEVENT',
+    ].filter(Boolean).join('\r\n')
+  })
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//MRBS//RoomSync//EN', 'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT',
-    `DTSTART:${fmtDT(booking.start_at)}`,
-    `DTEND:${fmtDT(booking.end_at)}`,
-    `DTSTAMP:${stamp}`,
-    `UID:booking-${booking.id ?? Date.now()}@mbrs`,
-    `SUMMARY:${esc(booking.title)}`,
-    booking.description ? `DESCRIPTION:${esc(booking.description)}` : '',
-    loc ? `LOCATION:${esc(loc)}` : '',
-    'END:VEVENT', 'END:VCALENDAR',
-  ].filter(Boolean).join('\r\n')
+    ...events,
+    'END:VCALENDAR',
+  ].join('\r\n')
+  const first = bookings[0]
+  const suffix = bookings.length > 1 ? '_series' : ''
   const a = Object.assign(document.createElement('a'), {
     href: URL.createObjectURL(new Blob([lines], { type: 'text/calendar;charset=utf-8' })),
-    download: `${(booking.title || 'booking').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`,
+    download: `${(first.title || 'booking').replace(/[^a-z0-9]/gi, '_').toLowerCase()}${suffix}.ics`,
   })
   document.body.appendChild(a); a.click(); document.body.removeChild(a)
 }
@@ -150,6 +162,7 @@ export default function TimelinePage() {
   const barDragRef  = useRef<BarDrag | null>(null)
   const barResizeRef = useRef<BarResize | null>(null)
   const [dragTick, setDragTick] = useState(0)
+  const [hoverSlot, setHoverSlot] = useState<number | null>(null)
   const mainRef = useRef<HTMLElement>(null)
 
   // Clear animation after it plays so background re-renders don't replay it
@@ -1668,14 +1681,16 @@ export default function TimelinePage() {
                 const slot1 = i * 2 + 1
                 const s0In = cellDragRef.current && slot0 >= hDragMin && slot0 <= hDragMax
                 const s1In = cellDragRef.current && slot1 >= hDragMin && slot1 <= hDragMax
+                const s0Hover = !cellDragRef.current && hoverSlot === slot0
+                const s1Hover = !cellDragRef.current && hoverSlot === slot1
                 return (
                   <div key={h} style={{ width: SLOT_W * 2, height: CELL_H }} className="flex shrink-0">
                     <div className="flex-1 flex items-center justify-center text-[13px] font-black border-r-2 border-[var(--ds-border)] transition-colors"
-                      style={{ color: 'var(--ds-text-1)', background: s0In ? 'rgba(173,238,43,0.18)' : undefined, borderBottom: s0In ? '2px solid #adee2b' : '1px solid var(--ds-border-sub)' }}>
+                      style={{ color: 'var(--ds-text-1)', background: s0In ? 'rgba(173,238,43,0.18)' : s0Hover ? 'rgba(173,238,43,0.10)' : undefined, borderBottom: s0In ? '2px solid #adee2b' : s0Hover ? '2px solid rgba(173,238,43,0.4)' : '1px solid var(--ds-border-sub)' }}>
                       {h}:00
                     </div>
                     <div className="flex-1 flex items-center justify-center text-[10px] font-medium border-r border-[var(--ds-border-sub)] transition-colors"
-                      style={{ color: s1In ? 'var(--ds-text-2)' : 'var(--ds-text-3)', background: s1In ? 'rgba(173,238,43,0.12)' : undefined, borderBottom: s1In ? '2px solid rgba(173,238,43,0.5)' : '1px solid var(--ds-border-sub)' }}>
+                      style={{ color: s1In ? 'var(--ds-text-2)' : 'var(--ds-text-3)', background: s1In ? 'rgba(173,238,43,0.12)' : s1Hover ? 'rgba(173,238,43,0.07)' : undefined, borderBottom: s1In ? '2px solid rgba(173,238,43,0.5)' : s1Hover ? '2px solid rgba(173,238,43,0.3)' : '1px solid var(--ds-border-sub)' }}>
                       {h}:30
                     </div>
                   </div>
@@ -1742,7 +1757,7 @@ export default function TimelinePage() {
                 </div>
 
                 {/* Slots */}
-                <div className="flex-1 relative" style={{ height: CELL_H }}>
+                <div className="flex-1 relative" style={{ height: CELL_H }} onMouseLeave={() => setHoverSlot(null)}>
                   {/* Cell grid — fixed layout, no bookings in flow */}
                   <div className="flex h-full absolute inset-0">
                     {Array.from({ length: slots }, (_, s) => {
@@ -1753,6 +1768,7 @@ export default function TimelinePage() {
                             ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#adee2b]/5'}
                             ${(s + 1) % 2 === 0 ? 'border-r-[var(--ds-border)]' : ''}`}
                           style={{ width: SLOT_W, height: CELL_H }}
+                          onMouseEnter={() => setHoverSlot(s)}
                           onMouseDown={e => {
                             if (e.button !== 0) return
                             e.preventDefault()
@@ -2212,8 +2228,17 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar{otherCtxMenu.booking.series_id ? ' (This Entry)' : ''}</span>
               </button>
+              {otherCtxMenu.booking.series_id && (
+                <button
+                  onClick={() => { exportSeriesToICS(otherCtxMenu.booking.series_id!); setOtherCtxMenu(null) }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+                >
+                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar (Series)</span>
+                </button>
+              )}
 
               {/* View Room */}
               <button
@@ -2362,8 +2387,17 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar{ctxMenu.booking.series_id ? ' (This Entry)' : ''}</span>
               </button>
+              {ctxMenu.booking.series_id && (
+                <button
+                  onClick={() => { exportSeriesToICS(ctxMenu.booking.series_id!); setCtxMenu(null) }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+                >
+                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar (Series)</span>
+                </button>
+              )}
 
               {/* Cancel */}
               <button
