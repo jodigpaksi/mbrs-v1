@@ -4222,7 +4222,7 @@ function ArchiveTab() {
   }
 
   function exportExcel() {
-    if (!data?.data.length) return
+    if (!data?.data?.length) return
     const rows = data.data.map(b => ({
       Date: fmtDate(b.start_at as unknown as string),
       'Start': fmtTime(b.start_at as unknown as string),
@@ -4241,7 +4241,7 @@ function ArchiveTab() {
   }
 
   function exportCsv() {
-    if (!data?.data.length) return
+    if (!data?.data?.length) return
     const rows = data.data
     const cols = ['Date', 'Start', 'End', 'Title', 'Room', 'User', 'Status', 'Archived At']
     const lines = [
@@ -4310,11 +4310,11 @@ function ArchiveTab() {
           </button>
           <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) { doImport(f); e.target.value = '' } }} />
-          <button onClick={exportExcel} disabled={!data?.data.length}
+          <button onClick={exportExcel} disabled={!data?.data?.length}
             className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-30">
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>table_view</span>Excel
           </button>
-          <button onClick={exportCsv} disabled={!data?.data.length}
+          <button onClick={exportCsv} disabled={!data?.data?.length}
             className="flex items-center gap-1.5 px-3.5 h-9 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] text-[10px] font-black uppercase hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-30">
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>csv</span>CSV
           </button>
@@ -4385,10 +4385,10 @@ function ArchiveTab() {
             </tr>
           </thead>
           <tbody>
-            {!data?.data.length && !isFetching && (
+            {!data?.data?.length && !isFetching && (
               <tr><td colSpan={8} className="px-5 py-12 text-center text-[var(--ds-text-3)] text-sm font-bold">No archived bookings found.</td></tr>
             )}
-            {data?.data.map(b => (
+            {data?.data?.map(b => (
               <tr key={b.id} className="border-b border-[var(--ds-border-sub)] hover:bg-[var(--ds-bg-raised)] transition-colors">
                 <td className="px-5 py-3 text-xs font-bold text-[var(--ds-text-1)] whitespace-nowrap">
                   {fmtDate(b.start_at as unknown as string)}
@@ -4643,7 +4643,7 @@ function SettingsTab() {
       setResendFromAddress(mailer.resend.from_address); setResendFromName(mailer.resend.from_name)
       setBrevoFromAddress(mailer.brevo.from_address); setBrevoFromName(mailer.brevo.from_name)
     }
-  }, [mailer?.active_mailer, mailer?.resend.from_address, mailer?.resend.from_name, mailer?.brevo.from_address, mailer?.brevo.from_name])
+  }, [mailer?.active_mailer, mailer?.resend?.from_address, mailer?.resend?.from_name, mailer?.brevo?.from_address, mailer?.brevo?.from_name])
   function onMailerField(setter: (v: string) => void) {
     return (v: string) => { setter(v); setDirty(true) }
   }
@@ -6054,9 +6054,9 @@ function SettingsTab() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {([
             { key: 'default' as const, label: 'Default', icon: 'block', ready: true },
-            { key: 'm365' as const,    label: 'Microsoft 365', icon: 'cloud', ready: mailer?.m365.ready ?? false },
-            { key: 'resend' as const,  label: 'Resend', icon: 'send', ready: mailer?.resend.ready ?? false },
-            { key: 'brevo' as const,   label: 'Brevo', icon: 'forward_to_inbox', ready: mailer?.brevo.ready ?? false },
+            { key: 'm365' as const,    label: 'Microsoft 365', icon: 'cloud', ready: mailer?.m365?.ready ?? false },
+            { key: 'resend' as const,  label: 'Resend', icon: 'send', ready: mailer?.resend?.ready ?? false },
+            { key: 'brevo' as const,   label: 'Brevo', icon: 'forward_to_inbox', ready: mailer?.brevo?.ready ?? false },
           ]).map(opt => (
             <button key={opt.key} type="button" onClick={() => selectActiveMailer(opt.key)}
               className="flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-all"
@@ -6085,7 +6085,7 @@ function SettingsTab() {
               <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">API Key</label>
                 <input type="password" value={resendApiKey} onChange={e => onMailerField(setResendApiKey)(e.target.value)}
-                  placeholder={mailer?.resend.has_key ? '•••••••• (already set — type to replace)' : 're_...'}
+                  placeholder={mailer?.resend?.has_key ? '•••••••• (already set — type to replace)' : 're_...'}
                   className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
                 <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. From <strong>resend.com</strong> → API Keys.</p>
               </div>
@@ -6113,7 +6113,7 @@ function SettingsTab() {
               <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">API Key</label>
                 <input type="password" value={brevoApiKey} onChange={e => onMailerField(setBrevoApiKey)(e.target.value)}
-                  placeholder={mailer?.brevo.has_key ? '•••••••• (already set — type to replace)' : 'xkeysib-...'}
+                  placeholder={mailer?.brevo?.has_key ? '•••••••• (already set — type to replace)' : 'xkeysib-...'}
                   className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]" />
                 <p className="text-[10px] text-[var(--ds-text-3)] px-1">Stored encrypted. From <strong>app.brevo.com</strong> → SMTP &amp; API → API Keys.</p>
               </div>

@@ -83,6 +83,10 @@ return [
             'transport' => 'graph',
         ],
 
+        'brevo' => [
+            'transport' => 'brevo',
+        ],
+
         'failover' => [
             'transport' => 'failover',
             'mailers' => [
