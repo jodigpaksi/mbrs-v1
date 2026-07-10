@@ -23,4 +23,4 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
 
 EXPOSE 80
 
-CMD php artisan config:cache && php artisan migrate --force && apache2-foreground
+CMD php artisan config:cache && (php artisan storage:link || true) && chown -R www-data:www-data storage bootstrap/cache && php artisan migrate --force && apache2-foreground
