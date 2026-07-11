@@ -16,6 +16,7 @@ interface Settings {
   startDay: StartDayPref
   defaultBuilding: number | null
   showBarTitle: boolean
+  showKeyboardShortcuts: boolean
   setDefaultView: (v: ViewPref) => void
   setDefaultType: (v: TypePref) => void
   setLanguage: (v: LangPref) => void
@@ -23,6 +24,7 @@ interface Settings {
   setStartDay: (v: StartDayPref) => void
   setDefaultBuilding: (v: number | null) => void
   setShowBarTitle: (v: boolean) => void
+  setShowKeyboardShortcuts: (v: boolean) => void
   t: (key: TranslationKey) => string
 }
 
@@ -49,6 +51,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [darkMode, setDarkModeRaw]               = useState<boolean>(() => prefs?.darkMode ?? load('mbrs_dark_mode', false))
   const [startDay, setStartDayRaw]               = useState<StartDayPref>(() => (prefs?.startDay as StartDayPref) ?? load('mbrs_start_day', 'mon'))
   const [showBarTitle, setShowBarTitleRaw]       = useState<boolean>(() => prefs?.showBarTitle ?? load('mbrs_show_bar_title', false))
+  const [showKeyboardShortcuts, setShowKeyboardShortcutsRaw] = useState<boolean>(() => prefs?.showKeyboardShortcuts ?? load('mbrs_show_keyboard_shortcuts', true))
   const [defaultBuilding, setDefaultBuildingRaw] = useState<number | null>(() => {
     // Priority: server default_building_id > server preferences.defaultBuilding > localStorage
     if (user?.default_building_id != null) return user.default_building_id
@@ -65,6 +68,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (prefs.darkMode   != null) setDarkModeRaw(prefs.darkMode)
     if (prefs.startDay)      setStartDayRaw(prefs.startDay as StartDayPref)
     if (prefs.showBarTitle != null) setShowBarTitleRaw(prefs.showBarTitle)
+    if (prefs.showKeyboardShortcuts != null) setShowKeyboardShortcutsRaw(prefs.showKeyboardShortcuts)
     const building = user?.default_building_id ?? (prefs.defaultBuilding as number | null | undefined) ?? null
     if (building != null) setDefaultBuildingRaw(building)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,6 +109,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setShowBarTitleRaw(v); persist('mbrs_show_bar_title', v)
     syncToServer({ showBarTitle: v })
   }
+  const setShowKeyboardShortcuts = (v: boolean) => {
+    setShowKeyboardShortcutsRaw(v); persist('mbrs_show_keyboard_shortcuts', v)
+    syncToServer({ showKeyboardShortcuts: v })
+  }
   const setDefaultBuilding = (v: number | null) => {
     setDefaultBuildingRaw(v); persist('mbrs_default_building', v)
     syncToServer({ defaultBuilding: v })
@@ -114,10 +122,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const t = useCallback((key: TranslationKey): string => dict[key] ?? key, [dict])
 
   const value = useMemo(() => ({
-    defaultView, defaultType, language, darkMode, startDay, defaultBuilding, showBarTitle,
-    setDefaultView, setDefaultType, setLanguage, setDarkMode, setStartDay, setDefaultBuilding, setShowBarTitle, t,
+    defaultView, defaultType, language, darkMode, startDay, defaultBuilding, showBarTitle, showKeyboardShortcuts,
+    setDefaultView, setDefaultType, setLanguage, setDarkMode, setStartDay, setDefaultBuilding, setShowBarTitle, setShowKeyboardShortcuts, t,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [defaultView, defaultType, language, darkMode, startDay, defaultBuilding, showBarTitle, t])
+  }), [defaultView, defaultType, language, darkMode, startDay, defaultBuilding, showBarTitle, showKeyboardShortcuts, t])
 
   return (
     <SettingsContext.Provider value={value}>

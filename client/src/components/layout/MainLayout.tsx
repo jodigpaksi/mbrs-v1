@@ -7,6 +7,7 @@ import TodayPanel from '../booking/TodayPanel'
 import AvailableRoomsPanel from '../room/AvailableRoomsPanel'
 import BookingPanel from '../booking/BookingPanel'
 import { getGeneralSettings } from '../../api/settings'
+import { useSettings } from '../../context/SettingsContext'
 import type { Room } from '../../types'
 
 interface MainLayoutProps {
@@ -15,6 +16,7 @@ interface MainLayoutProps {
 
 function MainLayoutInner({ children }: MainLayoutProps) {
   const queryClient = useQueryClient()
+  const { showKeyboardShortcuts } = useSettings()
   const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60_000 })
   const [availableOpen, setAvailableOpen] = useState(false)
   const [selectedRoom, setSelectedRoom]   = useState<Room | null>(null)
@@ -79,7 +81,7 @@ function MainLayoutInner({ children }: MainLayoutProps) {
         {children}
       </main>
       {generalSettings?.feature_ai_chat !== false && <AiAgentFab />}
-      <KeyboardShortcutsFab stackAboveAiFab={generalSettings?.feature_ai_chat !== false} />
+      {showKeyboardShortcuts && <KeyboardShortcutsFab stackAboveAiFab={generalSettings?.feature_ai_chat !== false} />}
       <TodayPanel />
       <AvailableRoomsPanel
         open={availableOpen}

@@ -4672,6 +4672,8 @@ function SettingsTab() {
   const [workEnd,      setWorkEnd]      = useState(general?.working_hours_end ?? '17:00')
   const [aiChat,       setAiChat]       = useState(general?.feature_ai_chat ?? true)
   const [roomsGrid,    setRoomsGrid]    = useState(general?.rooms_grid_cols ?? 3)
+  const [titleMaxLen,  setTitleMaxLen]  = useState(general?.booking_title_max_length ?? 45)
+  const [descMaxLen,   setDescMaxLen]   = useState(general?.booking_description_max_length ?? 65)
   const [archiveDays,      setArchiveDays]      = useState(general?.archive_after_days ?? 30)
   const [deleteDays,       setDeleteDays]       = useState(general?.archive_delete_after_days ?? 90)
   const [antiGhostEnabled,      setAntiGhostEnabled]      = useState(general?.anti_ghost_enabled ?? false)
@@ -4699,6 +4701,8 @@ function SettingsTab() {
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
       setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
       setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
+      setTitleMaxLen(general.booking_title_max_length ?? 45)
+      setDescMaxLen(general.booking_description_max_length ?? 65)
       setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
       setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
       setAntiGhostModes(new Set((general.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
@@ -4912,6 +4916,7 @@ function SettingsTab() {
         allow_password_change: allowPasswordChange, allow_avatar_upload: allowAvatarUpload,
         restrict_after_hours: restrictAH, working_hours_end: workEnd,
         feature_ai_chat: aiChat, rooms_grid_cols: roomsGrid,
+        booking_title_max_length: titleMaxLen, booking_description_max_length: descMaxLen,
         archive_after_days: archiveDays, archive_delete_after_days: deleteDays,
         anti_ghost_enabled: antiGhostEnabled, anti_ghost_mode: [...antiGhostModes].sort().join(','),
         anti_ghost_window_before: ghostWindowBefore, anti_ghost_window_after: ghostWindowAfter,
@@ -4976,6 +4981,8 @@ function SettingsTab() {
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
       setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
       setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
+      setTitleMaxLen(general.booking_title_max_length ?? 45)
+      setDescMaxLen(general.booking_description_max_length ?? 65)
       setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
       setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
       setAntiGhostModes(new Set((general.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
@@ -5381,6 +5388,48 @@ function SettingsTab() {
               onChange={e => onMaxDaysChange(Math.max(1, Math.min(365, Number(e.target.value))))}
               className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
             <span className="text-[12px] font-bold text-[var(--ds-text-3)]">days</span>
+          </div>
+        </div>
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Meeting title max length */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>short_text</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Meeting Title Max Length</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Keeps long titles from breaking the UI/exports</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min={10} max={255} value={titleMaxLen}
+              onChange={e => { setTitleMaxLen(Math.max(10, Math.min(255, Number(e.target.value)))); setDirty(true) }}
+              className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+            <span className="text-[12px] font-bold text-[var(--ds-text-3)]">chars</span>
+          </div>
+        </div>
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Meeting description max length */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>notes</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Meeting Description Max Length</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Keeps long descriptions from breaking the UI/exports</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min={10} max={1000} value={descMaxLen}
+              onChange={e => { setDescMaxLen(Math.max(10, Math.min(1000, Number(e.target.value)))); setDirty(true) }}
+              className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+            <span className="text-[12px] font-bold text-[var(--ds-text-3)]">chars</span>
           </div>
         </div>
 
@@ -6964,13 +7013,12 @@ export default function AdminPage() {
     )
   }
 
-  // building_admin gets a reduced, building-scoped menu: Buildings & Rooms, Users (view-only), Activity Log.
-  // Everything else (Overview, Archive, Kiosk, Sensor, Settings, Disputes) is admin-only.
+  // building_admin gets a reduced, building-scoped menu: Buildings & Rooms, Users (view-only).
+  // Everything else (Overview, Archive, Kiosk, Sensor, Settings, Disputes, Activity Log) is admin-only.
   const mainTabs: { key: Tab; label: string; icon: string }[] = isBuildingAdmin
     ? [
         { key: 'buildings', label: 'Buildings', icon: 'domain' },
         { key: 'users',     label: 'Users',     icon: 'group' },
-        { key: 'activity',  label: 'Activity',  icon: 'history' },
       ]
     : [
         { key: 'overview',   label: 'Overview',   icon: 'dashboard' },

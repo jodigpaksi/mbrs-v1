@@ -169,6 +169,7 @@ export default function SettingModal({ open, onClose }: Props) {
     darkMode,    setDarkMode,
     defaultBuilding, setDefaultBuilding,
     showBarTitle, setShowBarTitle,
+    showKeyboardShortcuts, setShowKeyboardShortcuts,
     t,
   } = useSettings()
 
@@ -352,6 +353,48 @@ export default function SettingModal({ open, onClose }: Props) {
                   borderRadius: '50%', background: showBarTitle ? '#000' : 'white',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
                   left: showBarTitle ? 21 : 2.5,
+                  transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                }} />
+              </div>
+            </button>
+          </SettingRow>
+
+          {/* Show keyboard shortcuts FAB */}
+          <SettingRow label={t('settings_show_keyboard_shortcuts')}>
+            <button
+              onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-[14px] transition-all active:scale-[0.99]"
+              style={{ background: 'rgba(0,0,0,0.05)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="size-8 rounded-xl flex items-center justify-center transition-all duration-300"
+                  style={{ background: showKeyboardShortcuts ? '#adee2b' : 'rgba(0,0,0,0.08)' }}
+                >
+                  <span
+                    className="material-symbols-outlined transition-all duration-300"
+                    style={{ fontSize: 17, color: showKeyboardShortcuts ? '#000' : 'var(--ds-text-2)' }}
+                  >
+                    keyboard
+                  </span>
+                </div>
+                <p className="text-[12px] font-black" style={{ color: 'var(--ds-text-1)' }}>
+                  {showKeyboardShortcuts ? 'Button visible' : 'Button hidden'}
+                </p>
+              </div>
+              <div
+                className="relative shrink-0"
+                style={{
+                  width: 42, height: 23, borderRadius: 12,
+                  background: showKeyboardShortcuts ? '#adee2b' : 'rgba(0,0,0,0.18)',
+                  transition: 'background 0.25s ease',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 2.5, width: 18, height: 18,
+                  borderRadius: '50%', background: showKeyboardShortcuts ? '#000' : 'white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                  left: showKeyboardShortcuts ? 21 : 2.5,
                   transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
                 }} />
               </div>

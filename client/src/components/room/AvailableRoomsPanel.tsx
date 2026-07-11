@@ -149,7 +149,7 @@ function SlotRoomCard({
 export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoomSelect, prefillDate, prefillStartTime, prefillEndTime }: Props) {
   const { defaultBuilding, t, language } = useSettings()
   const { user } = useAuth()
-  const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
+  const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin'
   const { start: bsStr, end: beStr } = useBookingHours()
   const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60_000 })
   // After-Hours Restriction (if enabled, for non-privileged users) caps results earlier than Booking Hours end

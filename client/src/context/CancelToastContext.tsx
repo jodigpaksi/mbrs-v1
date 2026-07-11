@@ -29,12 +29,12 @@ interface Ctx {
   pendingCancelIds: Set<number>
   exitingCancelIds: Set<number>
   toasts: ToastItem[]
-  seriesUndoToast: SeriesUndoToast | null
+  seriesUndoToasts: SeriesUndoToast[]
   addCancelToast: (booking: Booking) => void
   addInfoToast: (msg: string, negative?: boolean) => void
   undoCancel: (toastId: string, bookingId: number) => void
   confirmSeriesCancel: (target: SeriesCancelTarget) => void
-  undoSeriesCancel: () => void
+  undoSeriesCancel: (toastId: string) => void
 }
 
 const CancelToastContext = createContext<Ctx | null>(null)
@@ -42,11 +42,11 @@ const CancelToastContext = createContext<Ctx | null>(null)
 export function CancelToastProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [toasts, setToasts]                       = useState<ToastItem[]>([])
-  const [seriesUndoToast, setSeriesUndoToast]     = useState<SeriesUndoToast | null>(null)
+  const [seriesUndoToasts, setSeriesUndoToasts]   = useState<SeriesUndoToast[]>([])
   const [pendingCancelIds, setPendingCancelIds]   = useState<Set<number>>(new Set())
   const [exitingCancelIds, setExitingCancelIds]   = useState<Set<number>>(new Set())
   const cancelTimers     = useRef<Map<number, { timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> }>>(new Map())
-  const seriesCancelTimer = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
+  const seriesCancelTimers = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> }>>(new Map())
 
   async function invalidateAll(cancelledId?: number) {
     // Patch active queries immediately (Schedule page still mounted)
@@ -120,37 +120,37 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
     let count = 5
     const activeCount = target.bookings.filter(b => b.status !== 'cancelled').length
 
-    setSeriesUndoToast({ id: toastId, seriesId: target.series_id, msg: `"${target.bookings[0].title}" series (${activeCount} bookings) will be cancelled`, countdown: count })
+    setSeriesUndoToasts(prev => [...prev, { id: toastId, seriesId: target.series_id, msg: `"${target.bookings[0].title}" series (${activeCount} bookings) will be cancelled`, countdown: count }])
 
     const interval = setInterval(() => {
       count -= 1
-      setSeriesUndoToast(prev => prev?.id === toastId ? { ...prev, countdown: count } : prev)
+      setSeriesUndoToasts(prev => prev.map(t => t.id === toastId ? { ...t, countdown: count } : t))
     }, 1000)
 
     const timer = setTimeout(async () => {
-      clearInterval(interval)
-      seriesCancelTimer.current = null
-      setSeriesUndoToast(null)
+      seriesCancelTimers.current.delete(toastId)
+      setSeriesUndoToasts(prev => prev.filter(t => t.id !== toastId))
       await cancelSeries(target.series_id)
       await invalidateAll()
     }, 5000)
 
-    seriesCancelTimer.current = { timer, interval }
+    seriesCancelTimers.current.set(toastId, { timer, interval })
   }
 
-  function undoSeriesCancel() {
-    if (seriesCancelTimer.current) {
-      clearTimeout(seriesCancelTimer.current.timer)
-      clearInterval(seriesCancelTimer.current.interval)
-      seriesCancelTimer.current = null
+  function undoSeriesCancel(toastId: string) {
+    const t = seriesCancelTimers.current.get(toastId)
+    if (t) {
+      clearTimeout(t.timer)
+      clearInterval(t.interval)
+      seriesCancelTimers.current.delete(toastId)
     }
-    setSeriesUndoToast(null)
+    setSeriesUndoToasts(prev => prev.filter(x => x.id !== toastId))
   }
 
-  const toastUI = (toasts.length > 0 || seriesUndoToast) ? createPortal(
+  const toastUI = (toasts.length > 0 || seriesUndoToasts.length > 0) ? createPortal(
     <div style={{ position: 'fixed', bottom: 28, right: 96, zIndex: 99999, display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'auto' }}>
-      {seriesUndoToast && (
-        <div key={seriesUndoToast.id} className="toast-pop-in-bottom" style={{
+      {seriesUndoToasts.map(st => (
+        <div key={st.id} className="toast-pop-in-bottom" style={{
           background: 'rgba(15,20,45,0.55)', backdropFilter: 'blur(48px) saturate(200%)',
           WebkitBackdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(255,255,255,0.14)',
           borderRadius: '1.5rem', padding: '14px 18px',
@@ -158,11 +158,11 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
           display: 'flex', alignItems: 'center', gap: 12, minWidth: 300,
         }}>
           <span className="material-symbols-outlined" style={{ fontSize: 22, color: '#f87171', flexShrink: 0 }}>repeat</span>
-          <span style={{ color: 'white', fontSize: 12, fontWeight: 900, flex: 1 }}>{seriesUndoToast.msg}</span>
-          <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 22, textAlign: 'right' }}>{seriesUndoToast.countdown}s</span>
-          <button onClick={undoSeriesCancel} style={{ background: '#adee2b', color: '#000', border: 'none', borderRadius: 10, padding: '5px 12px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0 }}>Undo</button>
+          <span style={{ color: 'white', fontSize: 12, fontWeight: 900, flex: 1 }}>{st.msg}</span>
+          <span style={{ fontSize: 12, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 22, textAlign: 'right' }}>{st.countdown}s</span>
+          <button onClick={() => undoSeriesCancel(st.id)} style={{ background: '#adee2b', color: '#000', border: 'none', borderRadius: 10, padding: '5px 12px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0 }}>Undo</button>
         </div>
-      )}
+      ))}
       {toasts.map(t => (
         <div key={t.id} className="toast-pop-in-bottom" style={{
           background: 'rgba(15,20,45,0.55)', backdropFilter: 'blur(48px) saturate(200%)',
@@ -188,7 +188,7 @@ export function CancelToastProvider({ children }: { children: ReactNode }) {
   return (
     <CancelToastContext.Provider value={{
       pendingCancelIds, exitingCancelIds,
-      toasts, seriesUndoToast,
+      toasts, seriesUndoToasts,
       addCancelToast, addInfoToast,
       undoCancel, confirmSeriesCancel, undoSeriesCancel,
     }}>

@@ -191,6 +191,7 @@ const WeekDateRow = memo(function WeekDateRow(props: WeekDateRowProps) {
     cellDragRef, barDragRef, barResizeRef, getSlotFromClientX, setDragTick, setHoverSlot,
     setCellCtxMenu, setCtxMenu, setOtherCtxMenu, showTooltip, hideTooltip,
   } = props
+  const { language } = useSettings()
 
   return (
     <div className={`flex group/row relative border-b border-[var(--ds-border-sub)] ${isWeekend ? 'hover:bg-[var(--ds-bg-surface-2)]' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
@@ -200,10 +201,10 @@ const WeekDateRow = memo(function WeekDateRow(props: WeekDateRowProps) {
         style={{ width: ROOM_W, height: CELL_H }}
       >
         <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
-          {d.toLocaleDateString('en-GB', { weekday: 'short' })}
+          {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' })}
         </span>
         <span className={`text-[13px] font-black ${isTd ? 'text-lime-600 dark:text-lime-400' : 'text-[var(--ds-text-1)]'}`}>
-          {d.getDate()} {d.toLocaleDateString('en-GB', { month: 'short' })}
+          {d.getDate()} {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'short' })}
         </span>
       </div>
 
@@ -364,7 +365,7 @@ const WeekDateRow = memo(function WeekDateRow(props: WeekDateRowProps) {
 
 export default function TimelinePage() {
   const { user } = useAuth()
-  const { defaultView, startDay, defaultBuilding, showBarTitle, t } = useSettings()
+  const { defaultView, startDay, defaultBuilding, showBarTitle, language, t } = useSettings()
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
   const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
@@ -393,6 +394,13 @@ export default function TimelinePage() {
     if (!id || !lastActionKey) return
     localStorage.setItem(lastActionKey, String(id))
     setJustCreatedId(id)
+  }
+  // Dismissing only hides it for the current view — deliberately NOT cleared from localStorage/
+  // justCreatedId, so navigating away and back still replays it (this is just a "stop bothering
+  // me right now" for this one look, not "forget this ever happened").
+  const [dismissedRecentIds, setDismissedRecentIds] = useState<Set<number>>(new Set())
+  function dismissRecentBadge(id: number) {
+    setDismissedRecentIds(prev => new Set(prev).add(id))
   }
   const [currentDate, setCurrentDate] = useState(() => {
     const d = searchParams.get('date')
@@ -425,19 +433,30 @@ export default function TimelinePage() {
   const [roomHover, setRoomHover] = useState<{ room: Room; x: number; y: number } | null>(null)
   const roomHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [roomHoverPhotoIdx, setRoomHoverPhotoIdx] = useState(0)
-  const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [toastCountdown, setToastCountdown] = useState<number | null>(null)
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cancelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Stacked toasts — each cancel/series-cancel/info message gets its own entry (keyed by id) so
+  // multiple can be in flight at once (e.g. cancelling several bookings in quick succession),
+  // instead of one overwriting another. `countdown === null` means a plain auto-dismissing info
+  // toast; otherwise it's an undoable cancel with its own timer tracked in toastTimers.
+  interface TlToast { id: string; msg: string; countdown: number | null; kind: 'cancel' | 'series-cancel' | 'info' }
+  const [toasts, setToasts] = useState<TlToast[]>([])
+  const toastTimers = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; interval?: ReturnType<typeof setInterval> }>>(new Map())
+  function addInfoToast(msg: string, duration = 3500) {
+    const id = `info-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setToasts(prev => [...prev, { id, msg, countdown: null, kind: 'info' }])
+    const timer = setTimeout(() => removeToast(id), duration)
+    toastTimers.current.set(id, { timer })
+  }
+  function removeToast(id: string) {
+    const t = toastTimers.current.get(id)
+    if (t) { clearTimeout(t.timer); if (t.interval) clearInterval(t.interval); toastTimers.current.delete(id) }
+    setToasts(prev => prev.filter(x => x.id !== id))
+  }
   const [ctxMenu, setCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [otherCtxMenu, setOtherCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [cellCtxMenu, setCellCtxMenu] = useState<{ room: Room | null; slot: number; date: Date; x: number; y: number } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
   const [transferBooking, setTransferBooking] = useState<Booking | null>(null)
   const [seriesCancelTarget, setSeriesCancelTarget] = useState<Booking | null>(null)
-  const [pendingSeriesId, setPendingSeriesId] = useState<{ seriesId: string; title: string; count: number } | null>(null)
-  const seriesCancelTimerRef = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => defaultView)
   const [ganttKey, setGanttKey] = useState(0)
   const [ganttAnim, setGanttAnim] = useState<'left' | 'right' | 'up' | 'fade' | 'none'>('none')
@@ -640,14 +659,10 @@ export default function TimelinePage() {
             end_at:   slotToDateTimeStr(activeDate, newEnd),
           })
           queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
-          setToastMsg('Booking moved successfully')
-          if (toastTimer.current) clearTimeout(toastTimer.current)
-          toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
+          addInfoToast('Booking moved successfully', 3500)
         } catch (err: unknown) {
           const status = (err as { response?: { status?: number } })?.response?.status
-          setToastMsg(status === 422 ? 'Slot occupied — move cancelled' : 'Failed to move booking')
-          if (toastTimer.current) clearTimeout(toastTimer.current)
-          toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
+          addInfoToast(status === 422 ? 'Slot occupied — move cancelled' : 'Failed to move booking', 3000)
         }
       }
       if (bd) { barDragRef.current = null; setDragTick(t => t + 1) }
@@ -664,14 +679,10 @@ export default function TimelinePage() {
               end_at:   slotToDateTimeStr(activeDate, newEnd),
             })
             queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
-            setToastMsg('Booking resized successfully')
-            if (toastTimer.current) clearTimeout(toastTimer.current)
-            toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
+            addInfoToast('Booking resized successfully', 3500)
           } catch (err: unknown) {
             const status = (err as { response?: { status?: number } })?.response?.status
-            setToastMsg(status === 422 ? 'Slot occupied — resize cancelled' : 'Failed to resize booking')
-            if (toastTimer.current) clearTimeout(toastTimer.current)
-            toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
+            addInfoToast(status === 422 ? 'Slot occupied — resize cancelled' : 'Failed to resize booking', 3000)
           }
         }
       }
@@ -797,7 +808,7 @@ export default function TimelinePage() {
   const nowSlot = ((today.getHours() - HOUR_START) * 60 + today.getMinutes()) / 30
 
   function fmtDate(d: Date) {
-    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()
+    return d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()
   }
 
   function isRoomOccupied(room: Room): boolean {
@@ -853,7 +864,7 @@ export default function TimelinePage() {
 
   const canBookDirectly = (room: Room) => {
     if (!room.requires_contact) return true
-    return user?.role === 'admin' || user?.role === 'receptionist' || user?.department === 'GAA'
+    return user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin' || user?.department === 'GAA'
   }
 
   function openBookingForRoom(room: Room) {
@@ -875,9 +886,7 @@ export default function TimelinePage() {
     onSuccess: (_, toUserId) => {
       const person = directory.find(d => d.id === toUserId)
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      setToastMsg(`Booking transferred to ${person?.name ?? 'new user'}`)
-      if (toastTimer.current) clearTimeout(toastTimer.current)
-      toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
+      addInfoToast(`Booking transferred to ${person?.name ?? 'new user'}`, 2500)
       setTransferBooking(null)
       setTransferSearch('')
     },
@@ -894,31 +903,22 @@ export default function TimelinePage() {
     const booking = cancelTarget
     setCancelTarget(null)
 
+    const id = `cancel-${booking.id}-${Date.now()}`
     let count = 5
-    setToastMsg(`"${booking.title}" cancelled`)
-    setToastCountdown(count)
-    if (cancelIntervalRef.current) clearInterval(cancelIntervalRef.current)
-    if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current)
+    setToasts(prev => [...prev, { id, msg: `"${booking.title}" cancelled`, countdown: count, kind: 'cancel' }])
 
-    cancelIntervalRef.current = setInterval(() => {
+    const interval = setInterval(() => {
       count -= 1
-      setToastCountdown(count)
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, countdown: count } : t))
     }, 1000)
 
-    cancelTimerRef.current = setTimeout(async () => {
-      clearInterval(cancelIntervalRef.current!)
-      setToastCountdown(null)
-      setToastMsg(null)
+    const timer = setTimeout(async () => {
+      toastTimers.current.delete(id)
+      setToasts(prev => prev.filter(t => t.id !== id))
       await cancelBooking(booking.id)
       queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
     }, 5000)
-  }
-
-  function undoCancel() {
-    if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current)
-    if (cancelIntervalRef.current) clearInterval(cancelIntervalRef.current)
-    setToastMsg(null)
-    setToastCountdown(null)
+    toastTimers.current.set(id, { timer, interval })
   }
 
   function confirmSeriesCancel(target: Booking) {
@@ -927,39 +927,26 @@ export default function TimelinePage() {
     const allBookings = queryClient.getQueryData<Booking[]>(['bookings', dateStr]) ?? []
     const seriesBookings = allBookings.filter(b => b.series_id === target.series_id && b.status !== 'cancelled')
     const count = seriesBookings.length || 1
-    setPendingSeriesId({ seriesId: target.series_id, title: target.title, count })
-    if (seriesCancelTimerRef.current) {
-      clearTimeout(seriesCancelTimerRef.current.timer)
-      clearInterval(seriesCancelTimerRef.current.interval)
-    }
+
+    const id = `series-${target.series_id}-${Date.now()}`
     let c = 5
-    setToastMsg(`"${target.title}" series (${count} bookings) will be cancelled`)
-    setToastCountdown(c)
+    setToasts(prev => [...prev, { id, msg: `"${target.title}" series (${count} bookings) will be cancelled`, countdown: c, kind: 'series-cancel' }])
+
     const interval = setInterval(() => {
       c -= 1
-      setToastCountdown(c)
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, countdown: c } : t))
     }, 1000)
     const timer = setTimeout(async () => {
-      clearInterval(interval)
-      seriesCancelTimerRef.current = null
-      setPendingSeriesId(null)
-      setToastMsg(null)
-      setToastCountdown(null)
+      toastTimers.current.delete(id)
+      setToasts(prev => prev.filter(t => t.id !== id))
       await cancelSeries(target.series_id!)
       queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
     }, 5000)
-    seriesCancelTimerRef.current = { timer, interval }
+    toastTimers.current.set(id, { timer, interval })
   }
 
-  function undoSeriesCancel() {
-    if (seriesCancelTimerRef.current) {
-      clearTimeout(seriesCancelTimerRef.current.timer)
-      clearInterval(seriesCancelTimerRef.current.interval)
-      seriesCancelTimerRef.current = null
-    }
-    setPendingSeriesId(null)
-    setToastMsg(null)
-    setToastCountdown(null)
+  function undoToast(id: string) {
+    removeToast(id)
   }
 
   const VIEW_ORDER = { day: 0, week: 1, month: 2 } as const
@@ -1055,10 +1042,10 @@ export default function TimelinePage() {
             {/* Acrylic noise texture */}
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: ACRYLIC_GRAIN, backgroundSize: '180px 180px', opacity: 0.05, mixBlendMode: 'overlay' }} />
             <p className="relative text-white font-black uppercase leading-tight" style={{ fontSize: 'clamp(28px,4vw,52px)', letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
-              {currentDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+              {currentDate.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'long' })}
             </p>
             <p className="relative text-white/80 font-bold uppercase tracking-[0.15em] mt-1.5" style={{ fontSize: 'clamp(11px,1.4vw,14px)', textShadow: '0 1px 8px rgba(0,0,0,0.5)' }}>
-              {currentDate.toLocaleDateString('en-GB', { weekday: 'long' })} &middot; {currentDate.getFullYear()}
+              {currentDate.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long' })} &middot; {currentDate.getFullYear()}
             </p>
           </div>
         </div>,
@@ -1072,7 +1059,7 @@ export default function TimelinePage() {
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade') }}
             className="px-5 py-2.5 bg-black text-[#adee2b] rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-80 transition-opacity">
-            Today
+            {t('label_today')}
           </button>
           {(() => {
             const fmtShort = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(2)}`
@@ -1085,11 +1072,11 @@ export default function TimelinePage() {
                 footer={(close) => (
                   <>
                     <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade'); close() }}
-                      className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
+                      className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">{t('label_today')}</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); switchDate(d, 'right'); close() }}
-                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">- 1 Week</button>
+                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">{t('label_minus_1_week')}</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); switchDate(d, 'left'); close() }}
-                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">+ 1 Week</button>
+                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">{t('label_plus_1_week')}</button>
                   </>
                 )}
               >
@@ -1315,7 +1302,7 @@ export default function TimelinePage() {
           {user?.role !== 'guest' && (
             <button onClick={openNewBooking}
               className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]">
-              <span className="material-symbols-outlined text-base">add</span> New Booking
+              <span className="material-symbols-outlined text-base">add</span> {t('btn_new_booking')}
             </button>
           )}
         </div>
@@ -1432,7 +1419,7 @@ export default function TimelinePage() {
                     onClick={() => { setCurrentDate(d); switchViewMode('day') }}
                   >
                     <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400 group-hover/wh:text-red-500' : 'text-[var(--ds-text-3)] group-hover/wh:text-[var(--ds-text-2)]'}`}>
-                      {d.toLocaleDateString('en-GB', { weekday: 'short' })}
+                      {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' })}
                     </span>
                     <div className={`mt-0.5 flex items-center justify-center rounded-full text-[15px] font-black transition-colors`}
                       style={{ width: 30, height: 30, background: isTd ? '#000' : 'transparent', color: isTd ? '#adee2b' : isWeekend ? '#ef4444' : 'var(--ds-text-1)' }}>
@@ -1440,7 +1427,7 @@ export default function TimelinePage() {
                     </div>
                     {showMonth && !isColLoading && (
                       <span className="text-[8px] font-bold text-[var(--ds-text-4)] mt-0.5">
-                        {d.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase()}
+                        {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'short' }).toUpperCase()}
                       </span>
                     )}
                     {isColLoading && (
@@ -1588,6 +1575,7 @@ export default function TimelinePage() {
         const DOW_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
+        const DOW_LABEL_ID: Record<string, string> = { Mon: 'Sen', Tue: 'Sel', Wed: 'Rab', Thu: 'Kam', Fri: 'Jum', Sat: 'Sab', Sun: 'Min' }
         const todayDateStr = toLocalDateStr(today)
         // Usage denominator: Regular + Maintenance rooms (maintenance counts as fully "used" capacity),
         // Special (requires_contact) rooms excluded entirely — not booked the same way, shouldn't skew the %.
@@ -1600,7 +1588,7 @@ export default function TimelinePage() {
             {/* Month header */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[28px] font-black text-[var(--ds-text-1)] uppercase tracking-tight leading-none">
-                {currentDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase()}
+                {currentDate.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'long', year: 'numeric' }).toUpperCase()}
               </h2>
               <div className="flex items-center gap-1">
                 <button
@@ -1623,7 +1611,7 @@ export default function TimelinePage() {
               {DOW.map(d => {
                 const isWkHeader = (d === 'Sat' && wkSat) || (d === 'Sun' && wkSun)
                 return (
-                  <div key={d} className={`text-center py-2 text-[11px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
+                  <div key={d} className={`text-center py-2 text-[11px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{language === 'id' ? DOW_LABEL_ID[d] : d}</div>
                 )
               })}
             </div>
@@ -1825,9 +1813,10 @@ export default function TimelinePage() {
           )}
 
           {/* Room rows */}
-          {filteredRooms.map((room: Room) => {
+          {filteredRooms.map((room: Room, roomIdx: number) => {
             const roomBookings = getBookingsForRoom(room.id)
             const isMaintRoom = room.status === 'maintenance'
+            const isFirstRoomRow = roomIdx === 0
 
             const isCellDragRow = cellDragRef.current?.roomId === room.id
             const cellDragMinSlot = cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
@@ -1910,6 +1899,7 @@ export default function TimelinePage() {
                     const bd = barDragRef.current
                     const br = barResizeRef.current
                     const isDragging = bd?.booking.id === b.id || br?.booking.id === b.id
+                    const showRecentBadge = b.id === justCreatedId && !dismissedRecentIds.has(b.id)
 
                     let { startSlot, span } = bookingToSlots(b)
                     let fracPx = 0, resizeFracW = 0, resizeFracX = 0
@@ -1954,7 +1944,7 @@ export default function TimelinePage() {
                     return (
                       <div key={b.id} className="absolute top-0 z-10"
                         ref={b.id === highlightId ? highlightRef : undefined}
-                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined, borderRadius: (b.id === highlightId || b.id === justCreatedId) ? 8 : undefined }}
+                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined, borderRadius: (b.id === highlightId || showRecentBadge) ? 8 : undefined }}
                         onContextMenu={e => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -2001,7 +1991,7 @@ export default function TimelinePage() {
                             setDragTick(t => t + 1)
                           } : undefined}
                         />
-                        {b.id === justCreatedId && (
+                        {showRecentBadge && (
                           <svg width={width} height={CELL_H} className="absolute top-0 left-0 pointer-events-none z-40" style={{ overflow: 'visible' }}>
                             <path
                               d={roundedRectPathFromTopCenter(width, CELL_H, 8)}
@@ -2014,23 +2004,45 @@ export default function TimelinePage() {
                             />
                           </svg>
                         )}
-                        {b.id === justCreatedId && (
-                          <div className="recent-badge-in absolute left-1/2 -translate-x-1/2 pointer-events-none z-40 whitespace-nowrap"
-                            style={{ bottom: '100%', marginBottom: 8 }}>
-                            <div style={{
-                              background: 'rgba(15,20,45,0.88)',
-                              backdropFilter: 'blur(24px) saturate(180%)',
-                              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-                              border: '1px solid rgba(173,238,43,0.4)',
-                              borderRadius: 99,
-                              padding: '7px 16px',
-                              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 7,
-                            }}>
+                        {showRecentBadge && (
+                          <div className="recent-badge-in absolute left-1/2 -translate-x-1/2 z-40 whitespace-nowrap"
+                            style={isFirstRoomRow ? { top: '100%', marginTop: 10 } : { bottom: '100%', marginBottom: 10 }}>
+                            <div
+                              onClick={e => { e.stopPropagation(); dismissRecentBadge(b.id) }}
+                              title={t('recent_booking_dismiss')}
+                              style={{
+                                position: 'relative',
+                                background: 'rgba(15,20,45,0.68)',
+                                backdropFilter: 'blur(24px) saturate(180%)',
+                                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                                border: '1px solid rgba(173,238,43,0.4)',
+                                borderRadius: 14,
+                                padding: '7px 16px',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 7,
+                                cursor: 'pointer',
+                                pointerEvents: 'auto',
+                              }}>
                               <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#adee2b' }}>check_circle</span>
                               <span style={{ color: 'white', fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('recent_booking_label')}</span>
+                              {/* Thin connector line between the tooltip's edge (facing the bar) and the
+                                  bar itself — flips to the tooltip's top edge when the tooltip itself is
+                                  flipped below the bar (first room row, so it doesn't render under the
+                                  sticky time header). */}
+                              <div style={{
+                                position: 'absolute',
+                                width: 3,
+                                height: 8,
+                                ...(isFirstRoomRow ? { bottom: '100%' } : { top: '100%' }),
+                                left: '50%',
+                                marginLeft: -1.5,
+                                background: 'rgba(15,20,45,0.68)',
+                                backdropFilter: 'blur(24px) saturate(180%)',
+                                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                                borderRadius: 1.5,
+                              }} />
                             </div>
                           </div>
                         )}
@@ -2086,12 +2098,12 @@ export default function TimelinePage() {
       <footer className="bg-[var(--ds-bg-surface)] border-t border-[var(--ds-border-sub)] px-8 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-5">
           {[
-            { label: 'My Booking', style: { backgroundColor: '#72ddf7' } },
-            { label: 'My Tentative', style: { backgroundColor: '#b0e8f8', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
-            { label: 'Confirmed', style: { backgroundColor: '#adee2b' } },
-            { label: 'Tentative', style: { backgroundColor: '#d1d5db', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
-            { label: 'Maintenance', style: { backgroundColor: '#fb923c' } },
-            { label: 'For/From Others', style: { backgroundColor: 'transparent', border: '2px solid #2563eb' } },
+            { label: t('legend_my_booking'), style: { backgroundColor: '#72ddf7' } },
+            { label: t('legend_my_tentative'), style: { backgroundColor: '#b0e8f8', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
+            { label: t('tt_confirmed'), style: { backgroundColor: '#adee2b' } },
+            { label: t('tt_tentative'), style: { backgroundColor: '#d1d5db', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
+            { label: t('legend_maintenance'), style: { backgroundColor: '#fb923c' } },
+            { label: t('legend_for_from_others'), style: { backgroundColor: 'transparent', border: '2px solid #2563eb' } },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1.5">
               <div className="size-2.5 rounded-md" style={l.style} />
@@ -2100,11 +2112,11 @@ export default function TimelinePage() {
           ))}
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-0.5 bg-red-500" />
-            <span className="text-[8px] font-bold text-[var(--ds-text-3)] uppercase">Now</span>
+            <span className="text-[8px] font-bold text-[var(--ds-text-3)] uppercase">{t('legend_now')}</span>
           </div>
           <div className="flex items-center gap-1.5 border-l border-[var(--ds-border-sub)] pl-4">
             <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 12 }}>drag_pan</span>
-            <span className="text-[8px] font-bold text-[var(--ds-text-4)] uppercase">Drag bar to move &middot; drag edge to resize &middot; drag cell to create</span>
+            <span className="text-[8px] font-bold text-[var(--ds-text-4)] uppercase">{t('legend_drag_hint')}</span>
           </div>
         </div>
         <p className="text-[8px] font-black text-[var(--ds-text-4)] uppercase tracking-widest italic">{appName} &middot; 2026</p>
@@ -2261,9 +2273,7 @@ export default function TimelinePage() {
         onSubmit={(createdId) => {
           setBookingPanelOpen(false)
           queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
-          setToastMsg('Booking saved successfully')
-          if (toastTimer.current) clearTimeout(toastTimer.current)
-          toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
+          addInfoToast('Booking saved successfully', 3500)
           markLastAction(createdId)
         }}
         onCancel={(b) => { setBookingPanelOpen(false); setCancelTarget(b) }}
@@ -2338,15 +2348,13 @@ export default function TimelinePage() {
                 onClick={() => {
                   navigator.clipboard.writeText(otherCtxMenu.booking.user?.ext || '')
                   setOtherCtxMenu(null)
-                  setToastMsg(`Ext ${otherCtxMenu.booking.user?.ext} copied`)
-                  if (toastTimer.current) clearTimeout(toastTimer.current)
-                  toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
+                  addInfoToast(`Ext ${otherCtxMenu.booking.user?.ext} copied`, 2500)
                 }}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>phone_in_talk</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">Copy Ext</p>
+                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_copy_ext')}</p>
                   <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5">{otherCtxMenu.booking.user?.ext}</p>
                 </div>
               </button>
@@ -2356,15 +2364,13 @@ export default function TimelinePage() {
                 onClick={() => {
                   navigator.clipboard.writeText(otherCtxMenu.booking.user?.email || '')
                   setOtherCtxMenu(null)
-                  setToastMsg('Email copied')
-                  if (toastTimer.current) clearTimeout(toastTimer.current)
-                  toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
+                  addInfoToast('Email copied', 2500)
                 }}
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>mail</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">Copy Email</p>
+                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_copy_email')}</p>
                   <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5 truncate">{otherCtxMenu.booking.user?.email}</p>
                 </div>
               </button>
@@ -2377,7 +2383,7 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar{otherCtxMenu.booking.series_id ? ' (This Entry)' : ''}</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')}{otherCtxMenu.booking.series_id ? ` ${t('ctx_this_entry')}` : ''}</span>
               </button>
               {otherCtxMenu.booking.series_id && (
                 <button
@@ -2385,7 +2391,7 @@ export default function TimelinePage() {
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar (Series)</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')} {t('ctx_this_series')}</span>
                 </button>
               )}
 
@@ -2399,12 +2405,19 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room Detail</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_view_room_detail')}</span>
               </button>
 
-              {/* Transfer Booking — receptionist/admin only */}
-              {(user?.role === 'admin' || user?.role === 'receptionist') && otherCtxMenu.booking.status !== 'cancelled' && (<>
+              {/* Edit / Cancel / Transfer — receptionist/admin/building_admin only */}
+              {(user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin') && otherCtxMenu.booking.status !== 'cancelled' && (<>
                 <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
+                <button
+                  onClick={() => { openEdit(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+                >
+                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>edit</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_edit')}</span>
+                </button>
                 <button
                   onClick={() => {
                     setTransferBooking(otherCtxMenu.booking)
@@ -2414,6 +2427,13 @@ export default function TimelinePage() {
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>swap_horiz</span>
                   <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Transfer Booking</span>
+                </button>
+                <button
+                  onClick={() => { setCancelTarget(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-red-500/10"
+                >
+                  <span className="material-symbols-outlined text-red-400" style={{ fontSize: 15 }}>cancel</span>
+                  <span className="text-[11px] font-black uppercase text-red-500">{t('btn_cancel_booking')}</span>
                 </button>
               </>)}
             </div>
@@ -2472,7 +2492,7 @@ export default function TimelinePage() {
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>add_circle</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">New Booking</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('btn_new_booking')}</span>
                 </button>
               )}
 
@@ -2483,7 +2503,7 @@ export default function TimelinePage() {
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_view_room')}</span>
                 </button>
               )}
             </div>
@@ -2525,7 +2545,7 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>edit</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Edit</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_edit')}</span>
               </button>
 
               {/* Export to ICS */}
@@ -2534,7 +2554,7 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar{ctxMenu.booking.series_id ? ' (This Entry)' : ''}</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')}{ctxMenu.booking.series_id ? ` ${t('ctx_this_entry')}` : ''}</span>
               </button>
               {ctxMenu.booking.series_id && (
                 <button
@@ -2542,7 +2562,7 @@ export default function TimelinePage() {
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar (Series)</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')} {t('ctx_this_series')}</span>
                 </button>
               )}
 
@@ -2552,7 +2572,7 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-red-500/10"
               >
                 <span className="material-symbols-outlined text-red-400" style={{ fontSize: 15 }}>cancel</span>
-                <span className="text-[11px] font-black uppercase text-red-500">Cancel Booking</span>
+                <span className="text-[11px] font-black uppercase text-red-500">{t('btn_cancel_booking')}</span>
               </button>
             </div>
           </div>
@@ -2784,50 +2804,49 @@ export default function TimelinePage() {
         </>
       )}
 
-      {/* Toast */}
-      <div
-        className="fixed z-[9999] transition-all duration-300"
-        style={{ bottom: 28, right: 96, transform: toastMsg ? 'translateY(0)' : 'translateY(80px)', opacity: toastMsg ? 1 : 0, pointerEvents: toastMsg ? 'auto' : 'none' }}
-      >
-        <div style={{
-          background: 'rgba(15,20,45,0.55)',
-          backdropFilter: 'blur(48px) saturate(200%)',
-          WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-          border: '1px solid rgba(255,255,255,0.14)',
-          borderRadius: '1.5rem',
-          padding: '16px 20px',
-          boxShadow: '0 24px 56px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          minWidth: 320,
-        }}>
-          <span
-            className="material-symbols-outlined shrink-0"
-            style={{ fontSize: 24, color: toastCountdown !== null ? '#f87171' : '#adee2b' }}
-          >
-            {toastCountdown !== null ? (pendingSeriesId ? 'repeat' : 'cancel') : 'check_circle'}
-          </span>
-          <span className="text-white text-[13px] font-black flex-1">{toastMsg}</span>
-          {toastCountdown !== null && (
-            <>
-              <span style={{ fontSize: 13, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 26, textAlign: 'right' }}>
-                {toastCountdown}s
-              </span>
-              <button
-                onClick={pendingSeriesId ? undoSeriesCancel : undoCancel}
-                style={{
-                  background: '#adee2b', color: '#000', border: 'none',
-                  borderRadius: 10, padding: '6px 14px',
-                  fontSize: 11, fontWeight: 900, textTransform: 'uppercase',
-                  cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0,
-                }}
-              >
-                Undo
-              </button>
-            </>
-          )}
-        </div>
+      {/* Toasts — stacked, one per cancel/series-cancel/info action in flight */}
+      <div className="fixed z-[9999] flex flex-col gap-2.5" style={{ bottom: 28, right: 96 }}>
+        {toasts.map(t => (
+          <div key={t.id} className="toast-pop-in-bottom" style={{
+            background: 'rgba(15,20,45,0.55)',
+            backdropFilter: 'blur(48px) saturate(200%)',
+            WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+            border: '1px solid rgba(255,255,255,0.14)',
+            borderRadius: '1.5rem',
+            padding: '16px 20px',
+            boxShadow: '0 24px 56px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            minWidth: 320,
+          }}>
+            <span
+              className="material-symbols-outlined shrink-0"
+              style={{ fontSize: 24, color: t.countdown !== null ? '#f87171' : '#adee2b' }}
+            >
+              {t.countdown !== null ? (t.kind === 'series-cancel' ? 'repeat' : 'cancel') : 'check_circle'}
+            </span>
+            <span className="text-white text-[13px] font-black flex-1">{t.msg}</span>
+            {t.countdown !== null && (
+              <>
+                <span style={{ fontSize: 13, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 26, textAlign: 'right' }}>
+                  {t.countdown}s
+                </span>
+                <button
+                  onClick={() => undoToast(t.id)}
+                  style={{
+                    background: '#adee2b', color: '#000', border: 'none',
+                    borderRadius: 10, padding: '6px 14px',
+                    fontSize: 11, fontWeight: 900, textTransform: 'uppercase',
+                    cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0,
+                  }}
+                >
+                  Undo
+                </button>
+              </>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Past date/time booking blocked modal */}

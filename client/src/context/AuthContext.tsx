@@ -9,6 +9,7 @@ export interface UserPreferences {
   darkMode?: boolean
   startDay?: string
   showBarTitle?: boolean
+  showKeyboardShortcuts?: boolean
   defaultBuilding?: number | null
 }
 

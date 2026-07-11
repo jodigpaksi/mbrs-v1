@@ -4,6 +4,7 @@ import type { Booking } from '../../types/index'
 import { getDirectory } from '../../api/users'
 import UserAvatar from '../ui/UserAvatar'
 import { parseLocal } from '../../utils/date'
+import { useSettings } from '../../context/SettingsContext'
 
 interface TooltipPos { x: number; y: number }
 
@@ -20,6 +21,7 @@ interface BookingTooltipProps {
 }
 
 export default function BookingTooltip({ booking, pos, visible, onMouseEnter, onMouseLeave, currentUserId, onEdit, onCancel, onCancelSeries }: BookingTooltipProps) {
+  const { t, language } = useSettings()
   const ref = useRef<HTMLDivElement>(null)
   const [adjustedPos, setAdjustedPos] = useState(pos)
   const [forAnchorRect, setForAnchorRect] = useState<DOMRect | null>(null)
@@ -86,18 +88,19 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
   const isConf = booking.status === 'confirmed'
 
   function formatTime(iso: string) {
-    return parseLocal(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    return parseLocal(iso).toLocaleTimeString(language === 'id' ? 'id-ID' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
   }
 
   function getDuration() {
     const diff = (parseLocal(booking.end_at).getTime() - parseLocal(booking.start_at).getTime()) / 60000
     const h = Math.floor(diff / 60)
     const m = diff % 60
-    return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`
+    const hUnit = language === 'id' ? 'j' : 'h'
+    return h && m ? `${h}${hUnit} ${m}m` : h ? `${h}${hUnit}` : `${m}m`
   }
 
   function formatDate(iso: string) {
-    return parseLocal(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
+    return parseLocal(iso).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'short' })
   }
 
   function copyBookingInfo() {
@@ -152,7 +155,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
         <div className="flex items-center gap-2 flex-wrap">
           {isMe && (
             <span className="text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wide" style={{ backgroundColor: '#72ddf7', color: 'black' }}>
-              Your Booking
+              {t('tt_your_booking')}
             </span>
           )}
           {booking.series_id && (
@@ -173,7 +176,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
                 ? { background: 'rgba(173,238,43,0.15)', color: '#4d7c00' }
                 : { background: 'var(--ds-bg-surface-2)', color: 'var(--ds-text-2)' }}
           >
-            {isTentative ? 'Tentative' : booking.status === 'confirmed' ? 'Confirmed' : booking.status}
+            {isTentative ? t('tt_tentative') : booking.status === 'confirmed' ? t('tt_confirmed') : booking.status}
           </span>
         </div>
 
@@ -211,7 +214,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
             title="Copy booking info"
           >
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>content_copy</span>
-            Copy
+            {t('tt_copy')}
           </button>
         </div>
 
@@ -230,7 +233,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
                   style={{ color: 'var(--ds-text-3)' }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>person_pin</span>
-                  Booking for <span style={{ color: '#72ddf7' }}>{booking.booked_for}</span>
+                  Booking {t('label_for')} <span style={{ color: '#72ddf7' }}>{booking.booked_for}</span>
                   <span className="material-symbols-outlined" style={{ fontSize: 11 }}>open_in_new</span>
                 </button>
               )}
@@ -251,7 +254,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
                 className="shrink-0 flex items-center gap-1 hover:bg-[#adee2b] hover:text-black px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
                 style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>{t('tt_copy')}
               </button>
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -265,7 +268,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
                 className="shrink-0 flex items-center gap-1 hover:bg-[#adee2b] hover:text-black px-2.5 py-1 rounded-lg transition-all text-[9px] font-black uppercase"
                 style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>Copy
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>content_copy</span>{t('tt_copy')}
               </button>
             </div>
           </div>

@@ -34,7 +34,7 @@ class BookingController extends Controller
     public function transfer(Request $request, Booking $booking): JsonResponse
     {
         $role = $request->user()->role;
-        if (!in_array($role, ['admin', 'receptionist'])) {
+        if (!in_array($role, ['admin', 'receptionist', 'building_admin'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -372,12 +372,15 @@ class BookingController extends Controller
     public function store(Request $request): JsonResponse
     {
         $role = $request->user()->role;
-        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+        $isPrivileged = in_array($role, ['admin', 'receptionist', 'building_admin']);
+        $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
+        $titleMax = (int) ($lenLimits['booking_title_max_length'] ?? 45);
+        $descMax  = (int) ($lenLimits['booking_description_max_length'] ?? 65);
 
         $data = $request->validate([
             'room_id'     => 'required|exists:rooms,id',
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'title'       => "required|string|max:{$titleMax}",
+            'description' => "nullable|string|max:{$descMax}",
             'start_at'    => 'required|date',
             'end_at'      => 'required|date|after:start_at',
             'status'      => 'in:confirmed,tentative',
@@ -458,7 +461,7 @@ class BookingController extends Controller
     public function update(Request $request, Booking $booking): JsonResponse
     {
         $role = $request->user()->role;
-        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+        $isPrivileged = in_array($role, ['admin', 'receptionist', 'building_admin']);
         $isOwner      = $booking->user_id === $request->user()->id;
         $isRecipient  = $booking->booked_for_user_id !== null && $booking->booked_for_user_id === $request->user()->id;
 
@@ -466,10 +469,13 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
+        $titleMax = (int) ($lenLimits['booking_title_max_length'] ?? 45);
+        $descMax  = (int) ($lenLimits['booking_description_max_length'] ?? 65);
         $data = $request->validate([
             'room_id'     => 'sometimes|exists:rooms,id',
-            'title'       => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
+            'title'       => "sometimes|string|max:{$titleMax}",
+            'description' => "nullable|string|max:{$descMax}",
             'start_at'    => 'sometimes|date',
             'end_at'      => 'sometimes|date|after:start_at',
             'status'      => 'sometimes|in:confirmed,tentative,cancelled',
@@ -542,7 +548,7 @@ class BookingController extends Controller
     public function seriesUpdate(Request $request, string $seriesId): JsonResponse
     {
         $role = $request->user()->role;
-        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+        $isPrivileged = in_array($role, ['admin', 'receptionist', 'building_admin']);
 
         $bookings = Booking::where('series_id', $seriesId)
             ->where('status', '!=', 'cancelled')
@@ -557,9 +563,12 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
+        $titleMax = (int) ($lenLimits['booking_title_max_length'] ?? 45);
+        $descMax  = (int) ($lenLimits['booking_description_max_length'] ?? 65);
         $data = $request->validate([
-            'title'       => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
+            'title'       => "sometimes|string|max:{$titleMax}",
+            'description' => "nullable|string|max:{$descMax}",
             'status'      => 'sometimes|in:confirmed,tentative',
             'type'        => $isPrivileged
                 ? 'sometimes|in:internal,external,maintenance,repairment'

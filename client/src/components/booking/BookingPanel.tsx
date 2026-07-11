@@ -108,11 +108,13 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const { start: bsStr, end: beStr } = useBookingHours()
   const bookingStartMin = toMin(bsStr)
   const bookingEndMin   = toMin(beStr)
-  const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
+  const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin'
   const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60_000 })
   const allowBookForOthers = isPrivileged || (generalSettings?.allow_book_for_others !== false)
   const restrictAfterHours = !isPrivileged && (generalSettings?.restrict_after_hours === true)
   const workingHoursEnd = generalSettings?.working_hours_end ?? '17:00'
+  const titleMaxLength = generalSettings?.booking_title_max_length ?? 45
+  const descMaxLength = generalSettings?.booking_description_max_length ?? 65
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -1246,17 +1248,35 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     </button>
                   </div>
                 </div>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)}
-                  placeholder={t('panel_title_placeholder')}
-                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 outline-none transition-all duration-200
-                    focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
+                <div className="relative">
+                  <input type="text" value={title} onChange={e => setTitle(e.target.value.slice(0, titleMaxLength))}
+                    maxLength={titleMaxLength}
+                    placeholder={t('panel_title_placeholder')}
+                    className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-black p-2.5 pr-12 outline-none transition-all duration-200
+                      focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
+                  <span
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded-md pointer-events-none"
+                    style={{ background: 'var(--ds-bg-surface)', color: title.length >= titleMaxLength ? '#ef4444' : 'var(--ds-text-4)' }}
+                  >
+                    {title.length}/{titleMaxLength}
+                  </span>
+                </div>
               </div>
               <div className="space-y-1.5 transition-transform duration-200 ease-out focus-within:scale-[1.015] origin-left">
                 <label className="text-[11px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1 transition-colors duration-200 focus-within:text-[var(--ds-text-2)]">{t('panel_description')}</label>
-                <textarea rows={2} value={desc} onChange={e => setDesc(e.target.value)}
-                  placeholder={t('panel_desc_placeholder')}
-                  className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium p-2.5 outline-none resize-none transition-all duration-200
-                    focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
+                <div className="relative">
+                  <textarea rows={2} value={desc} onChange={e => setDesc(e.target.value.slice(0, descMaxLength))}
+                    maxLength={descMaxLength}
+                    placeholder={t('panel_desc_placeholder')}
+                    className="w-full bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-sm font-medium p-2.5 pb-6 outline-none resize-none transition-all duration-200
+                      focus:border-[#adee2b]/60 focus:shadow-[0_0_0_3px_rgba(173,238,43,0.12)] focus:bg-[var(--ds-bg-surface)]" />
+                  <span
+                    className="absolute right-2.5 bottom-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md pointer-events-none"
+                    style={{ background: 'var(--ds-bg-surface)', color: desc.length >= descMaxLength ? '#ef4444' : 'var(--ds-text-4)' }}
+                  >
+                    {desc.length}/{descMaxLength}
+                  </span>
+                </div>
               </div>
 
               {/* Booking for — accordion (hidden if disabled by admin, or if editing as a recipient) */}

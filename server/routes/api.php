@@ -125,7 +125,7 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
     Route::patch('/bookings/{booking}', [BookingController::class, 'update']);
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy']);
     Route::post('/bookings/{booking}/confirm-presence', [BookingController::class, 'confirmPresenceWeb']);
-    Route::post('/bookings/{booking}/transfer', [BookingController::class, 'transfer'])->middleware('can:receptionist');
+    Route::post('/bookings/{booking}/transfer', [BookingController::class, 'transfer']);
     Route::post('/bookings/{booking}/dispute', [BookingController::class, 'submitDispute']);
 
     // Disputes — accessible to admin, receptionist, building_admin (controller enforces role)
@@ -183,7 +183,8 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
         Route::post('/locations', [LocationController::class, 'store']);
         Route::patch('/locations/{location}', [LocationController::class, 'update']);
         Route::delete('/locations/{location}', [LocationController::class, 'destroy']);
-        // Activity log export/clear (admin only) — reading the list is also allowed for building_admin, scoped, see below
+        // Activity log — admin only (building_admin has no access, not even scoped)
+        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
         Route::get('/activity-logs/export', [\App\Http\Controllers\Api\ActivityLogController::class, 'export']);
         Route::delete('/activity-logs/all', [\App\Http\Controllers\Api\ActivityLogController::class, 'clearAll']);
 
@@ -232,6 +233,5 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
     // Read-only, building-scoped for building_admin; unrestricted for admin
     Route::middleware('can:building_admin')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
-        Route::get('/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
     });
 });

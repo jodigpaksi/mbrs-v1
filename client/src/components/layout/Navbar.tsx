@@ -14,6 +14,7 @@ import UserAvatar from '../ui/UserAvatar'
 import UserHoverCard from '../ui/UserHoverCard'
 import SettingModal from '../profile/SettingModal'
 import HelpModal from '../profile/HelpModal'
+import AboutModal from '../profile/AboutModal'
 
 const NAV_PATHS = [
   { path: '/',         key: 'nav_schedule',    icon: 'grid_view' },
@@ -74,6 +75,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [settingOpen, setSettingOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false)
   // Synced from TimelinePage's "Select Building" filter via CustomEvent — null means no
   // filter is active there (or the user hasn't visited Timeline yet), so show all buildings.
@@ -219,7 +221,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const isAdminPanelUser = user?.role === 'admin' || user?.role === 'building_admin'
   const allItems = [
     ...NAV_ITEMS,
-    ...(isReceptionist ? [{ path: '/receptionist', label: 'Receptionist', icon: 'support_agent' }] : []),
+    ...(isReceptionist ? [{ path: '/receptionist', label: t('nav_receptionist'), icon: 'support_agent' }] : []),
     ...(isAdminPanelUser ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
   ]
 
@@ -581,6 +583,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                   { icon: 'account_circle', label: t('nav_user_profile'), action: () => { setProfileModalOpen(true); setProfileOpen(false) } },
                   { icon: 'settings', label: t('nav_setting'), action: () => { setSettingOpen(true); setProfileOpen(false) } },
                   { icon: 'help', label: t('nav_help'), action: () => { setHelpOpen(true); setProfileOpen(false) } },
+                  { icon: 'info', label: t('nav_about'), action: () => { setAboutOpen(true); setProfileOpen(false) } },
                 ].map(({ icon, label, action }) => (
                   <button key={label} onClick={action}
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/10 transition-colors text-[11px] font-black uppercase"
@@ -609,6 +612,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
       <UserProfileModal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
       <SettingModal open={settingOpen} onClose={() => setSettingOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       {advancedSearchOpen && searchResults && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">

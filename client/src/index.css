@@ -117,20 +117,21 @@
 .toast-pop-out-top     { animation: toast-pop-out-top    0.18s cubic-bezier(0.4,0,0.2,1) both; }
 .toast-pop-in-bottom  { animation: toast-pop-in-bottom  0.22s cubic-bezier(0.34,1.04,0.64,1) both; }
 
-/* ── "Your recent booking" — border draws itself clockwise around the bar (starting/ending at
-     top-center, see the `<path>` built in TimelinePage) over 0.9s, holds fully drawn while the
-     badge (delayed to start right as the draw finishes) shows for ~5s, then both fade out
-     together. Total timeline: 0.9s draw + ~5s hold + ~0.4s fade = 6.3s. Since these elements are
-     only rendered while `b.id === lastActionId` (see TimelinePage), and that id is persisted to
-     localStorage rather than auto-cleared, the whole sequence naturally replays every time the
-     bar's DOM node remounts (switching days/pages and coming back) — no JS timer needed. ── */
+/* ── "Your recent booking" — waits 1.5s, then the border draws itself clockwise around the bar
+     (starting/ending at top-center, see the `<path>` built in TimelinePage) over 0.9s, holds
+     fully drawn while the badge (delayed to start right as the draw finishes) shows for ~5s,
+     then both fade out together. Total timeline: 1.5s wait + 0.9s draw + ~5s hold + ~0.4s fade =
+     7.8s. Since these elements are only rendered while `b.id === lastActionId` (see
+     TimelinePage), and that id is persisted to localStorage rather than auto-cleared, the whole
+     sequence naturally replays every time the bar's DOM node remounts (switching days/pages and
+     coming back) — no JS timer needed. ── */
 @keyframes recent-border-draw {
   0%    { stroke-dashoffset: 100; opacity: 1; }
-  14.3% { stroke-dashoffset: 0;   opacity: 1; }
-  96.8% { stroke-dashoffset: 0;   opacity: 1; }
+  11.5% { stroke-dashoffset: 0;   opacity: 1; }
+  97.4% { stroke-dashoffset: 0;   opacity: 1; }
   100%  { stroke-dashoffset: 0;   opacity: 0; }
 }
-.recent-border-draw { stroke-dasharray: 100; stroke-dashoffset: 100; animation: recent-border-draw 6.3s ease forwards; }
+.recent-border-draw { stroke-dasharray: 100; stroke-dashoffset: 100; opacity: 0; animation: recent-border-draw 6.3s ease 1.5s forwards; }
 
 @keyframes recent-badge-in {
   0%   { opacity: 0; transform: translateY(4px)  scale(0.9); }
@@ -138,7 +139,7 @@
   96.3% { opacity: 1; transform: translateY(0)    scale(1);   }
   100% { opacity: 0; transform: translateY(-4px) scale(0.95); }
 }
-.recent-badge-in { opacity: 0; animation: recent-badge-in 5.4s ease forwards; animation-delay: 0.9s; }
+.recent-badge-in { opacity: 0; animation: recent-badge-in 5.4s ease forwards; animation-delay: 2.4s; }
 
 /* ── Shared staggered row entrance — search results, list rows appearing one after another.
      Pass a per-row `animation-delay` inline to stagger (see callers). ── */

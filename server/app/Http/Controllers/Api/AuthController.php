@@ -100,7 +100,7 @@ class AuthController extends Controller
 
     public function updatePreferences(Request $request): JsonResponse
     {
-        $allowed = ['defaultView', 'defaultType', 'language', 'darkMode', 'startDay', 'showBarTitle', 'defaultBuilding'];
+        $allowed = ['defaultView', 'defaultType', 'language', 'darkMode', 'startDay', 'showBarTitle', 'showKeyboardShortcuts', 'defaultBuilding'];
         $data = $request->validate([
             'preferences' => 'required|array',
         ]);

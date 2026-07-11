@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 
 const SHORTCUTS = [
   { keys: ['Ctrl', 'F'], label: 'Search Available Rooms' },
+  { keys: ['Ctrl', 'Shift', 'F'], label: 'Search' },
   { keys: ['Alt', 'N'], label: 'New Booking' },
   { keys: ['N'], label: 'Open Notifications' },
   { keys: ['T'], label: 'Today Panel' },
