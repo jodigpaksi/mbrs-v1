@@ -226,6 +226,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [showRoomDrop, setShowRoomDrop] = useState(false)
   const [hoverRoomPhoto, setHoverRoomPhoto] = useState<{ x: number; y: number; src: string } | null>(null)
   const [showMiniPanel, setShowMiniPanel] = useState(false)
+  const [showDatesList, setShowDatesList] = useState(false)
   const [showBookFor, setShowBookFor] = useState(false)
   const [activeBuildingId, setActiveBuildingId] = useState<number | null>(buildingId ?? defaultBuilding ?? null)
   // submit
@@ -434,6 +435,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // Auto-set weeklyDays default to day of selected date when switching to weekly
   function handleRepeatChange(r: 'none' | 'daily' | 'weekly') {
     setRepeat(r)
+    setShowDatesList(false)
     if (r === 'weekly' && date) {
       const [yy, mm, dd] = date.split('-').map(Number)
       const dow = new Date(yy, mm - 1, dd).getDay()
@@ -563,6 +565,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       const interval = Math.max(1, dailyInterval)
       const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6
       if (repeatMode === 'count') {
+        // repeatCount is the number of sessions to create (see repeat_for_sessions label) —
+        // simpler than a day-span, which would force users to do multiple-of-interval math.
         for (let i = 0; i < repeatCount; i++) {
           const d = new Date(startD); d.setDate(d.getDate() + i * interval)
           if (!skipWeekends || !isWeekend(d)) dates.push(toISO(d))
@@ -783,6 +787,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // Save draft on close (belt-and-suspenders alongside the auto-save effect).
   function handleClose() {
     if (!editBooking) saveDraft()
+    setShowDatesList(false)
     onClose()
   }
 
@@ -978,6 +983,61 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               })}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Repeat dates list — floating card to the left of main panel, opened from "+N more" */}
+      <div
+        className="fixed z-[109] w-[280px] transition-all duration-[350ms] ease-[cubic-bezier(0.34,1.04,0.64,1)]"
+        style={{
+          right: 452,
+          top: 24,
+          bottom: 24,
+          opacity: showDatesList ? 1 : 0,
+          transform: showDatesList ? 'translateX(0) scale(1)' : 'translateX(24px) scale(0.96)',
+          pointerEvents: showDatesList ? 'auto' : 'none',
+          background: 'var(--ds-glass-bg)',
+          backdropFilter: 'blur(32px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+          borderRadius: 24,
+          border: '1px solid var(--ds-glass-border)',
+          boxShadow: 'var(--ds-glass-shadow)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[var(--ds-border-sub)] shrink-0">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--ds-text-3)] mb-1.5">{t('series_all_dates')}</p>
+            <p className="text-[16px] font-black text-[var(--ds-text-1)] leading-tight">{repeatDates.length} {t('series_label')}</p>
+          </div>
+          <button type="button" onClick={() => setShowDatesList(false)}
+            className="size-8 rounded-full flex items-center justify-center hover:bg-[var(--ds-bg-raised)] transition-colors shrink-0">
+            <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--ds-text-3)' }}>close</span>
+          </button>
+        </div>
+
+        {/* Full date list */}
+        <div className="py-3 px-3 space-y-1.5 overflow-y-auto">
+          {repeatDates.map((d, i) => {
+            const dow = new Date(d + 'T00:00:00').getDay()
+            const isWeekend = dow === 0 || dow === 6
+            return (
+              <div key={d}
+                className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl"
+                style={{ background: 'var(--ds-bg-raised)' }}
+              >
+                <span className="text-[10px] font-black text-[var(--ds-text-4)] tabular-nums shrink-0" style={{ width: 20 }}>{i + 1}</span>
+                <span className="text-[12px] font-bold text-[var(--ds-text-1)] flex-1">{fmtShortDate(d, language)}</span>
+                {isWeekend && (
+                  <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                    {language === 'id' ? 'Libur' : 'Weekend'}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -1649,7 +1709,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             {repeatMode === 'count' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
                           <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex-1" onClick={() => setRepeatMode('count')}>
-                            {repeat === 'daily' ? t('repeat_for_days') : t('repeat_for_weeks')}
+                            {repeat === 'daily' ? t('repeat_for_sessions') : t('repeat_for_weeks')}
                           </span>
                           {repeatMode === 'count' && (
                             <div className="flex items-center gap-1.5 ml-auto">
@@ -1812,12 +1872,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                               </span>
                             ))}
                             {repeatDates.length > 8 && (
-                              <span
-                                className="text-[10px] font-bold bg-black dark:bg-white/10 text-[#adee2b] rounded-lg px-2.5 py-1"
+                              <button
+                                type="button"
+                                onClick={() => setShowDatesList(true)}
+                                className="text-[10px] font-bold bg-black dark:bg-white/10 text-[#adee2b] rounded-lg px-2.5 py-1 hover:bg-slate-800 dark:hover:bg-white/20 transition-colors cursor-pointer"
                                 style={{ animation: `chip-in 0.28s cubic-bezier(0.34,1.56,0.64,1) ${8 * 30}ms both` }}
                               >
                                 +{repeatDates.length - 8} {t('series_more')}
-                              </span>
+                              </button>
                             )}
                           </div>
                         </div>
