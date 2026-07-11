@@ -94,7 +94,7 @@ interface BookingPanelProps {
   prefillVersion?: number
   buildingId?: number | null
   resolveSkipContext?: { seriesId: string; date: string } | null
-  onSubmit?: () => void
+  onSubmit?: (createdId?: number) => void
   onCancel?: (booking: Booking) => void
   onAfterHoursOpen?: (data: { buildingId?: number | null; workingHoursEnd: string }) => void
 }
@@ -209,6 +209,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // submit
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // Tracks the most recently created booking's id across single/series/skip-conflict flows so
+  // onSubmit can tell the caller which bar to highlight as "just created" — always the LAST one
+  // created when a whole series is booked at once, per product decision.
+  const lastCreatedIdRef = useRef<number | undefined>(undefined)
   // conflict preview modal (all-or-nothing mode)
   const [conflictInfo, setConflictInfo] = useState<{ conflicting: string[]; available: string[]; seriesId: string } | null>(null)
   // skipped dates result modal (shown after skip-mode series completes)
@@ -607,8 +611,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     const endAt = `${date} ${endTime}:00`
     if (isEdit && editBooking) {
       await updateBooking(editBooking.id, { ...base, start_at: startAt, end_at: endAt })
+      onSubmit?.(editBooking.id)
     } else {
-      await createBooking({
+      const created = await createBooking({
         ...base,
         start_at: startAt,
         end_at: endAt,
@@ -616,8 +621,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         resolves_skipped_date: resolveSkipContext?.date,
       })
       clearDraft()
+      onSubmit?.(created?.id)
     }
-    onSubmit?.()
   }
 
   // knownSkipped: dates already known to conflict (pre-checked), so they get stored on each booking
@@ -628,13 +633,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     const runtimeSkipped: string[] = []
     for (const d of datesToBook) {
       try {
-        await createBooking({
+        const res = await createBooking({
           ...base,
           start_at: `${d} ${startTime}:00`,
           end_at: `${d} ${endTime}:00`,
           series_id: seriesId,
           series_skipped_dates: knownSkipped.length > 0 ? knownSkipped : undefined,
         })
+        lastCreatedIdRef.current = res?.id
         created++
       } catch { runtimeSkipped.push(d) }
     }
@@ -646,7 +652,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     if (allSkipped.length > 0) {
       setSkippedResult({ skipped: allSkipped, created, total: datesToBook.length + knownSkipped.length })
     } else {
-      onSubmit?.()
+      onSubmit?.(lastCreatedIdRef.current)
     }
   }
 
@@ -739,7 +745,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
   function handleSkippedDone() {
     setSkippedResult(null)
-    onSubmit?.()
+    onSubmit?.(lastCreatedIdRef.current)
   }
 
   // Enter → primary action, Escape → cancel/back, scoped so only the topmost visible layer reacts.

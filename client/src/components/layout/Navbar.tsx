@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMyBookings, getBookings } from '../../api/bookings'
@@ -11,6 +11,7 @@ import { useNotification } from '../../context/NotificationContext'
 import { useNotificationUnreadCount } from './NotificationPanel'
 import UserProfileModal from '../profile/UserProfileModal'
 import UserAvatar from '../ui/UserAvatar'
+import UserHoverCard from '../ui/UserHoverCard'
 import SettingModal from '../profile/SettingModal'
 import HelpModal from '../profile/HelpModal'
 
@@ -26,8 +27,30 @@ interface NavbarProps {
 }
 
 function fmtSearchDate(iso: string, lang = 'en') {
-  const d = new Date(iso)
+  const d = new Date(iso.replace('Z', ''))
   return d.toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+function fmtSearchTime(iso: string) {
+  const d = new Date(iso.replace('Z', ''))
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// Wraps the substring(s) matching `query` (case-insensitive) in a light-green highlight.
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const q = query.trim()
+  if (!q) return <>{text}</>
+  const idx = text.toLowerCase().indexOf(q.toLowerCase())
+  if (idx === -1) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span style={{ background: 'rgba(173,238,43,0.45)', color: 'inherit', borderRadius: 3, padding: '0 1px' }}>
+        {text.slice(idx, idx + q.length)}
+      </span>
+      {text.slice(idx + q.length)}
+    </>
+  )
 }
 
 export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
@@ -51,9 +74,20 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [settingOpen, setSettingOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false)
+  // Synced from TimelinePage's "Select Building" filter via CustomEvent — null means no
+  // filter is active there (or the user hasn't visited Timeline yet), so show all buildings.
+  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  // Measured content height for the animated "expand" transition on the results — CSS can't
+  // transition to/from `height: auto`, so the actual content height is measured and animated
+  // as a pixel value instead (see the two useLayoutEffects below).
+  const dropdownResultsRef = useRef<HTMLDivElement>(null)
+  const [dropdownResultsH, setDropdownResultsH] = useState(0)
+  const modalBodyRef = useRef<HTMLDivElement>(null)
+  const [modalBodyH, setModalBodyH] = useState(0)
 
   // — queries (may reference state declared above) —
   const { data: myBookings = [] } = useQuery<Booking[]>({
@@ -67,12 +101,12 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     staleTime: 5 * 60_000,
   })
   const todayStr = new Date().toLocaleDateString('en-CA')
-  const plus60Str = (() => { const d = new Date(); d.setDate(d.getDate() + 60); return d.toLocaleDateString('en-CA') })()
+  const plus7Str = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toLocaleDateString('en-CA') })()
   const { data: allBookings = [] } = useQuery<Booking[]>({
     queryKey: ['bookings-global-search', todayStr],
-    queryFn: () => getBookings({ date_from: todayStr, date_to: plus60Str }),
+    queryFn: () => getBookings({ date_from: todayStr, date_to: plus7Str }),
     staleTime: 60_000,
-    enabled: searchOpen,
+    enabled: searchOpen || advancedSearchOpen,
   })
 
   const todayCount = useMemo(() => {
@@ -94,6 +128,14 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  useEffect(() => {
+    function handleBuildingFilter(e: Event) {
+      setSelectedBuildingId((e as CustomEvent<number | null>).detail)
+    }
+    document.addEventListener('building-filter-changed', handleBuildingFilter)
+    return () => document.removeEventListener('building-filter-changed', handleBuildingFilter)
+  }, [])
+
   const openSearch = useCallback(() => {
     setSearchOpen(true)
     setTimeout(() => searchInputRef.current?.focus(), 50)
@@ -108,16 +150,24 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
   function closeSearch() { setSearchOpen(false); setQ(''); dispatchTimeline('') }
 
-  // Global search results — rooms + all users' upcoming bookings
+  const RESULT_CAP = 5
+
+  // Global search results — rooms (scoped to the building selected on Timeline, if any) + all
+  // users' bookings from today through the next 7 days. Full (uncapped) lists are kept so the
+  // "Show more" advanced search modal can browse everything; the dropdown only shows the top 5
+  // of each.
   const searchResults = useMemo(() => {
     const trimmed = q.trim().toLowerCase()
     if (trimmed.length < 1) return null
-    const matchedRooms = (rooms as Room[]).filter(r =>
-      r.name.toLowerCase().includes(trimmed) ||
-      (r.building?.name ?? '').toLowerCase().includes(trimmed) ||
-      (r.building?.code ?? '').toLowerCase().includes(trimmed)
-    ).slice(0, 4)
-    const matchedBookings = (allBookings as Booking[])
+    const allMatchedRooms = (rooms as Room[]).filter(r =>
+      (selectedBuildingId === null || r.building_id === selectedBuildingId) &&
+      (
+        r.name.toLowerCase().includes(trimmed) ||
+        (r.building?.name ?? '').toLowerCase().includes(trimmed) ||
+        (r.building?.code ?? '').toLowerCase().includes(trimmed)
+      )
+    )
+    const allMatchedBookings = (allBookings as Booking[])
       .filter(b =>
         b.status !== 'cancelled' &&
         (
@@ -128,11 +178,27 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
         )
       )
       .sort((a, b) => a.start_at.localeCompare(b.start_at))
-      .slice(0, 5)
-    return { rooms: matchedRooms, bookings: matchedBookings }
-  }, [q, rooms, allBookings])
+    return {
+      rooms: allMatchedRooms.slice(0, RESULT_CAP),
+      bookings: allMatchedBookings.slice(0, RESULT_CAP),
+      allRooms: allMatchedRooms,
+      allBookings: allMatchedBookings,
+      hasMore: allMatchedRooms.length > RESULT_CAP || allMatchedBookings.length > RESULT_CAP,
+    }
+  }, [q, rooms, allBookings, selectedBuildingId])
 
   const hasResults = searchResults && (searchResults.rooms.length > 0 || searchResults.bookings.length > 0)
+
+  // Re-measure whenever the result set changes (typing, or the results loading in) so the
+  // dropdown/modal can smoothly animate to the new content height instead of snapping.
+  useLayoutEffect(() => {
+    setDropdownResultsH(dropdownResultsRef.current?.scrollHeight ?? 0)
+  }, [searchResults])
+
+  useLayoutEffect(() => {
+    if (!advancedSearchOpen) return
+    setModalBodyH(modalBodyRef.current?.scrollHeight ?? 0)
+  }, [searchResults, advancedSearchOpen])
 
   function goToRoom(r: Room) {
     closeSearch()
@@ -157,8 +223,8 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     ...(isAdminPanelUser ? [{ path: '/admin', label: t('nav_admin'), icon: 'admin_panel_settings' }] : []),
   ]
 
-  // Global keyboard shortcuts — Ctrl+F available rooms, N notifications, T today panel,
-  // Alt+N new booking (handled by TimelinePage via CustomEvent)
+  // Global keyboard shortcuts — Ctrl+F available rooms, Ctrl+Shift+F global search,
+  // N notifications, T today panel, Alt+N new booking (handled by TimelinePage via CustomEvent)
   // Note: Ctrl+N is reserved by the browser (new window) and cannot be overridden — Alt+N used instead.
   // Note: Tab/Shift+Tab nav-cycling was removed — it interfered with normal Tab-based focus navigation in forms.
   useEffect(() => {
@@ -179,7 +245,11 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
         if (isTyping) return
         if (e.key.toLowerCase() === 'f') {
           e.preventDefault()
-          document.dispatchEvent(new CustomEvent('available-rooms-toggle'))
+          if (e.shiftKey) {
+            openSearch()
+          } else {
+            document.dispatchEvent(new CustomEvent('available-rooms-toggle'))
+          }
         }
         return
       }
@@ -196,7 +266,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [user?.role, location.pathname, language])
+  }, [user?.role, location.pathname, language, openSearch])
 
   async function handleLogout() {
     setProfileOpen(false)
@@ -275,7 +345,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
 
             {/* Search dropdown */}
             <div
-              className="absolute right-0 top-full mt-2 z-50 w-80"
+              className="absolute right-0 top-full mt-2 z-50 w-[28rem]"
               style={{
                 opacity: searchOpen ? 1 : 0,
                 transform: searchOpen ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.97)',
@@ -283,8 +353,13 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                 pointerEvents: searchOpen ? 'auto' : 'none',
               }}
             >
-              <div className="rounded-2xl shadow-xl overflow-hidden"
-                style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)' }}>
+              <div className="rounded-2xl overflow-hidden shadow-xl"
+                style={{
+                  background: 'var(--ds-glass-bg)',
+                  backdropFilter: 'blur(32px)',
+                  WebkitBackdropFilter: 'blur(32px)',
+                  border: '1px solid var(--ds-glass-border)',
+                }}>
 
                 {/* Input */}
                 <div className="flex items-center gap-1 p-1.5">
@@ -308,22 +383,26 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                   )}
                 </div>
 
-                {/* Live results */}
+                {/* Live results — outer wrapper animates its height to the measured content
+                    height so the dropdown smoothly grows/shrinks as you type, instead of
+                    snapping to the new size. */}
+                <div style={{ height: dropdownResultsH, overflow: 'hidden', transition: 'height 200ms cubic-bezier(0.4,0,0.2,1)' }}>
+                <div ref={dropdownResultsRef}>
                 {searchResults && (
                   <div style={{ borderTop: '1px solid var(--ds-border-sub)' }}>
                     {searchResults.rooms.length > 0 && (
                       <div className="px-2 pt-2 pb-1">
                         <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>{t('nav_rooms_section')}</p>
-                        {searchResults.rooms.map(r => (
+                        {searchResults.rooms.map((r, i) => (
                           <button key={r.id} onClick={() => goToRoom(r)}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left"
-                            style={{ color: 'var(--ds-text-1)' }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left row-stagger-in"
+                            style={{ color: 'var(--ds-text-1)', animationDelay: `${i * 25}ms` }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                           >
                             <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>meeting_room</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[12px] font-black truncate">{r.name}</p>
+                              <p className="text-[12px] font-black truncate" title={r.name}><HighlightMatch text={r.name} query={q} /></p>
                               <p className="text-[10px] font-bold truncate" style={{ color: 'var(--ds-text-3)' }}>
                                 {r.building?.code || r.building?.name}{r.floor ? ` · Lt ${r.floor}` : ''}{r.capacity ? ` · ${r.capacity} pax` : ''}
                               </p>
@@ -339,25 +418,35 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                     {searchResults.bookings.length > 0 && (
                       <div className={`px-2 pt-2 pb-1 ${searchResults.rooms.length > 0 ? 'border-t' : ''}`} style={{ borderColor: 'var(--ds-border-sub)' }}>
                         <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>{t('nav_bookings_section')}</p>
-                        {searchResults.bookings.map(b => {
+                        {searchResults.bookings.map((b, i) => {
                           const isOwn = b.user_id === user?.id
                           return (
                             <button key={b.id} onClick={() => goToBooking(b)}
-                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left"
-                              style={{ color: 'var(--ds-text-1)' }}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left row-stagger-in"
+                              style={{ color: 'var(--ds-text-1)', animationDelay: `${(searchResults.rooms.length + i) * 25}ms` }}
                               onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
                               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                             >
                               {b.user && !isOwn
                                 ? <UserAvatar name={b.user.name} avatar={b.user.avatar} size={22} style={{ shrink: 0 }} />
-                                : <span className="material-symbols-outlined shrink-0" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>event</span>
+                                : (
+                                  <div className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 22, height: 22, background: 'var(--ds-bg-raised)' }}>
+                                    <span className="material-symbols-outlined" style={{ fontSize: 13, color: 'var(--ds-text-3)' }}>event</span>
+                                  </div>
+                                )
                               }
                               <div className="flex-1 min-w-0">
-                                <p className="text-[12px] font-black truncate">{b.title}</p>
-                                <p className="text-[10px] font-bold truncate" style={{ color: 'var(--ds-text-3)' }}>
-                                  {b.room?.name} · {fmtSearchDate(b.start_at, language)}
-                                  {!isOwn && b.user && <span style={{ color: 'var(--ds-text-4)' }}> · {b.user.name}</span>}
-                                </p>
+                                <p className="text-[12px] font-black truncate" title={b.title}><HighlightMatch text={b.title} query={q} /></p>
+                                <div className="text-[10px] font-bold truncate" style={{ color: 'var(--ds-text-3)' }}>
+                                  {b.room?.name} · {fmtSearchDate(b.start_at, language)}, {fmtSearchTime(b.start_at)}–{fmtSearchTime(b.end_at)}
+                                  {b.user && (
+                                    <UserHoverCard name={b.user.name} userId={b.user_id} user={b.user}>
+                                      <span style={{ color: 'var(--ds-text-4)', cursor: 'default' }}>
+                                        {' · '}{isOwn ? t('nav_search_you') : b.user.name}{b.user.department_name ? `/${b.user.department_name}` : ''}
+                                      </span>
+                                    </UserHoverCard>
+                                  )}
+                                </div>
                               </div>
                               <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full shrink-0 ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : 'bg-amber-500/15 text-amber-600'}`}>
                                 {b.status}
@@ -373,8 +462,25 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                         <p className="text-[11px] font-bold" style={{ color: 'var(--ds-text-3)' }}>{t('nav_no_results')} "{q}"</p>
                       </div>
                     )}
+
+                    {searchResults.hasMore && (
+                      <div className="px-2 pb-1">
+                        <button type="button"
+                          onClick={() => setAdvancedSearchOpen(true)}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wide transition-colors"
+                          style={{ color: '#7ab814' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(173,238,43,0.10)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          {t('nav_search_show_more')}
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_forward</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
+                </div>
+                </div>
 
                 {/* Footer: Search Available Rooms shortcut */}
                 <div className="px-2 pb-2" style={{ borderTop: '1px solid var(--ds-border-sub)', paddingTop: 6, marginTop: searchResults ? 0 : 0 }}>
@@ -503,6 +609,121 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
       <UserProfileModal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
       <SettingModal open={settingOpen} onClose={() => setSettingOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {advancedSearchOpen && searchResults && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <style>{`
+            @keyframes advsearch-backdrop-in { from { opacity: 0 } to { opacity: 1 } }
+          `}</style>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setAdvancedSearchOpen(false)}
+            style={{ animation: 'advsearch-backdrop-in 150ms ease' }} />
+          <div
+            className="relative flex flex-col rounded-3xl shadow-2xl w-full max-w-[640px] modal-pop-in"
+            style={{
+              background: 'var(--ds-bg-surface)',
+              border: '1px solid var(--ds-border-sub)',
+              maxHeight: '82vh',
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 px-6 py-5 shrink-0 rounded-t-3xl" style={{ borderBottom: '1px solid var(--ds-border-sub)' }}>
+              <span className="material-symbols-outlined shrink-0" style={{ fontSize: 20, color: 'var(--ds-text-3)' }}>search</span>
+              <input
+                type="text"
+                autoFocus
+                value={q}
+                onChange={e => { setQ(e.target.value); dispatchTimeline(e.target.value) }}
+                onKeyDown={e => e.key === 'Escape' && setAdvancedSearchOpen(false)}
+                className="flex-1 text-[15px] font-bold bg-transparent focus:outline-none"
+                style={{ color: 'var(--ds-text-1)' }}
+              />
+              <button onClick={() => setAdvancedSearchOpen(false)}
+                className="size-8 rounded-full flex items-center justify-center transition-colors hover:bg-[var(--ds-bg-raised)] shrink-0"
+                style={{ color: 'var(--ds-text-3)' }}>
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            {/* Body — outer wrapper animates height to the measured content height (see
+                modalBodyH/useLayoutEffect above) so the modal visibly "expands" as results
+                come in, instead of jumping straight to full size. */}
+            <div className="overflow-y-auto" style={{ height: modalBodyH, maxHeight: 'calc(82vh - 88px)', transition: 'height 220ms cubic-bezier(0.4,0,0.2,1)' }}>
+            <div ref={modalBodyRef} className="px-2 py-2">
+              {searchResults.allRooms.length > 0 && (
+                <div className="px-2 pt-2 pb-1">
+                  <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>
+                    {t('nav_rooms_section')} ({searchResults.allRooms.length})
+                  </p>
+                  {searchResults.allRooms.map((r, i) => (
+                    <button key={r.id} onClick={() => { setAdvancedSearchOpen(false); goToRoom(r) }}
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-left row-stagger-in"
+                      style={{ color: 'var(--ds-text-1)', animationDelay: `${Math.min(i, 10) * 30}ms` }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <span className="material-symbols-outlined shrink-0" style={{ fontSize: 19, color: 'var(--ds-text-3)' }}>meeting_room</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-black truncate" title={r.name}><HighlightMatch text={r.name} query={q} /></p>
+                        <p className="text-[11px] font-bold truncate mt-0.5" style={{ color: 'var(--ds-text-3)' }}>
+                          {r.building?.code || r.building?.name}{r.floor ? ` · Lt ${r.floor}` : ''}{r.capacity ? ` · ${r.capacity} pax` : ''}
+                        </p>
+                      </div>
+                      <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full shrink-0 ${r.status === 'active' ? 'bg-green-500/15 text-green-600' : 'bg-amber-500/15 text-amber-600'}`}>
+                        {r.status}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {searchResults.allBookings.length > 0 && (
+                <div className={`px-2 pt-2 pb-1 ${searchResults.allRooms.length > 0 ? 'border-t' : ''}`} style={{ borderColor: 'var(--ds-border-sub)' }}>
+                  <p className="px-2 pb-1 text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--ds-text-4)' }}>
+                    {t('nav_bookings_section')} ({searchResults.allBookings.length})
+                  </p>
+                  {searchResults.allBookings.map((b, i) => {
+                    const isOwn = b.user_id === user?.id
+                    return (
+                      <button key={b.id} onClick={() => { setAdvancedSearchOpen(false); goToBooking(b) }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-left row-stagger-in"
+                        style={{ color: 'var(--ds-text-1)', animationDelay: `${Math.min(searchResults.allRooms.length + i, 10) * 30}ms` }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        {b.user && !isOwn
+                          ? <UserAvatar name={b.user.name} avatar={b.user.avatar} size={28} style={{ shrink: 0 }} />
+                          : (
+                            <div className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: 'var(--ds-bg-raised)' }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>event</span>
+                            </div>
+                          )
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] font-black truncate" title={b.title}><HighlightMatch text={b.title} query={q} /></p>
+                          <div className="text-[11px] font-bold truncate mt-0.5" style={{ color: 'var(--ds-text-3)' }}>
+                            {b.room?.name} · {fmtSearchDate(b.start_at, language)}, {fmtSearchTime(b.start_at)}–{fmtSearchTime(b.end_at)}
+                            {b.user && (
+                              <UserHoverCard name={b.user.name} userId={b.user_id} user={b.user}>
+                                <span style={{ color: 'var(--ds-text-4)', cursor: 'default' }}>
+                                  {' · '}{isOwn ? t('nav_search_you') : b.user.name}{b.user.department_name ? `/${b.user.department_name}` : ''}
+                                </span>
+                              </UserHoverCard>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full shrink-0 ${b.status === 'confirmed' ? 'bg-[#adee2b] text-black' : 'bg-amber-500/15 text-amber-600'}`}>
+                          {b.status}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </>
   )

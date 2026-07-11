@@ -152,6 +152,7 @@ export default function NotificationPanel() {
   return createPortal(
     <div
       ref={panelRef}
+      className="toast-pop-in-top"
       style={{
         position: 'fixed',
         top: 64,
@@ -168,10 +169,8 @@ export default function NotificationPanel() {
         flexDirection: 'column',
         maxHeight: 520,
         overflow: 'hidden',
-        animation: 'notif-in 0.22s cubic-bezier(0.34,1.04,0.64,1)',
       }}
     >
-      <style>{`@keyframes notif-in{from{opacity:0;transform:translateY(-8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
 
       {/* Header */}
       <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--ds-border-sub)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

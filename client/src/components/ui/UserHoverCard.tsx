@@ -80,10 +80,8 @@ export default function UserHoverCard({ name, userId, user: propUser, children }
           borderRadius: '1.25rem',
           width: CARD_W,
           boxShadow: 'var(--ds-glass-shadow)',
-          animation: 'user-hover-in 0.16s cubic-bezier(0.4,0,0.2,1) both',
           padding: '14px 16px',
-        }}>
-          <style>{`@keyframes user-hover-in{from{opacity:0;transform:scale(0.94) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+        }} className="hover-card-pop-in">
 
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: resolved ? 10 : 0 }}>

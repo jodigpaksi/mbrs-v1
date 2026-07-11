@@ -3122,9 +3122,6 @@ export default function SchedulePage() {
       `}</style>
 
       {/* Cancel confirm modal */}
-      {(cancelTarget || clearConfirm || !!seriesCancelTarget) && (
-        <style>{`@keyframes sp-modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
-      )}
       {cancelTarget && (
         <div
           className="fixed inset-0 z-[1000] flex items-center justify-center"
@@ -3132,6 +3129,7 @@ export default function SchedulePage() {
           onClick={() => setCancelTarget(null)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 380,
@@ -3142,7 +3140,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-6">
@@ -3201,6 +3198,7 @@ export default function SchedulePage() {
           onClick={() => setTentativeTarget(null)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 400,
@@ -3211,7 +3209,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-5">
@@ -3289,6 +3286,7 @@ export default function SchedulePage() {
           onClick={() => setSeriesCancelTarget(null)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 400,
@@ -3299,7 +3297,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-5">
@@ -3353,6 +3350,7 @@ export default function SchedulePage() {
           onClick={() => setClearConfirm(false)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 380,
@@ -3363,7 +3361,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-5">

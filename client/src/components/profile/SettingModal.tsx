@@ -201,13 +201,6 @@ export default function SettingModal({ open, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      <style>{`
-        @keyframes sm-in {
-          from { opacity: 0; transform: scale(0.95) translateY(10px); }
-          to   { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
-
       {/* Backdrop — pure dim, no blur (lets panel glass show app content) */}
       <div
         className="absolute inset-0"
@@ -217,7 +210,7 @@ export default function SettingModal({ open, onClose }: Props) {
 
       {/* Glass panel */}
       <div
-        className="relative w-[460px] overflow-hidden"
+        className="relative w-[460px] overflow-hidden modal-pop-in"
         style={{
           background: 'rgba(255,255,255,0.82)',
           backdropFilter: 'blur(48px) saturate(200%)',
@@ -225,7 +218,6 @@ export default function SettingModal({ open, onClose }: Props) {
           border: '1px solid rgba(255,255,255,0.90)',
           borderRadius: 24,
           boxShadow: '0 32px 72px rgba(0,0,0,0.16), 0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
-          animation: 'sm-in 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
         }}
         /* dark mode override via CSS class */
         data-dark=""

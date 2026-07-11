@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, useQueries, useMutation } from '@tanstack/react-query'
@@ -87,6 +87,281 @@ type CellDrag = { roomId: number; room: Room; date: Date; startSlot: number; end
 type BarDrag  = { booking: Booking; origStartSlot: number; origSpan: number; offsetSlot: number; deltaSlot: number; origClientX: number; deltaPixels: number }
 type BarResize = { booking: Booking; edge: 'left' | 'right'; origStartSlot: number; origSpan: number; deltaSlot: number; origClientX: number; deltaPixels: number }
 
+// Pure — no closure over component state — hoisted to module scope so WeekDateRow (below) can
+// call them directly without needing a fresh function-prop every render (which would defeat memo).
+function bookingToSlots(b: Booking) {
+  const start = new Date(b.start_at.replace('Z', ''))
+  const end   = new Date(b.end_at.replace('Z', ''))
+  const startSlot = (start.getHours() - HOUR_START) * 2 + (start.getMinutes() >= 30 ? 1 : 0)
+  const endSlot   = (end.getHours() - HOUR_START) * 2 + (end.getMinutes() > 0 ? Math.ceil(end.getMinutes() / 30) : 0)
+  return { startSlot, span: endSlot - startSlot }
+}
+
+// Rounded-rectangle outline path starting/ending at top-center, going clockwise — used to
+// "draw" the recent-booking border animation around a bar of the given pixel size.
+function roundedRectPathFromTopCenter(w: number, h: number, r: number): string {
+  const x0 = 1, y0 = 1, x1 = w - 1, y1 = h - 1
+  return `M ${w / 2} ${y0} L ${x1 - r} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y0 + r} L ${x1} ${y1 - r} A ${r} ${r} 0 0 1 ${x1 - r} ${y1} L ${x0 + r} ${y1} A ${r} ${r} 0 0 1 ${x0} ${y1 - r} L ${x0} ${y0 + r} A ${r} ${r} 0 0 1 ${x0 + r} ${y0} L ${w / 2} ${y0}`
+}
+
+function slotToTimeStr(slot: number): string {
+  const totalMins = HOUR_START * 60 + slot * 30
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function bookingMatchesSearch(b: Booking, q: string): boolean {
+  const s = q.toLowerCase()
+  const fmt = (iso: string) => {
+    const d = new Date(iso.replace('Z', ''))
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  }
+  return [
+    b.title, b.description, b.user?.name, b.user?.department_name,
+    b.user?.email, b.user?.ext, b.type, b.status,
+    fmt(b.start_at), fmt(b.end_at),
+  ].some(v => v && v.toLowerCase().includes(s))
+}
+
+// Memoized per-date row for the "Selected Room" week grid. Extracted so a drag/resize/move
+// (which bumps a `dragTick` counter on every animation frame) only re-renders the ONE row that
+// actually contains the dragged booking, instead of re-reconciling all 7 date rows × N slot
+// cells each frame — this was the main cause of Week view feeling laggy during drag interactions.
+// Custom comparator (not React.memo's default shallow-equal) because `dayBookings` is a freshly
+// filtered array every parent render even when its contents haven't changed.
+interface WeekDateRowProps {
+  d: Date
+  dayIdx: number
+  room: Room
+  dayBookings: Booking[]
+  isTd: boolean
+  isWeekend: boolean
+  search: string
+  showBarTitle: boolean
+  currentUserId: number | undefined
+  nowSlot: number
+  slots: number
+  cellDragActive: boolean
+  cellDragMinSlot: number
+  cellDragMaxSlot: number
+  dragBookingId: number | null
+  dragEdge: 'left' | 'right' | 'move' | null
+  dragOrigStartSlot: number
+  dragOrigSpan: number
+  dragDeltaSlot: number
+  dragDeltaPixels: number
+  cellDragRef: React.MutableRefObject<CellDrag | null>
+  barDragRef: React.MutableRefObject<BarDrag | null>
+  barResizeRef: React.MutableRefObject<BarResize | null>
+  getSlotFromClientX: (clientX: number) => number
+  setDragTick: React.Dispatch<React.SetStateAction<number>>
+  setHoverSlot: (s: number | null) => void
+  setCellCtxMenu: (v: { room: Room | null; slot: number; date: Date; x: number; y: number } | null) => void
+  setCtxMenu: (v: { booking: Booking; x: number; y: number } | null) => void
+  setOtherCtxMenu: (v: { booking: Booking; x: number; y: number } | null) => void
+  showTooltip: (e: React.MouseEvent, booking: Booking) => void
+  hideTooltip: () => void
+}
+
+function weekDateRowPropsEqual(prev: WeekDateRowProps, next: WeekDateRowProps): boolean {
+  if (
+    prev.dayIdx !== next.dayIdx || prev.d.getTime() !== next.d.getTime() || prev.room.id !== next.room.id ||
+    prev.isTd !== next.isTd || prev.isWeekend !== next.isWeekend || prev.search !== next.search ||
+    prev.showBarTitle !== next.showBarTitle || prev.currentUserId !== next.currentUserId ||
+    prev.nowSlot !== next.nowSlot || prev.slots !== next.slots ||
+    prev.cellDragActive !== next.cellDragActive || prev.cellDragMinSlot !== next.cellDragMinSlot || prev.cellDragMaxSlot !== next.cellDragMaxSlot ||
+    prev.dragBookingId !== next.dragBookingId || prev.dragEdge !== next.dragEdge ||
+    prev.dragOrigStartSlot !== next.dragOrigStartSlot || prev.dragOrigSpan !== next.dragOrigSpan ||
+    prev.dragDeltaSlot !== next.dragDeltaSlot || prev.dragDeltaPixels !== next.dragDeltaPixels
+  ) return false
+  if (prev.dayBookings.length !== next.dayBookings.length) return false
+  for (let i = 0; i < prev.dayBookings.length; i++) {
+    const a = prev.dayBookings[i], b = next.dayBookings[i]
+    if (a.id !== b.id || a.start_at !== b.start_at || a.end_at !== b.end_at || a.status !== b.status || a.title !== b.title) return false
+  }
+  return true
+}
+
+const WeekDateRow = memo(function WeekDateRow(props: WeekDateRowProps) {
+  const {
+    d, room, dayBookings, isTd, isWeekend, search, showBarTitle, currentUserId, nowSlot, slots,
+    cellDragActive, cellDragMinSlot, cellDragMaxSlot,
+    dragBookingId, dragEdge, dragOrigStartSlot, dragOrigSpan, dragDeltaSlot, dragDeltaPixels,
+    cellDragRef, barDragRef, barResizeRef, getSlotFromClientX, setDragTick, setHoverSlot,
+    setCellCtxMenu, setCtxMenu, setOtherCtxMenu, showTooltip, hideTooltip,
+  } = props
+
+  return (
+    <div className={`flex group/row relative border-b border-[var(--ds-border-sub)] ${isWeekend ? 'hover:bg-[var(--ds-bg-surface-2)]' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
+      {/* Date label — sticky */}
+      <div
+        className={`shrink-0 flex flex-col items-center justify-center px-3 border-r-2 sticky left-0 z-20 ${isTd ? 'bg-[color-mix(in_srgb,var(--ds-bg-surface),#adee2b_15%)]' : 'bg-[var(--ds-bg-surface)]'} border-[var(--ds-border)]`}
+        style={{ width: ROOM_W, height: CELL_H }}
+      >
+        <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
+          {d.toLocaleDateString('en-GB', { weekday: 'short' })}
+        </span>
+        <span className={`text-[13px] font-black ${isTd ? 'text-lime-600 dark:text-lime-400' : 'text-[var(--ds-text-1)]'}`}>
+          {d.getDate()} {d.toLocaleDateString('en-GB', { month: 'short' })}
+        </span>
+      </div>
+
+      {/* Slots */}
+      <div className="flex-1 relative" style={{ height: CELL_H }} onMouseLeave={() => setHoverSlot(null)}>
+        <div className="flex h-full absolute inset-0">
+          {Array.from({ length: slots }, (_, s) => {
+            const isCellSel = cellDragActive && s >= cellDragMinSlot && s <= cellDragMaxSlot
+            return (
+              <div key={s}
+                className={`shrink-0 border-r border-[var(--ds-border-sub)] transition-colors cursor-cell
+                  ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#adee2b]/5'}
+                  ${(s + 1) % 2 === 0 ? 'border-r-[var(--ds-border)]' : ''}`}
+                style={{ width: SLOT_W, height: CELL_H }}
+                onMouseEnter={() => setHoverSlot(s)}
+                onMouseDown={e => {
+                  if (e.button !== 0) return
+                  e.preventDefault()
+                  const s2 = getSlotFromClientX(e.clientX)
+                  cellDragRef.current = { roomId: room.id, room, date: d, startSlot: s2, endSlot: s2 }
+                  setDragTick(t => t + 1)
+                }}
+                onContextMenu={e => {
+                  if (e.ctrlKey) return
+                  e.preventDefault()
+                  const slot = getSlotFromClientX(e.clientX)
+                  setCellCtxMenu({ room, slot, date: d, x: e.clientX, y: e.clientY })
+                }}
+              />
+            )
+          })}
+        </div>
+
+        {/* Booking bars */}
+        {dayBookings.map((b: Booking) => {
+          const isMe = b.user_id === currentUserId
+          const matchesSearch = !search || bookingMatchesSearch(b, search)
+          const isDragging = dragBookingId === b.id
+
+          let { startSlot, span } = bookingToSlots(b)
+          let fracPx = 0, resizeFracW = 0, resizeFracX = 0
+
+          if (isDragging && dragEdge === 'move') {
+            startSlot = Math.max(0, Math.min(slots - dragOrigSpan, dragOrigStartSlot + dragDeltaSlot))
+            span = dragOrigSpan
+            fracPx = dragDeltaPixels - dragDeltaSlot * SLOT_W
+          } else if (isDragging && dragEdge === 'right') {
+            span = Math.max(1, dragOrigSpan + dragDeltaSlot)
+            resizeFracW = dragDeltaPixels - dragDeltaSlot * SLOT_W
+          } else if (isDragging && dragEdge === 'left') {
+            const origStart = dragOrigStartSlot
+            const delta = Math.max(-(slots - origStart - dragOrigSpan), Math.min(dragOrigSpan - 1, dragDeltaSlot))
+            startSlot = Math.max(0, origStart - delta)
+            span = Math.max(1, dragOrigSpan + delta)
+            const f = Math.max(0, -dragDeltaPixels - dragDeltaSlot * SLOT_W)
+            resizeFracW = f
+            resizeFracX = -f
+          }
+
+          const left = startSlot * SLOT_W + fracPx + resizeFracX
+          const width = span * SLOT_W + resizeFracW
+
+          let startS = startSlot, endS = startSlot + span
+          if (isDragging && dragEdge === 'move') {
+            startS = Math.max(0, dragOrigStartSlot + dragDeltaSlot)
+            endS = startS + dragOrigSpan
+          } else if (isDragging && dragEdge === 'right') {
+            startS = dragOrigStartSlot
+            endS = Math.max(dragOrigStartSlot + 1, dragOrigStartSlot + dragOrigSpan + dragDeltaSlot)
+          } else if (isDragging && dragEdge === 'left') {
+            const dd = Math.max(-(slots - dragOrigStartSlot - dragOrigSpan), Math.min(dragOrigSpan - 1, dragDeltaSlot))
+            startS = Math.max(0, dragOrigStartSlot - dd)
+            endS = dragOrigStartSlot + dragOrigSpan + dd
+          }
+
+          return (
+            <div key={b.id} className="absolute top-0 z-10"
+              style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined }}
+              onContextMenu={e => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (isMe) setCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                else setOtherCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+              }}>
+              <BookingBar
+                booking={b}
+                onMouseEnter={showTooltip}
+                onMouseLeave={hideTooltip}
+                isMe={isMe}
+                isDragging={isDragging}
+                showTitle={showBarTitle}
+                onBarMouseDown={isMe ? (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  hideTooltip()
+                  const { startSlot: ss, span: sp } = bookingToSlots(b)
+                  const mouseSlot = getSlotFromClientX(e.clientX)
+                  barDragRef.current = {
+                    booking: b,
+                    origStartSlot: ss,
+                    origSpan: sp,
+                    offsetSlot: mouseSlot - ss,
+                    deltaSlot: 0,
+                    origClientX: e.clientX,
+                    deltaPixels: 0,
+                  }
+                  setDragTick(t => t + 1)
+                } : undefined}
+                onResizeMouseDown={isMe ? (e, edge) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  hideTooltip()
+                  const { startSlot: ss, span: sp } = bookingToSlots(b)
+                  barResizeRef.current = {
+                    booking: b, edge,
+                    origStartSlot: ss,
+                    origSpan: sp,
+                    deltaSlot: 0,
+                    origClientX: e.clientX,
+                    deltaPixels: 0,
+                  }
+                  setDragTick(t => t + 1)
+                } : undefined}
+              />
+              {isDragging && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                  <div style={{ background: 'rgba(8,12,28,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 99, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+                    <span className="text-white text-[9px] font-black">
+                      {slotToTimeStr(Math.max(0, startS))} &ndash; {slotToTimeStr(Math.min(slots, endS))}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Now line */}
+        {isTd && nowSlot > 0 && nowSlot < slots && (
+          <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-15" style={{ left: nowSlot * SLOT_W }} />
+        )}
+
+        {/* Cell drag selection overlay */}
+        {cellDragActive && (
+          <div
+            className="absolute top-2 bottom-2 bg-[#adee2b]/40 border-2 border-[#adee2b] rounded-xl pointer-events-none z-10 transition-none"
+            style={{ left: cellDragMinSlot * SLOT_W + 2, width: (cellDragMaxSlot - cellDragMinSlot + 1) * SLOT_W - 4 }}
+          >
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-black text-black/70 whitespace-nowrap">
+              {slotToTimeStr(cellDragMinSlot)} &ndash; {slotToTimeStr(cellDragMaxSlot + 1)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}, weekDateRowPropsEqual)
+
 export default function TimelinePage() {
   const { user } = useAuth()
   const { defaultView, startDay, defaultBuilding, showBarTitle, t } = useSettings()
@@ -100,12 +375,37 @@ export default function TimelinePage() {
     return h ? parseInt(h) : null
   })
   const highlightRef = useRef<HTMLDivElement | null>(null)
+  // "Your recent booking" — separate from highlightId (which is for notification/search-click
+  // navigation, uses the URL and always shows the full 4x pulse). Marks whichever booking this
+  // user most recently created OR edited. Persisted to localStorage (keyed per-user, not tied to
+  // the account server-side) so it survives page/menu/day navigation and even logout+login on
+  // the same device — the border-draw + badge CSS animations naturally replay every time the
+  // matching bar's DOM node remounts, since we never auto-clear this state on a timer.
+  const [justCreatedId, setJustCreatedId] = useState<number | null>(null)
+  const lastActionKey = user ? `mrbs_last_action_booking_${user.id}` : null
+  useEffect(() => {
+    if (!lastActionKey) return
+    const saved = localStorage.getItem(lastActionKey)
+    if (saved) setJustCreatedId(parseInt(saved))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastActionKey])
+  function markLastAction(id?: number) {
+    if (!id || !lastActionKey) return
+    localStorage.setItem(lastActionKey, String(id))
+    setJustCreatedId(id)
+  }
   const [currentDate, setCurrentDate] = useState(() => {
     const d = searchParams.get('date')
     if (d) { const [y, m, day] = d.split('-').map(Number); return new Date(y, m - 1, day) }
     return new Date()
   })
   const [location, setLocation] = useState<Building | null>(null)
+  // Let the global Navbar search know which building is currently selected here, so its
+  // Room results can be scoped to it too — CustomEvent (not shared state/context) to match
+  // this codebase's existing cross-component convention (see CLAUDE.md).
+  useEffect(() => {
+    document.dispatchEvent(new CustomEvent('building-filter-changed', { detail: location?.id ?? null }))
+  }, [location])
   const [deptFilter, setDeptFilter] = useState('')
   const [deptSearch, setDeptSearch] = useState('')
   const [search, setSearch] = useState('')
@@ -199,13 +499,6 @@ export default function TimelinePage() {
   const slots = (HOUR_END - HOUR_START) * 2
 
   // Slot ↔ time conversions (captured fresh each time via closure)
-  function slotToTimeStr(slot: number): string {
-    const totalMins = HOUR_START * 60 + slot * 30
-    const h = Math.floor(totalMins / 60)
-    const m = totalMins % 60
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-  }
-
   function slotToDateTimeStr(date: Date, slot: number): string {
     const y  = date.getFullYear()
     const mo = String(date.getMonth() + 1).padStart(2, '0')
@@ -328,51 +621,33 @@ export default function TimelinePage() {
         }
       }
 
-      function slotOverlaps(ns: number, ne: number, roomId: number, excludeId: number, all: Booking[]) {
-        return all.some(o => {
-          if (o.id === excludeId || o.room_id !== roomId || o.status === 'cancelled') return false
-          const s = new Date(o.start_at.replace('Z', ''))
-          const e = new Date(o.end_at.replace('Z', ''))
-          const os = (s.getHours() - HOUR_START) * 2 + (s.getMinutes() >= 30 ? 1 : 0)
-          const oe = (e.getHours() - HOUR_START) * 2 + (e.getMinutes() > 0 ? Math.ceil(e.getMinutes() / 30) : 0)
-          return ns < oe && ne > os
-        })
-      }
-
       const bd = barDragRef.current
       const br = barResizeRef.current
       // Move/resize apply to the booking's own date (may differ from currentDate in the
       // per-room week grid, where each row is a different date sharing one time header).
       const activeDate = bd ? new Date(bd.booking.start_at.replace('Z', '')) : br ? new Date(br.booking.start_at.replace('Z', '')) : currentDate
       const dStr = toLocalDateStr(activeDate)
-      const needsCheck = (bd && bd.deltaSlot !== 0) || (br && br.deltaSlot !== 0)
-      const allBkgs: Booking[] = needsCheck
-        ? await queryClient.fetchQuery({ queryKey: ['bookings', dStr], queryFn: () => getBookings({ date: dStr }), staleTime: 0 })
-        : (queryClient.getQueryData(['bookings', dStr]) as Booking[]) ?? []
+      // Conflict checking is done server-side (BookingController::update() returns 422 on overlap)
+      // — no client-side pre-check fetchQuery here, since that was a second full round-trip before
+      // the actual save on every move/resize, which is the dominant cost under TiDB cross-region latency.
 
       if (bd && bd.deltaSlot !== 0) {
         const newStart = bd.origStartSlot + bd.deltaSlot
         const newEnd   = newStart + bd.origSpan
-        if (slotOverlaps(newStart, newEnd, bd.booking.room_id, bd.booking.id, allBkgs)) {
-          setToastMsg('Slot occupied — move cancelled')
+        try {
+          await updateBookingApi(bd.booking.id, {
+            start_at: slotToDateTimeStr(activeDate, newStart),
+            end_at:   slotToDateTimeStr(activeDate, newEnd),
+          })
+          queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
+          setToastMsg('Booking moved successfully')
+          if (toastTimer.current) clearTimeout(toastTimer.current)
+          toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
+        } catch (err: unknown) {
+          const status = (err as { response?: { status?: number } })?.response?.status
+          setToastMsg(status === 422 ? 'Slot occupied — move cancelled' : 'Failed to move booking')
           if (toastTimer.current) clearTimeout(toastTimer.current)
           toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-        } else {
-          try {
-            await updateBookingApi(bd.booking.id, {
-              start_at: slotToDateTimeStr(activeDate, newStart),
-              end_at:   slotToDateTimeStr(activeDate, newEnd),
-            })
-            queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
-            setToastMsg('Booking moved successfully')
-            if (toastTimer.current) clearTimeout(toastTimer.current)
-            toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
-          } catch (err: unknown) {
-            const status = (err as { response?: { status?: number } })?.response?.status
-            setToastMsg(status === 422 ? 'Slot occupied — move cancelled' : 'Failed to move booking')
-            if (toastTimer.current) clearTimeout(toastTimer.current)
-            toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-          }
         }
       }
       if (bd) { barDragRef.current = null; setDragTick(t => t + 1) }
@@ -383,26 +658,20 @@ export default function TimelinePage() {
         if (br.edge === 'right') newEnd   += br.deltaSlot
         else                     newStart -= br.deltaSlot
         if (newEnd > newStart && newStart >= 0 && newEnd <= slots) {
-          if (slotOverlaps(newStart, newEnd, br.booking.room_id, br.booking.id, allBkgs)) {
-            setToastMsg('Slot occupied — resize cancelled')
+          try {
+            await updateBookingApi(br.booking.id, {
+              start_at: slotToDateTimeStr(activeDate, newStart),
+              end_at:   slotToDateTimeStr(activeDate, newEnd),
+            })
+            queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
+            setToastMsg('Booking resized successfully')
+            if (toastTimer.current) clearTimeout(toastTimer.current)
+            toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
+          } catch (err: unknown) {
+            const status = (err as { response?: { status?: number } })?.response?.status
+            setToastMsg(status === 422 ? 'Slot occupied — resize cancelled' : 'Failed to resize booking')
             if (toastTimer.current) clearTimeout(toastTimer.current)
             toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-          } else {
-            try {
-              await updateBookingApi(br.booking.id, {
-                start_at: slotToDateTimeStr(activeDate, newStart),
-                end_at:   slotToDateTimeStr(activeDate, newEnd),
-              })
-              queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
-              setToastMsg('Booking resized successfully')
-              if (toastTimer.current) clearTimeout(toastTimer.current)
-              toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
-            } catch (err: unknown) {
-              const status = (err as { response?: { status?: number } })?.response?.status
-              setToastMsg(status === 422 ? 'Slot occupied — resize cancelled' : 'Failed to resize booking')
-              if (toastTimer.current) clearTimeout(toastTimer.current)
-              toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-            }
           }
         }
       }
@@ -462,13 +731,18 @@ export default function TimelinePage() {
       { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
       { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
       { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
-    ], { duration: 4000, easing: 'ease-in-out' })
+      { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
+      { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
+      { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
+      { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
+    ], { duration: 8000, easing: 'ease-in-out' })
     const t = setTimeout(() => {
       setHighlightId(null)
       setSearchParams(p => { p.delete('highlight'); p.delete('date'); return p }, { replace: true })
-    }, 4100)
+    }, 8100)
     return () => clearTimeout(t)
   }, [highlightId, highlightRef.current])
+
 
   const { data: rooms = [], isLoading: roomsLoading } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: departments = [] } = useQuery<Department[]>({
@@ -526,14 +800,6 @@ export default function TimelinePage() {
     return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()
   }
 
-  function bookingToSlots(b: Booking) {
-    const start = new Date(b.start_at.replace('Z', ''))
-    const end   = new Date(b.end_at.replace('Z', ''))
-    const startSlot = (start.getHours() - HOUR_START) * 2 + (start.getMinutes() >= 30 ? 1 : 0)
-    const endSlot   = (end.getHours() - HOUR_START) * 2 + (end.getMinutes() > 0 ? Math.ceil(end.getMinutes() / 30) : 0)
-    return { startSlot, span: endSlot - startSlot }
-  }
-
   function isRoomOccupied(room: Room): boolean {
     const now = new Date()
     return bookings.some((b: Booking) => {
@@ -553,19 +819,6 @@ export default function TimelinePage() {
     : viewMode === 'month'
     ? monthBookings as Booking[]
     : bookings as Booking[]
-
-  function bookingMatchesSearch(b: Booking, q: string): boolean {
-    const s = q.toLowerCase()
-    const fmt = (iso: string) => {
-      const d = new Date(iso.replace('Z', ''))
-      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-    }
-    return [
-      b.title, b.description, b.user?.name, b.user?.department_name,
-      b.user?.email, b.user?.ext, b.type, b.status,
-      fmt(b.start_at), fmt(b.end_at),
-    ].some(v => v && v.toLowerCase().includes(s))
-  }
 
   const filteredRooms = (rooms as Room[]).filter((r: Room) => {
     if (location && r.building_id !== location.id) return false
@@ -587,6 +840,9 @@ export default function TimelinePage() {
   }
 
   const showTooltip = useCallback((e: React.MouseEvent, booking: Booking) => {
+    // Never show the hover tooltip while a drag/move/resize is in progress — it would
+    // otherwise cover the bar being manipulated.
+    if (cellDragRef.current || barDragRef.current || barResizeRef.current) return
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current)
     setTooltip({ booking, pos: { x: e.clientX, y: e.clientY }, visible: true })
   }, [])
@@ -1108,7 +1364,9 @@ export default function TimelinePage() {
                   })()}
                 </div>
 
-                {/* Date rows — mirrors Day view's room rows exactly, one row per date instead of per room */}
+                {/* Date rows — mirrors Day view's room rows exactly, one row per date instead of per room.
+                    Extracted into memoized WeekDateRow (see module scope above) so drag/resize/move only
+                    re-renders the one row actually involved, not all 7 date rows on every animation frame. */}
                 {weekDates.map((d, dayIdx) => {
                   const isTd = d.toDateString() === today.toDateString()
                   const dow = d.getDay()
@@ -1117,177 +1375,28 @@ export default function TimelinePage() {
                   const isCellDragRow = cellDragRef.current?.roomId === room.id && cellDragRef.current?.date.toDateString() === d.toDateString()
                   const cellDragMinSlot = isCellDragRow && cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
                   const cellDragMaxSlot = isCellDragRow && cellDragRef.current ? Math.max(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+                  const bd = barDragRef.current
+                  const br = barResizeRef.current
+                  const activeDragBookingId = bd?.booking.id ?? br?.booking.id ?? null
+                  const rowHasDraggedBooking = activeDragBookingId !== null && dayBookings.some(b => b.id === activeDragBookingId)
                   return (
-                    <div key={dayIdx} className={`flex group/row relative border-b border-[var(--ds-border-sub)] ${isWeekend ? 'hover:bg-[var(--ds-bg-surface-2)]' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
-                      {/* Date label — sticky */}
-                      <div
-                        className={`shrink-0 flex flex-col items-center justify-center px-3 border-r-2 sticky left-0 z-20 ${isTd ? 'bg-[#adee2b]/10' : 'bg-[var(--ds-bg-surface)]'} border-[var(--ds-border)]`}
-                        style={{ width: ROOM_W, height: CELL_H }}
-                      >
-                        <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
-                          {d.toLocaleDateString('en-GB', { weekday: 'short' })}
-                        </span>
-                        <span className={`text-[13px] font-black ${isTd ? 'text-lime-600 dark:text-lime-400' : 'text-[var(--ds-text-1)]'}`}>
-                          {d.getDate()} {d.toLocaleDateString('en-GB', { month: 'short' })}
-                        </span>
-                      </div>
-
-                      {/* Slots */}
-                      <div className="flex-1 relative" style={{ height: CELL_H }} onMouseLeave={() => setHoverSlot(null)}>
-                        <div className="flex h-full absolute inset-0">
-                          {Array.from({ length: slots }, (_, s) => {
-                            const isCellSel = isCellDragRow && s >= cellDragMinSlot && s <= cellDragMaxSlot
-                            return (
-                              <div key={s}
-                                className={`shrink-0 border-r border-[var(--ds-border-sub)] transition-colors cursor-cell
-                                  ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#adee2b]/5'}
-                                  ${(s + 1) % 2 === 0 ? 'border-r-[var(--ds-border)]' : ''}`}
-                                style={{ width: SLOT_W, height: CELL_H }}
-                                onMouseEnter={() => setHoverSlot(s)}
-                                onMouseDown={e => {
-                                  if (e.button !== 0) return
-                                  e.preventDefault()
-                                  const s2 = getSlotFromClientX(e.clientX)
-                                  cellDragRef.current = { roomId: room.id, room, date: d, startSlot: s2, endSlot: s2 }
-                                  setDragTick(t => t + 1)
-                                }}
-                                onContextMenu={e => {
-                                  if (e.ctrlKey) return
-                                  e.preventDefault()
-                                  const slot = getSlotFromClientX(e.clientX)
-                                  setCellCtxMenu({ room, slot, date: d, x: e.clientX, y: e.clientY })
-                                }}
-                              />
-                            )
-                          })}
-                        </div>
-
-                        {/* Booking bars */}
-                        {dayBookings.map((b: Booking) => {
-                          const isMe = b.user_id === user?.id
-                          const matchesSearch = !search || bookingMatchesSearch(b, search)
-                          const bd = barDragRef.current
-                          const br = barResizeRef.current
-                          const isDragging = bd?.booking.id === b.id || br?.booking.id === b.id
-
-                          let { startSlot, span } = bookingToSlots(b)
-                          let fracPx = 0, resizeFracW = 0, resizeFracX = 0
-
-                          if (bd?.booking.id === b.id) {
-                            startSlot = Math.max(0, Math.min(slots - bd.origSpan, bd.origStartSlot + bd.deltaSlot))
-                            span = bd.origSpan
-                            fracPx = bd.deltaPixels - bd.deltaSlot * SLOT_W
-                          } else if (br?.booking.id === b.id) {
-                            if (br.edge === 'right') {
-                              span = Math.max(1, br.origSpan + br.deltaSlot)
-                              resizeFracW = br.deltaPixels - br.deltaSlot * SLOT_W
-                            } else {
-                              const origStart = br.origStartSlot
-                              const delta = Math.max(-(slots - origStart - br.origSpan), Math.min(br.origSpan - 1, br.deltaSlot))
-                              startSlot = Math.max(0, origStart - delta)
-                              span = Math.max(1, br.origSpan + delta)
-                              const f = Math.max(0, -br.deltaPixels - br.deltaSlot * SLOT_W)
-                              resizeFracW = f
-                              resizeFracX = -f
-                            }
-                          }
-
-                          const left = startSlot * SLOT_W + fracPx + resizeFracX
-                          const width = span * SLOT_W + resizeFracW
-
-                          let startS = startSlot, endS = startSlot + span
-                          if (bd?.booking.id === b.id) {
-                            startS = Math.max(0, bd.origStartSlot + bd.deltaSlot)
-                            endS = startS + bd.origSpan
-                          } else if (br?.booking.id === b.id) {
-                            if (br.edge === 'right') {
-                              startS = br.origStartSlot
-                              endS = Math.max(br.origStartSlot + 1, br.origStartSlot + br.origSpan + br.deltaSlot)
-                            } else {
-                              const dd = Math.max(-(slots - br.origStartSlot - br.origSpan), Math.min(br.origSpan - 1, br.deltaSlot))
-                              startS = Math.max(0, br.origStartSlot - dd)
-                              endS = br.origStartSlot + br.origSpan + dd
-                            }
-                          }
-
-                          return (
-                            <div key={b.id} className="absolute top-0 z-10"
-                              style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined }}
-                              onContextMenu={e => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                if (isMe) setCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
-                                else setOtherCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
-                              }}>
-                              <BookingBar
-                                booking={b}
-                                onMouseEnter={showTooltip}
-                                onMouseLeave={hideTooltip}
-                                isMe={isMe}
-                                isDragging={isDragging}
-                                showTitle={showBarTitle}
-                                onBarMouseDown={isMe ? (e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  const { startSlot: ss, span: sp } = bookingToSlots(b)
-                                  const mouseSlot = getSlotFromClientX(e.clientX)
-                                  barDragRef.current = {
-                                    booking: b,
-                                    origStartSlot: ss,
-                                    origSpan: sp,
-                                    offsetSlot: mouseSlot - ss,
-                                    deltaSlot: 0,
-                                    origClientX: e.clientX,
-                                    deltaPixels: 0,
-                                  }
-                                  setDragTick(t => t + 1)
-                                } : undefined}
-                                onResizeMouseDown={isMe ? (e, edge) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  const { startSlot: ss, span: sp } = bookingToSlots(b)
-                                  barResizeRef.current = {
-                                    booking: b, edge,
-                                    origStartSlot: ss,
-                                    origSpan: sp,
-                                    deltaSlot: 0,
-                                    origClientX: e.clientX,
-                                    deltaPixels: 0,
-                                  }
-                                  setDragTick(t => t + 1)
-                                } : undefined}
-                              />
-                              {isDragging && (
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-                                  <div style={{ background: 'rgba(8,12,28,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 99, padding: '2px 10px', whiteSpace: 'nowrap' }}>
-                                    <span className="text-white text-[9px] font-black">
-                                      {slotToTimeStr(Math.max(0, startS))} &ndash; {slotToTimeStr(Math.min(slots, endS))}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-
-                        {/* Now line */}
-                        {isTd && nowSlot > 0 && nowSlot < slots && (
-                          <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-25" style={{ left: nowSlot * SLOT_W }} />
-                        )}
-
-                        {/* Cell drag selection overlay */}
-                        {isCellDragRow && cellDragRef.current && (
-                          <div
-                            className="absolute top-2 bottom-2 bg-[#adee2b]/40 border-2 border-[#adee2b] rounded-xl pointer-events-none z-10 transition-none"
-                            style={{ left: cellDragMinSlot * SLOT_W + 2, width: (cellDragMaxSlot - cellDragMinSlot + 1) * SLOT_W - 4 }}
-                          >
-                            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-black text-black/70 whitespace-nowrap">
-                              {slotToTimeStr(cellDragMinSlot)} &ndash; {slotToTimeStr(cellDragMaxSlot + 1)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <WeekDateRow
+                      key={dayIdx}
+                      d={d} dayIdx={dayIdx} room={room} dayBookings={dayBookings}
+                      isTd={isTd} isWeekend={isWeekend} search={search} showBarTitle={showBarTitle}
+                      currentUserId={user?.id} nowSlot={nowSlot} slots={slots}
+                      cellDragActive={!!isCellDragRow} cellDragMinSlot={cellDragMinSlot} cellDragMaxSlot={cellDragMaxSlot}
+                      dragBookingId={rowHasDraggedBooking ? activeDragBookingId : null}
+                      dragEdge={!rowHasDraggedBooking ? null : bd ? 'move' : (br?.edge ?? null)}
+                      dragOrigStartSlot={!rowHasDraggedBooking ? 0 : (bd?.origStartSlot ?? br?.origStartSlot ?? 0)}
+                      dragOrigSpan={!rowHasDraggedBooking ? 0 : (bd?.origSpan ?? br?.origSpan ?? 0)}
+                      dragDeltaSlot={!rowHasDraggedBooking ? 0 : (bd?.deltaSlot ?? br?.deltaSlot ?? 0)}
+                      dragDeltaPixels={!rowHasDraggedBooking ? 0 : (bd?.deltaPixels ?? br?.deltaPixels ?? 0)}
+                      cellDragRef={cellDragRef} barDragRef={barDragRef} barResizeRef={barResizeRef}
+                      getSlotFromClientX={getSlotFromClientX} setDragTick={setDragTick} setHoverSlot={setHoverSlot}
+                      setCellCtxMenu={setCellCtxMenu} setCtxMenu={setCtxMenu} setOtherCtxMenu={setOtherCtxMenu}
+                      showTooltip={showTooltip} hideTooltip={hideTooltip}
+                    />
                   )
                 })}
               </div>
@@ -1480,9 +1589,12 @@ export default function TimelinePage() {
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
         const todayDateStr = toLocalDateStr(today)
-        const regularRooms = (rooms as Room[]).filter(r => r.status !== 'maintenance' && (!location || r.building_id === location.id))
-        const totalCapacityMins = regularRooms.length * (HOUR_END - HOUR_START) * 60
-        const regularRoomIds = new Set(regularRooms.map(r => r.id))
+        // Usage denominator: Regular + Maintenance rooms (maintenance counts as fully "used" capacity),
+        // Special (requires_contact) rooms excluded entirely — not booked the same way, shouldn't skew the %.
+        const eligibleRooms = (rooms as Room[]).filter(r => !r.requires_contact && (!location || r.building_id === location.id))
+        const totalCapacityMins = eligibleRooms.length * (HOUR_END - HOUR_START) * 60
+        const eligibleRoomIds = new Set(eligibleRooms.map(r => r.id))
+        const maintenanceRoomIds = new Set(eligibleRooms.filter(r => r.status === 'maintenance').map(r => r.id))
         return (
           <main key={ganttKey} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] p-6" style={{ animation: ganttAnimCSS[ganttAnim] }}>
             {/* Month header */}
@@ -1538,8 +1650,12 @@ export default function TimelinePage() {
                 let usagePct = 0
                 if (isCurrentMonth && !isPast && totalCapacityMins > 0) {
                   let totalBookedMins = 0
+                  // Maintenance rooms count as fully occupied for the whole day, regardless of actual bookings.
+                  eligibleRooms.forEach(r => {
+                    if (maintenanceRoomIds.has(r.id)) totalBookedMins += (HOUR_END - HOUR_START) * 60
+                  })
                   dayBkgs.forEach(b => {
-                    if (!regularRoomIds.has(b.room_id)) return
+                    if (!eligibleRoomIds.has(b.room_id) || maintenanceRoomIds.has(b.room_id)) return
                     const s = new Date(b.start_at.replace('Z', ''))
                     const e = new Date(b.end_at.replace('Z', ''))
                     const sMins = Math.max(s.getHours() * 60 + s.getMinutes(), HOUR_START * 60)
@@ -1626,16 +1742,16 @@ export default function TimelinePage() {
                               WebkitBackdropFilter: 'blur(28px) saturate(180%)',
                               border: '1px solid rgba(255,255,255,0.10)',
                               borderRadius: 10,
-                              padding: '6px 10px',
+                              padding: '8px 13px',
                               boxShadow: '0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.08)',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: 6,
+                              gap: 7,
                             }}>
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: usageColor, display: 'inline-block', flexShrink: 0 }} />
-                              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 700 }}>Room usage</span>
-                              <span style={{ color: usageColor, fontSize: 12, fontWeight: 900 }}>{usagePct}%</span>
-                              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: 600 }}>· {regularRooms.length} rooms</span>
+                              <span style={{ width: 9, height: 9, borderRadius: '50%', background: usageColor, display: 'inline-block', flexShrink: 0 }} />
+                              <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 700 }}>Room usage</span>
+                              <span style={{ color: usageColor, fontSize: 15, fontWeight: 900 }}>{usagePct}%</span>
+                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600 }}>· {eligibleRooms.length} rooms</span>
                             </div>
                             {/* Arrow */}
                             <div style={{ width: 0, height: 0, margin: '0 auto', borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid rgba(15,20,45,0.72)' }} />
@@ -1838,7 +1954,7 @@ export default function TimelinePage() {
                     return (
                       <div key={b.id} className="absolute top-0 z-10"
                         ref={b.id === highlightId ? highlightRef : undefined}
-                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined, borderRadius: b.id === highlightId ? 8 : undefined }}
+                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined, borderRadius: (b.id === highlightId || b.id === justCreatedId) ? 8 : undefined }}
                         onContextMenu={e => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -1855,6 +1971,7 @@ export default function TimelinePage() {
                           onBarMouseDown={isMe ? (e) => {
                             e.preventDefault()
                             e.stopPropagation()
+                            hideTooltip()
                             const { startSlot: ss, span: sp } = bookingToSlots(b)
                             const mouseSlot = getSlotFromClientX(e.clientX)
                             barDragRef.current = {
@@ -1871,6 +1988,7 @@ export default function TimelinePage() {
                           onResizeMouseDown={isMe ? (e, edge) => {
                             e.preventDefault()
                             e.stopPropagation()
+                            hideTooltip()
                             const { startSlot: ss, span: sp } = bookingToSlots(b)
                             barResizeRef.current = {
                               booking: b, edge,
@@ -1883,6 +2001,39 @@ export default function TimelinePage() {
                             setDragTick(t => t + 1)
                           } : undefined}
                         />
+                        {b.id === justCreatedId && (
+                          <svg width={width} height={CELL_H} className="absolute top-0 left-0 pointer-events-none z-40" style={{ overflow: 'visible' }}>
+                            <path
+                              d={roundedRectPathFromTopCenter(width, CELL_H, 8)}
+                              fill="none"
+                              stroke="#adee2b"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              pathLength={100}
+                              className="recent-border-draw"
+                            />
+                          </svg>
+                        )}
+                        {b.id === justCreatedId && (
+                          <div className="recent-badge-in absolute left-1/2 -translate-x-1/2 pointer-events-none z-40 whitespace-nowrap"
+                            style={{ bottom: '100%', marginBottom: 8 }}>
+                            <div style={{
+                              background: 'rgba(15,20,45,0.88)',
+                              backdropFilter: 'blur(24px) saturate(180%)',
+                              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                              border: '1px solid rgba(173,238,43,0.4)',
+                              borderRadius: 99,
+                              padding: '7px 16px',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 7,
+                            }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#adee2b' }}>check_circle</span>
+                              <span style={{ color: 'white', fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('recent_booking_label')}</span>
+                            </div>
+                          </div>
+                        )}
                         {isDragging && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
                             <div style={{
@@ -1905,7 +2056,7 @@ export default function TimelinePage() {
 
                   {/* Now line */}
                   {isToday && nowSlot > 0 && nowSlot < slots && (
-                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-25"
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-15"
                       style={{ left: nowSlot * SLOT_W }} />
                   )}
 
@@ -2013,14 +2164,13 @@ export default function TimelinePage() {
       {/* Room hover mini-card */}
       {roomHover && (
         <>
-          <style>{`@keyframes room-hover-in{from{opacity:0;transform:scale(0.94) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed z-[997]"
             style={{ left: Math.min(roomHover.x + 20, window.innerWidth - 308), top: Math.min(roomHover.y - 10, window.innerHeight - 420) }}
             onMouseEnter={() => { if (roomHoverTimer.current) clearTimeout(roomHoverTimer.current) }}
             onMouseLeave={() => { roomHoverTimer.current = setTimeout(() => setRoomHover(null), 250) }}
           >
-            <div style={{
+            <div className="hover-card-pop-in" style={{
               background: 'var(--ds-glass-bg)',
               backdropFilter: 'blur(48px) saturate(200%)',
               WebkitBackdropFilter: 'blur(48px) saturate(200%)',
@@ -2029,7 +2179,6 @@ export default function TimelinePage() {
               width: 288,
               overflow: 'hidden',
               boxShadow: 'var(--ds-glass-shadow)',
-              animation: 'room-hover-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}>
               {/* Photo slideshow */}
               {roomHover.room.photos?.length > 0 ? (
@@ -2109,12 +2258,13 @@ export default function TimelinePage() {
         prefillEnd={prefillEnd}
         prefillDate={toLocalDateStr(currentDate)}
         buildingId={editBooking ? (editBooking.room?.building_id ?? null) : (location?.id ?? null)}
-        onSubmit={() => {
+        onSubmit={(createdId) => {
           setBookingPanelOpen(false)
           queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
           setToastMsg('Booking saved successfully')
           if (toastTimer.current) clearTimeout(toastTimer.current)
           toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
+          markLastAction(createdId)
         }}
         onCancel={(b) => { setBookingPanelOpen(false); setCancelTarget(b) }}
         onAfterHoursOpen={(data) => {
@@ -2158,9 +2308,9 @@ export default function TimelinePage() {
       {/* Other user's bar context menu */}
       {otherCtxMenu && (
         <>
-          <style>{`@keyframes ctx-in{from{opacity:0;transform:scale(0.92) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div className="fixed inset-0 z-[990]" onClick={() => setOtherCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setOtherCtxMenu(null) }}>
             <div
+              className="ctx-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 position: 'absolute',
@@ -2174,7 +2324,6 @@ export default function TimelinePage() {
                 borderRadius: 14,
                 boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
-                animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
               }}
             >
@@ -2275,9 +2424,9 @@ export default function TimelinePage() {
       {/* Cell right-click context menu */}
       {cellCtxMenu && (
         <>
-          <style>{`@keyframes ctx-in{from{opacity:0;transform:scale(0.92) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div className="fixed inset-0 z-[990]" onClick={() => setCellCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setCellCtxMenu(null) }}>
             <div
+              className="ctx-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 position: 'absolute',
@@ -2291,7 +2440,6 @@ export default function TimelinePage() {
                 borderRadius: 14,
                 boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
-                animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
               }}
             >
@@ -2346,9 +2494,9 @@ export default function TimelinePage() {
       {/* Right-click context menu */}
       {ctxMenu && (
         <>
-          <style>{`@keyframes ctx-in{from{opacity:0;transform:scale(0.92) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div className="fixed inset-0 z-[990]" onClick={() => setCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setCtxMenu(null) }}>
             <div
+              className="ctx-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 position: 'absolute',
@@ -2362,7 +2510,6 @@ export default function TimelinePage() {
                 borderRadius: 14,
                 boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
-                animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
               }}
             >
@@ -2415,13 +2562,13 @@ export default function TimelinePage() {
       {/* Cancel confirm modal */}
       {cancelTarget && (
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => setCancelTarget(null)}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 380,
@@ -2432,7 +2579,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               {/* Header */}
@@ -2484,13 +2630,13 @@ export default function TimelinePage() {
       {/* Transfer Booking modal */}
       {transferBooking && createPortal(
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => { setTransferBooking(null); setTransferSearch('') }}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 400,
@@ -2504,7 +2650,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               {/* Header */}
@@ -2577,13 +2722,13 @@ export default function TimelinePage() {
       {/* Cancel Series confirm modal */}
       {seriesCancelTarget && (
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => setSeriesCancelTarget(null)}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 400,
@@ -2594,7 +2739,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               <div className="flex items-center gap-3.5 mb-6">
@@ -2689,13 +2833,13 @@ export default function TimelinePage() {
       {/* Past date/time booking blocked modal */}
       {pastDateModalOpen && (
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => setPastDateModalOpen(false)}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 360,
@@ -2706,7 +2850,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               <div className="flex items-center gap-3.5 mb-5">
