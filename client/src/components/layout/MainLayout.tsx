@@ -71,6 +71,8 @@ function MainLayoutInner({ children }: MainLayoutProps) {
     setSelectedRoom(null)
     setAvailableOpen(false)
     queryClient.invalidateQueries({ queryKey: ['bookings', bookedDate] })
+    queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
+    queryClient.invalidateQueries({ queryKey: ['all-my-bookings'] })
     showToast('Booking saved successfully')
   }
 

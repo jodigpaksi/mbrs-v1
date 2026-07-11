@@ -13,6 +13,7 @@ import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
+import ToggleSwitch from '../ui/ToggleSwitch'
 
 type ICSData = { title: string; description?: string; startAt: string; endAt: string; location?: string; id?: number }
 
@@ -75,6 +76,19 @@ function fmtShortDate(iso: string, lang = 'en'): string {
   return new Date(y, m - 1, d).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short' })
 }
 
+// Semi-sequential batching for series pre-check/create — full Promise.all-for-everything
+// overloads the server (and races on room_views tracking) when a series has many dates;
+// pure one-at-a-time is correct but slow for long series. A small batch size (default 4)
+// keeps latency reasonable while bounding concurrency.
+async function runBatched<T, R>(items: T[], fn: (item: T) => Promise<R>, batchSize = 4): Promise<R[]> {
+  const results: R[] = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    results.push(...await Promise.all(batch.map(fn)))
+  }
+  return results
+}
+
 function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
 function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
@@ -132,6 +146,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [untilDateText, setUntilDateText] = useState('')
   const [skipConflicts, setSkipConflicts] = useState(true)
   const [weeklyDays, setWeeklyDays] = useState<string[]>(['mon'])
+  const [dailyInterval, setDailyInterval] = useState(1)
+  const [dailyIntervalRaw, setDailyIntervalRaw] = useState('1')
+  const [skipWeekends, setSkipWeekends] = useState(false)
   // pantry
   const [pantryOpen, setPantryOpen] = useState(false)
   const [coffeeQty, setCoffeeQty] = useState(2)
@@ -163,6 +180,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       p.repeat = repeat; p.repeatMode = repeatMode; p.repeatCount = repeatCount
       p.repeatEndDate = repeatEndDate; p.skipConflicts = skipConflicts
       if (repeat === 'weekly') p.weeklyDays = weeklyDays
+      if (repeat === 'daily') { p.dailyInterval = dailyInterval; p.skipWeekends = skipWeekends }
     }
     localStorage.setItem(PRESET_KEY, JSON.stringify(p))
     setPreset(p)
@@ -191,6 +209,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         setUntilDateText(`${d}/${m}/${y}`)
       }
       if (preset.weeklyDays) setWeeklyDays(preset.weeklyDays as string[])
+      if (preset.dailyInterval) { setDailyInterval(preset.dailyInterval as number); setDailyIntervalRaw(String(preset.dailyInterval)) }
+      if (preset.skipWeekends !== undefined) setSkipWeekends(preset.skipWeekends as boolean)
       if (preset.skipConflicts !== undefined) setSkipConflicts(preset.skipConflicts as boolean)
     }
   }
@@ -210,6 +230,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [activeBuildingId, setActiveBuildingId] = useState<number | null>(buildingId ?? defaultBuilding ?? null)
   // submit
   const [submitting, setSubmitting] = useState(false)
+  const [saveProgress, setSaveProgress] = useState(0) // 0-100, driven by real per-date completion for series
   const [error, setError] = useState('')
   // Tracks the most recently created booking's id across single/series/skip-conflict flows so
   // onSubmit can tell the caller which bar to highlight as "just created" — always the LAST one
@@ -218,7 +239,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // conflict preview modal (all-or-nothing mode)
   const [conflictInfo, setConflictInfo] = useState<{ conflicting: string[]; available: string[]; seriesId: string } | null>(null)
   // skipped dates result modal (shown after skip-mode series completes)
-  const [skippedResult, setSkippedResult] = useState<{ skipped: string[]; created: number; total: number } | null>(null)
+  const [skippedResult, setSkippedResult] = useState<{ skipped: { date: string; reason: 'conflict' | 'advance_limit' | 'timeout' }[]; created: number; total: number } | null>(null)
   // cancel series modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   // after-hours restriction modal
@@ -263,6 +284,17 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     return false
   })()
 
+  // Applies to both create AND edit — mirrors the server-side max_advance_days check in
+  // BookingController::validateGeneralRules(), so the UI can warn before the user hits Confirm
+  // instead of only finding out after a 422 (was previously only enforced server-side).
+  const maxAdvanceDays = generalSettings?.max_advance_days ?? 30
+  const isBeyondAdvanceLimit = !!date && (() => {
+    const d1 = new Date(today + 'T00:00:00')
+    const d2 = new Date(date + 'T00:00:00')
+    const daysAhead = Math.round((d2.getTime() - d1.getTime()) / 86400000)
+    return daysAhead > maxAdvanceDays
+  })()
+
   // Update snapshot every render — guarantees saveDraft() always has current values.
   const DRAFT_KEY = 'mbrs-booking-draft'
   if (open && !editBooking) {
@@ -270,6 +302,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       title, desc, date, startTime, endTime, status, type,
       room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, building_id: selectedRoom.building_id, building: selectedRoom.building ? { id: selectedRoom.building.id, name: selectedRoom.building.name, code: selectedRoom.building.code } : undefined } : null,
       repeat, repeatMode, repeatCount, repeatEndDate, weeklyDays, skipConflicts,
+      dailyInterval, skipWeekends,
       bookFor, bookForUserId, showBookFor,
     }
   }
@@ -353,6 +386,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           setRepeatEndDate(d.repeatEndDate ?? '')
           setUntilDateText(d.repeatEndDate ? (() => { const [y, m, dd] = d.repeatEndDate.split('-'); return `${dd}/${m}/${y}` })() : '')
           setWeeklyDays(d.weeklyDays ?? ['mon'])
+          setDailyInterval(d.dailyInterval ?? 1)
+          setDailyIntervalRaw(String(d.dailyInterval ?? 1))
+          setSkipWeekends(d.skipWeekends ?? false)
           setSkipConflicts(d.skipConflicts ?? true)
           setBookFor(d.bookFor ?? '')
           setBookForUserId(d.bookForUserId ?? null)
@@ -524,10 +560,12 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
     if (repeat === 'daily') {
       const dates: string[] = []
+      const interval = Math.max(1, dailyInterval)
+      const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6
       if (repeatMode === 'count') {
         for (let i = 0; i < repeatCount; i++) {
-          const d = new Date(startD); d.setDate(d.getDate() + i)
-          dates.push(toISO(d))
+          const d = new Date(startD); d.setDate(d.getDate() + i * interval)
+          if (!skipWeekends || !isWeekend(d)) dates.push(toISO(d))
         }
       } else {
         // until mode
@@ -536,8 +574,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         const endD = new Date(ey, em - 1, ed)
         const cur = new Date(startD)
         while (cur <= endD) {
-          dates.push(toISO(cur))
-          cur.setDate(cur.getDate() + 1)
+          if (!skipWeekends || !isWeekend(cur)) dates.push(toISO(cur))
+          cur.setDate(cur.getDate() + interval)
         }
       }
       return dates
@@ -598,6 +636,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     if (maintenanceBlocked) return false
     if (specialRoomBlocked) return false
     if (isPastBookingTime) return false
+    if (isBeyondAdvanceLimit) return false
     if (!title.trim() || !startTime || !endTime || !selectedRoom) return false
     if (restrictAfterHours && startTime >= workingHoursEnd) return false
     if (repeat !== 'none') {
@@ -627,13 +666,23 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     }
   }
 
+  // Series pre-check/create calls fan out across many dates; the shared axios instance's default
+  // 10s timeout is tuned for single interactive requests and is too tight once a batch queues up
+  // behind CORS preflights + a dev server with limited concurrency — those got silently canceled
+  // and miscategorized as "room conflict". Give series calls more room to breathe.
+  const SERIES_REQUEST_TIMEOUT_MS = 30000
+
   // knownSkipped: dates already known to conflict (pre-checked), so they get stored on each booking
   async function doCreateBookings(datesToBook: string[], seriesId: string, knownSkipped: string[] = []) {
     if (!selectedRoom) return
     const base = { room_id: selectedRoom.id, title, description: desc, status, type, booked_for: bookFor.trim() || undefined, booked_for_user_id: bookForUserId ?? undefined }
     let created = 0
-    const runtimeSkipped: string[] = []
-    for (const d of datesToBook) {
+    let processed = 0
+    const total = datesToBook.length
+    const runtimeSkipped: { date: string; reason: 'conflict' | 'advance_limit' | 'timeout' }[] = []
+    // Dates in a series never overlap each other (same time, different calendar days), so
+    // batching these creates is safe — order between them doesn't matter for correctness.
+    await runBatched(datesToBook, async d => {
       try {
         const res = await createBooking({
           ...base,
@@ -641,12 +690,22 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           end_at: `${d} ${endTime}:00`,
           series_id: seriesId,
           series_skipped_dates: knownSkipped.length > 0 ? knownSkipped : undefined,
-        })
+        }, SERIES_REQUEST_TIMEOUT_MS)
         lastCreatedIdRef.current = res?.id
         created++
-      } catch { runtimeSkipped.push(d) }
-    }
-    const allSkipped = [...knownSkipped, ...runtimeSkipped]
+      } catch (e: unknown) {
+        // Distinguish timeout / "beyond max_advance_days" / a real room conflict — backend's
+        // advance-limit message always contains "days in advance" (see validateGeneralRules).
+        const err = e as { code?: string; response?: { data?: { message?: string } } }
+        const msg = err?.response?.data?.message ?? ''
+        const reason = err?.code === 'ECONNABORTED' ? 'timeout' : msg.includes('days in advance') ? 'advance_limit' : 'conflict'
+        runtimeSkipped.push({ date: d, reason })
+      } finally {
+        processed++
+        setSaveProgress(Math.round((processed / total) * 100))
+      }
+    })
+    const allSkipped = [...knownSkipped.map(d => ({ date: d, reason: 'conflict' as const })), ...runtimeSkipped]
     if (created === 0) { setError(t('all_slots_taken')); return }
     // If any runtime skips happened (race condition after pre-check), patch the stored skipped dates
     // by including them in a final pass — simplest: just show combined result
@@ -665,14 +724,18 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
     const seriesId = crypto.randomUUID()
 
-    // Always pre-check all slots so we know the skipped dates upfront and can store them on each booking
-    const checks = await Promise.all(
-      dates.map(d =>
-        checkAvailability(selectedRoom.id, `${d} ${startTime}:00`, `${d} ${endTime}:00`)
-          .then(res => ({ date: d, available: !!res.available }))
-          .catch(() => ({ date: d, available: false }))
-      )
-    )
+    // Pre-check every date's availability BEFORE creating anything — the resulting "conflicting"
+    // list has to be known upfront because it gets embedded on each booking as series_skipped_dates
+    // at creation time (that's what the Series tab reads to render a "Find another slot" row; there
+    // is no endpoint to patch it after the fact). Batched (not full Promise.all): firing dozens of
+    // concurrent availability checks for the same room+user raced on the room_views tracking row
+    // and could fail under load, wrongly marking genuinely-free slots as conflicting.
+    const checks = await runBatched(dates, async d => {
+      try {
+        const res = await checkAvailability(selectedRoom.id, `${d} ${startTime}:00`, `${d} ${endTime}:00`, undefined, SERIES_REQUEST_TIMEOUT_MS)
+        return { date: d, available: !!res.available }
+      } catch { return { date: d, available: false } }
+    })
     const conflicting = checks.filter(c => !c.available).map(c => c.date)
     const available   = checks.filter(c => c.available).map(c => c.date)
 
@@ -685,7 +748,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       return
     }
 
-    // Skip mode: create only available, pass conflicting as knownSkipped
+    // Skip mode: create only the available dates, with the pre-checked conflicts stored as
+    // series_skipped_dates on each of them.
     if (available.length === 0) { setError(t('all_slots_taken')); return }
     await doCreateBookings(available, seriesId, conflicting)
   }
@@ -693,6 +757,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   async function handleSubmit() {
     if (!isValid() || !selectedRoom) return
     setSubmitting(true)
+    setSaveProgress(0)
     setError('')
     try {
       if (repeat === 'none') {
@@ -1490,6 +1555,55 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
                   {repeat !== 'none' && (
                     <div className="space-y-2.5" style={{ animation: 'section-in 0.25s ease-out' }}>
+                      {/* Daily: interval + skip weekends */}
+                      {repeat === 'daily' && (
+                        <div className="space-y-2.5" style={{ animation: 'section-in 0.22s ease-out' }}>
+                          <div className="flex items-center justify-between bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl p-3">
+                            <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)]">{t('repeat_every_n_days')}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button type="button"
+                                onClick={() => { const v = Math.max(1, dailyInterval - 1); setDailyInterval(v); setDailyIntervalRaw(String(v)) }}
+                                className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
+                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>remove</span>
+                              </button>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={dailyIntervalRaw}
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/\D/g, '')
+                                  setDailyIntervalRaw(raw)
+                                  const v = parseInt(raw)
+                                  if (!isNaN(v) && v >= 1) setDailyInterval(Math.min(30, v))
+                                }}
+                                onBlur={e => {
+                                  const v = parseInt(e.target.value)
+                                  const clamped = isNaN(v) ? 1 : Math.min(30, Math.max(1, v))
+                                  setDailyInterval(clamped)
+                                  setDailyIntervalRaw(String(clamped))
+                                }}
+                                className="text-[15px] font-black text-[var(--ds-text-1)] text-center tabular-nums bg-transparent border-b-2 focus:outline-none transition-colors"
+                                style={{ width: 32, borderColor: 'var(--ds-border)', caretColor: '#adee2b' }}
+                                onFocus={e => { e.target.style.borderColor = '#adee2b'; e.target.select() }}
+                                onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
+                              />
+                              <span className="text-[10px] font-bold text-[var(--ds-text-3)]">{t('label_days')}</span>
+                              <button type="button"
+                                onClick={() => { const v = Math.min(30, dailyInterval + 1); setDailyInterval(v); setDailyIntervalRaw(String(v)) }}
+                                className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
+                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add</span>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl p-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase text-[var(--ds-text-3)]">{t('skip_weekends')}</p>
+                              <p className="text-[9px] text-[var(--ds-text-4)] font-bold mt-0.5">{t('skip_weekends_desc')}</p>
+                            </div>
+                            <ToggleSwitch checked={skipWeekends} onChange={() => setSkipWeekends(v => !v)} />
+                          </div>
+                        </div>
+                      )}
                       {/* Weekly day picker */}
                       {repeat === 'weekly' && (
                         <div className="space-y-1.5" style={{ animation: 'section-in 0.22s ease-out' }}>
@@ -1728,7 +1842,24 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             {/* Availability (single booking only) */}
             {repeat === 'none' && (
               <>
-                {isTimeValid() === false && (
+                {isBeyondAdvanceLimit && (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-500/30 bg-red-500/10">
+                    <div className="size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0">
+                      <span className="material-symbols-outlined text-base">event_busy</span>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-red-700 dark:text-red-400">
+                        {language === 'id' ? 'Melebihi Batas Booking' : 'Beyond Advance-Booking Limit'}
+                      </p>
+                      <p className="text-[12px] font-semibold mt-1 text-red-600 dark:text-red-400">
+                        {language === 'id'
+                          ? `Booking tidak bisa dibuat lebih dari ${maxAdvanceDays} hari ke depan.`
+                          : `Bookings cannot be made more than ${maxAdvanceDays} days in advance.`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {!isBeyondAdvanceLimit && isTimeValid() === false && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-500/30 bg-red-500/10">
                     <div className="size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0">
                       <span className="material-symbols-outlined text-base">schedule</span>
@@ -1739,7 +1870,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     </div>
                   </div>
                 )}
-                {isTimeValid() === true && availChecking && (
+                {!isBeyondAdvanceLimit && isTimeValid() === true && availChecking && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-[var(--ds-border-sub)] bg-[var(--ds-bg-raised)]">
                     <div className="size-8 rounded-xl bg-[var(--ds-bg-surface-2)] flex items-center justify-center text-[var(--ds-text-3)] shrink-0">
                       <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
@@ -1747,7 +1878,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">{t('checking_avail')}</p>
                   </div>
                 )}
-                {isTimeValid() === true && !availChecking && isAvailable() === true && (
+                {!isBeyondAdvanceLimit && isTimeValid() === true && !availChecking && isAvailable() === true && (
                   <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 ${(availResult?.other_viewers ?? 0) > 0 ? 'border-amber-500/30 bg-amber-500/10' : 'border-[#adee2b]/50 bg-[#adee2b]/10'}`}>
                     <div className={`size-8 rounded-xl flex items-center justify-center shrink-0 ${(availResult?.other_viewers ?? 0) > 0 ? 'bg-amber-400 text-white' : 'bg-[#adee2b] text-black'}`}>
                       <span className="material-symbols-outlined text-base">{(availResult?.other_viewers ?? 0) > 0 ? 'group' : 'verified'}</span>
@@ -1762,7 +1893,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     </div>
                   </div>
                 )}
-                {isTimeValid() === true && !availChecking && isAvailable() === false && (
+                {!isBeyondAdvanceLimit && isTimeValid() === true && !availChecking && isAvailable() === false && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-red-500/30 bg-red-500/10">
                     <div className="size-8 rounded-xl bg-red-500 flex items-center justify-center text-white shrink-0">
                       <span className="material-symbols-outlined text-base">block</span>
@@ -1982,10 +2113,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               </div>
               <div className="bg-red-50 rounded-xl p-2.5 space-y-1 max-h-32 overflow-y-auto">
                 <p className="text-[8px] font-black uppercase text-red-400 tracking-wider px-1 mb-1.5">{t('skipped_dates_label')}</p>
-                {skippedResult.skipped.map(d => (
+                {skippedResult.skipped.map(({ date: d, reason }) => (
                   <div key={d} className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-red-400 shrink-0" style={{ fontSize: 12 }}>block</span>
+                    <span className="material-symbols-outlined text-red-400 shrink-0" style={{ fontSize: 12 }}>
+                      {reason === 'advance_limit' ? 'event_busy' : reason === 'timeout' ? 'hourglass_disabled' : 'block'}
+                    </span>
                     <span className="text-[11px] font-bold text-red-600">{fmtShortDate(d, language)}</span>
+                    <span className="text-[9px] font-bold text-red-400">
+                      — {reason === 'advance_limit' ? t('skipped_advance_limit') : reason === 'timeout' ? t('skipped_timeout') : t('skipped_conflict_reason')}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -2088,11 +2224,23 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                 <button
                   onClick={handleSubmit}
                   disabled={!isValid() || submitting || !!skippedResult}
-                  className="w-full py-5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all duration-200
+                  className={`relative w-full py-5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all duration-200 overflow-hidden
                     bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] shadow-lime-400/20
-                    disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none"
+                    disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none`}
                 >
-                  {submitting ? t('btn_saving') : isEdit ? t('btn_save_changes') : repeat !== 'none' ? `${t('btn_schedule_sessions')} ${repeatDates.length > 0 ? `(${repeatDates.length})` : ''}`.trim() : t('btn_confirm_booking')}
+                  {submitting && (
+                    repeat !== 'none' ? (
+                      <div
+                        className="absolute inset-y-0 left-0 bg-[#adee2b]/60 transition-[width] duration-300 ease-out"
+                        style={{ width: `${saveProgress}%` }}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 saving-shimmer" />
+                    )
+                  )}
+                  <span className="relative z-10">
+                    {submitting ? t('btn_saving') : isEdit ? t('btn_save_changes') : repeat !== 'none' ? `${t('btn_schedule_sessions')} ${repeatDates.length > 0 ? `(${repeatDates.length})` : ''}`.trim() : t('btn_confirm_booking')}
+                  </span>
                 </button>
                 {/* After-hours overlay — covers the Confirm Booking button */}
                 {restrictAfterHours && startTime >= workingHoursEnd && !showReceptionistNotice && (

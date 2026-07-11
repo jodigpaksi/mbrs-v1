@@ -10,9 +10,10 @@ export async function getRoomStats(roomId: number) {
   return res.data as { bookings_this_month: number; utilization: number; peak_hours: number[] }
 }
 
-export async function checkAvailability(roomId: number, startAt: string, endAt: string, excludeId?: number) {
+export async function checkAvailability(roomId: number, startAt: string, endAt: string, excludeId?: number, timeoutMs?: number) {
   const res = await api.get(`/rooms/${roomId}/availability`, {
     params: { start_at: startAt, end_at: endAt, exclude_booking_id: excludeId },
+    timeout: timeoutMs,
   })
   return res.data as { available: boolean; other_viewers: number; conflicts: unknown[] }
 }
