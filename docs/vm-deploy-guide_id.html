@@ -1,0 +1,470 @@
+<title>Panduan Deploy VM — RoomSync Pro di VirtualBox</title>
+<style>
+  :root {
+    --ink: #1b2430;
+    --ink-dim: #4b5563;
+    --paper: #f6f4ef;
+    --panel: #ffffff;
+    --line: #ddd6c6;
+    --accent: #2f5f8a;
+    --accent-soft: #e4ecf3;
+    --warn: #a85a1c;
+    --warn-soft: #f8ead9;
+    --ok: #2b6a4d;
+    --ok-soft: #e2efe7;
+    --code-bg: #10161d;
+    --code-ink: #d7e2ea;
+    --code-comment: #6b7a86;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e7e4da;
+      --ink-dim: #a3aab3;
+      --paper: #14181d;
+      --panel: #1b2129;
+      --line: #2c333c;
+      --accent: #7fb0dd;
+      --accent-soft: #223140;
+      --warn: #e0a45f;
+      --warn-soft: #3a2c1a;
+      --ok: #7fd1ac;
+      --ok-soft: #1c2f26;
+      --code-bg: #0b0f14;
+      --code-ink: #d7e2ea;
+      --code-comment: #7a8894;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.6;
+  }
+  h1, h2, h3 { font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif; text-wrap: balance; }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 48px;
+  }
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+  }
+
+  .masthead {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 28px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .masthead .kicker {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .masthead h1 {
+    font-size: clamp(28px, 4vw, 38px);
+    font-weight: 600;
+    margin: 4px 0 0;
+    letter-spacing: -0.01em;
+  }
+  .masthead .sub {
+    color: var(--ink-dim);
+    font-size: 14px;
+    max-width: 46ch;
+    margin-top: 6px;
+  }
+  .masthead .meta {
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .masthead .meta strong { color: var(--ink); display: block; font-size: 13px; }
+
+  nav.rail {
+    position: sticky;
+    top: 32px;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  nav.rail a {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13.5px;
+  }
+  nav.rail a:hover { background: var(--accent-soft); color: var(--ink); }
+  nav.rail a .n {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 12px;
+    width: 1.4em;
+    flex-shrink: 0;
+  }
+  nav.rail .rail-note {
+    margin-top: 18px;
+    padding: 12px 12px;
+    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.55;
+  }
+
+  main { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+  section.phase {
+    scroll-margin-top: 24px;
+    padding: 30px 0 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  section.phase:last-of-type { border-bottom: none; }
+
+  .phase-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; flex-wrap: wrap; }
+  .phase-head .num {
+    font-family: ui-serif, Georgia, serif;
+    font-size: 34px;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .phase-head h2 { font-size: 21px; font-weight: 600; margin: 0; }
+  .phase-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px 9px;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .phase p.lead { color: var(--ink-dim); margin: 6px 0 18px; max-width: 62ch; }
+
+  .step { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .step:last-child { margin-bottom: 0; }
+  .step .stitle { font-weight: 600; font-size: 14.5px; }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  pre .c { color: var(--code-comment); }
+
+  .callout {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    border-left: 3px solid;
+  }
+  .callout.warn { background: var(--warn-soft); border-color: var(--warn); }
+  .callout.ok   { background: var(--ok-soft);   border-color: var(--ok); }
+  .callout.info { background: var(--accent-soft); border-color: var(--accent); }
+  .callout .lbl {
+    font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
+    flex-shrink: 0; padding-top: 2px;
+  }
+  .callout.warn .lbl { color: var(--warn); }
+  .callout.ok .lbl { color: var(--ok); }
+  .callout.info .lbl { color: var(--accent); }
+  .callout p { margin: 0; color: var(--ink); }
+  .callout code { background: transparent; }
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    background: var(--accent-soft);
+    padding: 0.12em 0.4em;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  table th, table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  table th { color: var(--ink-dim); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .twrap { overflow-x: auto; }
+
+  ul.check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  ul.check li { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+  ul.check li::before { content: "—"; color: var(--accent); flex-shrink: 0; }
+
+  footer.done {
+    margin-top: 8px;
+    padding: 22px 24px;
+    border-radius: 14px;
+    background: var(--ok-soft);
+    border: 1px solid var(--ok);
+  }
+  footer.done h3 { margin: 0 0 8px; font-size: 16px; color: var(--ok); }
+  footer.done p { margin: 0; color: var(--ink); font-size: 14px; }
+</style>
+
+<div class="shell">
+
+  <div class="masthead">
+    <div>
+      <div class="kicker">Latihan Deployment</div>
+      <h1>RoomSync Pro, di VirtualBox sebagai "server kantor"</h1>
+      <p class="sub">Simulasi clone &amp; deploy repo asli — VM Windows 11 Pro, diperlakukan persis seperti mesin yang bakal duduk di ruang server kantor.</p>
+    </div>
+    <div class="meta">
+      <strong>github.com/jodigpaksi/mbrs-v1</strong>
+      branch main · Jaringan Bridged
+    </div>
+  </div>
+
+  <nav class="rail">
+    <a href="#p0"><span class="n">0</span> Push dulu yang lokal</a>
+    <a href="#p1"><span class="n">1</span> Buat VM-nya</a>
+    <a href="#p2"><span class="n">2</span> Instal Windows 11</a>
+    <a href="#p3"><span class="n">3</span> Instal stack-nya</a>
+    <a href="#p4"><span class="n">4</span> Clone repo</a>
+    <a href="#p5"><span class="n">5</span> Konfigurasi &amp; migrate</a>
+    <a href="#p6"><span class="n">6</span> Build frontend</a>
+    <a href="#p7"><span class="n">7</span> Arahkan Apache</a>
+    <a href="#p8"><span class="n">8</span> Jaga Reverb &amp; queue</a>
+    <a href="#p9"><span class="n">9</span> Verifikasi dari host</a>
+    <div class="rail-note">Tiap fase cuma butuh fase sebelumnya beres. Bisa berhenti di fase mana pun dan lanjut nanti — ini bukan satu transaksi panjang yang harus selesai sekaligus.</div>
+  </nav>
+
+  <main>
+
+    <section class="phase" id="p0">
+      <div class="phase-head"><span class="num">0</span><h2>Push dulu yang lokal, di PC ini</h2><span class="phase-tag">PC Host</span></div>
+      <p class="lead">VM nanti clone dari GitHub, bukan dari folder ini — jadi apa pun yang belum ke-push dianggap tidak ada oleh VM.</p>
+      <div class="step">
+        <div class="stitle">Cek dulu apa yang udah ke-commit vs yang masih nyangkut di working tree</div>
+        <pre>git status
+<span class="c"># kalau ada yang nggak terduga muncul, commit atau stash dulu sebelum lanjut —
+# latihan ini harus nge-clone kode yang sama persis kayak yang beneran mau kamu
+# kasih ke production</span></pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Push</div>
+        <pre>git push origin main</pre>
+      </div>
+      <div class="callout info">
+        <span class="lbl">Catatan</span>
+        <p>Fix origin <code>CORS</code> yang barusan di sesi ini itu cuma buat config dev lokal (localhost) — nggak perlu ikut ke VM. CORS production nanti dikonfigurasi ulang dari nol di Fase 5, disesuaikan sama alamat yang beneran dijawab VM-nya.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p1">
+      <div class="phase-head"><span class="num">1</span><h2>Buat VM-nya</h2><span class="phase-tag">VirtualBox</span></div>
+      <p class="lead">New VM → kasih nama misalnya <code>mbrs-office-server</code>, tipe <strong>Microsoft Windows</strong>, versi <strong>Windows 11 (64-bit)</strong>.</p>
+      <div class="twrap">
+        <table>
+          <tr><th>Setting</th><th>Nilai</th><th>Kenapa</th></tr>
+          <tr><td>Memory</td><td>Minimal 4096 MB</td><td>Apache + MySQL + Reverb + queue worker jalan bareng — minimum di README sendiri 2 GB, kasih ruang lebih</td></tr>
+          <tr><td>Processor</td><td>2 core</td><td>Windows 11 sendiri minta 2+</td></tr>
+          <tr><td>Disk</td><td>64 GB, dynamically allocated</td><td>Windows 11 doang udah ~20 GB sebelum instal apa-apa</td></tr>
+          <tr><td>Network Adapter</td><td><strong>Bridged Adapter</strong>, bukan NAT</td><td>VM dapet IP sendiri di jaringan LAN — bisa diakses dari PC host <em>dan</em> mesin lain di jaringan, persis kayak server kantor beneran</td></tr>
+        </table>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Gotcha</span>
+        <p>Aktifkan <strong>Nested VT-x/AMD-V</strong> di System → Processor VM kalau installer Windows 11 nolak boot karena cek TPM/Secure Boot — atau pakai varian ISO Windows 11 yang skip requirement TPM buat VM.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p2">
+      <div class="phase-head"><span class="num">2</span><h2>Instal Windows 11 Pro</h2><span class="phase-tag">~20 menit, kebanyakan nunggu</span></div>
+      <p class="lead">Walkthrough installer standar. Dua pilihan yang ngaruh ke langkah berikutnya:</p>
+      <ul class="check">
+        <li>Pilih <strong>"Set up for work or school"</strong> / akun lokal aja cukup — VM ini nggak perlu akun Microsoft.</li>
+        <li>Setelah boot pertama, instal <strong>VirtualBox Guest Additions</strong> (menu Devices → Insert Guest Additions CD) — dapet clipboard bersama dan window yang bisa di-resize, dua-duanya bikin fase berikutnya jauh lebih nggak ribet.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="p3">
+      <div class="phase-head"><span class="num">3</span><h2>Instal stack-nya, di dalam VM</h2><span class="phase-tag">Guest OS</span></div>
+      <p class="lead">Semua yang ada di tabel requirement README. Download tiap installer lewat browser di dalam VM.</p>
+      <div class="step">
+        <div class="stitle">1 — XAMPP (PHP 8.2+, Apache, MySQL)</div>
+        <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Download dari apachefriends.org — pilih versi yang PHP bawaannya <strong>8.2.x</strong>, harus persis sama requirement <code>composer.json</code> yaitu <code>^8.2</code>. PHP bawaan yang lebih baru/lama itu penyebab paling umum bug membingungkan pas pindah mesin.</p>
+        <pre>php -v
+<span class="c"># pastikan yang keluar 8.2.x setelah XAMPP terinstal dan php.exe-nya masuk PATH</span></pre>
+      </div>
+      <div class="step">
+        <div class="stitle">2 — Composer</div>
+        <pre>composer -V</pre>
+      </div>
+      <div class="step">
+        <div class="stitle">3 — Node.js 20.x LTS + Git for Windows</div>
+        <pre>node -v   <span class="c"># harus v20.x</span>
+git --version</pre>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Gotcha</span>
+        <p>Windows Defender Firewall bakal diam-diam nge-block koneksi masuk ke Apache/Reverb dari mesin lain di jaringan sampai kamu izinin. Lakukan sekali sekarang: <strong>Control Panel → Windows Defender Firewall → Allow an app</strong> → izinkan <code>httpd.exe</code> (Apache) di jaringan Private, dan nanti buka juga port Reverb secara eksplisit (Fase 8).</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p4">
+      <div class="phase-head"><span class="num">4</span><h2>Clone repo</h2><span class="phase-tag">Guest OS</span></div>
+      <div class="step">
+        <pre>cd C:\XAMPP\htdocs
+git clone https://github.com/jodigpaksi/mbrs-v1.git
+cd mbrs-v1</pre>
+      </div>
+      <div class="callout info">
+        <span class="lbl">Pilihan</span>
+        <p>Clone <code>main</code> buat latihan ini — <code>deploy</code> itu branch yang memang sedikit beda di project ini (ada beberapa commit permanen yang cuma config), bukan yang merepresentasikan "kondisi main saat ini yang sebenarnya."</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p5">
+      <div class="phase-head"><span class="num">5</span><h2>Konfigurasi &amp; migrate backend</h2><span class="phase-tag">server/</span></div>
+      <div class="step">
+        <div class="stitle">Instal dependency</div>
+        <pre>cd server
+composer install --no-dev --optimize-autoloader</pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Environment</div>
+        <pre>copy .env.example .env
+php artisan key:generate
+php artisan reverb:install   <span class="c"># generate REVERB_APP_ID / KEY / SECRET ke .env</span></pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Lalu edit <code>.env</code> manual:</p>
+        <div class="twrap">
+          <table>
+            <tr><th>Key</th><th>Isi dengan</th></tr>
+            <tr><td><code>APP_ENV</code></td><td><code>production</code></td></tr>
+            <tr><td><code>APP_DEBUG</code></td><td><code>false</code></td></tr>
+            <tr><td><code>APP_URL</code></td><td><code>http://&lt;IP LAN VM&gt;:8000</code> — cek pakai <code>ipconfig</code> di dalam VM</td></tr>
+            <tr><td><code>DB_CONNECTION</code></td><td><code>mysql</code> + database asli yang kamu buat di phpMyAdmin</td></tr>
+            <tr><td><code>BROADCAST_CONNECTION</code></td><td><code>reverb</code></td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="step">
+        <div class="stitle">Migrate</div>
+        <pre>php artisan migrate --force
+php artisan storage:link</pre>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Gotcha — ini bakal kena</span>
+        <p>Begitu frontend disajikan dari origin yang beda (hasil build Fase 6, atau IP VM lewat Apache), <code>server/config/cors.php</code> bagian <code>allowed_origins</code> harus nyertain origin itu persis — pelajaran yang sama kayak masalah <code>localhost:4173</code> tadi. Tambahin dulu sebelum tes login, jangan nunggu gagal dulu baru sadar.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p6">
+      <div class="phase-head"><span class="num">6</span><h2>Build frontend</h2><span class="phase-tag">client/</span></div>
+      <div class="step">
+        <pre>cd ..\client
+copy .env.example .env   <span class="c">rem — isi VITE_REVERB_* biar sama dengan REVERB_* di server/.env</span>
+npm install
+npm run build</pre>
+      </div>
+      <p style="color:var(--ink-dim);font-size:13.5px;margin:0;">Hasilnya masuk ke <code>client/dist</code> — folder file statis, nggak perlu proses Node yang tetap jalan buat frontend-nya begitu ini selesai.</p>
+    </section>
+
+    <section class="phase" id="p7">
+      <div class="phase-head"><span class="num">7</span><h2>Arahkan Apache ke dua-duanya</h2><span class="phase-tag">XAMPP Apache</span></div>
+      <p class="lead">Ada dua hal yang butuh "rumah": API Laravel (<code>server/public</code>) dan frontend statis (<code>client/dist</code>). Paling gampang buat latihan: dua port di Apache yang sama.</p>
+      <div class="step">
+        <div class="stitle">Edit <code>xampp/apache/conf/extra/httpd-vhosts.conf</code></div>
+        <pre><span class="c">&lt;VirtualHost *:8000&gt;
+    DocumentRoot "C:/xampp/htdocs/mbrs-v1/server/public"
+    &lt;Directory "C:/xampp/htdocs/mbrs-v1/server/public"&gt;
+        AllowOverride All
+        Require all granted
+    &lt;/Directory&gt;
+&lt;/VirtualHost&gt;
+
+&lt;VirtualHost *:8001&gt;
+    DocumentRoot "C:/xampp/htdocs/mbrs-v1/client/dist"
+    &lt;Directory "C:/xampp/htdocs/mbrs-v1/client/dist"&gt;
+        AllowOverride All
+        Require all granted
+        FallbackResource /index.html
+    &lt;/Directory&gt;
+&lt;/VirtualHost&gt;</span></pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Tambahin Listen directive-nya, lalu restart Apache</div>
+        <pre><span class="c"># di httpd.conf, di samping "Listen 80" yang udah ada:</span>
+Listen 8000
+Listen 8001</pre>
+      </div>
+      <div class="callout info">
+        <span class="lbl">Kenapa <code>FallbackResource</code></span>
+        <p>Ini SPA React Router — tanpa ini, refresh di route selain <code>/</code> bakal 404, karena Apache nyari file asli di path itu.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p8">
+      <div class="phase-head"><span class="num">8</span><h2>Jaga Reverb &amp; queue tetap hidup</h2><span class="phase-tag">Proses background</span></div>
+      <p class="lead">Ini bukan request/response biasa — harus tetap jalan terus. README merekomendasikan Supervisor (Linux) atau NSSM (Windows). Buat latihan, 2 jendela terminal kebuka aja udah cukup:</p>
+      <div class="step">
+        <pre><span class="c">rem terminal 1</span>
+cd C:\xampp\htdocs\mbrs-v1\server
+php artisan reverb:start
+
+<span class="c">rem terminal 2</span>
+php artisan queue:work --tries=1</pre>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Gotcha</span>
+        <p>Port Reverb (default <code>8080</code>) butuh allow-rule Windows Firewall yang sama kayak Apache kalau mau mesin lain di jaringan lihat update realtime — kalau nggak, app-nya tetap jalan, cuma kerasa "statis" (nggak auto-refresh) buat siapa pun yang connect dari luar VM.</p>
+      </div>
+      <div class="step">
+        <div class="stitle">Kalau mau ini tetap jalan setelah restart tanpa buka terminal manual lagi</div>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Itu fungsinya NSSM — bungkus tiap perintah jadi Windows Service beneran. Worth dilakukan setelah kamu konfirmasi semuanya jalan manual, jangan sebelum itu.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p9">
+      <div class="phase-head"><span class="num">9</span><h2>Verifikasi — dari PC host, bukan cuma di dalam VM</h2><span class="phase-tag">Tes yang sebenarnya</span></div>
+      <p class="lead">Inti dari jaringan Bridged: perlakukan VM kayak mesin di ruangan sebelah.</p>
+      <ul class="check">
+        <li>Di dalam VM, jalankan <code>ipconfig</code> dan catat alamat IPv4-nya (kira-kira <code>192.168.1.x</code>).</li>
+        <li>Dari browser PC host ini sendiri — bukan browser di dalam VM — buka <code>http://&lt;IP tadi&gt;:8001</code>.</li>
+        <li>Login. Kalau gagal, buka DevTools → Network dulu, bukan log backend — penolakan CORS dan error 500 asli itu kelihatan identik dari sisi form login.</li>
+        <li>Buat booking, pastikan langsung muncul tanpa refresh (Reverb beneran nyampe ke kamu lintas jaringan, bukan cuma di dalam VM).</li>
+      </ul>
+    </section>
+
+    <footer class="done">
+      <h3>Ciri-ciri "beres"</h3>
+      <p>Browser di PC host ini, akses IP LAN VM, login, booking ruangan, dan langsung muncul live — semua tanpa perlu balik lagi ke layar VM-nya. Itu bentuk yang sama kayak rollout kantor beneran: meja seseorang, server orang lain.</p>
+    </footer>
+
+  </main>
+</div>
