@@ -667,13 +667,16 @@ function SeriesGroupRow({
                   <span className="text-[11px] font-black uppercase tracking-wider text-red-500">
                     {unresolvedCount > 0 ? `${unresolvedCount} date${unresolvedCount !== 1 ? 's' : ''} skipped — conflict at time of booking` : `${skipped.length} date${skipped.length !== 1 ? 's' : ''} skipped — all rebooked`}
                   </span>
+                  {first.room?.name && (
+                    <span className="text-[11px] font-bold text-red-400/80 dark:text-red-400/70 truncate">· {first.room.name}</span>
+                  )}
                 </div>
                 <div className="divide-y divide-red-200/60 dark:divide-red-500/10">
                   {visibleSkipped.map(d => {
                     const { real, invalidDay } = parseSkipDate(d)
                     const resolved = resolvedSkips[`${group.series_id}:${real}`]
                     return resolved
-                      ? <ResolvedSkipRow key={d} date={real} booking={resolved} pendingCancelIds={pendingCancelIds} onEdit={onEdit} onCancel={onCancel} />
+                      ? <ResolvedSkipRow key={d} date={real} invalidDay={invalidDay} booking={resolved} pendingCancelIds={pendingCancelIds} onEdit={onEdit} onCancel={onCancel} />
                       : <SkippedDateRow key={d} date={real} invalidDay={invalidDay} room={first.room} startTime={toHHMM(first.start_at)} endTime={toHHMM(first.end_at)} seriesId={group.series_id} disabled={isPast} />
                   })}
                 </div>
@@ -704,7 +707,10 @@ function SeriesGroupRow({
 
 function fmtSkipDate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  const dt = new Date(y, m - 1, d)
+  const datePart = dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  const dayPart = dt.toLocaleDateString('en-GB', { weekday: 'short' })
+  return `${datePart}, ${dayPart}`
 }
 
 // Monthly-repeat invalid dates are stored as "Y-m-d~D" — Y-m-d is a clamped placeholder (last real
@@ -839,8 +845,9 @@ function SkippedDateRow({ date, invalidDay, room, startTime, endTime, seriesId, 
   )
 }
 
-function ResolvedSkipRow({ date, booking, pendingCancelIds, onEdit, onCancel }: {
+function ResolvedSkipRow({ date, invalidDay, booking, pendingCancelIds, onEdit, onCancel }: {
   date: string
+  invalidDay?: number
   booking: Booking
   pendingCancelIds: Set<number>
   onEdit: (b: Booking) => void
@@ -851,7 +858,11 @@ function ResolvedSkipRow({ date, booking, pendingCancelIds, onEdit, onCancel }: 
     <div className="flex items-center justify-between gap-3 px-3 py-2 bg-green-50 dark:bg-green-500/5">
       <div className="flex items-center gap-2 min-w-0">
         <span className="material-symbols-outlined text-green-500 shrink-0" style={{ fontSize: 13 }}>check_circle</span>
-        <span className="text-[13px] font-bold text-green-700 dark:text-green-400 shrink-0">{fmtSkipDate(date)} — rebooked:</span>
+        <span className="text-[13px] font-bold text-green-700 dark:text-green-400 shrink-0">
+          {invalidDay
+            ? `${fmtInvalidSkipDate(date, invalidDay, language)} (${language === 'id' ? 'Invalid, tanggal tidak ada di bulan itu' : "Invalid, date doesn't exist that month"})`
+            : fmtSkipDate(date)} — rebooked:
+        </span>
         <span className="text-[12px] font-semibold text-green-600 dark:text-green-400/80 truncate">
           {booking.title} · {booking.room?.name}{booking.room?.building?.name ? `, ${booking.room.building.name}` : ''} · {fmtTableDate(booking.start_at, language)} {fmtTime(booking.start_at, language)}–{fmtTime(booking.end_at, language)}
         </span>

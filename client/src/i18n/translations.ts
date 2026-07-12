@@ -145,6 +145,8 @@ export const en = {
   all_rooms_booked: 'All rooms are booked for this period.',
   fully_free: 'Fully Free',
   special_rooms_only: 'Special Rooms only',
+  collapse_filters: 'Collapse filters',
+  expand_filters: 'Expand filters',
   showing_rooms_with: 'Showing rooms with',
   seats_suffix: 'seats',
   // Booking panel
@@ -457,6 +459,8 @@ export const id: typeof en = {
   all_rooms_booked: 'Semua ruangan terisi untuk periode ini.',
   fully_free: 'Seluruhnya Bebas',
   special_rooms_only: 'Hanya Ruangan Khusus',
+  collapse_filters: 'Sembunyikan filter',
+  expand_filters: 'Tampilkan filter',
   showing_rooms_with: 'Menampilkan ruangan dengan',
   seats_suffix: 'kursi',
   panel_book_room: 'Pesan Ruangan',

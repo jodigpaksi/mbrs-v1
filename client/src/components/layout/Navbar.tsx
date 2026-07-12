@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getMyBookings, getBookings } from '../../api/bookings'
@@ -25,6 +26,43 @@ const NAV_PATHS = [
 interface NavbarProps {
   onSearch?: (q: string) => void
   onTodayClick?: () => void
+}
+
+// Portal-based hover tooltip — escapes the search dropdown's overflow-hidden container
+// (a plain CSS group-hover popup gets clipped since it's near the top edge of that box).
+function InfoTooltip({ text }: { text: string }) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const width = 224
+
+  function show() {
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setPos({ top: rect.bottom + 8, left: Math.min(rect.right - width, window.innerWidth - width - 8) })
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={btnRef}
+        type="button"
+        onMouseEnter={show}
+        onMouseLeave={() => setPos(null)}
+        className="size-6 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--ds-bg-raised)]"
+        style={{ color: 'var(--ds-text-4)' }}
+      >
+        <span className="material-symbols-outlined text-sm">info</span>
+      </button>
+      {pos && createPortal(
+        <div className="fixed z-[300] pointer-events-none" style={{ top: pos.top, left: pos.left, width }}>
+          <div className="px-3 py-2.5 rounded-xl" style={{ background: '#1e293b', boxShadow: '0 8px 24px rgba(0,0,0,0.28)' }}>
+            <p className="text-[10px] font-semibold text-white leading-relaxed">{text}</p>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
 }
 
 function fmtSearchDate(iso: string, lang = 'en') {
@@ -359,11 +397,11 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                   background: 'var(--ds-glass-bg)',
                   backdropFilter: 'blur(32px)',
                   WebkitBackdropFilter: 'blur(32px)',
-                  border: '1px solid var(--ds-glass-border)',
+                  border: '1.5px solid var(--ds-border)',
                 }}>
 
                 {/* Input */}
-                <div className="flex items-center gap-1 p-1.5">
+                <div className="flex items-center gap-1 px-2 py-4">
                   <span className="material-symbols-outlined text-base ml-2 shrink-0" style={{ color: 'var(--ds-text-4)' }}>search</span>
                   <input
                     ref={searchInputRef}
@@ -382,6 +420,9 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                       <span className="material-symbols-outlined text-sm">close</span>
                     </button>
                   )}
+                  <InfoTooltip text={language === 'id'
+                    ? 'Pencarian cuma mencakup Ruangan & Booking (hari ini s/d 7 hari ke depan). Tidak bisa mencari orang/user.'
+                    : 'Search covers Rooms & Bookings only (today through the next 7 days). Cannot search for people/users.'} />
                 </div>
 
                 {/* Live results — outer wrapper animates its height to the measured content

@@ -6,6 +6,7 @@ import { updateOnDutyStatus } from '../../api/auth'
 import { getBuildings } from '../../api/buildings'
 import type { Building } from '../../types/index'
 import { useModalHotkeys } from '../../hooks/useModalHotkeys'
+import ThemeSwitch from '../ui/ThemeSwitch'
 
 interface Props {
   open: boolean
@@ -465,9 +466,8 @@ export default function SettingModal({ open, onClose }: Props) {
 
           {/* Dark mode row */}
           <SettingRow label={t('settings_appearance')}>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-[14px] transition-all active:scale-[0.99]"
+            <div
+              className="w-full flex items-center justify-between px-4 py-3 rounded-[14px]"
               style={{ background: 'rgba(0,0,0,0.05)' }}
             >
               <div className="flex items-center gap-3">
@@ -487,32 +487,8 @@ export default function SettingModal({ open, onClose }: Props) {
                 </p>
               </div>
 
-              {/* Toggle */}
-              <div
-                className="relative shrink-0"
-                style={{
-                  width: 42,
-                  height: 23,
-                  borderRadius: 12,
-                  background: darkMode ? '#adee2b' : 'rgba(0,0,0,0.18)',
-                  transition: 'background 0.25s ease',
-                }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 2.5,
-                    width: 18,
-                    height: 18,
-                    borderRadius: '50%',
-                    background: darkMode ? '#000' : 'white',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-                    left: darkMode ? 21 : 2.5,
-                    transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
-                  }}
-                />
-              </div>
-            </button>
+              <ThemeSwitch checked={darkMode} onChange={setDarkMode} />
+            </div>
           </SettingRow>
 
         </div>

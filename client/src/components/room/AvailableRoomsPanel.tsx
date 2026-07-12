@@ -22,6 +22,15 @@ function fmtDate(iso: string, lang = 'en') {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 }
+// "<date>, <day>" — e.g. "12 Jul, Sun" — used by the per-room date-pill strip
+function fmtPillDate(iso: string, lang = 'en') {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const locale = lang === 'id' ? 'id-ID' : 'en-GB'
+  const datePart = date.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+  const dayPart = date.toLocaleDateString(locale, { weekday: 'short' })
+  return `${datePart}, ${dayPart}`
+}
 function slotTime(iso: string) { return iso.split('T')[1]?.slice(0, 5) ?? '' }
 function slotDate(iso: string) { return iso.split('T')[0] ?? '' }
 function slotDuration(slot: AvailableSlot) {
@@ -82,19 +91,63 @@ interface Props {
   prefillEndTime?: string
 }
 
+/* ── Horizontal-scroll row: native scrollbar + mouse-drag-to-scroll, for date pill strips ── */
+function HScrollRow({ children }: { children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const drag = useRef({ startX: 0, startScroll: 0, dragging: false, moved: false })
+
+  function onMouseDown(e: React.MouseEvent) {
+    const el = scrollRef.current
+    if (!el) return
+    drag.current = { startX: e.pageX, startScroll: el.scrollLeft, dragging: true, moved: false }
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    const el = scrollRef.current
+    if (!drag.current.dragging || !el) return
+    const dx = e.pageX - drag.current.startX
+    if (Math.abs(dx) > 4) drag.current.moved = true
+    if (drag.current.moved) el.scrollLeft = drag.current.startScroll - dx
+  }
+  function endDrag() {
+    drag.current.dragging = false
+  }
+  function onClickCapture(e: React.MouseEvent) {
+    if (drag.current.moved) {
+      e.stopPropagation()
+      e.preventDefault()
+      drag.current.moved = false
+    }
+  }
+
+  return (
+    <div
+      ref={scrollRef}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
+      onClickCapture={onClickCapture}
+      className="hscroll-x flex items-center gap-1.5 flex-nowrap overflow-x-auto cursor-grab active:cursor-grabbing select-none min-w-0 pb-2.5"
+    >
+      {children}
+    </div>
+  )
+}
+
 /* ── Shared room card (no date pills) ── */
 function SlotRoomCard({
-  room, slots, showDate, onSelect,
+  room, slots, showDate, onSelect, index = 0,
 }: {
   room: Room
   slots: AvailableSlot[]
   showDate?: boolean
   onSelect: (room: Room, date: string, start: string, end: string) => void
+  index?: number
 }) {
   const { language, t: tr } = useSettings()
   if (slots.length === 0) return null
   return (
-    <div className="rounded-2xl overflow-hidden border border-[var(--ds-border-sub)]">
+    <div className="rounded-2xl overflow-hidden border border-[var(--ds-border-sub)] row-stagger-in" style={{ animationDelay: `${index * 30}ms` }}>
       <div className="flex items-center gap-3 px-4 py-3 bg-[var(--ds-bg-surface-2)]">
         <div className="size-10 rounded-[10px] bg-[var(--ds-border)] overflow-hidden shrink-0">
           {(room.photos ?? [])[0]
@@ -133,7 +186,7 @@ function SlotRoomCard({
             <span className="material-symbols-outlined text-[#adee2b] shrink-0" style={{ fontSize: 14 }}>schedule</span>
             <span className="text-[11px] font-black text-[var(--ds-text-1)] tabular-nums flex-1">
               {showDate && (
-                <span className="text-[var(--ds-text-3)] font-bold mr-1.5">{fmtDate(slotDate(slot.start), language)} ·</span>
+                <span className="text-[var(--ds-text-3)] font-bold mr-1.5">{fmtPillDate(slotDate(slot.start), language)} ·</span>
               )}
               {slotTime(slot.start)} – {slotTime(slot.end)}
             </span>
@@ -181,6 +234,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
   const [groupBy, setGroupBy]         = useState<GroupBy>('room')
   const [minCapacity, setMinCapacity] = useState(0)
   const [specialOnly, setSpecialOnly] = useState(false)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
 
   const [searched, setSearched]           = useState(false)
   const [searchKey, setSearchKey]         = useState(0)
@@ -301,7 +355,16 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
         </div>
 
         {/* ── Filters ── */}
-        <div className="relative z-20 px-5 py-4 shrink-0 space-y-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+        <div className="relative z-20 shrink-0 border-b border-black/[0.06] dark:border-white/[0.08]">
+        <div
+          style={{
+            maxHeight: filtersCollapsed ? 0 : 1400,
+            opacity: filtersCollapsed ? 0 : 1,
+            overflow: 'hidden',
+            transition: 'max-height 320ms cubic-bezier(0.4,0,0.2,1), opacity 200ms ease',
+          }}
+        >
+        <div className="px-5 py-4 space-y-3">
 
           {/* Building dropdown */}
           <div className="space-y-1">
@@ -555,13 +618,27 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             onClick={handleSearch}
             disabled={!buildingId || isFetching}
             className="w-full py-2.5 rounded-xl bg-black text-[#adee2b] text-[10px] font-black uppercase tracking-[0.15em]
-              hover:bg-slate-800 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed
+              hover:bg-slate-800 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none
               flex items-center justify-center gap-2 transition-all"
           >
             {isFetching
               ? <><span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span>{t('searching')}</>
               : <><span className="material-symbols-outlined" style={{ fontSize: 14 }}>search</span>{t('search_btn')}</>}
           </button>
+        </div>
+        </div>
+
+        {/* Collapse/expand filters toggle — sits at the boundary between the filter form and results */}
+        <button
+          type="button"
+          onClick={() => setFiltersCollapsed(v => !v)}
+          className="group w-full flex items-center justify-center py-1 hover:bg-slate-100 dark:hover:bg-white/[0.06] active:bg-slate-200 dark:active:bg-white/[0.1] transition-colors"
+          title={filtersCollapsed ? t('expand_filters') : t('collapse_filters')}
+        >
+          <span className="material-symbols-outlined text-[var(--ds-text-3)] arrow-bob group-hover:[animation-play-state:paused]" style={{ fontSize: 16 }}>
+            {filtersCollapsed ? 'expand_more' : 'expand_less'}
+          </span>
+        </button>
         </div>
 
         {/* ── Results ── */}
@@ -638,14 +715,14 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                   <p className="text-[8px] font-black uppercase tracking-widest text-[var(--ds-text-3)] pb-0.5">
                     {visibleRooms.length} room{visibleRooms.length !== 1 ? 's' : ''} with availability
                   </p>
-                  {visibleRooms.map((room: Room) => {
+                  {visibleRooms.map((room: Room, i: number) => {
                     const byDate = isRange ? rangeSlots[room.id] : {}
                     const datesWithSlots = rangeDates.filter(d => (byDate[d]?.length ?? 0) > 0)
                     const activeDate = selectedRoomDate[room.id] ?? datesWithSlots[0] ?? ''
                     const visibleSlots = isRange ? (byDate[activeDate] ?? []) : singleSlots[room.id]
 
                     return (
-                      <div key={room.id} className="rounded-2xl overflow-hidden border border-[var(--ds-border-sub)]">
+                      <div key={room.id} className="rounded-2xl overflow-hidden border border-[var(--ds-border-sub)] row-stagger-in" style={{ animationDelay: `${i * 30}ms` }}>
                         <div className="flex items-center gap-3 px-4 py-3 bg-[var(--ds-bg-surface-2)]">
                           <div className="size-10 rounded-[10px] bg-[var(--ds-border)] overflow-hidden shrink-0">
                             {(room.photos ?? [])[0]
@@ -675,23 +752,25 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                         </div>
 
                         {isRange && datesWithSlots.length > 0 && (
-                          <div className="px-3 pt-2.5 pb-2 flex items-center gap-1.5 flex-wrap bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)]">
-                            {datesWithSlots.map(d => {
-                              const isActive = d === activeDate
-                              return (
-                                <button key={d} type="button"
-                                  onClick={() => setSelectedRoomDate(prev => ({ ...prev, [room.id]: d }))}
-                                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase transition-all
-                                    ${isActive ? 'bg-black dark:bg-white text-[#adee2b] dark:text-black' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] hover:bg-[var(--ds-border)]'}`}
-                                >
-                                  {fmtDate(d, language)}
-                                  <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black
-                                    ${isActive ? 'bg-white/15 dark:bg-black/15 text-[#adee2b] dark:text-black' : 'bg-[var(--ds-border)] text-[var(--ds-text-3)]'}`}>
-                                    {byDate[d].length}
-                                  </span>
-                                </button>
-                              )
-                            })}
+                          <div className="px-3 pt-2.5 pb-2 bg-[var(--ds-bg-surface)] border-b border-[var(--ds-border-sub)]">
+                            <HScrollRow>
+                              {datesWithSlots.map(d => {
+                                const isActive = d === activeDate
+                                return (
+                                  <button key={d} type="button"
+                                    onClick={() => setSelectedRoomDate(prev => ({ ...prev, [room.id]: d }))}
+                                    className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black uppercase transition-all
+                                      ${isActive ? 'bg-black dark:bg-white text-[#adee2b] dark:text-black' : 'bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] hover:bg-[var(--ds-border)]'}`}
+                                  >
+                                    {fmtPillDate(d, language)}
+                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black
+                                      ${isActive ? 'bg-white/15 dark:bg-black/15 text-[#adee2b] dark:text-black' : 'bg-[var(--ds-border)] text-[var(--ds-text-3)]'}`}>
+                                      {byDate[d].length}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </HScrollRow>
                           </div>
                         )}
 
@@ -737,33 +816,36 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               return (
                 <>
                   {/* Sticky date pill nav */}
-                  <div className="sticky top-0 z-10 -mx-5 px-5 -mt-4 pt-1 pb-2 flex gap-1.5 flex-wrap">
-                    {datesWithRooms.map(d => {
-                      const isActive = d === currentDate
-                      const count = visibleRooms.filter((r: Room) => (rangeSlots[r.id]?.[d]?.length ?? 0) > 0).length
-                      return (
-                        <button key={d} type="button" onClick={() => setActiveDatePill(d)}
-                          className={`group flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase transition-all active:scale-95 border backdrop-blur-md
-                            ${isActive
-                              ? 'bg-[rgba(10,15,40,0.82)] border-white/[0.12] text-[#adee2b] shadow-[0_2px_12px_rgba(0,0,0,0.22)]'
-                              : 'bg-[rgba(10,15,40,0.26)] border-white/[0.08] text-white/60 hover:bg-[rgba(10,15,40,0.48)] hover:border-white/[0.15] hover:text-white/90'}`}
-                        >
-                          {fmtDate(d, language)}
-                          <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black transition-colors
-                            ${isActive ? 'bg-[rgba(173,238,43,0.18)] text-[#adee2b]' : 'bg-white/10 text-white/50 group-hover:text-white/75'}`}>
-                            {count}
-                          </span>
-                        </button>
-                      )
-                    })}
+                  <div className="sticky top-0 z-10 -mx-5 px-5 -mt-4 pt-1 pb-2">
+                    <HScrollRow>
+                      {datesWithRooms.map(d => {
+                        const isActive = d === currentDate
+                        const count = visibleRooms.filter((r: Room) => (rangeSlots[r.id]?.[d]?.length ?? 0) > 0).length
+                        return (
+                          <button key={d} type="button" onClick={() => setActiveDatePill(d)}
+                            className={`shrink-0 group flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase transition-all active:scale-95 border backdrop-blur-md
+                              ${isActive
+                                ? 'bg-[rgba(10,15,40,0.82)] border-white/[0.12] text-[#adee2b] shadow-[0_2px_12px_rgba(0,0,0,0.22)]'
+                                : 'bg-[rgba(10,15,40,0.26)] border-white/[0.08] text-white/60 hover:bg-[rgba(10,15,40,0.48)] hover:border-white/[0.15] hover:text-white/90'}`}
+                          >
+                            {fmtPillDate(d, language)}
+                            <span className={`text-[8px] px-1.5 py-0.5 rounded-full leading-none font-black transition-colors
+                              ${isActive ? 'bg-[rgba(173,238,43,0.18)] text-[#adee2b]' : 'bg-white/10 text-white/50 group-hover:text-white/75'}`}>
+                              {count}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </HScrollRow>
                   </div>
 
-                  {roomsForDate.map((room: Room) => (
+                  {roomsForDate.map((room: Room, i: number) => (
                     <SlotRoomCard
                       key={room.id}
                       room={room}
                       slots={rangeSlots[room.id]?.[currentDate] ?? []}
                       onSelect={onRoomSelect}
+                      index={i}
                     />
                   ))}
                 </>
@@ -773,12 +855,31 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
             /* ── GROUP BY SESSION — pill nav at top ── */
             if (groupBy === 'session') {
               const sessionDefs = [
-                { key: 'morning'   as const, label: t('label_morning'),   icon: 'wb_sunny',   test: (ts: string) => ts < '12:00' },
-                { key: 'afternoon' as const, label: t('label_afternoon'), icon: 'wb_twilight', test: (ts: string) => ts >= '12:00' },
+                { key: 'morning'   as const, label: t('label_morning'),   icon: 'wb_sunny',
+                  winStart: bookingStartMin, winEnd: Math.min(720, bookingEndMin) },
+                { key: 'afternoon' as const, label: t('label_afternoon'), icon: 'wb_twilight',
+                  winStart: Math.max(720, bookingStartMin), winEnd: bookingEndMin },
               ]
 
-              const availableSessions = sessionDefs.filter(sess =>
-                visibleRooms.some((r: Room) => allSlotsFor(r).some(s => sess.test(slotTime(s.start))))
+              // Clip each slot to the session's time window — a slot spanning both morning and
+              // afternoon (e.g. a whole free day) must still surface in both, not just the one
+              // its start-time falls in.
+              function slotsInSession(room: Room, def: typeof sessionDefs[number]): AvailableSlot[] {
+                return allSlotsFor(room)
+                  .map(s => {
+                    const start = Math.max(toMin(slotTime(s.start)), def.winStart)
+                    const end   = Math.min(toMin(slotTime(s.end)),   def.winEnd)
+                    return { s, start, end }
+                  })
+                  .filter(({ start, end }) => end - start >= 30)
+                  .map(({ s, start, end }) => ({
+                    start: `${s.start.slice(0, 11)}${fromMin(start)}:00`,
+                    end:   `${s.start.slice(0, 11)}${fromMin(end)}:00`,
+                  }))
+              }
+
+              const availableSessions = sessionDefs.filter(def =>
+                visibleRooms.some((r: Room) => slotsInSession(r, def).length > 0)
               )
               if (availableSessions.length === 0) return (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-12">
@@ -791,19 +892,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 ? activeSessionPill : availableSessions[0].key
               const sessDef = sessionDefs.find(s => s.key === currentSession)!
 
-              const sessionEndCap = currentSession === 'morning' ? 720 : bookingEndMin  // 12:00 or effective end
               const roomsForSession = visibleRooms
-                .map((r: Room) => {
-                  const slots = allSlotsFor(r)
-                    .filter(s => sessDef.test(slotTime(s.start)))
-                    .map(s => {
-                      const eMin = toMin(slotTime(s.end))
-                      if (eMin <= sessionEndCap) return s
-                      return { ...s, end: `${s.end.slice(0, 11)}${fromMin(sessionEndCap)}:00` }
-                    })
-                    .filter(s => toMin(slotTime(s.end)) - toMin(slotTime(s.start)) >= 30)
-                  return { room: r, slots }
-                })
+                .map((r: Room) => ({ room: r, slots: slotsInSession(r, sessDef) }))
                 .filter(({ slots }) => slots.length > 0)
 
               return (
@@ -812,9 +902,7 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                   <div className="sticky top-0 z-10 -mx-5 px-5 -mt-4 pt-1 pb-2 flex gap-2">
                     {availableSessions.map(sess => {
                       const isActive = sess.key === currentSession
-                      const count = visibleRooms.filter((r: Room) =>
-                        allSlotsFor(r).some(s => sess.test(slotTime(s.start)))
-                      ).length
+                      const count = visibleRooms.filter((r: Room) => slotsInSession(r, sess).length > 0).length
                       return (
                         <button key={sess.key} type="button" onClick={() => setActiveSessionPill(sess.key)}
                           className={`group flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-black uppercase transition-all active:scale-95 border backdrop-blur-md
@@ -833,8 +921,8 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                     })}
                   </div>
 
-                  {roomsForSession.map(({ room, slots }) => (
-                    <SlotRoomCard key={room.id} room={room} slots={slots} showDate={isRange} onSelect={onRoomSelect} />
+                  {roomsForSession.map(({ room, slots }, i: number) => (
+                    <SlotRoomCard key={room.id} room={room} slots={slots} showDate={isRange} onSelect={onRoomSelect} index={i} />
                   ))}
                 </>
               )
