@@ -3498,6 +3498,7 @@ function PerPageDropdown({ value, onChange, options }: { value: string; onChange
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -3508,7 +3509,10 @@ function PerPageDropdown({ value, onChange, options }: { value: string; onChange
     }
     place()
     function onDocClick(e: MouseEvent) {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (btnRef.current?.contains(target)) return
+      if (panelRef.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDocClick)
     window.addEventListener('scroll', place, true)
@@ -3528,7 +3532,7 @@ function PerPageDropdown({ value, onChange, options }: { value: string; onChange
         <span className="material-symbols-outlined transition-transform duration-200" style={{ fontSize: 15, transform: open ? 'rotate(180deg)' : 'none' }}>expand_more</span>
       </button>
       {open && createPortal(
-        <div className="fixed z-[400] rounded-xl p-1 flex flex-col min-w-[96px] dropdown-enter"
+        <div ref={panelRef} className="fixed z-[400] rounded-xl p-1 flex flex-col min-w-[96px] dropdown-enter"
           style={{
             top: pos.top, left: pos.left,
             background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px) saturate(180%)', WebkitBackdropFilter: 'blur(32px) saturate(180%)',
