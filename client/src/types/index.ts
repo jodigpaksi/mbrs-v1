@@ -25,6 +25,8 @@ export interface User {
   default_building_id?: number | null
   department_location?: { id: number; name: string; code?: string } | null
   admin_buildings?: { id: number; name: string; address?: string; location?: { id: number; name: string } }[]
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Facility {

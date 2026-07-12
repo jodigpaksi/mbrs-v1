@@ -50,7 +50,7 @@ export async function getDirectory(): Promise<{ id: number; name: string; email:
   return res.data
 }
 
-export async function exportUsers(): Promise<{ name: string; email: string; alias: string; password: string; department: string; department_location: string; role: string; ext: string; default_building: string; assigned_buildings: string }[]> {
+export async function exportUsers(): Promise<{ name: string; email: string; alias: string; password: string; department: string; department_location: string; role: string; ext: string; default_building: string; assigned_buildings: string; created_at?: string; updated_at?: string }[]> {
   const res = await api.get('/users/export')
   return res.data
 }

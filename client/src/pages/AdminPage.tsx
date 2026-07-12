@@ -39,10 +39,28 @@ function ModalPortal({ children }: { children: ReactNode }) {
   return <>{createPortal(children, document.body)}</>
 }
 
-function StatCard({ label, value, sub, dark }: { label: string; value: string; sub: string; dark?: boolean }) {
+function StatCard({ label, value, sub, dark, period, onPeriodChange }: {
+  label: string; value: string; sub: string; dark?: boolean
+  period?: 'month' | 'all'; onPeriodChange?: (p: 'month' | 'all') => void
+}) {
   return (
     <div className={`p-5 rounded-2xl ${dark ? 'bg-black' : 'bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)]'}`}>
-      <p className={`text-[8px] font-black uppercase tracking-widest ${dark ? 'text-slate-500' : 'text-[var(--ds-text-3)]'}`}>{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-[8px] font-black uppercase tracking-widest ${dark ? 'text-slate-500' : 'text-[var(--ds-text-3)]'}`}>{label}</p>
+        {period && onPeriodChange && (
+          <div className="relative flex p-0.5 rounded-lg shrink-0" style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'var(--ds-bg-raised)' }}>
+            <div className="absolute top-0.5 bottom-0.5 rounded-[5px] pointer-events-none transition-transform duration-200 ease-out"
+              style={{ width: 'calc(50% - 2px)', left: 2, background: dark ? 'rgba(255,255,255,0.14)' : 'var(--ds-bg-surface)', transform: period === 'all' ? 'translateX(100%)' : 'translateX(0)', boxShadow: dark ? 'none' : '0 1px 2px rgba(0,0,0,0.08)' }} />
+            {(['month', 'all'] as const).map(p => (
+              <button key={p} type="button" onClick={() => onPeriodChange(p)}
+                className="relative z-10 px-1.5 py-0.5 rounded-[5px] text-[7px] font-black uppercase tracking-wide transition-colors"
+                style={{ color: period === p ? (dark ? '#fff' : 'var(--ds-text-1)') : (dark ? 'rgba(255,255,255,0.4)' : 'var(--ds-text-4)') }}>
+                {p === 'month' ? 'Month' : 'All'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <p className={`text-4xl font-black italic mt-1 ${dark ? 'text-[#adee2b]' : 'text-[var(--ds-text-1)]'}`}>{value}</p>
       <p className={`text-[9px] font-bold mt-0.5 ${dark ? 'text-slate-500' : 'text-[var(--ds-text-3)]'}`}>{sub}</p>
     </div>
@@ -2087,8 +2105,8 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
 // ── Import / Export modal ─────────────────────────────────────────────────────
 type ImportTab = 'excel' | 'csv' | 'sql'
 
-const EXPORT_COLS = ['name', 'email', 'alias', 'password', 'department', 'department_location', 'role', 'ext', 'default_building', 'assigned_buildings']
-const IMPORT_COLS = EXPORT_COLS
+const IMPORT_COLS = ['name', 'email', 'alias', 'password', 'department', 'department_location', 'role', 'ext', 'default_building', 'assigned_buildings']
+const EXPORT_COLS = [...IMPORT_COLS, 'created_at', 'updated_at']
 const ROLE_OPTIONS = ['user', 'admin', 'receptionist', 'building_admin']
 
 type ImportRow = {
@@ -2102,7 +2120,10 @@ function ImportExportModal({ users, onImport, onClose }: {
   onImport: (rows: ImportRow[]) => Promise<{ created: number; errors: string[] }>
   onClose: () => void
 }) {
+  const [mainTab, setMainTab] = useState<'export' | 'import'>('export')
   const [tab, setTab] = useState<ImportTab>('excel')
+  const [docsOpen, setDocsOpen] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const [preview, setPreview] = useState<ImportRow[] | null>(null)
   const [parseErr, setParseErr] = useState('')
   const [importing, setImporting] = useState(false)
@@ -2137,6 +2158,7 @@ function ImportExportModal({ users, onImport, onClose }: {
       department: u.department, department_location: u.department_location,
       role: u.role, ext: u.ext,
       default_building: u.default_building, assigned_buildings: u.assigned_buildings,
+      created_at: u.created_at ?? '', updated_at: u.updated_at ?? '',
     })))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Users')
@@ -2146,11 +2168,11 @@ function ImportExportModal({ users, onImport, onClose }: {
   async function doExportSQL() {
     const data = await fetchExportData()
     const rows = data.map(u => {
-      const vals = [u.name, u.email, u.alias, u.password, u.department, u.department_location, u.role, u.ext, u.default_building, u.assigned_buildings]
+      const vals = [u.name, u.email, u.alias, u.password, u.department, u.department_location, u.role, u.ext, u.default_building, u.assigned_buildings, u.created_at, u.updated_at]
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MRBS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings) VALUES\n${rows};`
+    const sql = `-- MRBS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings, created_at, updated_at) VALUES\n${rows};`
     download('users_export.sql', sql, 'text/plain')
   }
 
@@ -2158,6 +2180,7 @@ function ImportExportModal({ users, onImport, onClose }: {
   const TEMPLATE_EXAMPLE: Record<string, string>[] = [
     { name: 'Budi Santoso', email: 'budi@company.com', alias: 'budi', password: 'password123', department: 'IT', department_location: 'Jakarta', role: 'user', ext: '1001', default_building: 'Tower A', assigned_buildings: '' },
     { name: 'Siti Rahayu', email: 'siti@company.com', alias: 'siti.rahayu', password: 'password123', department: 'HR', department_location: 'Jakarta', role: 'receptionist', ext: '', default_building: '', assigned_buildings: 'Tower A, Tower B' },
+    { name: 'Andi Wijaya', email: 'andi.wijaya@company.com', alias: '', password: 'password123', department: 'Finance', department_location: 'Jakarta', role: 'user', ext: '', default_building: '', assigned_buildings: '' },
   ]
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
@@ -2277,12 +2300,12 @@ function ImportExportModal({ users, onImport, onClose }: {
   return (
     <ModalPortal>
     <div className="fixed inset-0 z-[1000] flex items-center justify-center admin-backdrop-in" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
-      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[640px] max-h-[90vh] flex flex-col overflow-hidden admin-modal-in" onClick={e => e.stopPropagation()}>
+      <div className="bg-[var(--ds-bg-surface)] rounded-3xl shadow-2xl w-[96vw] max-w-[1600px] flex flex-col overflow-hidden admin-modal-in" style={{ height: 720, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-[var(--ds-border)] shrink-0">
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Admin · Users</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)]">Admin · Users</p>
             <h3 className="text-xl font-black uppercase tracking-tight text-[var(--ds-text-1)] mt-0.5">Import / Export</h3>
           </div>
           <button onClick={onClose} className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)]">
@@ -2290,170 +2313,210 @@ function ImportExportModal({ users, onImport, onClose }: {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-
-        {/* ── EXPORT SECTION ── */}
-        <div className="px-7 pt-5 pb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.12)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#10b981' }}>upload</span>
-            </div>
-            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#10b981' }}>Export Users</p>
-            <span className="text-[10px] font-bold text-[var(--ds-text-3)]">— {users.length} users</span>
-          </div>
-          <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'rgba(16,185,129,0.04)', borderColor: 'rgba(16,185,129,0.18)' }}>
-            <p className="text-[10px] text-[var(--ds-text-2)] font-medium">Downloads all user records including hashed passwords and default building. Columns: <span className="font-mono text-[var(--ds-text-1)]">name, email, password, department, role, ext, default_building</span></p>
-            <div className="flex gap-2">
-              <button onClick={doExportExcel} disabled={exporting}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table</span>}Excel
-              </button>
-              <button onClick={doExportCSV} disabled={exporting}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors">
-                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>description</span>}CSV
-              </button>
-              <button onClick={doExportSQL} disabled={exporting}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700 text-white text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-50 transition-colors">
-                {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>database</span>}SQL
-              </button>
-            </div>
-          </div>
+        {/* Main tabs: Export / Import */}
+        <div className="flex gap-1 px-7 pt-3 shrink-0 border-b border-[var(--ds-border)]">
+          {([
+            { key: 'export' as const, label: 'Export', icon: 'upload', color: '#10b981' },
+            { key: 'import' as const, label: 'Import', icon: 'download', color: '#6366f1' },
+          ]).map(mt => (
+            <button key={mt.key} onClick={() => setMainTab(mt.key)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-[12px] font-black uppercase tracking-wider transition-colors border-b-2 -mb-px"
+              style={mainTab === mt.key ? { borderColor: mt.color, color: 'var(--ds-text-1)' } : { borderColor: 'transparent', color: 'var(--ds-text-3)' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: mainTab === mt.key ? mt.color : undefined }}>{mt.icon}</span>
+              {mt.label}
+            </button>
+          ))}
         </div>
 
-        {/* Divider */}
-        <div className="mx-7 border-t border-[var(--ds-border)]" />
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
 
-        {/* ── IMPORT SECTION ── */}
-        <div className="px-7 pt-4 pb-6 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="size-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.12)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#6366f1' }}>download</span>
+        {/* ── EXPORT TAB ── */}
+        {mainTab === 'export' && (
+          <div className="px-7 py-5">
+            <div className="rounded-2xl border p-4 space-y-3" style={{ background: 'rgba(16,185,129,0.04)', borderColor: 'rgba(16,185,129,0.18)' }}>
+              <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{users.length} user{users.length !== 1 ? 's' : ''} will be exported</span>
+              <p className="text-[11px] text-[var(--ds-text-2)] font-medium">Downloads all user records including hashed passwords. Columns: <span className="font-mono text-[var(--ds-text-1)]">{EXPORT_COLS.join(', ')}</span>. <span className="italic">Date Created/Edited are read-only — not part of the import template.</span></p>
+              <div className="flex gap-2">
+                <button onClick={doExportExcel} disabled={exporting}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-[11px] font-black uppercase hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                  {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table</span>}Excel
+                </button>
+                <button onClick={doExportCSV} disabled={exporting}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-500 text-white text-[11px] font-black uppercase hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                  {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>description</span>}CSV
+                </button>
+                <button onClick={doExportSQL} disabled={exporting}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-700 text-white text-[11px] font-black uppercase hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                  {exporting ? <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span> : <span className="material-symbols-outlined" style={{ fontSize: 13 }}>database</span>}SQL
+                </button>
+              </div>
             </div>
-            <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: '#6366f1' }}>Import Users</p>
           </div>
+        )}
+
+        {/* ── IMPORT TAB ── */}
+        {mainTab === 'import' && (
+        <div className="px-7 py-5 space-y-4">
 
           {/* Format tabs */}
           <div className="flex gap-1 bg-[var(--ds-bg-surface-2)] rounded-xl p-1 w-fit">
             {TABS.map(t => (
-              <button key={t.key} onClick={() => { setTab(t.key); setPreview(null); setParseErr(''); setImportResult(null) }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${tab === t.key ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
-                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{t.icon}</span>
+              <button key={t.key} onClick={() => { setTab(t.key); setPreview(null); setParseErr(''); setImportResult(null); setDocsOpen(false) }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all ${tab === t.key ? 'bg-[var(--ds-bg-surface)] shadow text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{t.icon}</span>
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* Format docs */}
-          <div className="bg-[var(--ds-bg-raised)] rounded-2xl p-4 space-y-3 text-[11px]">
-            {tab === 'excel' && (
-              <>
-                <p className="font-black text-[var(--ds-text-1)]">Format Excel (.xlsx)</p>
-                <div className="overflow-x-auto">
-                  <table className="text-[10px] border-collapse w-full">
-                    <thead>
-                      <tr className="bg-[var(--ds-border)]">
-                        {IMPORT_COLS.map((_, i) => (
-                          <th key={i} className="px-3 py-1.5 text-left font-black text-[var(--ds-text-1)] border border-[var(--ds-border)]">Col {String.fromCharCode(65 + i)}</th>
-                        ))}
-                      </tr>
-                      <tr className="bg-[var(--ds-bg-surface-2)]">
-                        {IMPORT_COLS.map(c => (
-                          <th key={c} className="px-3 py-1.5 text-left font-bold text-[var(--ds-text-2)] border border-[var(--ds-border)] font-mono">{c}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="bg-[var(--ds-bg-surface)]">
-                        {['Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''].map((v, i) => (
-                          <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)]">{v}</td>
-                        ))}
-                      </tr>
-                      <tr className="bg-[var(--ds-bg-raised)]">
-                        {['Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', '', '', 'Tower A, Tower B'].map((v, i) => (
-                          <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(empty)'}</td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
-                  <li>First row must be a header — column names can be anything, <em>column order determines mapping</em></li>
-                  <li>Required: <span className="font-mono">name</span> (Col A), <span className="font-mono">email</span> (Col B), <span className="font-mono">password</span> (Col D). All other columns are optional</li>
-                  <li>Alias (Col C): login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix</li>
-                  <li>Role: <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">user</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">admin</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">receptionist</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>) — the downloaded template has a dropdown on this column</li>
-                  <li>Department location (Col F) is only used when the department name is new (creates it with that location)</li>
-                  <li>Default/assigned building (Col I–J) must match an existing building name exactly; separate multiple assigned buildings with commas</li>
-                  <li>Password is hashed automatically on the server</li>
-                </ul>
-                <button onClick={() => downloadTemplate('xlsx')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[9px] font-black uppercase hover:bg-emerald-700 transition-colors">
-                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.xlsx)
-                </button>
-              </>
-            )}
+          {/* Format docs — collapsible, collapsed by default */}
+          <div className="bg-[var(--ds-bg-raised)] rounded-2xl overflow-hidden">
+            <button type="button" onClick={() => setDocsOpen(o => !o)}
+              className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left">
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 16 }}>info</span>
+                <span className="font-black text-[var(--ds-text-1)] text-[12px] truncate">
+                  Format {tab === 'excel' ? 'Excel (.xlsx)' : tab === 'csv' ? 'CSV (.csv)' : 'SQL (.sql)'} — column guide &amp; example
+                </span>
+              </span>
+              <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0 transition-transform duration-200" style={{ fontSize: 18, transform: docsOpen ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+            </button>
 
-            {tab === 'csv' && (
-              <>
-                <p className="font-black text-[var(--ds-text-1)]">Format CSV (.csv)</p>
-                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
-                  <p className="text-[var(--ds-text-3)]">{IMPORT_COLS.join(',')}</p>
-                  <p>Budi Santoso,budi@co.com,budi,pass1234,IT,Jakarta,user,1001,Tower A,</p>
-                  <p>Siti Rahayu,siti@co.com,siti.rahayu,pass1234,HR,Jakarta,receptionist,,,&quot;Tower A, Tower B&quot;</p>
-                </div>
-                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
-                  <li>Separator: comma <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">,</span> — wrap values containing commas (e.g. multiple assigned buildings) in double quotes</li>
-                  <li>First row = header (column names used for mapping, order doesn't matter)</li>
-                  <li>Columns <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required — all others are optional</li>
-                  <li>Alias: login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix</li>
-                  <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
-                  <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas inside quotes</li>
-                  <li>Encoding: UTF-8</li>
-                </ul>
-                <button onClick={() => downloadTemplate('csv')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500 text-white text-[9px] font-black uppercase hover:bg-blue-600 transition-colors">
-                  <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.csv)
-                </button>
-              </>
-            )}
+            {docsOpen && (
+              <div className="px-4 pb-4 pt-1 space-y-3 text-[12px] border-t border-[var(--ds-border-sub)]">
+                {tab === 'excel' && (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="text-[11px] border-collapse w-full">
+                        <thead>
+                          <tr className="bg-[var(--ds-border)]">
+                            {IMPORT_COLS.map((_, i) => (
+                              <th key={i} className="px-3 py-1.5 text-left font-black text-[var(--ds-text-1)] border border-[var(--ds-border)]">Col {String.fromCharCode(65 + i)}</th>
+                            ))}
+                          </tr>
+                          <tr className="bg-[var(--ds-bg-surface-2)]">
+                            {IMPORT_COLS.map(c => (
+                              <th key={c} className="px-3 py-1.5 text-left font-bold text-[var(--ds-text-2)] border border-[var(--ds-border)] font-mono">{c}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-[var(--ds-bg-surface)]">
+                            {['Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''].map((v, i) => (
+                              <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)]">{v}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-[var(--ds-bg-raised)]">
+                            {['Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', '', '', 'Tower A, Tower B'].map((v, i) => (
+                              <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(empty)'}</td>
+                            ))}
+                          </tr>
+                          <tr className="bg-[var(--ds-bg-surface)]">
+                            {['Andi Wijaya', 'andi.wijaya@co.com', '', 'pass1234', 'Finance', 'Jakarta', 'user', '', '', ''].map((v, i) => (
+                              <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(auto → andi.wijaya)'}</td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                      <li>First row must be a header — column names can be anything, <em>column order determines mapping</em></li>
+                      <li>Required: <span className="font-mono">name</span> (Col A), <span className="font-mono">email</span> (Col B), <span className="font-mono">password</span> (Col D). All other columns are optional</li>
+                      <li>Alias (Col C): login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix (see row 3 example above)</li>
+                      <li>Role: <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">user</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">admin</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">receptionist</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>) — the downloaded template has a dropdown on this column</li>
+                      <li>Department location (Col F) is only used when the department name is new (creates it with that location)</li>
+                      <li>Default/assigned building (Col I–J) must match an existing building name exactly; separate multiple assigned buildings with commas</li>
+                      <li>Password is hashed automatically on the server</li>
+                    </ul>
+                    <button onClick={() => downloadTemplate('xlsx')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase hover:bg-emerald-700 transition-colors">
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.xlsx)
+                    </button>
+                  </>
+                )}
 
-            {tab === 'sql' && (
-              <>
-                <p className="font-black text-[var(--ds-text-1)]">Format SQL (.sql)</p>
-                <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[10px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
-                  <p className="text-[var(--ds-text-3)]">-- Column order required: {IMPORT_COLS.join(', ')}</p>
-                  <p>INSERT INTO users ({IMPORT_COLS.join(', ')}) VALUES</p>
-                  <p className="pl-2">('Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''),</p>
-                  <p className="pl-2">('Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', NULL, NULL, 'Tower A, Tower B');</p>
-                </div>
-                <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
-                  <li>Only one <span className="font-mono">INSERT INTO ... VALUES (...)</span> block is processed</li>
-                  <li>Column order in VALUES must be: <span className="font-mono">{IMPORT_COLS.join(', ')}</span></li>
-                  <li>Use <span className="font-mono">NULL</span> or empty string <span className="font-mono">''</span> for optional fields — only <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required</li>
-                  <li>Alias: login username. Leave <span className="font-mono">NULL</span>/empty to auto-generate from the email prefix (e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>)</li>
-                  <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
-                  <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas</li>
-                  <li>Password can be plain text (auto-hashed) or a bcrypt hash from an export (recognized automatically)</li>
-                  <li>Multi-statement and subqueries are not supported</li>
-                </ul>
-              </>
+                {tab === 'csv' && (
+                  <>
+                    <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[11px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                      <p className="text-[var(--ds-text-3)]">{IMPORT_COLS.join(',')}</p>
+                      <p>Budi Santoso,budi@co.com,budi,pass1234,IT,Jakarta,user,1001,Tower A,</p>
+                      <p>Siti Rahayu,siti@co.com,siti.rahayu,pass1234,HR,Jakarta,receptionist,,,&quot;Tower A, Tower B&quot;</p>
+                      <p>Andi Wijaya,andi.wijaya@co.com,,pass1234,Finance,Jakarta,user,,,</p>
+                    </div>
+                    <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                      <li>Separator: comma <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">,</span> — wrap values containing commas (e.g. multiple assigned buildings) in double quotes</li>
+                      <li>First row = header (column names used for mapping, order doesn't matter)</li>
+                      <li>Columns <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required — all others are optional</li>
+                      <li>Alias: login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix (see row 3 example above)</li>
+                      <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
+                      <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas inside quotes</li>
+                      <li>Encoding: UTF-8</li>
+                    </ul>
+                    <button onClick={() => downloadTemplate('csv')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase hover:bg-blue-600 transition-colors">
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>download</span>Download Template (.csv)
+                    </button>
+                  </>
+                )}
+
+                {tab === 'sql' && (
+                  <>
+                    <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[11px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
+                      <p className="text-[var(--ds-text-3)]">-- Column order required: {IMPORT_COLS.join(', ')}</p>
+                      <p>INSERT INTO users ({IMPORT_COLS.join(', ')}) VALUES</p>
+                      <p className="pl-2">('Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''),</p>
+                      <p className="pl-2">('Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', NULL, NULL, 'Tower A, Tower B'),</p>
+                      <p className="pl-2">('Andi Wijaya', 'andi.wijaya@co.com', NULL, 'pass1234', 'Finance', 'Jakarta', 'user', NULL, NULL, NULL);</p>
+                    </div>
+                    <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
+                      <li>Only one <span className="font-mono">INSERT INTO ... VALUES (...)</span> block is processed</li>
+                      <li>Column order in VALUES must be: <span className="font-mono">{IMPORT_COLS.join(', ')}</span></li>
+                      <li>Use <span className="font-mono">NULL</span> or empty string <span className="font-mono">''</span> for optional fields — only <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required</li>
+                      <li>Alias: login username. Leave <span className="font-mono">NULL</span>/empty to auto-generate from the email prefix (e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>, see row 3 example above)</li>
+                      <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
+                      <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas</li>
+                      <li>Password can be plain text (auto-hashed) or a bcrypt hash from an export (recognized automatically)</li>
+                      <li>Multi-statement and subqueries are not supported</li>
+                    </ul>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
-          {/* File input */}
+          {/* Drag & drop file chooser */}
           {!importResult && (
-            <div>
-              <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider block mb-2">Choose File</label>
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => {
+                e.preventDefault(); setDragOver(false)
+                const f = e.dataTransfer.files?.[0]
+                if (f) handleFile(f)
+              }}
+              onClick={() => fileRef.current?.click()}
+              className="rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 py-8 px-4 cursor-pointer transition-colors"
+              style={dragOver
+                ? { borderColor: '#adee2b', background: 'rgba(173,238,43,0.06)' }
+                : { borderColor: 'var(--ds-border)' }
+              }
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 30 }}>cloud_upload</span>
+              <p className="text-[12px] font-bold text-[var(--ds-text-2)] text-center">
+                Drag &amp; drop your file here, or <span className="text-[var(--ds-text-1)] underline">browse</span>
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--ds-text-3)]">
+                Accepted: {tab === 'excel' ? '.xlsx, .xls' : tab === 'csv' ? '.csv' : '.sql'}
+              </p>
               <input
                 ref={fileRef}
                 type="file"
                 accept={tab === 'excel' ? '.xlsx,.xls' : tab === 'csv' ? '.csv' : '.sql'}
                 onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
-                className="block w-full text-[11px] text-[var(--ds-text-2)] font-bold
-                  file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0
-                  file:text-[10px] file:font-black file:uppercase
-                  file:bg-black file:text-[#adee2b] hover:file:bg-slate-800 file:cursor-pointer"
+                className="hidden"
               />
-              {parseErr && <p className="text-xs text-red-500 font-bold mt-2">{parseErr}</p>}
+              {parseErr && <p className="text-sm text-red-500 font-bold mt-1">{parseErr}</p>}
             </div>
           )}
 
@@ -2461,12 +2524,12 @@ function ImportExportModal({ users, onImport, onClose }: {
           {preview && preview.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Preview — {preview.length} rows</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">Preview — {preview.length} rows</p>
                 <button onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = '' }}
-                  className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Clear</button>
+                  className="text-[10px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Clear</button>
               </div>
               <div className="overflow-x-auto rounded-xl border border-[var(--ds-border)]">
-                <table className="w-full text-[10px]">
+                <table className="w-full text-[11px]">
                   <thead>
                     <tr className="bg-[var(--ds-bg-raised)] border-b border-[var(--ds-border)]">
                       {IMPORT_COLS.map(c => (
@@ -2485,7 +2548,7 @@ function ImportExportModal({ users, onImport, onClose }: {
                         <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.department_location || '—'}</td>
                         <td className="px-3 py-1.5">
                           {row.role && ROLE_META[row.role as UserRole] ? (
-                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${ROLE_META[row.role as UserRole].bg} ${ROLE_META[row.role as UserRole].text}`}>{row.role}</span>
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${ROLE_META[row.role as UserRole].bg} ${ROLE_META[row.role as UserRole].text}`}>{row.role}</span>
                           ) : <span className="text-[var(--ds-text-3)]">{row.role || 'user'}</span>}
                         </td>
                         <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.ext || '—'}</td>
@@ -2495,7 +2558,7 @@ function ImportExportModal({ users, onImport, onClose }: {
                     ))}
                     {preview.length > 8 && (
                       <tr>
-                        <td colSpan={IMPORT_COLS.length} className="px-3 py-2 text-center text-[9px] text-[var(--ds-text-3)] font-bold">
+                        <td colSpan={IMPORT_COLS.length} className="px-3 py-2 text-center text-[10px] text-[var(--ds-text-3)] font-bold">
                           +{preview.length - 8} more rows...
                         </td>
                       </tr>
@@ -2504,7 +2567,7 @@ function ImportExportModal({ users, onImport, onClose }: {
                 </table>
               </div>
               <button onClick={handleImport} disabled={importing}
-                className="w-full py-3 rounded-2xl bg-black text-[#adee2b] text-[10px] font-black uppercase hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
+                className="w-full py-3 rounded-2xl bg-black text-[#adee2b] text-[11px] font-black uppercase hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
                 {importing && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
                 Import {preview.length} Users
               </button>
@@ -2515,23 +2578,24 @@ function ImportExportModal({ users, onImport, onClose }: {
           {importResult && (
             <div className="space-y-3">
               <div className={`rounded-2xl p-4 ${importResult.errors.length === 0 ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
-                <p className={`text-sm font-black ${importResult.errors.length === 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                <p className={`text-base font-black ${importResult.errors.length === 0 ? 'text-green-400' : 'text-amber-400'}`}>
                   {importResult.created} user{importResult.created !== 1 ? 's' : ''} created successfully
                   {importResult.errors.length > 0 ? ` — ${importResult.errors.length} row${importResult.errors.length !== 1 ? 's' : ''} failed` : ' — all done!'}
                 </p>
                 {importResult.errors.length > 0 && (
                   <ul className="mt-2 space-y-1">
                     {importResult.errors.map((e, i) => (
-                      <li key={i} className="text-[10px] text-amber-400 font-medium">• {e}</li>
+                      <li key={i} className="text-[11px] text-amber-400 font-medium">• {e}</li>
                     ))}
                   </ul>
                 )}
               </div>
               <button onClick={() => setImportResult(null)}
-                className="text-[9px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Import more</button>
+                className="text-[10px] text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] font-bold">Import more</button>
             </div>
           )}
-        </div>{/* end import section */}
+        </div>
+        )}{/* end import tab */}
         </div>{/* end scrollable */}
       </div>
     </div>
@@ -3428,9 +3492,115 @@ function DepartmentsSection({ departments, locations, qc }: {
   )
 }
 
+/** Page-number bar + "per page" dropdown for the Data User Reguler table. Reused above and below the table. */
+/** Small glass dropdown for the "per page" selector — portal-positioned so it never gets clipped by the table card's overflow-hidden. */
+function PerPageDropdown({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function place() {
+      const r = btnRef.current?.getBoundingClientRect()
+      if (!r) return
+      setPos({ top: r.bottom + 6, left: r.right - 96 })
+    }
+    place()
+    function onDocClick(e: MouseEvent) {
+      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open])
+
+  return (
+    <>
+      <button ref={btnRef} type="button" onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 pl-3 pr-2 py-1.5 rounded-lg border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[11px] font-black text-[var(--ds-text-1)] hover:bg-[var(--ds-bg-surface-2)] transition-colors">
+        {value}
+        <span className="material-symbols-outlined transition-transform duration-200" style={{ fontSize: 15, transform: open ? 'rotate(180deg)' : 'none' }}>expand_more</span>
+      </button>
+      {open && createPortal(
+        <div className="fixed z-[400] rounded-xl p-1 flex flex-col min-w-[96px] dropdown-enter"
+          style={{
+            top: pos.top, left: pos.left,
+            background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px) saturate(180%)', WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+            border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)',
+          }}>
+          {options.map(o => (
+            <button key={o} onClick={() => { onChange(o); setOpen(false) }}
+              className={`px-3 py-2 rounded-lg text-left text-[11px] font-black transition-colors ${o === value ? 'bg-black text-[#adee2b]' : 'text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)]'}`}>
+              {o}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+/** Sliding window of at most `size` consecutive page numbers, clamped within [1, totalPages]. */
+function pageWindow(page: number, totalPages: number, size = 5): number[] {
+  if (totalPages <= size) return Array.from({ length: totalPages }, (_, i) => i + 1)
+  let start = Math.max(1, page - Math.floor(size / 2))
+  const end = Math.min(totalPages, start + size - 1)
+  start = Math.max(1, end - size + 1)
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}
+
+function UserPaginationBar({ page, totalPages, perPage, onPage, onPerPage, total, showPerPage }: {
+  page: number; totalPages: number; perPage: string
+  onPage: (p: number) => void; onPerPage: (p: string) => void
+  total: number; showPerPage: boolean
+}) {
+  const pages = useMemo(() => pageWindow(page, totalPages, 5), [page, totalPages])
+  const perPageN = Number(perPage)
+
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap px-5 py-3">
+      <p className="text-[11px] font-bold text-[var(--ds-text-3)] whitespace-nowrap">
+        {total === 0 ? 'No users' : `Showing ${(page - 1) * perPageN + 1}–${Math.min(page * perPageN, total)} of ${total}`}
+      </p>
+      <div className="flex items-center gap-4 flex-wrap">
+        {showPerPage && (
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Per page</span>
+            <PerPageDropdown value={perPage} onChange={onPerPage} options={['25', '50', '100', '200', '500']} />
+          </div>
+        )}
+        <div className="flex items-center gap-1">
+          <button onClick={() => onPage(Math.max(1, page - 1))} disabled={page <= 1}
+            className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] disabled:opacity-30 disabled:pointer-events-none transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_left</span>
+          </button>
+          {pages.map(p => (
+            <button key={p} onClick={() => onPage(p)}
+              className={`min-w-8 h-8 px-2 flex items-center justify-center rounded-lg text-[11px] font-black transition-colors ${p === page ? 'bg-black text-[#adee2b]' : 'text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)]'}`}>
+              {p}
+            </button>
+          ))}
+          <button onClick={() => onPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}
+            className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] disabled:opacity-30 disabled:pointer-events-none transition-colors">
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function UsersTab() {
   const qc = useQueryClient()
   const { user: currentUser } = useAuth()
+  const { addInfoToast } = useCancelToast()
   const isReadOnly = currentUser?.role === 'building_admin'
   const { data: users = [], isLoading } = useQuery<User[]>({ queryKey: ['users'], queryFn: getUsers })
   const { data: buildings = [] } = useQuery<Building[]>({ queryKey: ['buildings'], queryFn: getBuildings })
@@ -3442,6 +3612,11 @@ function UsersTab() {
   const [bldIds, setBldIds]             = useState<number[]>([])
   const [saving, setSaving]             = useState(false)
   const editScrollBodyRef = useRef<HTMLDivElement>(null)
+
+  function fmtUserDate(iso?: string) {
+    if (!iso) return '—'
+    return new Date(iso.replace('Z', '')).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
 
   function selectEditRole(r: UserRole, blocked: boolean) {
     if (blocked) return
@@ -3458,6 +3633,11 @@ function UsersTab() {
   const [deletingUser, setDeletingUser]         = useState(false)
   const [deleteUserErr, setDeleteUserErr]       = useState('')
   const [deleteBlockedUser, setDeleteBlockedUser] = useState<User | null>(null)
+  const [selectedIds, setSelectedIds]           = useState<Set<number>>(new Set())
+  const [batchDeleteOpen, setBatchDeleteOpen]   = useState(false)
+  const [batchConfirmInput, setBatchConfirmInput] = useState('')
+  const [batchDeleting, setBatchDeleting]       = useState(false)
+  const [batchDeleteErr, setBatchDeleteErr]     = useState('')
   const [editName, setEditName]               = useState('')
   const [editEmail, setEditEmail]             = useState('')
   const [editAlias, setEditAlias]             = useState('')
@@ -3466,7 +3646,6 @@ function UsersTab() {
   const [editPw, setEditPw]                   = useState('')
   const [editConfirmPw, setEditConfirmPw]     = useState('')
   const [editShowPw, setEditShowPw]           = useState(false)
-  const [editAvatar, setEditAvatar]           = useState('')
   const [editErr, setEditErr]                 = useState('')
   const [editDefaultBldId, setEditDefaultBldId] = useState<number | null>(null)
 
@@ -3482,7 +3661,6 @@ function UsersTab() {
     setEditExt(u.ext ?? '')
     setEditPw('')
     setEditConfirmPw('')
-    setEditAvatar(u.avatar ?? '')
     setEditShowPw(false)
     setEditErr('')
   }
@@ -3501,7 +3679,6 @@ function UsersTab() {
         department_id: editDeptId,
         ext: editExt.trim() || undefined,
         ...(editPw ? { password: editPw } : {}),
-        ...(editAvatar !== (editUser.avatar ?? '') ? { avatar: editAvatar || null } : {}),
       })
       await updateUserRole(editUser.id, roleValue)
       if (roleValue !== 'admin') {
@@ -3549,6 +3726,46 @@ function UsersTab() {
     () => { setDeleteUserTarget(null); setConfirmUserInput('') },
   )
 
+  // ── Multi-select batch delete (Data User Reguler subpage) ──
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBatchDelete() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBatchDeleting(true); setBatchDeleteErr('')
+    const errors: string[] = []
+    for (const id of ids) {
+      try { await deleteUser(id) }
+      catch (e: unknown) {
+        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        const u = (users as User[]).find(x => x.id === id)
+        errors.push(`${u?.name ?? id}: ${msg ?? 'failed to delete'}`)
+      }
+    }
+    qc.invalidateQueries({ queryKey: ['users'] })
+    setBatchDeleting(false)
+    if (errors.length === 0) {
+      addInfoToast(`${ids.length} user${ids.length !== 1 ? 's' : ''} deleted`)
+      setSelectedIds(new Set())
+      setBatchDeleteOpen(false)
+      setBatchConfirmInput('')
+    } else {
+      setBatchDeleteErr(`${ids.length - errors.length}/${ids.length} deleted. ${errors.join('; ')}`)
+    }
+  }
+
+  useModalHotkeys(
+    batchDeleteOpen,
+    batchConfirmInput === 'DELETE' ? handleBatchDelete : undefined,
+    () => { setBatchDeleteOpen(false); setBatchConfirmInput(''); setBatchDeleteErr('') },
+  )
+
   async function handleImport(rows: ImportRow[]) {
     const result = await importUsers(rows)
     qc.invalidateQueries({ queryKey: ['users'] })
@@ -3565,12 +3782,42 @@ function UsersTab() {
     return g
   }, [filtered])
 
+  // ── "User (Reguler)" subpage — the role='user' table lives on its own drill-down view ──
+  const [regularView, setRegularView] = useState(false)
+
+  // ── Pagination — Data User Reguler (role='user') table only ──
+  const [regularPage, setRegularPage]       = useState(1)
+  const [regularPerPage, setRegularPerPage] = useState('25')
+  const regularUsers    = grouped.user ?? []
+  const regularPerPageN = Number(regularPerPage)
+  const regularTotalPages = Math.max(1, Math.ceil(regularUsers.length / regularPerPageN))
+  const regularPageClamped = Math.min(regularPage, regularTotalPages)
+  const regularPageRows = regularUsers.slice((regularPageClamped - 1) * regularPerPageN, regularPageClamped * regularPerPageN)
+
+  useEffect(() => { setRegularPage(1) }, [search, regularPerPage])
+  useEffect(() => { setSelectedIds(new Set()) }, [search, regularView])
+
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5 w-full max-w-[1600px]">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Management</p>
-          <h1 className="text-3xl font-black italic tracking-tighter uppercase">Users</h1>
+          {regularView ? (
+            <div className="flex items-center gap-3">
+              <button onClick={() => setRegularView(false)}
+                className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors shrink-0">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span>
+              </button>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Management User</p>
+                <h1 className="text-3xl font-black italic tracking-tighter uppercase">User (Reguler)</h1>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[var(--ds-text-3)] mb-1">Management</p>
+              <h1 className="text-3xl font-black italic tracking-tighter uppercase">Users</h1>
+            </>
+          )}
         </div>
         {/* Search */}
         <div className="relative">
@@ -3594,8 +3841,8 @@ function UsersTab() {
         </>)}
       </div>
 
-      {/* ── Departments section — admin only ── */}
-      {!isReadOnly && <DepartmentsSection departments={departments as Department[]} locations={locations as Location[]} qc={qc} />}
+      {/* ── Departments section — admin only, hidden while inside the User (Reguler) subpage ── */}
+      {!isReadOnly && !regularView && <DepartmentsSection departments={departments as Department[]} locations={locations as Location[]} qc={qc} />}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
@@ -3603,16 +3850,53 @@ function UsersTab() {
         </div>
       ) : (
         <div className="space-y-4">
-          {ALL_ROLES.filter(r => grouped[r]?.length).map(role => {
+          {!regularView && grouped.user?.length ? (
+            <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
+              <div className="flex items-center justify-between gap-3 px-5 py-3.5 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <span className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase ${ROLE_META.user.bg} ${ROLE_META.user.text}`}>{ROLE_META.user.label}</span>
+                  <span className="text-[11px] font-black text-[var(--ds-text-3)]">{grouped.user.length} user{grouped.user.length !== 1 ? 's' : ''}</span>
+                </div>
+                <button onClick={() => setRegularView(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black text-[#adee2b] text-[11px] font-black uppercase hover:bg-slate-800 transition-colors">
+                  Open User (Reguler)
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {(regularView ? (['user'] as UserRole[]) : ALL_ROLES.filter(r => r !== 'user')).filter(r => grouped[r]?.length).map(role => {
             const m = ROLE_META[role]
             const isUserRole = role === 'user'
             return (
               <div key={role} className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border-sub)] overflow-hidden">
                 {/* Group header */}
-                <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ds-border-sub)]">
+                <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--ds-border-sub)] flex-wrap">
                   <span className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase ${m.bg} ${m.text}`}>{m.label}</span>
                   <span className="text-[11px] font-black text-[var(--ds-text-3)]">{grouped[role]!.length} user{grouped[role]!.length !== 1 ? 's' : ''}</span>
+                  {isUserRole && !isReadOnly && selectedIds.size > 0 && (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <span className="text-[11px] font-bold text-[var(--ds-text-2)]">{selectedIds.size} selected</span>
+                      <button onClick={() => setSelectedIds(new Set())}
+                        className="text-[10px] font-black uppercase tracking-wider text-[var(--ds-text-3)] hover:text-[var(--ds-text-1)] transition-colors px-2 py-1.5">
+                        Clear
+                      </button>
+                      <button onClick={() => { setBatchDeleteErr(''); setBatchConfirmInput(''); setBatchDeleteOpen(true) }}
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase hover:bg-red-600 transition-colors">
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
+                        Delete Selected
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {isUserRole && regularUsers.length > 0 && (
+                  <div className="border-b border-[var(--ds-border-sub)]">
+                    <UserPaginationBar page={regularPageClamped} totalPages={regularTotalPages} perPage={regularPerPage}
+                      onPage={setRegularPage} onPerPage={setRegularPerPage} total={regularUsers.length} showPerPage />
+                  </div>
+                )}
 
                 {isUserRole ? (
                   /* Table layout for role='user' */
@@ -3620,6 +3904,7 @@ function UsersTab() {
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b border-[var(--ds-border-sub)]">
+                          {!isReadOnly && <th className="px-4 py-3 w-8"></th>}
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-10">No.</th>
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name</th>
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Email</th>
@@ -3627,14 +3912,22 @@ function UsersTab() {
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-20">Ext</th>
                           {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Default Building</th>}
                           {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Special Access</th>}
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Created</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Edited</th>
                           <th className="px-2 py-3 w-10"></th>
                           <th className="px-2 py-3 w-10"></th>
                         </tr>
                       </thead>
                       <tbody>
-                        {grouped[role]!.map((u, i) => (
-                          <tr key={u.id} className={`hover:bg-[var(--ds-bg-raised)] transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''}`}>
-                            <td className="px-5 py-3.5 text-[11px] font-bold text-[var(--ds-text-3)]">{i + 1}</td>
+                        {regularPageRows.map((u, i) => (
+                          <tr key={u.id} className={`hover:bg-[var(--ds-bg-raised)] transition-colors ${i < regularPageRows.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''} ${selectedIds.has(u.id) ? 'bg-red-500/[0.04]' : ''}`}>
+                            {!isReadOnly && (
+                              <td className="px-4 py-3.5">
+                                <input type="checkbox" checked={selectedIds.has(u.id)} onChange={() => toggleSelect(u.id)}
+                                  className="size-4 rounded accent-black cursor-pointer" />
+                              </td>
+                            )}
+                            <td className="px-5 py-3.5 text-[11px] font-bold text-[var(--ds-text-3)]">{(regularPageClamped - 1) * regularPerPageN + i + 1}</td>
                             <td className="px-5 py-3.5">
                               <div className="flex items-center gap-2.5">
                                 <UserAvatar name={u.name} avatar={u.avatar} size={32} />
@@ -3699,6 +3992,8 @@ function UsersTab() {
                                 </button>
                               </td>
                             )}
+                            <td className="px-5 py-3.5 text-[11px] text-[var(--ds-text-3)] font-medium whitespace-nowrap">{fmtUserDate(u.created_at)}</td>
+                            <td className="px-5 py-3.5 text-[11px] text-[var(--ds-text-3)] font-medium whitespace-nowrap">{fmtUserDate(u.updated_at)}</td>
                             <td className="px-2 py-3.5">
                               {!isReadOnly && (
                                 <button onClick={() => openEdit(u)}
@@ -3720,61 +4015,100 @@ function UsersTab() {
                       </tbody>
                     </table>
                   </div>
-                ) : (
-                  /* Card layout for admin roles */
-                  <>
-                    {grouped[role]!.map((u, i) => (
-                      <div key={u.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-[var(--ds-bg-raised)] transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''}`}>
-                        <UserAvatar name={u.name} avatar={u.avatar} size={44} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[14px] font-black text-[var(--ds-text-1)]">{u.name}</p>
-                          <p className="text-[12px] text-[var(--ds-text-3)] font-bold">{u.email}{u.alias && <span className="text-[var(--ds-text-4)] font-medium"> · @{u.alias}</span>}</p>
-                        </div>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          {u.department && <span className="text-[11px] font-bold text-[var(--ds-text-3)] uppercase">{u.department}</span>}
-                          {u.department_location && <span className="text-[10px] font-bold text-[var(--ds-text-4)]">| {u.department_location.code ?? u.department_location.name}</span>}
-                        </span>
-                        {/* Building tags */}
-                        <div className="flex gap-1.5 flex-wrap max-w-[220px] justify-end">
-                          {(u.admin_buildings ?? []).length === 0
-                            ? <span className="text-[11px] text-orange-400 font-black uppercase">No buildings</span>
-                            : (u.admin_buildings ?? []).map(b => (
-                              <span key={b.id} className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase">{b.name}</span>
-                            ))
-                          }
-                        </div>
-                        {/* Special room access — only for regular users */}
-                        {u.role === 'user' && !isReadOnly && (
-                          <button
-                            title={u.can_book_special ? 'Revoke special room access' : 'Grant special room access'}
-                            onClick={async () => {
-                              await toggleUserSpecialAccess(u.id)
-                              qc.invalidateQueries({ queryKey: ['users'] })
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-colors shrink-0 text-[11px] font-black uppercase tracking-wider"
-                            style={{ background: u.can_book_special ? 'rgba(173,238,43,0.12)' : 'rgba(0,0,0,0.04)', color: u.can_book_special ? '#4d7c00' : '#94a3b8' }}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>star</span>
-                            {u.can_book_special ? 'Special' : 'Regular'}
-                          </button>
-                        )}
-                        {!isReadOnly && (<>
-                        <button onClick={() => openEdit(u)}
-                          className="size-9 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors shrink-0">
-                          <span className="material-symbols-outlined" style={{ fontSize: 17 }}>edit</span>
-                        </button>
-                        <button onClick={() => {
-                            const isLastAdmin = u.role === 'admin' && (users as User[]).filter(x => x.role === 'admin').length <= 1
-                            if (isLastAdmin) { setDeleteBlockedUser(u); return }
-                            setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('')
-                          }}
-                          className="size-8 flex items-center justify-center rounded-xl text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors shrink-0">
-                          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>delete</span>
-                        </button>
-                        </>)}
-                      </div>
-                    ))}
-                  </>
+                ) : null}
+
+                {isUserRole && regularUsers.length > 0 && (
+                  <div className="border-t border-[var(--ds-border-sub)]">
+                    <UserPaginationBar page={regularPageClamped} totalPages={regularTotalPages} perPage={regularPerPage}
+                      onPage={setRegularPage} onPerPage={setRegularPerPage} total={regularUsers.length} showPerPage={false} />
+                  </div>
+                )}
+
+                {!isUserRole && (
+                  /* Table layout for admin/building_admin/receptionist — mirrors the regular-user table so every role group lines up in the same neat columns */
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left table-fixed">
+                      <colgroup>
+                        <col className="w-[26%]" />
+                        <col className="w-[16%]" />
+                        <col className="w-[28%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-10" />
+                        <col className="w-10" />
+                      </colgroup>
+                      <thead>
+                        <tr className="border-b border-[var(--ds-border-sub)]">
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Department</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Buildings</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Created</th>
+                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Edited</th>
+                          <th className="px-2 py-3"></th>
+                          <th className="px-2 py-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {grouped[role]!.map((u, i) => (
+                          <tr key={u.id} className={`hover:bg-[var(--ds-bg-raised)] transition-colors ${i < grouped[role]!.length - 1 ? 'border-b border-[var(--ds-border-sub)]' : ''}`}>
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <UserAvatar name={u.name} avatar={u.avatar} size={32} />
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-black text-[var(--ds-text-1)] truncate">{u.name}</p>
+                                  <p className="text-[11px] text-[var(--ds-text-3)] font-medium truncate">{u.email}{u.alias && <span className="text-[var(--ds-text-4)]"> · @{u.alias}</span>}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              {u.department ? (
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                  <span className="text-[12px] font-black text-[var(--ds-text-1)] uppercase truncate">{u.department}</span>
+                                  {u.department_location && (
+                                    <span className="text-[10px] font-bold text-[var(--ds-text-3)] shrink-0">
+                                      | {u.department_location.code ?? u.department_location.name}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : <span className="text-[var(--ds-text-4)]">—</span>}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <div className="flex gap-1.5 flex-wrap">
+                                {(u.admin_buildings ?? []).length === 0
+                                  ? <span className="text-[11px] text-orange-400 font-black uppercase">No buildings</span>
+                                  : (u.admin_buildings ?? []).map(b => (
+                                    <span key={b.id} className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase">{b.name}</span>
+                                  ))
+                                }
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5 text-[11px] text-[var(--ds-text-3)] font-medium whitespace-nowrap">{fmtUserDate(u.created_at)}</td>
+                            <td className="px-5 py-3.5 text-[11px] text-[var(--ds-text-3)] font-medium whitespace-nowrap">{fmtUserDate(u.updated_at)}</td>
+                            <td className="px-2 py-3.5">
+                              {!isReadOnly && (
+                                <button onClick={() => openEdit(u)}
+                                  className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-surface-2)] hover:text-[var(--ds-text-1)] transition-colors">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-2 py-3.5">
+                              {!isReadOnly && (
+                                <button onClick={() => {
+                                    const isLastAdmin = u.role === 'admin' && (users as User[]).filter(x => x.role === 'admin').length <= 1
+                                    if (isLastAdmin) { setDeleteBlockedUser(u); return }
+                                    setDeleteUserTarget(u); setConfirmUserInput(''); setDeleteUserErr('')
+                                  }}
+                                  className="size-8 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-red-500/10 hover:text-red-400 transition-colors">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )
@@ -3902,6 +4236,86 @@ function UsersTab() {
         </ModalPortal>
       )}
 
+      {/* Batch delete confirm — "Batch Delete User" danger zone */}
+      {batchDeleteOpen && (() => {
+        const selectedUsers = (users as User[]).filter(u => selectedIds.has(u.id))
+        return (
+        <ModalPortal>
+        <div className="fixed inset-0 z-[1001] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(16px)' }}
+          onClick={() => { if (!batchDeleting) { setBatchDeleteOpen(false); setBatchConfirmInput('') } }}>
+          <div
+            className="w-[460px] max-h-[85vh] flex flex-col rounded-[2rem] shadow-2xl overflow-hidden"
+            style={{ background: 'var(--ds-bg-surface)', backdropFilter: 'blur(48px) saturate(200%)', border: '1px solid rgba(128,128,128,0.15)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-7 pt-7 pb-5 border-b flex items-center gap-3 shrink-0" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.15)' }}>
+              <div className="size-11 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-red-500" style={{ fontSize: 22 }}>delete_sweep</span>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-red-500">Danger Zone</p>
+                <h3 className="text-lg font-black text-[var(--ds-text-1)] uppercase tracking-tight mt-0.5">Batch Delete User</h3>
+              </div>
+            </div>
+            <div className="px-7 py-5 space-y-4 overflow-y-auto">
+              <p className="text-[11px] text-[var(--ds-text-2)] font-medium leading-relaxed">
+                <span className="font-black text-[var(--ds-text-1)]">{selectedUsers.length} account{selectedUsers.length !== 1 ? 's' : ''}</span> and all associated data will be permanently removed. <span className="font-black text-[var(--ds-text-1)]">This cannot be undone.</span>
+              </p>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] px-1">Who's selected</label>
+                <div className="rounded-xl border border-[var(--ds-border-sub)] max-h-[200px] overflow-y-auto divide-y divide-[var(--ds-border-sub)]">
+                  {selectedUsers.map(u => (
+                    <div key={u.id} className="flex items-center gap-3 px-3 py-2.5">
+                      <UserAvatar name={u.name} avatar={u.avatar} size={28} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] font-black text-[var(--ds-text-1)] truncate">{u.name}</p>
+                        <p className="text-[10px] text-[var(--ds-text-3)] font-medium truncate">{u.email}{u.department ? ` · ${u.department}` : ''}</p>
+                      </div>
+                      <button onClick={() => toggleSelect(u.id)} title="Remove from selection"
+                        className="size-6 flex items-center justify-center rounded-lg text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] hover:text-[var(--ds-text-1)] transition-colors shrink-0">
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-[var(--ds-text-3)] px-1">
+                  Type <span className="normal-case text-[var(--ds-text-1)]">"DELETE"</span> to confirm
+                </label>
+                <input
+                  value={batchConfirmInput}
+                  onChange={e => setBatchConfirmInput(e.target.value)}
+                  placeholder="DELETE"
+                  autoFocus
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-transparent text-[var(--ds-text-1)]"
+                />
+              </div>
+              {batchDeleteErr && (
+                <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+                  <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>
+                  {batchDeleteErr}
+                </div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => { setBatchDeleteOpen(false); setBatchConfirmInput('') }} disabled={batchDeleting}
+                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] hover:bg-[var(--ds-bg-raised)] transition-colors disabled:opacity-40">
+                  Cancel
+                </button>
+                <button onClick={handleBatchDelete} disabled={batchDeleting || batchConfirmInput !== 'DELETE'}
+                  className="flex-1 py-3.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-red-500 text-white hover:bg-red-600 disabled:opacity-30 flex items-center justify-center gap-2 transition-all">
+                  {batchDeleting && <span className="material-symbols-outlined animate-spin" style={{ fontSize: 13 }}>progress_activity</span>}
+                  {batchDeleting ? 'Deleting...' : `Delete ${selectedUsers.length} User${selectedUsers.length !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        </ModalPortal>
+        )
+      })()}
+
       {/* Add user modal */}
       {addModal && (
         <AddUserModal
@@ -3931,7 +4345,7 @@ function UsersTab() {
             onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center gap-3 px-7 pt-6 pb-5 border-b border-[var(--ds-border-sub)] shrink-0">
-              <UserAvatar name={editUser.name} avatar={editAvatar || editUser.avatar} size={48}
+              <UserAvatar name={editUser.name} avatar={editUser.avatar} size={48}
                 style={{ borderRadius: 16 }} />
               <div>
                 <h3 className="text-sm font-black uppercase tracking-tight text-[var(--ds-text-1)]">Edit User</h3>
@@ -3943,40 +4357,6 @@ function UsersTab() {
             <div ref={editScrollBodyRef} className="flex-1 overflow-y-auto px-7 py-5 space-y-4" style={{ scrollbarWidth: 'thin' }}>
 
             {editErr && <div className="flex items-center gap-2 text-[11px] font-bold px-3 py-2.5 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}><span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>error</span>{editErr}</div>}
-
-            {/* Avatar picker */}
-            {(() => {
-              const PRESET_AVATARS = [
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Felix',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Lily',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Max',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Zoe',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Oliver',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Mia',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Leo',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Emma',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Kai',
-                'https://api.dicebear.com/9.x/adventurer/svg?seed=Nora',
-              ]
-              return (
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Avatar</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {PRESET_AVATARS.map(url => (
-                      <button key={url} type="button" onClick={() => setEditAvatar(editAvatar === url ? '' : url)}
-                        className={`size-9 rounded-xl overflow-hidden border-2 transition-all ${editAvatar === url ? 'border-[#adee2b] shadow-md scale-110' : 'border-transparent hover:border-[var(--ds-border)]'}`}>
-                        <img src={url} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-[var(--ds-text-3)]">Custom URL</label>
-                    <input value={editAvatar} onChange={e => setEditAvatar(e.target.value)} placeholder="https://..."
-                      className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
-                  </div>
-                </div>
-              )
-            })()}
 
             {/* Info fields */}
             <div className="grid grid-cols-2 gap-3">
@@ -6935,6 +7315,8 @@ export default function AdminPage() {
 
   // Overview
   const [overviewPeriod, setOverviewPeriod]   = useState<7 | 30>(7)
+  const [totalBookingsPeriod, setTotalBookingsPeriod] = useState<'month' | 'all'>('all')
+  const [confirmedPeriod, setConfirmedPeriod]         = useState<'month' | 'all'>('all')
   const [statusPeriod, setStatusPeriod]       = useState<SectionPeriod>('month')
   const [roomsPeriod, setRoomsPeriod]         = useState<SectionPeriod>('month')
   const [hoursPeriod, setHoursPeriod]         = useState<SectionPeriod>('month')
@@ -7407,8 +7789,14 @@ export default function AdminPage() {
 
               {/* ── Stats (filtered by building) ── */}
               <div className="grid grid-cols-4 gap-4">
-                <StatCard label="Total Bookings" value={String(overviewData.stats.total_bookings)} sub={overviewBuilding ? 'this building' : 'all time'} dark />
-                <StatCard label="Confirmed" value={String(overviewData.stats.confirmed)} sub="bookings" />
+                <StatCard label="Total Bookings"
+                  value={String(totalBookingsPeriod === 'month' ? overviewData.stats.total_bookings_month : overviewData.stats.total_bookings)}
+                  sub={overviewBuilding ? 'this building' : totalBookingsPeriod === 'month' ? 'this month' : 'all time'}
+                  period={totalBookingsPeriod} onPeriodChange={setTotalBookingsPeriod} />
+                <StatCard label="Confirmed"
+                  value={String(confirmedPeriod === 'month' ? overviewData.stats.confirmed_month : overviewData.stats.confirmed)}
+                  sub={confirmedPeriod === 'month' ? 'bookings this month' : 'bookings all time'}
+                  period={confirmedPeriod} onPeriodChange={setConfirmedPeriod} />
                 <StatCard label="Active Rooms" value={String(overviewData.stats.active_rooms)} sub={overviewBuilding ? 'in building' : 'available'} />
                 <StatCard label="Users" value={String(overviewData.stats.total_users)} sub="registered" />
               </div>
