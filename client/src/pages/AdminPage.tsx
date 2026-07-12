@@ -2098,7 +2098,7 @@ type ImportRow = {
 
 function ImportExportModal({ users, onImport, onClose }: {
   users: User[]
-  onImport: (rows: ImportRow[]) => Promise<void>
+  onImport: (rows: ImportRow[]) => Promise<{ created: number; errors: string[] }>
   onClose: () => void
 }) {
   const [tab, setTab] = useState<ImportTab>('excel')
@@ -4138,7 +4138,7 @@ function ArchiveTab() {
   const [dateTo, setDateTo]   = useState('')
   const [purgeConfirm, setPurgeConfirm] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
-  const searchDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const queryKey = ['archive', params]
   const { data, isFetching } = useQuery({

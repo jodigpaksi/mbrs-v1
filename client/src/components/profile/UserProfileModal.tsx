@@ -65,10 +65,11 @@ export default function UserProfileModal({ open, onClose }: Props) {
   }
 
   async function handleRemoveAvatar() {
+    if (!user) return
     setRemoving(true); setError(null)
     try {
       await removeAvatar()
-      setUser({ ...user, avatar: undefined })
+      setUser({ ...user, avatar: '' })
     } catch { setError('Remove failed.') }
     finally { setRemoving(false) }
   }

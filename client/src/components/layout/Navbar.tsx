@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { getMyBookings, getBookings } from '../../api/bookings'
 import { getRooms } from '../../api/rooms'
 import { getGeneralSettings, getCachedBranding } from '../../api/settings'
@@ -59,7 +59,6 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
   const location = useLocation()
   const { user, logout } = useAuth()
   const { t, language } = useSettings()
-  const queryClient = useQueryClient()
   const { openNotifications } = useNotification()
   const unreadCount = useNotificationUnreadCount()
   const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
@@ -430,7 +429,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                             >
                               {b.user && !isOwn
-                                ? <UserAvatar name={b.user.name} avatar={b.user.avatar} size={22} style={{ shrink: 0 }} />
+                                ? <UserAvatar name={b.user.name} avatar={b.user.avatar} size={22} style={{ flexShrink: 0 }} />
                                 : (
                                   <div className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 22, height: 22, background: 'var(--ds-bg-raised)' }}>
                                     <span className="material-symbols-outlined" style={{ fontSize: 13, color: 'var(--ds-text-3)' }}>event</span>
@@ -695,7 +694,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                       >
                         {b.user && !isOwn
-                          ? <UserAvatar name={b.user.name} avatar={b.user.avatar} size={28} style={{ shrink: 0 }} />
+                          ? <UserAvatar name={b.user.name} avatar={b.user.avatar} size={28} style={{ flexShrink: 0 }} />
                           : (
                             <div className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 28, height: 28, background: 'var(--ds-bg-raised)' }}>
                               <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'var(--ds-text-3)' }}>event</span>

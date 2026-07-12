@@ -20,7 +20,7 @@ interface BookingTooltipProps {
   onCancelSeries?: (booking: Booking) => void
 }
 
-export default function BookingTooltip({ booking, pos, visible, onMouseEnter, onMouseLeave, currentUserId, onEdit, onCancel, onCancelSeries }: BookingTooltipProps) {
+export default function BookingTooltip({ booking: bookingProp, pos, visible, onMouseEnter, onMouseLeave, currentUserId, onEdit, onCancel, onCancelSeries }: BookingTooltipProps) {
   const { t, language } = useSettings()
   const ref = useRef<HTMLDivElement>(null)
   const [adjustedPos, setAdjustedPos] = useState(pos)
@@ -28,7 +28,7 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
   const [forComputedPos, setForComputedPos] = useState<{ x: number; y: number } | null>(null)
   const forPopupRef = useRef<HTMLDivElement>(null)
   const { data: directory = [] } = useQuery({ queryKey: ['user-directory'], queryFn: getDirectory, staleTime: 60_000 })
-  const forUser = booking?.booked_for_user_id ? directory.find(u => u.id === booking.booked_for_user_id) : null
+  const forUser = bookingProp?.booked_for_user_id ? directory.find(u => u.id === bookingProp.booked_for_user_id) : null
 
   function openForInfo(e: React.MouseEvent<HTMLButtonElement>) {
     e.stopPropagation()
@@ -80,7 +80,8 @@ export default function BookingTooltip({ booking, pos, visible, onMouseEnter, on
     setAdjustedPos({ x, y })
   }, [pos, visible])
 
-  if (!booking) return null
+  if (!bookingProp) return null
+  const booking = bookingProp
 
   const dept = booking.user?.department_name || (typeof booking.user?.department === 'string' ? booking.user.department : '') || ''
   const isMe = booking.user_id === currentUserId

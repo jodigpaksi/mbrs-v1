@@ -446,7 +446,7 @@ function SeriesGroupRow({
   const { language } = useSettings()
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
-  const closeTimer = useRef<ReturnType<typeof setTimeout>>()
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [showAllSkipped, setShowAllSkipped] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportIncludePast, setExportIncludePast] = useState(false)
@@ -650,7 +650,7 @@ function SeriesGroupRow({
       {(open || closing) && (() => {
         const skipped = first.series_skipped_dates
         if (!skipped || skipped.length === 0) return null
-        const unresolvedCount = skipped.filter(d => !resolvedSkips[`${group.series_id}:${d}`]).length
+        const unresolvedCount = skipped.filter(d => !resolvedSkips[`${group.series_id}:${parseSkipDate(d).real}`]).length
         const visibleSkipped = showAllSkipped ? skipped : skipped.slice(0, 2)
         const hiddenCount = skipped.length - visibleSkipped.length
         return (
@@ -670,10 +670,11 @@ function SeriesGroupRow({
                 </div>
                 <div className="divide-y divide-red-200/60 dark:divide-red-500/10">
                   {visibleSkipped.map(d => {
-                    const resolved = resolvedSkips[`${group.series_id}:${d}`]
+                    const { real, invalidDay } = parseSkipDate(d)
+                    const resolved = resolvedSkips[`${group.series_id}:${real}`]
                     return resolved
-                      ? <ResolvedSkipRow key={d} date={d} booking={resolved} pendingCancelIds={pendingCancelIds} onEdit={onEdit} onCancel={onCancel} />
-                      : <SkippedDateRow key={d} date={d} room={first.room} startTime={toHHMM(first.start_at)} endTime={toHHMM(first.end_at)} seriesId={group.series_id} disabled={isPast} />
+                      ? <ResolvedSkipRow key={d} date={real} booking={resolved} pendingCancelIds={pendingCancelIds} onEdit={onEdit} onCancel={onCancel} />
+                      : <SkippedDateRow key={d} date={real} invalidDay={invalidDay} room={first.room} startTime={toHHMM(first.start_at)} endTime={toHHMM(first.end_at)} seriesId={group.series_id} disabled={isPast} />
                   })}
                 </div>
                 {hiddenCount > 0 && (
@@ -704,6 +705,21 @@ function SeriesGroupRow({
 function fmtSkipDate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+// Monthly-repeat invalid dates are stored as "Y-m-d~D" — Y-m-d is a clamped placeholder (last real
+// day of that month, needed so series_skipped_dates/resolves_skipped_date stay real dates), D is the
+// originally-requested day-of-month that doesn't exist (e.g. "2026-09-30~31" — the 31st in Sep).
+// See BookingPanel.tsx's SkippedEntry encoding — this must decode the exact same format.
+function parseSkipDate(raw: string): { real: string; invalidDay?: number } {
+  const [real, day] = raw.split('~')
+  return { real, invalidDay: day ? Number(day) : undefined }
+}
+
+function fmtInvalidSkipDate(real: string, invalidDay: number, language: string) {
+  const [y, m] = real.split('-').map(Number)
+  const monthYear = new Date(y, m - 1, 1).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'short', year: 'numeric' })
+  return `${invalidDay} ${monthYear}`
 }
 
 function MoreTooltip({ label, items }: { label: string; items: string[] }) {
@@ -753,8 +769,9 @@ function MoreTooltip({ label, items }: { label: string; items: string[] }) {
   )
 }
 
-function SkippedDateRow({ date, room, startTime, endTime, seriesId, disabled = false }: {
+function SkippedDateRow({ date, invalidDay, room, startTime, endTime, seriesId, disabled = false }: {
   date: string
+  invalidDay?: number
   room?: Room
   startTime: string
   endTime: string
@@ -765,7 +782,7 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId, disabled = f
   const { data } = useQuery({
     queryKey: ['skip-conflicts', room?.id, date, startTime, endTime],
     queryFn: () => checkAvailability(room!.id, `${date} ${startTime}:00`, `${date} ${endTime}:00`),
-    enabled: !!room,
+    enabled: !!room && !invalidDay,
     staleTime: 60_000,
   })
   const conflicts = (data?.conflicts ?? []) as Booking[]
@@ -777,13 +794,24 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId, disabled = f
     return `${b.title} - ${b.user?.name ?? '—'}${dept ? ` (${dept})` : ''} ${fmtTime(b.start_at, language)}-${fmtTime(b.end_at, language)}`
   }
 
+  // Invalid monthly date (e.g. 31st in Feb) — search from the 1st of that month instead of the
+  // clamped placeholder date, but resolveSkip must still key off the real stored date so it
+  // matches series_skipped_dates / resolves_skipped_date for the "resolved" lookup.
+  const searchDate = invalidDay ? `${date.slice(0, 7)}-01` : date
+
   return (
     <div className="flex items-start justify-between gap-3 px-3 py-2">
       <div className="flex items-start gap-2 min-w-0">
-        <span className="material-symbols-outlined text-red-300 mt-0.5" style={{ fontSize: 12 }}>block</span>
+        <span className="material-symbols-outlined text-red-300 mt-0.5" style={{ fontSize: 12 }}>{invalidDay ? 'event_busy' : 'block'}</span>
         <div className="min-w-0">
-          <span className="text-[13px] font-bold text-red-600 dark:text-red-400 block">{fmtSkipDate(date)}</span>
-          {shown.length > 0 && (
+          <span className="text-[13px] font-bold text-red-600 dark:text-red-400 block">
+            {invalidDay ? fmtInvalidSkipDate(date, invalidDay, language) : fmtSkipDate(date)}
+          </span>
+          {invalidDay ? (
+            <p className="text-[11px] font-semibold text-red-400/90 dark:text-red-400/80">
+              {language === 'id' ? 'Tanggal tidak ada di bulan itu' : "Date doesn't exist that month"}
+            </p>
+          ) : shown.length > 0 && (
             <div className="mt-1 space-y-1">
               {shown.map(c => (
                 <p key={c.id} className="text-[11.5px] font-semibold text-red-400/90 dark:text-red-400/80 truncate max-w-[320px]">{fmtConflict(c)}</p>
@@ -795,7 +823,7 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId, disabled = f
       </div>
       <button
         onClick={() => document.dispatchEvent(new CustomEvent('available-rooms-prefill', {
-          detail: { date, startTime, endTime, resolveSkip: { seriesId, date } },
+          detail: { date: searchDate, startTime, endTime, resolveSkip: { seriesId, date } },
         }))}
         disabled={disabled}
         title={disabled ? "Series has ended — can't rebook" : undefined}

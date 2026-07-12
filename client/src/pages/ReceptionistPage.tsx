@@ -8,7 +8,7 @@ import {
 import type { AfterHoursContact } from '../api/settings'
 import { getDisputes, resolveDispute } from '../api/bookings'
 import { getDirectory } from '../api/users'
-import type { Booking, User } from '../types'
+import type { Booking } from '../types'
 import UserAvatar from '../components/ui/UserAvatar'
 import { useSettings } from '../context/SettingsContext'
 import { parseLocal } from '../utils/date'
@@ -46,7 +46,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
     staleTime: 30_000,
   })
 
-  const { data: directory = [] } = useQuery<User[]>({
+  const { data: directory = [] } = useQuery({
     queryKey: ['user-directory'],
     queryFn: getDirectory,
     staleTime: 5 * 60_000,
@@ -65,7 +65,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
 
   const currentIds = contacts.map((c: AfterHoursContact) => c.id)
 
-  function toggleContact(user: User) {
+  function toggleContact(user: { id: number }) {
     const isAdding = !currentIds.includes(user.id)
     const next = isAdding
       ? [...currentIds, user.id]
@@ -81,7 +81,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
     mutation.mutate(currentIds.filter((x: number) => x !== id))
   }
 
-  const pickerFiltered = (directory as User[]).filter(u =>
+  const pickerFiltered = directory.filter(u =>
     u.name.toLowerCase().includes(search.toLowerCase()) ||
     (u.email ?? '').toLowerCase().includes(search.toLowerCase())
   )
@@ -99,7 +99,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
       <div className="px-6 py-5 flex items-start justify-between gap-4 border-b" style={{ borderColor: 'var(--ds-border-sub)' }}>
         <div>
           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: iconColor }}>{icon}</span>
+            <span className="material-symbols-outlined rounded-lg p-1" style={{ fontSize: 16, color: iconColor, background: iconBg }}>{icon}</span>
             <p className="text-[13px] font-black" style={{ color: 'var(--ds-text-1)' }}>{title}</p>
             {saved && (
               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full"
@@ -219,7 +219,7 @@ function ContactSection({ queryKey, fetchFn, saveFn, icon, iconColor, iconBg, ti
             />
           </div>
           <div className="flex flex-col gap-1 max-h-[220px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-            {pickerFiltered.map((u: User) => {
+            {pickerFiltered.map(u => {
               const selected = currentIds.includes(u.id)
               return (
                 <button key={u.id}

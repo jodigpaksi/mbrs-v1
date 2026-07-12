@@ -74,8 +74,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
 
       <div
         className="relative rounded-2xl overflow-hidden shadow-2xl overflow-y-auto transition-transform duration-300"
-        style={{ backgroundColor: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}
-        style={{ width: 980, maxHeight: '92vh', transform: open ? 'scale(1)' : 'scale(0.97)' }}
+        style={{ backgroundColor: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', width: 980, maxHeight: '92vh', transform: open ? 'scale(1)' : 'scale(0.97)' }}
       >
         <button
           onClick={onClose}
@@ -134,7 +133,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div style={{ background: room.status === 'maintenance' ? '#fb923c' : isAvailableNow ? '#adee2b' : '#ef4444', color: room.status === 'maintenance' ? '#fff' : isAvailableNow ? '#000' : '#fff', fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 14px', borderRadius: 99 }}>
-                      {room.status === 'maintenance' ? 'Maintenance' : isAvailableNow ? t('room_available') : 'Occupied'}
+                      {room.status === 'maintenance' ? 'Maintenance' : isAvailableNow ? t('room_status_available') : 'Occupied'}
                     </div>
                     {room.requires_contact && <SpecialRoomBadge size="xs" variant="dark" />}
                   </div>

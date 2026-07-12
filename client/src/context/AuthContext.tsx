@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import { getMe, logout as apiLogout } from '../api/auth'
 import { queryClient } from '../main'
 
@@ -22,6 +22,7 @@ interface User {
   ext: string
   avatar: string
   on_duty?: boolean
+  can_book_special?: boolean
   buildings?: { id: number; name: string }[]
   preferences?: UserPreferences
   default_building_id?: number | null

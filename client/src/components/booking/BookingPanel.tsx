@@ -90,6 +90,7 @@ async function runBatched<T, R>(items: T[], fn: (item: T) => Promise<R>, batchSi
 }
 
 function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
+function daysInMonth(year: number, month0: number) { return new Date(year, month0 + 1, 0).getDate() }
 function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
 const DOW_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
@@ -116,7 +117,7 @@ interface BookingPanelProps {
 export default function BookingPanel({ open, onClose, initialRoom, editBooking, prefillStart, prefillEnd, prefillDate, prefillVersion, buildingId, resolveSkipContext, onSubmit, onCancel, onAfterHoursOpen }: BookingPanelProps) {
   const { user } = useAuth()
   const { defaultType, defaultBuilding, t, language } = useSettings()
-  const REPEAT_LBL: Record<string, string> = { none: t('repeat_none'), daily: t('repeat_daily'), weekly: t('repeat_weekly') }
+  const REPEAT_LBL: Record<string, string> = { none: t('repeat_none'), daily: t('repeat_daily'), weekly: t('repeat_weekly'), monthly: t('repeat_monthly') }
   const DOW_LBL: Record<string, string> = { mon: t('dow_mon'), tue: t('dow_tue'), wed: t('dow_wed'), thu: t('dow_thu'), fri: t('dow_fri'), sat: t('dow_sat'), sun: t('dow_sun') }
   const DOW_FUL: Record<string, string> = { mon: t('dow_full_mon'), tue: t('dow_full_tue'), wed: t('dow_full_wed'), thu: t('dow_full_thu'), fri: t('dow_full_fri'), sat: t('dow_full_sat'), sun: t('dow_full_sun') }
   const { start: bsStr, end: beStr } = useBookingHours()
@@ -137,7 +138,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [endTime, setEndTime] = useState('')
   const [status, setStatus] = useState<'confirmed' | 'tentative'>('confirmed')
   const [type, setType] = useState<'internal' | 'external' | 'maintenance' | 'repairment'>(() => defaultType)
-  const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly'>('none')
+  const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none')
   // repeat sub-state
   const [repeatMode, setRepeatMode] = useState<'count' | 'until'>('count')
   const [repeatCount, setRepeatCount] = useState(5)
@@ -149,6 +150,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [dailyInterval, setDailyInterval] = useState(1)
   const [dailyIntervalRaw, setDailyIntervalRaw] = useState('1')
   const [skipWeekends, setSkipWeekends] = useState(false)
+  const [monthlyDays, setMonthlyDays] = useState<number[]>([])
+  const [monthlyInterval, setMonthlyInterval] = useState(1)
+  const [monthlyIntervalRaw, setMonthlyIntervalRaw] = useState('1')
   // pantry
   const [pantryOpen, setPantryOpen] = useState(false)
   const [coffeeQty, setCoffeeQty] = useState(2)
@@ -181,6 +185,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       p.repeatEndDate = repeatEndDate; p.skipConflicts = skipConflicts
       if (repeat === 'weekly') p.weeklyDays = weeklyDays
       if (repeat === 'daily') { p.dailyInterval = dailyInterval; p.skipWeekends = skipWeekends }
+      if (repeat === 'monthly') { p.monthlyDays = monthlyDays; p.monthlyInterval = monthlyInterval; p.skipWeekends = skipWeekends }
     }
     localStorage.setItem(PRESET_KEY, JSON.stringify(p))
     setPreset(p)
@@ -210,6 +215,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       }
       if (preset.weeklyDays) setWeeklyDays(preset.weeklyDays as string[])
       if (preset.dailyInterval) { setDailyInterval(preset.dailyInterval as number); setDailyIntervalRaw(String(preset.dailyInterval)) }
+      if (preset.monthlyDays) setMonthlyDays(preset.monthlyDays as number[])
+      if (preset.monthlyInterval) { setMonthlyInterval(preset.monthlyInterval as number); setMonthlyIntervalRaw(String(preset.monthlyInterval)) }
       if (preset.skipWeekends !== undefined) setSkipWeekends(preset.skipWeekends as boolean)
       if (preset.skipConflicts !== undefined) setSkipConflicts(preset.skipConflicts as boolean)
     }
@@ -238,9 +245,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // created when a whole series is booked at once, per product decision.
   const lastCreatedIdRef = useRef<number | undefined>(undefined)
   // conflict preview modal (all-or-nothing mode)
-  const [conflictInfo, setConflictInfo] = useState<{ conflicting: string[]; available: string[]; seriesId: string } | null>(null)
+  const [conflictInfo, setConflictInfo] = useState<{ conflicting: SkippedEntry[]; available: string[]; seriesId: string } | null>(null)
   // skipped dates result modal (shown after skip-mode series completes)
-  const [skippedResult, setSkippedResult] = useState<{ skipped: { date: string; reason: 'conflict' | 'advance_limit' | 'timeout' }[]; created: number; total: number } | null>(null)
+  const [skippedResult, setSkippedResult] = useState<{ skipped: SkippedEntry[]; created: number; total: number } | null>(null)
   // cancel series modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   // after-hours restriction modal
@@ -303,7 +310,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       title, desc, date, startTime, endTime, status, type,
       room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, building_id: selectedRoom.building_id, building: selectedRoom.building ? { id: selectedRoom.building.id, name: selectedRoom.building.name, code: selectedRoom.building.code } : undefined } : null,
       repeat, repeatMode, repeatCount, repeatEndDate, weeklyDays, skipConflicts,
-      dailyInterval, skipWeekends,
+      dailyInterval, skipWeekends, monthlyDays, monthlyInterval,
       bookFor, bookForUserId, showBookFor,
     }
   }
@@ -389,6 +396,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           setWeeklyDays(d.weeklyDays ?? ['mon'])
           setDailyInterval(d.dailyInterval ?? 1)
           setDailyIntervalRaw(String(d.dailyInterval ?? 1))
+          setMonthlyDays(d.monthlyDays ?? [])
+          setMonthlyInterval(d.monthlyInterval ?? 1)
+          setMonthlyIntervalRaw(String(d.monthlyInterval ?? 1))
           setSkipWeekends(d.skipWeekends ?? false)
           setSkipConflicts(d.skipConflicts ?? true)
           setBookFor(d.bookFor ?? '')
@@ -432,8 +442,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     setActiveBuildingId(buildingId ?? defaultBuilding ?? null)
   }, [open, editBooking, initialRoom, prefillStart, prefillEnd, prefillDate])
 
-  // Auto-set weeklyDays default to day of selected date when switching to weekly
-  function handleRepeatChange(r: 'none' | 'daily' | 'weekly') {
+  // Auto-set weeklyDays/monthlyDays default to the selected date when switching mode
+  function handleRepeatChange(r: 'none' | 'daily' | 'weekly' | 'monthly') {
     setRepeat(r)
     setShowDatesList(false)
     if (r === 'weekly' && date) {
@@ -441,10 +451,15 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       const dow = new Date(yy, mm - 1, dd).getDay()
       setWeeklyDays([JS_DOW_TO_KEY[dow]])
     }
+    if (r === 'monthly' && date) {
+      const dd = Number(date.split('-')[2])
+      setMonthlyDays([dd])
+    }
   }
 
   useEffect(() => {
     if (!open && selectedRoom) clearRoomView(selectedRoom.id)
+    if (!open) setShowDatesList(false)
   }, [open])
 
   useEffect(() => {
@@ -609,7 +624,67 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       return dates
     }
 
+    if (repeat === 'monthly') {
+      if (monthlyDays.length === 0) return []
+      const interval = Math.max(1, monthlyInterval)
+      const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6
+      const dates: string[] = []
+      const sortedDays = [...monthlyDays].sort((a, b) => a - b)
+      // repeatCount is the number of month-cycles (like weekly's "for N weeks"), not a total
+      // session count — each cycle can produce multiple sessions (one per selected day-of-month).
+      for (let c = 0; ; c++) {
+        const monthOffset = (mm - 1) + c * interval
+        const targetYear = yy + Math.floor(monthOffset / 12)
+        const targetMonth = ((monthOffset % 12) + 12) % 12
+        if (repeatMode === 'count' && c >= repeatCount) break
+        if (repeatMode === 'until') {
+          if (!repeatEndDate) return []
+          const cycleStart = toISO(new Date(targetYear, targetMonth, 1))
+          if (cycleStart > repeatEndDate) break
+        }
+        const dim = daysInMonth(targetYear, targetMonth)
+        for (const day of sortedDays) {
+          if (day > dim) continue // doesn't exist this month — see generateInvalidMonthlyDates()
+          const d = new Date(targetYear, targetMonth, day)
+          const iso = toISO(d)
+          if (repeatMode === 'until' && repeatEndDate && iso > repeatEndDate) continue
+          if (!skipWeekends || !isWeekend(d)) dates.push(iso)
+        }
+        if (c > 240) break // safety cap (~20 years) in case of a logic error above
+      }
+      return dates.sort()
+    }
+
     return []
+  }
+
+  // Monthly-only: selected days-of-month that don't exist in a given cycle's month (e.g. 31 in
+  // February) — `date` is the last real day of that month so it can still be recorded as a
+  // skipped date (series_skipped_dates) and resolved later via "Find another slot"; `day`/`monthYear`
+  // are kept for a human-readable label (the placeholder date alone would be misleading).
+  function generateInvalidMonthlyDates(): { date: string; day: number; monthYear: string }[] {
+    if (repeat !== 'monthly' || !date || monthlyDays.length === 0) return []
+    const [yy, mm] = date.split('-').map(Number)
+    const interval = Math.max(1, monthlyInterval)
+    const results: { date: string; day: number; monthYear: string }[] = []
+    for (let c = 0; ; c++) {
+      const monthOffset = (mm - 1) + c * interval
+      const targetYear = yy + Math.floor(monthOffset / 12)
+      const targetMonth = ((monthOffset % 12) + 12) % 12
+      if (repeatMode === 'count' && c >= repeatCount) break
+      if (repeatMode === 'until') {
+        if (!repeatEndDate) return []
+        const cycleStart = toISO(new Date(targetYear, targetMonth, 1))
+        if (cycleStart > repeatEndDate) break
+      }
+      const dim = daysInMonth(targetYear, targetMonth)
+      const monthYear = new Date(targetYear, targetMonth, 1).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'long', year: 'numeric' })
+      for (const day of monthlyDays) {
+        if (day > dim) results.push({ date: toISO(new Date(targetYear, targetMonth, dim)), day, monthYear })
+      }
+      if (c > 240) break
+    }
+    return results
   }
 
   function isTimeValid() {
@@ -676,14 +751,23 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // and miscategorized as "room conflict". Give series calls more room to breathe.
   const SERIES_REQUEST_TIMEOUT_MS = 30000
 
-  // knownSkipped: dates already known to conflict (pre-checked), so they get stored on each booking
-  async function doCreateBookings(datesToBook: string[], seriesId: string, knownSkipped: string[] = []) {
+  type SkipReason = 'conflict' | 'advance_limit' | 'timeout' | 'invalid_date'
+  // label: optional display override — invalid_date entries store a clamped placeholder date
+  // (e.g. Sep 30) for series_skipped_dates, but should still *display* the originally requested
+  // day (e.g. "31 Sep") so the post-submit result matches what the dates-list panel showed.
+  interface SkippedEntry { date: string; reason: SkipReason; label?: string }
+
+  // knownSkipped: dates already known to be un-bookable (pre-checked conflicts, or monthly dates
+  // that don't exist in their target month) — they get stored as series_skipped_dates on each
+  // booking, and surfaced directly without ever calling createBooking() for them.
+  async function doCreateBookings(datesToBook: string[], seriesId: string, knownSkipped: SkippedEntry[] = []) {
     if (!selectedRoom) return
     const base = { room_id: selectedRoom.id, title, description: desc, status, type, booked_for: bookFor.trim() || undefined, booked_for_user_id: bookForUserId ?? undefined }
     let created = 0
     let processed = 0
     const total = datesToBook.length
-    const runtimeSkipped: { date: string; reason: 'conflict' | 'advance_limit' | 'timeout' }[] = []
+    const knownSkippedDates = knownSkipped.map(k => k.date)
+    const runtimeSkipped: SkippedEntry[] = []
     // Dates in a series never overlap each other (same time, different calendar days), so
     // batching these creates is safe — order between them doesn't matter for correctness.
     await runBatched(datesToBook, async d => {
@@ -693,7 +777,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           start_at: `${d} ${startTime}:00`,
           end_at: `${d} ${endTime}:00`,
           series_id: seriesId,
-          series_skipped_dates: knownSkipped.length > 0 ? knownSkipped : undefined,
+          series_skipped_dates: knownSkippedDates.length > 0 ? knownSkippedDates : undefined,
         }, SERIES_REQUEST_TIMEOUT_MS)
         lastCreatedIdRef.current = res?.id
         created++
@@ -702,14 +786,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         // advance-limit message always contains "days in advance" (see validateGeneralRules).
         const err = e as { code?: string; response?: { data?: { message?: string } } }
         const msg = err?.response?.data?.message ?? ''
-        const reason = err?.code === 'ECONNABORTED' ? 'timeout' : msg.includes('days in advance') ? 'advance_limit' : 'conflict'
+        const reason: SkipReason = err?.code === 'ECONNABORTED' ? 'timeout' : msg.includes('days in advance') ? 'advance_limit' : 'conflict'
         runtimeSkipped.push({ date: d, reason })
       } finally {
         processed++
         setSaveProgress(Math.round((processed / total) * 100))
       }
     })
-    const allSkipped = [...knownSkipped.map(d => ({ date: d, reason: 'conflict' as const })), ...runtimeSkipped]
+    const allSkipped = [...knownSkipped, ...runtimeSkipped]
     if (created === 0) { setError(t('all_slots_taken')); return }
     // If any runtime skips happened (race condition after pre-check), patch the stored skipped dates
     // by including them in a final pass — simplest: just show combined result
@@ -724,6 +808,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   async function doSubmitSeries() {
     if (!selectedRoom) return
     const dates = generateRepeatDates()
+    const invalidDates = generateInvalidMonthlyDates()
     if (dates.length === 0) { setError(t('err_no_repeat_dates')); return }
 
     const seriesId = crypto.randomUUID()
@@ -744,18 +829,29 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     const available   = checks.filter(c => c.available).map(c => c.date)
 
     if (!skipConflicts) {
-      if (conflicting.length > 0) {
-        setConflictInfo({ conflicting, available, seriesId })
+      if (conflicting.length > 0 || invalidDates.length > 0) {
+        const conflictEntries: SkippedEntry[] = [
+          ...conflicting.map(d => ({ date: d, reason: 'conflict' as const })),
+          ...invalidDates.map(v => ({ date: `${v.date}~${v.day}`, reason: 'invalid_date' as const, label: `${v.day} ${v.monthYear}` })),
+        ]
+        setConflictInfo({ conflicting: conflictEntries, available, seriesId })
         return
       }
       await doCreateBookings(dates, seriesId)
       return
     }
 
-    // Skip mode: create only the available dates, with the pre-checked conflicts stored as
-    // series_skipped_dates on each of them.
+    // Skip mode: create only the available dates, with pre-checked conflicts + invalid monthly
+    // dates (e.g. 31st in February) stored as series_skipped_dates on each of them.
     if (available.length === 0) { setError(t('all_slots_taken')); return }
-    await doCreateBookings(available, seriesId, conflicting)
+    const knownSkipped: SkippedEntry[] = [
+      ...conflicting.map(d => ({ date: d, reason: 'conflict' as const })),
+      // Encode the originally-requested day so it survives into series_skipped_dates and can be
+      // displayed correctly everywhere (Series tab included), not just in this local session —
+      // see the matching regex in BookingController::store().
+      ...invalidDates.map(v => ({ date: `${v.date}~${v.day}`, reason: 'invalid_date' as const, label: `${v.day} ${v.monthYear}` })),
+    ]
+    await doCreateBookings(available, seriesId, knownSkipped)
   }
 
   async function handleSubmit() {
@@ -835,7 +931,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     return r.name.toLowerCase().includes(q)
   })
 
+  const repeatCountMax = repeat === 'daily' ? 90 : repeat === 'monthly' ? 24 : 52
   const repeatDates = generateRepeatDates()
+  const invalidMonthlyDates = generateInvalidMonthlyDates()
 
   return (
     <>
@@ -1038,6 +1136,29 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               </div>
             )
           })}
+          {invalidMonthlyDates.map(v => (
+            <div key={`invalid-${v.date}-${v.day}`}
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-dashed"
+              style={{ background: 'var(--ds-bg-raised)', borderColor: 'rgba(239,68,68,0.35)', opacity: 0.75 }}
+            >
+              <span className="material-symbols-outlined text-red-400 shrink-0" style={{ fontSize: 16, width: 20 }}>event_busy</span>
+              <span className="text-[12px] font-bold text-[var(--ds-text-3)] flex-1">{v.day} {v.monthYear}</span>
+              <div className="relative group/tip shrink-0">
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md bg-red-500/15 text-red-500 cursor-help">
+                  {language === 'id' ? 'Tidak Ada' : 'Invalid'}
+                </span>
+                <div className="absolute bottom-full right-0 mb-2 z-20 pointer-events-none opacity-0 translate-y-1 group-hover/tip:opacity-100 group-hover/tip:translate-y-0 transition-all duration-200">
+                  <div className="px-3 py-1.5 rounded-xl whitespace-nowrap" style={{ background: '#1e293b', boxShadow: '0 8px 24px rgba(0,0,0,0.28)' }}>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white">
+                      {language === 'id'
+                        ? `Tanggal ${v.day} tidak ada di ${v.monthYear}`
+                        : `${v.monthYear} has no day ${v.day}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1601,11 +1722,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               {!isEdit && (
                 <div className="space-y-3">
                   <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_repeat')}</label>
-                  {/* Repeat mode toggle: None / Daily / Weekly */}
+                  {/* Repeat mode toggle: None / Daily / Weekly / Monthly */}
                   <div className="relative flex bg-[var(--ds-bg-surface-2)] p-1 rounded-full border border-[var(--ds-border-sub)]">
                     <div className="absolute top-1 bottom-1 rounded-full bg-[var(--ds-bg-surface)] shadow-sm pointer-events-none transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                      style={{ left: 4, width: 'calc((100% - 8px) / 3)', transform: `translateX(${repeat === 'none' ? 0 : repeat === 'daily' ? 100 : 200}%)` }} />
-                    {(['none', 'daily', 'weekly'] as const).map(r => (
+                      style={{ left: 4, width: 'calc((100% - 8px) / 4)', transform: `translateX(${repeat === 'none' ? 0 : repeat === 'daily' ? 100 : repeat === 'weekly' ? 200 : 300}%)` }} />
+                    {(['none', 'daily', 'weekly', 'monthly'] as const).map(r => (
                       <button key={r} onClick={() => handleRepeatChange(r)}
                         className={`relative z-10 flex-1 py-1.5 text-[11px] font-black uppercase rounded-full transition-colors duration-150 ${repeat === r ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}>
                         {REPEAT_LBL[r]}
@@ -1697,6 +1818,89 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                           </div>
                         </div>
                       )}
+                      {/* Monthly: interval + day-of-month multi-select + skip weekends */}
+                      {repeat === 'monthly' && (
+                        <div className="space-y-2.5" style={{ animation: 'section-in 0.22s ease-out' }}>
+                          <div className="flex items-center justify-between bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl p-3">
+                            <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)]">{t('repeat_every_n_months')}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button type="button"
+                                onClick={() => { const v = Math.max(1, monthlyInterval - 1); setMonthlyInterval(v); setMonthlyIntervalRaw(String(v)) }}
+                                className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
+                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>remove</span>
+                              </button>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={monthlyIntervalRaw}
+                                onChange={e => {
+                                  const raw = e.target.value.replace(/\D/g, '')
+                                  setMonthlyIntervalRaw(raw)
+                                  const v = parseInt(raw)
+                                  if (!isNaN(v) && v >= 1) setMonthlyInterval(Math.min(24, v))
+                                }}
+                                onBlur={e => {
+                                  const v = parseInt(e.target.value)
+                                  const clamped = isNaN(v) ? 1 : Math.min(24, Math.max(1, v))
+                                  setMonthlyInterval(clamped)
+                                  setMonthlyIntervalRaw(String(clamped))
+                                }}
+                                className="text-[15px] font-black text-[var(--ds-text-1)] text-center tabular-nums bg-transparent border-b-2 focus:outline-none transition-colors"
+                                style={{ width: 32, borderColor: 'var(--ds-border)', caretColor: '#adee2b' }}
+                                onFocus={e => { e.target.style.borderColor = '#adee2b'; e.target.select() }}
+                                onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
+                              />
+                              <span className="text-[10px] font-bold text-[var(--ds-text-3)]">{t('label_months')}</span>
+                              <button type="button"
+                                onClick={() => { const v = Math.min(24, monthlyInterval + 1); setMonthlyInterval(v); setMonthlyIntervalRaw(String(v)) }}
+                                className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
+                                <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <p className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('repeat_monthly_days_label')}</p>
+                            <div className="grid grid-cols-7 gap-1">
+                              {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
+                                const selected = monthlyDays.includes(day)
+                                return (
+                                  <button
+                                    key={day}
+                                    type="button"
+                                    onClick={() => {
+                                      if (selected && monthlyDays.length === 1) return
+                                      setMonthlyDays(selected ? monthlyDays.filter(d => d !== day) : [...monthlyDays, day].sort((a, b) => a - b))
+                                    }}
+                                    className="h-8 rounded-lg text-[10px] font-black tabular-nums"
+                                    style={{
+                                      background: selected ? '#adee2b' : 'var(--ds-bg-surface-2)',
+                                      color: selected ? '#1a3a00' : 'var(--ds-text-4)',
+                                      border: selected ? '1.5px solid #7cc000' : '1.5px solid transparent',
+                                      transform: selected ? 'scale(1.06)' : 'scale(1)',
+                                      boxShadow: selected ? '0 3px 10px rgba(173,238,43,0.4)' : 'none',
+                                      transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)',
+                                    }}
+                                  >
+                                    {day}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            {monthlyDays.some(d => d > 28) && (
+                              <p className="text-[9px] text-[var(--ds-text-4)] font-bold px-1">{t('repeat_monthly_invalid_hint')}</p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl p-3">
+                            <div>
+                              <p className="text-[10px] font-black uppercase text-[var(--ds-text-3)]">{t('skip_weekends')}</p>
+                              <p className="text-[9px] text-[var(--ds-text-4)] font-bold mt-0.5">{t('skip_weekends_desc')}</p>
+                            </div>
+                            <ToggleSwitch checked={skipWeekends} onChange={() => setSkipWeekends(v => !v)} />
+                          </div>
+                        </div>
+                      )}
 
                       {/* Count vs Until toggle */}
                       <div className="bg-[var(--ds-bg-surface)] border border-[var(--ds-border-sub)] rounded-2xl p-3 space-y-2">
@@ -1709,7 +1913,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                             {repeatMode === 'count' && <div className="w-1.5 h-1.5 rounded-full bg-[#adee2b]" />}
                           </div>
                           <span className="text-[10px] font-black uppercase text-[var(--ds-text-3)] flex-1" onClick={() => setRepeatMode('count')}>
-                            {repeat === 'daily' ? t('repeat_for_sessions') : t('repeat_for_weeks')}
+                            {repeat === 'daily' ? t('repeat_for_sessions') : repeat === 'monthly' ? t('repeat_for_months') : t('repeat_for_weeks')}
                           </span>
                           {repeatMode === 'count' && (
                             <div className="flex items-center gap-1.5 ml-auto">
@@ -1726,11 +1930,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                   const raw = e.target.value.replace(/\D/g, '')
                                   setRepeatCountRaw(raw)
                                   const v = parseInt(raw)
-                                  if (!isNaN(v) && v >= 2) setRepeatCount(Math.min(repeat === 'daily' ? 90 : 52, v))
+                                  if (!isNaN(v) && v >= 2) setRepeatCount(Math.min(repeatCountMax, v))
                                 }}
                                 onBlur={e => {
                                   const v = parseInt(e.target.value)
-                                  const clamped = isNaN(v) ? 2 : Math.min(repeat === 'daily' ? 90 : 52, Math.max(2, v))
+                                  const clamped = isNaN(v) ? 2 : Math.min(repeatCountMax, Math.max(2, v))
                                   setRepeatCount(clamped)
                                   setRepeatCountRaw(String(clamped))
                                 }}
@@ -1740,7 +1944,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 onBlurCapture={e => { e.target.style.borderColor = 'var(--ds-border)' }}
                               />
                               <button type="button"
-                                onClick={() => { const v = Math.min(repeat === 'daily' ? 90 : 52, repeatCount + 1); setRepeatCount(v); setRepeatCountRaw(String(v)) }}
+                                onClick={() => { const v = Math.min(repeatCountMax, repeatCount + 1); setRepeatCount(v); setRepeatCountRaw(String(v)) }}
                                 className="size-7 rounded-lg bg-[var(--ds-bg-surface-2)] hover:bg-[var(--ds-border)] flex items-center justify-center font-black text-[var(--ds-text-2)] transition-colors">
                                 <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add</span>
                               </button>
@@ -1871,14 +2075,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                                 {fmtShortDate(d, language)}
                               </span>
                             ))}
-                            {repeatDates.length > 8 && (
+                            {(repeatDates.length > 8 || invalidMonthlyDates.length > 0) && (
                               <button
                                 type="button"
                                 onClick={() => setShowDatesList(true)}
                                 className="text-[10px] font-bold bg-black dark:bg-white/10 text-[#adee2b] rounded-lg px-2.5 py-1 hover:bg-slate-800 dark:hover:bg-white/20 transition-colors cursor-pointer"
                                 style={{ animation: `chip-in 0.28s cubic-bezier(0.34,1.56,0.64,1) ${8 * 30}ms both` }}
                               >
-                                +{repeatDates.length - 8} {t('series_more')}
+                                {repeatDates.length > 8 ? `+${repeatDates.length - 8} ${t('series_more')}` : t('series_view_all')}
                               </button>
                             )}
                           </div>
@@ -2106,10 +2310,10 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
 
                 {/* Conflicting dates list */}
                 <div className="bg-red-50 rounded-2xl p-3 space-y-1 max-h-32 overflow-y-auto">
-                  {conflictInfo.conflicting.map(d => (
+                  {conflictInfo.conflicting.map(({ date: d, label }) => (
                     <div key={d} className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-red-400" style={{ fontSize: 13 }}>block</span>
-                      <span className="text-[10px] font-bold text-red-600">{fmtShortDate(d, language)}</span>
+                      <span className="text-[10px] font-bold text-red-600">{label ?? fmtShortDate(d, language)}</span>
                     </div>
                   ))}
                 </div>
@@ -2175,14 +2379,14 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               </div>
               <div className="bg-red-50 rounded-xl p-2.5 space-y-1 max-h-32 overflow-y-auto">
                 <p className="text-[8px] font-black uppercase text-red-400 tracking-wider px-1 mb-1.5">{t('skipped_dates_label')}</p>
-                {skippedResult.skipped.map(({ date: d, reason }) => (
-                  <div key={d} className="flex items-center gap-1.5">
+                {skippedResult.skipped.map(({ date: d, reason, label }) => (
+                  <div key={`${d}-${reason}-${label ?? ''}`} className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-red-400 shrink-0" style={{ fontSize: 12 }}>
-                      {reason === 'advance_limit' ? 'event_busy' : reason === 'timeout' ? 'hourglass_disabled' : 'block'}
+                      {reason === 'advance_limit' ? 'event_busy' : reason === 'timeout' ? 'hourglass_disabled' : reason === 'invalid_date' ? 'event_note' : 'block'}
                     </span>
-                    <span className="text-[11px] font-bold text-red-600">{fmtShortDate(d, language)}</span>
+                    <span className="text-[11px] font-bold text-red-600">{label ?? fmtShortDate(d, language)}</span>
                     <span className="text-[9px] font-bold text-red-400">
-                      — {reason === 'advance_limit' ? t('skipped_advance_limit') : reason === 'timeout' ? t('skipped_timeout') : t('skipped_conflict_reason')}
+                      — {reason === 'advance_limit' ? t('skipped_advance_limit') : reason === 'timeout' ? t('skipped_timeout') : reason === 'invalid_date' ? t('skipped_invalid_date') : t('skipped_conflict_reason')}
                     </span>
                   </div>
                 ))}

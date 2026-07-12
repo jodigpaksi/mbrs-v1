@@ -389,7 +389,11 @@ class BookingController extends Controller
                 : 'in:internal,external',
             'series_id'             => 'nullable|string|max:36',
             'series_skipped_dates'  => 'nullable|array',
-            'series_skipped_dates.*'=> 'date_format:Y-m-d',
+            // Plain "Y-m-d" for a real conflict/advance-limit skip, or "Y-m-d~D" where D is the
+            // originally-requested day-of-month for an invalid monthly date (e.g. "2026-09-30~31"
+            // — the 31st doesn't exist in September, Y-m-d is a clamped placeholder for storage,
+            // ~31 lets the UI display "31 Sep" instead of the misleading placeholder date).
+            'series_skipped_dates.*'=> 'regex:/^\d{4}-\d{2}-\d{2}(~\d{1,2})?$/',
             'resolves_series_id'    => 'nullable|string|max:36',
             'resolves_skipped_date' => 'nullable|date_format:Y-m-d',
             'booked_for'            => 'nullable|string|max:100',

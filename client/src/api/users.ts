@@ -45,7 +45,7 @@ export async function deleteUser(id: number): Promise<void> {
   await api.delete(`/users/${id}`)
 }
 
-export async function getDirectory(): Promise<{ id: number; name: string; email: string; ext?: string; department: string }[]> {
+export async function getDirectory(): Promise<{ id: number; name: string; email: string; alias?: string; ext?: string; role: string; avatar?: string; department: string; buildings?: { id: number; name: string }[] }[]> {
   const res = await api.get('/users/directory')
   return res.data
 }

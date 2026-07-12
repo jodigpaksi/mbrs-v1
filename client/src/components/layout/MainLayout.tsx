@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useRef } from 'react'
+import { type ReactNode, useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Navbar from './Navbar'
 import AiAgentFab from '../ai/AiAgentFab'

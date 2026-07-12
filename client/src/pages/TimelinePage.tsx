@@ -480,7 +480,7 @@ export default function TimelinePage() {
   const cellDragRef = useRef<CellDrag | null>(null)
   const barDragRef  = useRef<BarDrag | null>(null)
   const barResizeRef = useRef<BarResize | null>(null)
-  const [dragTick, setDragTick] = useState(0)
+  const [, setDragTick] = useState(0)
   const [hoverSlot, setHoverSlot] = useState<number | null>(null)
   const mainRef = useRef<HTMLElement>(null)
 
