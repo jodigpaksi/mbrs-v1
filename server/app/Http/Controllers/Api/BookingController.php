@@ -590,7 +590,13 @@ class BookingController extends Controller
 
     public function seriesDestroy(Request $request, string $seriesId): JsonResponse
     {
-        $bookings = Booking::where('series_id', $seriesId)
+        // Include bookings that rebooked a skipped/invalid date from this series (via "Find another
+        // slot") — they never got this series_id (they're standalone, single bookings), but deleting
+        // the whole series should still take them along as one package.
+        $bookings = Booking::where(function ($q) use ($seriesId) {
+                $q->where('series_id', $seriesId)
+                  ->orWhere('resolves_series_id', $seriesId);
+            })
             ->where('status', '!=', 'cancelled')
             ->get();
 

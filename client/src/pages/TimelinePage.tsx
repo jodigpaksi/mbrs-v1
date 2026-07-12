@@ -17,6 +17,7 @@ import ContactReceptionistModal from '../components/room/ContactReceptionistModa
 import AfterHoursModal from '../components/booking/AfterHoursModal'
 import GlassDatePicker from '../components/ui/GlassDatePicker'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
+import WifiLoader from '../components/ui/WifiLoader'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import { getDepartments } from '../api/departments'
@@ -1058,7 +1059,7 @@ export default function TimelinePage() {
         {/* Date nav */}
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade') }}
-            className="px-5 py-2.5 bg-black text-[#adee2b] rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-80 transition-opacity">
+            className="px-5 py-2.5 bg-black text-[#adee2b] rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-slate-800 hover:scale-[1.04] hover:shadow-lg active:scale-95 transition-all">
             {t('label_today')}
           </button>
           {(() => {
@@ -1072,7 +1073,7 @@ export default function TimelinePage() {
                 footer={(close) => (
                   <>
                     <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade'); close() }}
-                      className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">{t('label_today')}</button>
+                      className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 hover:scale-[1.03] active:scale-95 transition-all">{t('label_today')}</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); switchDate(d, 'right'); close() }}
                       className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">{t('label_minus_1_week')}</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); switchDate(d, 'left'); close() }}
@@ -1313,7 +1314,7 @@ export default function TimelinePage() {
         <main key={ganttKey} ref={weekSelectedRoom ? mainRef : undefined} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: weekSelectedRoom ? 'var(--ds-bg-surface)' : 'var(--ds-bg-base)', scrollbarWidth: 'thin' }}>
           {roomsLoading && (
             <div className="absolute inset-0 bg-[var(--ds-bg-base)]/80 flex items-center justify-center z-50">
-              <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
+              <WifiLoader />
             </div>
           )}
           {weekSelectedRoom ? (() => {
@@ -1767,7 +1768,7 @@ export default function TimelinePage() {
       <main key={ganttKey} ref={mainRef} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
         {(roomsLoading || bookingsLoading) && (
           <div className="absolute inset-0 bg-[var(--ds-bg-base)]/70 flex items-center justify-center z-50">
-            <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
+            <WifiLoader />
           </div>
         )}
         <div style={{ width: ROOM_W + slots * SLOT_W, minWidth: '100%' }}>

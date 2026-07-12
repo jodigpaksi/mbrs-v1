@@ -25,6 +25,7 @@ import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBack
 import type { UserRole } from '../types/index'
 import UserAvatar from '../components/ui/UserAvatar'
 import GlassTimePicker from '../components/ui/GlassTimePicker'
+import WifiLoader from '../components/ui/WifiLoader'
 import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 import KioskTab from '../components/admin/KioskTab'
@@ -3586,7 +3587,7 @@ function UsersTab() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-3)]">progress_activity</span>
+          <WifiLoader />
         </div>
       ) : (
         <div className="space-y-4">
@@ -7191,7 +7192,7 @@ export default function AdminPage() {
 
             {overviewLoading ? (
               <div className="flex items-center justify-center py-20">
-                <span className="material-symbols-outlined animate-spin text-[var(--ds-text-4)]" style={{ fontSize: 32 }}>progress_activity</span>
+                <WifiLoader />
               </div>
             ) : overviewData && (<>
               {/* ── Global stats: Unique Visitors + Storage (no building filter) ── */}

@@ -231,6 +231,13 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
   const [startTime, setStartTime]     = useState('09:00')
   const [endTime, setEndTime]         = useState('10:00')
 
+  function pickRangeStart(d: string) {
+    setStartDate(d)
+    const nd = new Date(d + 'T12:00:00')
+    nd.setDate(nd.getDate() + 1)
+    setEndDate(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}-${String(nd.getDate()).padStart(2, '0')}`)
+  }
+
   const [groupBy, setGroupBy]         = useState<GroupBy>('room')
   const [minCapacity, setMinCapacity] = useState(0)
   const [specialOnly, setSpecialOnly] = useState(false)
@@ -467,7 +474,17 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <div className="space-y-2">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">Date</label>
-                  <GlassDatePicker value={startDate} onChange={setStartDate} align="left">
+                  <GlassDatePicker
+                    value={startDate}
+                    onChange={setStartDate}
+                    align="left"
+                    footer={close => (
+                      <button type="button" onClick={() => { setStartDate(todayISO()); close() }}
+                        className="w-full py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 hover:scale-[1.03] active:scale-95 transition-all">
+                        {t('label_today')}
+                      </button>
+                    )}
+                  >
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
@@ -506,7 +523,16 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_start')} {t('panel_date')}</label>
-                  <GlassDatePicker value={startDate} onChange={d => { setStartDate(d); const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); setEndDate(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}-${String(nd.getDate()).padStart(2,'0')}`) }}>
+                  <GlassDatePicker
+                    value={startDate}
+                    onChange={pickRangeStart}
+                    footer={close => (
+                      <button type="button" onClick={() => { pickRangeStart(todayISO()); close() }}
+                        className="w-full py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 hover:scale-[1.03] active:scale-95 transition-all">
+                        {t('label_today')}
+                      </button>
+                    )}
+                  >
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>
@@ -517,7 +543,18 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black uppercase text-[var(--ds-text-3)] tracking-[0.15em]">{t('panel_end')} {t('panel_date')}</label>
-                  <GlassDatePicker value={endDate} onChange={setEndDate} min={startDate} align="right">
+                  <GlassDatePicker
+                    value={endDate}
+                    onChange={setEndDate}
+                    min={startDate}
+                    align="right"
+                    footer={close => (
+                      <button type="button" disabled={todayISO() < startDate} onClick={() => { setEndDate(todayISO()); close() }}
+                        className="w-full py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 hover:scale-[1.03] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100">
+                        {t('label_today')}
+                      </button>
+                    )}
+                  >
                     {({ label }) => (
                       <button type="button" className={fieldBtn}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 13 }}>calendar_today</span>

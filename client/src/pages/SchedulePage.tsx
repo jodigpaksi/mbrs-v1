@@ -20,6 +20,8 @@ import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import UserHoverCard from '../components/ui/UserHoverCard'
 import ToggleSwitch from '../components/ui/ToggleSwitch'
 import FilterSelectDropdown from '../components/ui/FilterSelectDropdown'
+import WifiLoader from '../components/ui/WifiLoader'
+import ElasticCheckbox from '../components/ui/ElasticCheckbox'
 import { parseLocal } from '../utils/date'
 
 function dur(start: string, end: string) {
@@ -562,10 +564,9 @@ function SeriesGroupRow({
                 <div ref={exportPanelRef} className="fixed z-50 rounded-2xl p-4 w-64 dropdown-enter-right"
                   style={{ top: exportPos.top, right: exportPos.right, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                   <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export this series</p>
-                  <label className="flex items-center gap-2.5 cursor-pointer mb-4">
-                    <input type="checkbox" checked={exportIncludePast} onChange={e => setExportIncludePast(e.target.checked)} className="accent-black w-4 h-4" />
+                  <ElasticCheckbox checked={exportIncludePast} onChange={setExportIncludePast} color="#000" className="mb-4">
                     <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
-                  </label>
+                  </ElasticCheckbox>
                   <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                     <button
                       onClick={() => { onExport(group, 'excel', exportIncludePast); setExportOpen(false) }}
@@ -1939,7 +1940,7 @@ export default function SchedulePage() {
         <div className="flex-1 overflow-y-auto px-8 py-6 bg-[var(--ds-bg-base)]" style={{ scrollbarWidth: 'thin' }}>
           {(isLoading || loadingAll) && myBookings.length === 0 && allMyBookings.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
+              <WifiLoader />
             </div>
           ) : (activeList.length === 0 && activeTab !== 'hcal' && activeTab !== 'special' && !(activeTab === 'today' && todayPastList.length > 0)) ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--ds-text-4)]">
@@ -2077,21 +2078,18 @@ export default function SchedulePage() {
                                   </div>
                                   <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Select groups to export</p>
                                   <div className="space-y-2.5 mb-4">
-                                    <label className="flex items-center gap-2.5 cursor-pointer">
-                                      <input type="checkbox" checked={spExportGroups.active} onChange={e => setSpExportGroups(g => ({ ...g, active: e.target.checked }))} className="accent-amber-500 w-4 h-4" />
+                                    <ElasticCheckbox checked={spExportGroups.active} onChange={v => setSpExportGroups(g => ({ ...g, active: v }))} color="#f59e0b">
                                       <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Upcoming &amp; Today</span>
                                       <span className="text-[11px] font-black text-amber-400">{spExportUseFilter ? spActive.length : rawActive.length}</span>
-                                    </label>
-                                    <label className="flex items-center gap-2.5 cursor-pointer">
-                                      <input type="checkbox" checked={spExportGroups.past} onChange={e => setSpExportGroups(g => ({ ...g, past: e.target.checked }))} className="accent-slate-400 w-4 h-4" />
+                                    </ElasticCheckbox>
+                                    <ElasticCheckbox checked={spExportGroups.past} onChange={v => setSpExportGroups(g => ({ ...g, past: v }))} color="#94a3b8">
                                       <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Past</span>
                                       <span className="text-[11px] font-black text-[var(--ds-text-3)]">{spExportUseFilter ? spPast.length : rawPast.length}</span>
-                                    </label>
-                                    <label className="flex items-center gap-2.5 cursor-pointer">
-                                      <input type="checkbox" checked={spExportGroups.cancelled} onChange={e => setSpExportGroups(g => ({ ...g, cancelled: e.target.checked }))} className="accent-red-400 w-4 h-4" />
+                                    </ElasticCheckbox>
+                                    <ElasticCheckbox checked={spExportGroups.cancelled} onChange={v => setSpExportGroups(g => ({ ...g, cancelled: v }))} color="#f87171">
                                       <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Cancelled</span>
                                       <span className="text-[11px] font-black text-red-400">{spExportUseFilter ? spCancelled.length : rawCancelled.length}</span>
-                                    </label>
+                                    </ElasticCheckbox>
                                   </div>
                                   <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                                     <button
@@ -2823,10 +2821,9 @@ export default function SchedulePage() {
                       <div className="absolute right-0 top-full mt-2 z-50 rounded-2xl p-4 w-72 dropdown-enter-right"
                         style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                         <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export all {displaySeriesList.length} series</p>
-                        <label className="flex items-center gap-2.5 cursor-pointer mb-4">
-                          <input type="checkbox" checked={seriesIncludePastAll} onChange={e => setSeriesIncludePastAll(e.target.checked)} className="accent-black w-4 h-4" />
+                        <ElasticCheckbox checked={seriesIncludePastAll} onChange={setSeriesIncludePastAll} color="#000" className="mb-4">
                           <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
-                        </label>
+                        </ElasticCheckbox>
                         <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                           <button
                             onClick={() => {
@@ -2947,21 +2944,18 @@ export default function SchedulePage() {
                       style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                       <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Select groups to export</p>
                       <div className="space-y-2.5 mb-4">
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                          <input type="checkbox" checked={allExportGroups.upcoming} onChange={e => setAllExportGroups(g => ({ ...g, upcoming: e.target.checked }))} className="accent-black w-4 h-4" />
+                        <ElasticCheckbox checked={allExportGroups.upcoming} onChange={v => setAllExportGroups(g => ({ ...g, upcoming: v }))} color="#000">
                           <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Upcoming &amp; Today</span>
                           <span className="text-[11px] font-black text-[var(--ds-text-1)]">{upcomingInAll.length}</span>
-                        </label>
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                          <input type="checkbox" checked={allExportGroups.past} onChange={e => setAllExportGroups(g => ({ ...g, past: e.target.checked }))} className="accent-slate-400 w-4 h-4" />
+                        </ElasticCheckbox>
+                        <ElasticCheckbox checked={allExportGroups.past} onChange={v => setAllExportGroups(g => ({ ...g, past: v }))} color="#94a3b8">
                           <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Past</span>
                           <span className="text-[11px] font-black text-[var(--ds-text-3)]">{pastInAll.length}</span>
-                        </label>
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                          <input type="checkbox" checked={allExportGroups.cancelled} onChange={e => setAllExportGroups(g => ({ ...g, cancelled: e.target.checked }))} className="accent-red-400 w-4 h-4" />
+                        </ElasticCheckbox>
+                        <ElasticCheckbox checked={allExportGroups.cancelled} onChange={v => setAllExportGroups(g => ({ ...g, cancelled: v }))} color="#f87171">
                           <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Cancelled <span className="text-[9px] font-bold text-[var(--ds-text-4)] normal-case">last {archiveAfterDays} days</span></span>
                           <span className="text-[11px] font-black text-red-400">{cancelledList.length}</span>
-                        </label>
+                        </ElasticCheckbox>
                       </div>
                       <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                         <button

@@ -13,6 +13,7 @@ import { useSettings } from '../context/SettingsContext'
 import RoomDetailModal from '../components/room/RoomDetailModal'
 import BookingPanel from '../components/booking/BookingPanel'
 import ContactReceptionistModal from '../components/room/ContactReceptionistModal'
+import WifiLoader from '../components/ui/WifiLoader'
 import AfterHoursModal from '../components/booking/AfterHoursModal'
 
 function toLocalDateStr(d: Date) {
@@ -529,7 +530,7 @@ export default function RoomsPage() {
 
         {isLoading && (
           <div className="flex items-center justify-center py-24">
-            <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-3)]">progress_activity</span>
+            <WifiLoader />
           </div>
         )}
 

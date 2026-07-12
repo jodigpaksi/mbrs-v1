@@ -8,6 +8,7 @@ import { getDirectory } from '../../api/users'
 import { getGeneralSettings } from '../../api/settings'
 import { useAuth } from '../../context/AuthContext'
 import { useSettings } from '../../context/SettingsContext'
+import { useSeriesProgress, type SkippedEntry, type SkipReason } from '../../context/SeriesProgressContext'
 import { useBookingHours } from '../../hooks/useBookingHours'
 import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 import GlassDatePicker from '../ui/GlassDatePicker'
@@ -238,7 +239,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [activeBuildingId, setActiveBuildingId] = useState<number | null>(buildingId ?? defaultBuilding ?? null)
   // submit
   const [submitting, setSubmitting] = useState(false)
-  const [saveProgress, setSaveProgress] = useState(0) // 0-100, driven by real per-date completion for series
   const [error, setError] = useState('')
   // Tracks the most recently created booking's id across single/series/skip-conflict flows so
   // onSubmit can tell the caller which bar to highlight as "just created" — always the LAST one
@@ -246,8 +246,29 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const lastCreatedIdRef = useRef<number | undefined>(undefined)
   // conflict preview modal (all-or-nothing mode)
   const [conflictInfo, setConflictInfo] = useState<{ conflicting: SkippedEntry[]; available: string[]; seriesId: string } | null>(null)
-  // skipped dates result modal (shown after skip-mode series completes)
-  const [skippedResult, setSkippedResult] = useState<{ skipped: SkippedEntry[]; created: number; total: number } | null>(null)
+  // Series submit progress/result lives in a context above the router (see SeriesProgressContext)
+  // instead of local state — that way an in-flight repeat-booking batch, and its result, survive
+  // this panel (or the whole page) being closed/unmounted mid-submit.
+  const {
+    progress: seriesProgress, result: seriesResult, activeInstanceId,
+    startSeriesProgress: startSharedSeriesProgress, updateSeriesProgress, finishSeriesProgress, doneSeriesProgress,
+    reportPanelOpen,
+  } = useSeriesProgress()
+  // Let the shared widget know whether THIS instance's panel is currently open — it only shows
+  // while every BookingPanel instance reporting into it is closed (this one has its own inline
+  // progress on the Confirm button while open, so the floating widget would be a duplicate then).
+  const instanceIdRef = useRef(`booking-panel-${Math.random().toString(36).slice(2)}`)
+  useEffect(() => {
+    const id = instanceIdRef.current
+    reportPanelOpen(id, open)
+    return () => reportPanelOpen(id, false)
+  }, [open, reportPanelOpen])
+  // Whether the ACTIVE shared submission (if any) is the one THIS instance started — a fresh,
+  // unrelated panel opened on a different menu must never be gated by someone else's pending
+  // result, so it only reads seriesProgress/seriesResult when this is true.
+  const isMySeriesSubmission = activeInstanceId === instanceIdRef.current
+  const myResult = isMySeriesSubmission ? seriesResult : null
+  function startSeriesProgress() { startSharedSeriesProgress(instanceIdRef.current) }
   // cancel series modal
   const [showCancelModal, setShowCancelModal] = useState(false)
   // after-hours restriction modal
@@ -408,7 +429,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           setPantrySaved(false)
           setDraftRestored(true)
           setActiveBuildingId(d.room?.building_id ?? buildingId ?? defaultBuilding ?? null)
-          setShowCancelModal(false); setError(''); setConflictInfo(null); setSkippedResult(null)
+          setShowCancelModal(false); setError(''); setConflictInfo(null)
           return
         } catch {}
       }
@@ -438,7 +459,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     setShowCancelModal(false)
     setError('')
     setConflictInfo(null)
-    setSkippedResult(null)
     setActiveBuildingId(buildingId ?? defaultBuilding ?? null)
   }, [open, editBooking, initialRoom, prefillStart, prefillEnd, prefillDate])
 
@@ -751,12 +771,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   // and miscategorized as "room conflict". Give series calls more room to breathe.
   const SERIES_REQUEST_TIMEOUT_MS = 30000
 
-  type SkipReason = 'conflict' | 'advance_limit' | 'timeout' | 'invalid_date'
-  // label: optional display override — invalid_date entries store a clamped placeholder date
-  // (e.g. Sep 30) for series_skipped_dates, but should still *display* the originally requested
-  // day (e.g. "31 Sep") so the post-submit result matches what the dates-list panel showed.
-  interface SkippedEntry { date: string; reason: SkipReason; label?: string }
-
   // knownSkipped: dates already known to be un-bookable (pre-checked conflicts, or monthly dates
   // that don't exist in their target month) — they get stored as series_skipped_dates on each
   // booking, and surfaced directly without ever calling createBooking() for them.
@@ -790,19 +804,28 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
         runtimeSkipped.push({ date: d, reason })
       } finally {
         processed++
-        setSaveProgress(Math.round((processed / total) * 100))
+        updateSeriesProgress(Math.round((processed / total) * 100))
       }
     })
     const allSkipped = [...knownSkipped, ...runtimeSkipped]
-    if (created === 0) { setError(t('all_slots_taken')); return }
+    if (created === 0) {
+      // Nothing was booked — still resolve the shared widget (otherwise it's stuck showing
+      // 100% forever with no result, since finishSeriesProgress is the only thing that clears
+      // it) but skip clearDraft() so the user's form input isn't lost on a total failure.
+      setError(t('all_slots_taken'))
+      finishSeriesProgress(
+        { skipped: allSkipped, created, total: datesToBook.length + knownSkipped.length },
+        () => onSubmit?.(lastCreatedIdRef.current),
+      )
+      return
+    }
     // If any runtime skips happened (race condition after pre-check), patch the stored skipped dates
     // by including them in a final pass — simplest: just show combined result
     clearDraft()
-    if (allSkipped.length > 0) {
-      setSkippedResult({ skipped: allSkipped, created, total: datesToBook.length + knownSkipped.length })
-    } else {
-      onSubmit?.(lastCreatedIdRef.current)
-    }
+    finishSeriesProgress(
+      { skipped: allSkipped, created, total: datesToBook.length + knownSkipped.length },
+      () => onSubmit?.(lastCreatedIdRef.current),
+    )
   }
 
   async function doSubmitSeries() {
@@ -857,7 +880,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   async function handleSubmit() {
     if (!isValid() || !selectedRoom) return
     setSubmitting(true)
-    setSaveProgress(0)
+    if (repeat !== 'none') startSeriesProgress()
     setError('')
     try {
       if (repeat === 'none') {
@@ -893,6 +916,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     setConflictInfo(null)
     setSkipConflicts(true)
     setSubmitting(true)
+    startSeriesProgress()
     setError('')
     try {
       await doCreateBookings(info.available, info.seriesId, info.conflicting)
@@ -911,16 +935,11 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     }
   }
 
-  function handleSkippedDone() {
-    setSkippedResult(null)
-    onSubmit?.(lastCreatedIdRef.current)
-  }
-
   // Enter → primary action, Escape → cancel/back, scoped so only the topmost visible layer reacts.
   useModalHotkeys(
     open && !showCancelModal && !conflictInfo,
-    skippedResult ? handleSkippedDone : handleSubmit,
-    skippedResult ? handleSkippedDone : handleClose,
+    myResult ? doneSeriesProgress : handleSubmit,
+    myResult ? doneSeriesProgress : handleClose,
   )
   useModalHotkeys(!!showCancelModal, undefined, () => setShowCancelModal(false))
   useModalHotkeys(!!conflictInfo, conflictInfo && conflictInfo.available.length > 0 ? handleSkipAndBook : undefined, () => setConflictInfo(null))
@@ -2344,8 +2363,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             </div>
           )}
 
-          {/* (skippedResult shown inline in submit area) */}
-
         </div>
 
         {/* Submit */}
@@ -2357,42 +2374,9 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
             </div>
           )}
 
-          {/* Skipped dates result — inline after series booking */}
-          {skippedResult && (
-            <div className="bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-2xl p-4 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="size-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#adee2b' }}>
-                    <span className="material-symbols-outlined text-black" style={{ fontSize: 14 }}>task_alt</span>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-black text-[var(--ds-text-1)]">{skippedResult.created} {t('booked_of')} {skippedResult.total} {t('booked_count')}</p>
-                    <p className="text-[9px] text-[var(--ds-text-3)] font-bold">{skippedResult.skipped.length} {t('skipped_conflicts')}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleSkippedDone}
-                  className="px-3 py-1.5 rounded-xl bg-black text-[#adee2b] text-[9px] font-black uppercase tracking-wide hover:bg-slate-800 transition-all shrink-0"
-                >
-                  {t('btn_done')}
-                </button>
-              </div>
-              <div className="bg-red-50 rounded-xl p-2.5 space-y-1 max-h-32 overflow-y-auto">
-                <p className="text-[8px] font-black uppercase text-red-400 tracking-wider px-1 mb-1.5">{t('skipped_dates_label')}</p>
-                {skippedResult.skipped.map(({ date: d, reason, label }) => (
-                  <div key={`${d}-${reason}-${label ?? ''}`} className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-red-400 shrink-0" style={{ fontSize: 12 }}>
-                      {reason === 'advance_limit' ? 'event_busy' : reason === 'timeout' ? 'hourglass_disabled' : reason === 'invalid_date' ? 'event_note' : 'block'}
-                    </span>
-                    <span className="text-[11px] font-bold text-red-600">{label ?? fmtShortDate(d, language)}</span>
-                    <span className="text-[9px] font-bold text-red-400">
-                      — {reason === 'advance_limit' ? t('skipped_advance_limit') : reason === 'timeout' ? t('skipped_timeout') : reason === 'invalid_date' ? t('skipped_invalid_date') : t('skipped_conflict_reason')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Skipped/invalid/beyond-limit result now shown in the shared floating widget
+              (SeriesProgressContext) — always in the same place whether this panel is open or
+              closed, instead of duplicated here. */}
 
           {/* Export to Calendar */}
           {title.trim() && date && startTime && endTime && selectedRoom && (
@@ -2489,7 +2473,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
               <div className="relative w-full">
                 <button
                   onClick={handleSubmit}
-                  disabled={!isValid() || submitting || !!skippedResult}
+                  disabled={!isValid() || submitting || !!myResult}
                   className={`relative w-full py-5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-xl transition-all duration-200 overflow-hidden
                     bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b] shadow-lime-400/20
                     disabled:bg-[var(--ds-bg-surface-2)] disabled:text-[var(--ds-text-3)] disabled:cursor-not-allowed disabled:shadow-none`}
@@ -2498,7 +2482,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                     repeat !== 'none' ? (
                       <div
                         className="absolute inset-y-0 left-0 bg-[#adee2b]/60 transition-[width] duration-300 ease-out"
-                        style={{ width: `${saveProgress}%` }}
+                        style={{ width: `${seriesProgress}%` }}
                       />
                     ) : (
                       <div className="absolute inset-0 saving-shimmer" />
@@ -2539,7 +2523,6 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
           )}
         </div>
       </div>
-
     </>
   )
 }

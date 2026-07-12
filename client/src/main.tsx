@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './context/AuthContext'
 import { SettingsProvider } from './context/SettingsContext'
 import { CancelToastProvider } from './context/CancelToastContext'
+import { SeriesProgressProvider } from './context/SeriesProgressContext'
 import { NotificationProvider } from './context/NotificationContext'
 import './index.css'
 import App from './App.tsx'
@@ -28,7 +29,9 @@ createRoot(document.getElementById('root')!).render(
           <SettingsProvider>
             <NotificationProvider>
               <CancelToastProvider>
-                <App />
+                <SeriesProgressProvider>
+                  <App />
+                </SeriesProgressProvider>
               </CancelToastProvider>
             </NotificationProvider>
           </SettingsProvider>
