@@ -45,6 +45,8 @@ class UserController extends Controller
                     'address'  => $b->address,
                     'location' => $b->location ? ['id' => $b->location->id, 'name' => $b->location->name] : null,
                 ]),
+                'created_at'           => $u->created_at?->toDateTimeString(),
+                'updated_at'           => $u->updated_at?->toDateTimeString(),
             ]);
     }
 

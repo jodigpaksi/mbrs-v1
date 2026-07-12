@@ -219,6 +219,8 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
                     'ext'                 => $u->ext ?? '',
                     'default_building'    => $u->defaultBuilding?->name ?? '',
                     'assigned_buildings'  => $u->adminBuildings->pluck('name')->implode(', '),
+                    'created_at'          => $u->created_at?->toDateTimeString(),
+                    'updated_at'          => $u->updated_at?->toDateTimeString(),
                 ])
             );
         });

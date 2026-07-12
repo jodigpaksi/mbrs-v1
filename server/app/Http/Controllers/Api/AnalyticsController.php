@@ -45,6 +45,13 @@ class AnalyticsController extends Controller
             ->selectRaw("COUNT(*) as total, SUM(status = 'confirmed') as confirmed, SUM(status = 'tentative') as tentative, SUM(status = 'cancelled') as cancelled")
             ->first();
 
+        // Same all-time query, scoped to this calendar month — backs the Total Bookings /
+        // Confirmed cards' This Month / All Time toggle.
+        $statusCountsMonth = $byBuilding(Booking::query())
+            ->where('start_at', '>=', $monthStart)
+            ->selectRaw("COUNT(*) as total, SUM(status = 'confirmed') as confirmed")
+            ->first();
+
         // Unique-visitor counts are always global (not per building) — one query with
         // conditional date buckets instead of 4 separate distinct-count queries.
         $visitorCounts = ActivityLog::whereNotNull('user_id')
@@ -57,8 +64,10 @@ class AnalyticsController extends Controller
             )->first();
 
         $stats = [
-            'total_bookings' => (int) $statusCounts->total,
-            'confirmed'      => (int) $statusCounts->confirmed,
+            'total_bookings'       => (int) $statusCounts->total,
+            'total_bookings_month' => (int) $statusCountsMonth->total,
+            'confirmed'            => (int) $statusCounts->confirmed,
+            'confirmed_month'      => (int) $statusCountsMonth->confirmed,
             'tentative'      => (int) $statusCounts->tentative,
             'cancelled'      => (int) $statusCounts->cancelled,
             'active_rooms'   => Room::where('is_active', true)

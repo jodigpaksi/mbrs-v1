@@ -2,7 +2,9 @@ import api from './axios'
 
 export interface OverviewStats {
   total_bookings: number
+  total_bookings_month: number
   confirmed: number
+  confirmed_month: number
   tentative: number
   cancelled: number
   active_rooms: number
