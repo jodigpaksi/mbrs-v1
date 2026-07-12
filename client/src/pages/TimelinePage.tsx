@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react'
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient, useQueries, useMutation } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type { Booking, Building, Room } from '../types/index'
 import { getRooms } from '../api/rooms'
 import { getBookings, updateBooking as updateBookingApi, cancelBooking, cancelSeries, transferBooking as transferBookingApi } from '../api/bookings'
@@ -363,6 +363,56 @@ const WeekDateRow = memo(function WeekDateRow(props: WeekDateRowProps) {
     </div>
   )
 }, weekDateRowPropsEqual)
+
+// Glass context-menu shell that measures itself and flips up/left when the click point is too near
+// the viewport edge — so a menu opened low on screen opens UPWARD instead of being clipped by (or
+// hidden behind) the footer. Rendered invisibly for one frame while measuring to avoid a jump.
+function ContextMenuShell({ x, y, width = 200, onClose, children }: {
+  x: number; y: number; width?: number; onClose: () => void; children: React.ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const M = 12 // keep this clear of every viewport edge (incl. the bottom footer strip)
+    let left = x
+    let top = y
+    if (left + rect.width > window.innerWidth - M) left = Math.max(M, x - rect.width)
+    if (top + rect.height > window.innerHeight - M) {
+      // Doesn't fit below the cursor — anchor the menu's BOTTOM at the cursor (open upward).
+      top = Math.max(M, y - rect.height)
+    }
+    setPos({ left, top })
+  }, [x, y])
+  return (
+    <div className="fixed inset-0 z-[990]" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose() }}>
+      <div
+        ref={ref}
+        className="ctx-pop-in"
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'absolute',
+          left: pos?.left ?? x,
+          top: pos?.top ?? y,
+          minWidth: width,
+          background: 'var(--ds-glass-bg)',
+          backdropFilter: 'blur(48px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+          border: '1px solid var(--ds-glass-border)',
+          borderRadius: 14,
+          boxShadow: 'var(--ds-glass-shadow)',
+          padding: 5,
+          transformOrigin: 'top left',
+          visibility: pos ? 'visible' : 'hidden',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function TimelinePage() {
   const { user } = useAuth()
@@ -763,10 +813,14 @@ export default function TimelinePage() {
     staleTime: 5 * 60_000,
   })
 
+  // staleTime is generous (not the old 3s) because Reverb already invalidates ['bookings'] /
+  // ['bookings-month'] on every real BookingChanged event (see useBookingRealtime) — a short
+  // staleTime here just meant switching day/week/month re-fetched from the server on almost every
+  // click instead of reusing what's already correct in cache.
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ['bookings', dateStr],
     queryFn: () => getBookings({ date: dateStr }),
-    staleTime: 3_000,
+    staleTime: 60_000,
   })
 
   // Week view
@@ -784,15 +838,22 @@ export default function TimelinePage() {
     })
   }, [currentDate, startDay])
 
-  const weekResults = useQueries({
-    queries: weekDates.map(d => ({
-      queryKey: ['bookings', toLocalDateStr(d)],
-      queryFn: () => getBookings({ date: toLocalDateStr(d) }),
-      enabled: viewMode === 'week',
-      staleTime: 10_000,
-    }))
+  // One range request for the whole week instead of 7 separate day requests — on the dev server
+  // (php artisan serve is single-threaded) those 7 "parallel" fetches were actually queued and
+  // processed one at a time, each paying full Laravel bootstrap cost. A single request pays that
+  // cost once; the per-day split happens client-side below.
+  const weekFrom = toLocalDateStr(weekDates[0])
+  const weekTo   = toLocalDateStr(weekDates[6])
+  const { data: weekBookings = [], isLoading: weekLoading } = useQuery({
+    queryKey: ['bookings', weekFrom, weekTo],
+    queryFn: () => getBookings({ date_from: weekFrom, date_to: weekTo }),
+    enabled: viewMode === 'week',
+    staleTime: 60_000,
   })
-  const weekData: Booking[][] = weekResults.map(r => (r.data as Booking[]) ?? [])
+  const weekData: Booking[][] = useMemo(() => weekDates.map(d => {
+    const ds = toLocalDateStr(d)
+    return (weekBookings as Booking[]).filter(b => toLocalDateStr(new Date(b.start_at.replace('Z', ''))) === ds)
+  }), [weekDates, weekBookings])
 
   // Month view data
   const monthFrom = toLocalDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1))
@@ -801,8 +862,75 @@ export default function TimelinePage() {
     queryKey: ['bookings-month', monthFrom, monthTo],
     queryFn: () => getBookings({ date_from: monthFrom, date_to: monthTo }),
     enabled: viewMode === 'month',
-    staleTime: 3_000,
+    staleTime: 60_000,
   })
+
+  // Month-view grid — was previously computed inline in the render body on every render (hover,
+  // drag, toast, anything), redoing an O(cells × rooms + cells × bookings) pass each time. Now it
+  // only recomputes when the data it actually depends on changes.
+  const monthGrid = useMemo(() => {
+    const year  = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay  = new Date(year, month + 1, 0)
+    const startOffset = startDay === 'sun' ? firstDay.getDay() : (firstDay.getDay() + 6) % 7
+    const gridStart = new Date(firstDay)
+    gridStart.setDate(1 - startOffset)
+    const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7
+    const todayStr = toLocalDateStr(new Date())
+
+    const bkgs = (monthBookings as Booking[]).filter(b => !location || b.room?.building_id === location.id)
+    const eligibleRooms = (rooms as Room[]).filter(r => !r.requires_contact && (!location || r.building_id === location.id))
+    const totalCapacityMins = eligibleRooms.length * (HOUR_END - HOUR_START) * 60
+    const eligibleRoomIds = new Set(eligibleRooms.map(r => r.id))
+    const maintenanceRoomIds = new Set(eligibleRooms.filter(r => r.status === 'maintenance').map(r => r.id))
+
+    const cells = Array.from({ length: totalCells }, (_, i) => {
+      const cellDate = new Date(gridStart)
+      cellDate.setDate(gridStart.getDate() + i)
+      const isCurrentMonth = cellDate.getMonth() === month
+      const cellStr = toLocalDateStr(cellDate)
+      const isTodayCell = cellStr === todayStr
+      const isPast = cellStr < todayStr
+      const cellDow = cellDate.getDay()
+      const isCellWeekend = (cellDow === 6 && wkSat) || (cellDow === 0 && wkSun)
+
+      const dayBkgs = bkgs.filter(b => {
+        const s = new Date(b.start_at.replace('Z', ''))
+        return toLocalDateStr(s) === cellStr && b.status !== 'cancelled'
+      })
+      const myBkgs = dayBkgs.filter(b => b.user_id === user?.id)
+      const otherBkgs = dayBkgs.filter(b => b.user_id !== user?.id)
+      const visibleBkgs = dayBkgs.slice(0, 6)
+      const overflow = dayBkgs.length - 6
+
+      let usagePct = 0
+      if (isCurrentMonth && !isPast && totalCapacityMins > 0) {
+        let totalBookedMins = 0
+        eligibleRooms.forEach(r => {
+          if (maintenanceRoomIds.has(r.id)) totalBookedMins += (HOUR_END - HOUR_START) * 60
+        })
+        dayBkgs.forEach(b => {
+          if (!eligibleRoomIds.has(b.room_id) || maintenanceRoomIds.has(b.room_id)) return
+          const s = new Date(b.start_at.replace('Z', ''))
+          const e = new Date(b.end_at.replace('Z', ''))
+          const sMins = Math.max(s.getHours() * 60 + s.getMinutes(), HOUR_START * 60)
+          const eMins = Math.min(e.getHours() * 60 + e.getMinutes(), HOUR_END * 60)
+          totalBookedMins += Math.max(0, eMins - sMins)
+        })
+        usagePct = Math.min(100, Math.round(totalBookedMins / totalCapacityMins * 100))
+      }
+      const usageColor = usagePct >= 80 ? '#ef4444' : usagePct >= 50 ? '#f59e0b' : '#adee2b'
+      const showUsage = isCurrentMonth && !isPast && totalCapacityMins > 0
+
+      return {
+        cellDate, isCurrentMonth, isTodayCell, cellStr, isPast, isCellWeekend,
+        dayBkgs, myBkgs, otherBkgs, visibleBkgs, overflow, usagePct, usageColor, showUsage,
+      }
+    })
+
+    return { cells, eligibleRoomsCount: eligibleRooms.length }
+  }, [currentDate, startDay, monthBookings, location, rooms, wkSat, wkSun, user?.id])
 
   const today = new Date()
   const isToday = currentDate.toDateString() === today.toDateString()
@@ -827,7 +955,7 @@ export default function TimelinePage() {
     .filter(n => n.toLowerCase().includes(deptSearch.toLowerCase()))
 
   const allVisibleBookings: Booking[] = viewMode === 'week'
-    ? weekResults.flatMap(r => (r.data || []) as Booking[])
+    ? weekBookings as Booking[]
     : viewMode === 'month'
     ? monthBookings as Booking[]
     : bookings as Booking[]
@@ -951,13 +1079,41 @@ export default function TimelinePage() {
   }
 
   const VIEW_ORDER = { day: 0, week: 1, month: 2 } as const
-  const ganttAnimCSS: Record<string, string> = {
-    left:  'gantt-enter-left 0.2s cubic-bezier(0.4,0,0.2,1) both',
-    right: 'gantt-enter-right 0.2s cubic-bezier(0.4,0,0.2,1) both',
-    up:    'gantt-enter-up 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
-    fade:  'gantt-enter-fade 0.18s ease both',
-    none:  '',
+
+  // Gantt view-switch animation — played via the Web Animations API directly on whichever <main>
+  // is currently mounted, instead of the old `key={ganttKey}` approach (which forced React to
+  // unmount+remount the entire grid — expensive for Month's ~40 cells / Week's 7 full columns —
+  // just to get a fresh element for the CSS `animation` property to attach to). Same visual
+  // result, without the destructive remount: the element stays mounted, we just replay its
+  // transform/opacity from the "entering" state to settled.
+  const GANTT_KEYFRAMES: Record<'left' | 'right' | 'up' | 'fade' | 'none', Keyframe[]> = {
+    left:  [{ opacity: 0, transform: 'translateX(28px)' },                    { opacity: 1, transform: 'translateX(0)' }],
+    right: [{ opacity: 0, transform: 'translateX(-28px)' },                   { opacity: 1, transform: 'translateX(0)' }],
+    up:    [{ opacity: 0, transform: 'translateY(16px) scale(0.99)' },        { opacity: 1, transform: 'translateY(0) scale(1)' }],
+    fade:  [{ opacity: 0 },                                                  { opacity: 1 }],
+    none:  [],
   }
+  const GANTT_TIMING: Record<'left' | 'right' | 'up' | 'fade' | 'none', KeyframeAnimationOptions> = {
+    left:  { duration: 200, easing: 'cubic-bezier(0.4,0,0.2,1)' },
+    right: { duration: 200, easing: 'cubic-bezier(0.4,0,0.2,1)' },
+    up:    { duration: 220, easing: 'cubic-bezier(0.34,1.04,0.64,1)' },
+    fade:  { duration: 180, easing: 'ease' },
+    none:  { duration: 0 },
+  }
+  const ganttAnimRef = useRef<HTMLElement | null>(null)
+  // Attaches to whichever <main> is currently rendered (day/week/month are mutually exclusive
+  // branches); `useMain` also feeds the same element into the pre-existing `mainRef` (scroll
+  // tracking) for the day/week views that need it.
+  const setGanttRef = useCallback((useMain: boolean) => (el: HTMLElement | null) => {
+    ganttAnimRef.current = el
+    if (useMain) (mainRef as React.MutableRefObject<HTMLElement | null>).current = el
+  }, [])
+  useLayoutEffect(() => {
+    const el = ganttAnimRef.current
+    if (!el || ganttAnim === 'none') return
+    el.animate(GANTT_KEYFRAMES[ganttAnim], GANTT_TIMING[ganttAnim])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ganttKey])
 
   function switchViewMode(mode: 'day' | 'week' | 'month') {
     if (mode === viewMode) return
@@ -1021,10 +1177,6 @@ export default function TimelinePage() {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <style>{`
-        @keyframes gantt-enter-left{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
-        @keyframes gantt-enter-right{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
-        @keyframes gantt-enter-up{from{opacity:0;transform:translateY(16px) scale(0.99)}to{opacity:1;transform:translateY(0) scale(1)}}
-        @keyframes gantt-enter-fade{from{opacity:0}to{opacity:1}}
         @keyframes date-popup-fade{from{opacity:0}to{opacity:1}}
       `}</style>
 
@@ -1311,7 +1463,7 @@ export default function TimelinePage() {
 
       {/* Week view */}
       {viewMode === 'week' && (
-        <main key={ganttKey} ref={weekSelectedRoom ? mainRef : undefined} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: weekSelectedRoom ? 'var(--ds-bg-surface)' : 'var(--ds-bg-base)', scrollbarWidth: 'thin' }}>
+        <main ref={setGanttRef(!!weekSelectedRoom)} className="flex-1 overflow-auto relative select-none" style={{ background: weekSelectedRoom ? 'var(--ds-bg-surface)' : 'var(--ds-bg-base)', scrollbarWidth: 'thin' }}>
           {roomsLoading && (
             <div className="absolute inset-0 bg-[var(--ds-bg-base)]/80 flex items-center justify-center z-50">
               <WifiLoader />
@@ -1400,7 +1552,7 @@ export default function TimelinePage() {
               {weekDates.map((d, i) => {
                 const isTd = d.toDateString() === today.toDateString()
                 const showMonth = i === 0 || d.getMonth() !== weekDates[i - 1].getMonth()
-                const isColLoading = weekResults[i]?.isLoading
+                const isColLoading = weekLoading
                 const visibleRoomIds = new Set(filteredRooms.map((r: Room) => r.id))
                 const hasMyBooking = (weekData[i] ?? []).some((b: Booking) =>
                   b.user_id === user?.id && b.status !== 'cancelled' && visibleRoomIds.has(b.room_id)
@@ -1556,36 +1708,12 @@ export default function TimelinePage() {
 
       {/* Month view */}
       {viewMode === 'month' && (() => {
-        const year  = currentDate.getFullYear()
-        const month = currentDate.getMonth()
-        const firstDay = new Date(year, month, 1)
-        const lastDay  = new Date(year, month + 1, 0)
-        // startDay setting: 'mon' = Monday first (offset +6 mod 7), 'sun' = Sunday first (raw .getDay())
-        const startOffset = startDay === 'sun'
-          ? firstDay.getDay()
-          : (firstDay.getDay() + 6) % 7
-        const gridStart = new Date(firstDay)
-        gridStart.setDate(1 - startOffset)
-        const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7
-        const cells = Array.from({ length: totalCells }, (_, i) => {
-          const d = new Date(gridStart)
-          d.setDate(gridStart.getDate() + i)
-          return d
-        })
-        const bkgs = (monthBookings as Booking[]).filter(b => !location || b.room?.building_id === location.id)
         const DOW_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
         const DOW_LABEL_ID: Record<string, string> = { Mon: 'Sen', Tue: 'Sel', Wed: 'Rab', Thu: 'Kam', Fri: 'Jum', Sat: 'Sab', Sun: 'Min' }
-        const todayDateStr = toLocalDateStr(today)
-        // Usage denominator: Regular + Maintenance rooms (maintenance counts as fully "used" capacity),
-        // Special (requires_contact) rooms excluded entirely — not booked the same way, shouldn't skew the %.
-        const eligibleRooms = (rooms as Room[]).filter(r => !r.requires_contact && (!location || r.building_id === location.id))
-        const totalCapacityMins = eligibleRooms.length * (HOUR_END - HOUR_START) * 60
-        const eligibleRoomIds = new Set(eligibleRooms.map(r => r.id))
-        const maintenanceRoomIds = new Set(eligibleRooms.filter(r => r.status === 'maintenance').map(r => r.id))
         return (
-          <main key={ganttKey} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] p-6" style={{ animation: ganttAnimCSS[ganttAnim] }}>
+          <main ref={setGanttRef(false)} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] p-6">
             {/* Month header */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[28px] font-black text-[var(--ds-text-1)] uppercase tracking-tight leading-none">
@@ -1619,43 +1747,11 @@ export default function TimelinePage() {
 
             {/* Calendar grid */}
             <div className="grid grid-cols-7 border-l border-t border-[var(--ds-border-sub)]">
-              {cells.map((cellDate, idx) => {
-                const isCurrentMonth = cellDate.getMonth() === month
-                const isTodayCell = cellDate.toDateString() === today.toDateString()
-                const cellStr = toLocalDateStr(cellDate)
-                const dayBkgs = bkgs.filter(b => {
-                  const s = new Date(b.start_at.replace('Z', ''))
-                  return toLocalDateStr(s) === cellStr && b.status !== 'cancelled'
-                })
-                const myBkgs = dayBkgs.filter(b => b.user_id === user?.id)
-                const otherBkgs = dayBkgs.filter(b => b.user_id !== user?.id)
-                const visibleBkgs = dayBkgs.slice(0, 6)
-                const overflow = dayBkgs.length - 6
-                const cellDow = cellDate.getDay()
-                const isCellWeekend = (cellDow === 6 && wkSat) || (cellDow === 0 && wkSun)
-                const isPast = cellStr < todayDateStr
-
-                // Usage % — only for today + future cells in current month
-                let usagePct = 0
-                if (isCurrentMonth && !isPast && totalCapacityMins > 0) {
-                  let totalBookedMins = 0
-                  // Maintenance rooms count as fully occupied for the whole day, regardless of actual bookings.
-                  eligibleRooms.forEach(r => {
-                    if (maintenanceRoomIds.has(r.id)) totalBookedMins += (HOUR_END - HOUR_START) * 60
-                  })
-                  dayBkgs.forEach(b => {
-                    if (!eligibleRoomIds.has(b.room_id) || maintenanceRoomIds.has(b.room_id)) return
-                    const s = new Date(b.start_at.replace('Z', ''))
-                    const e = new Date(b.end_at.replace('Z', ''))
-                    const sMins = Math.max(s.getHours() * 60 + s.getMinutes(), HOUR_START * 60)
-                    const eMins = Math.min(e.getHours() * 60 + e.getMinutes(), HOUR_END * 60)
-                    totalBookedMins += Math.max(0, eMins - sMins)
-                  })
-                  usagePct = Math.min(100, Math.round(totalBookedMins / totalCapacityMins * 100))
-                }
-
-                const usageColor = usagePct >= 80 ? '#ef4444' : usagePct >= 50 ? '#f59e0b' : '#adee2b'
-                const showUsage = isCurrentMonth && !isPast && totalCapacityMins > 0
+              {monthGrid.cells.map((cell, idx) => {
+                const {
+                  cellDate, isCurrentMonth, isTodayCell, isCellWeekend,
+                  myBkgs, otherBkgs, visibleBkgs, overflow, usagePct, usageColor, showUsage,
+                } = cell
 
                 return (
                   <div
@@ -1740,7 +1836,7 @@ export default function TimelinePage() {
                               <span style={{ width: 9, height: 9, borderRadius: '50%', background: usageColor, display: 'inline-block', flexShrink: 0 }} />
                               <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 700 }}>Room usage</span>
                               <span style={{ color: usageColor, fontSize: 15, fontWeight: 900 }}>{usagePct}%</span>
-                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600 }}>· {eligibleRooms.length} rooms</span>
+                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600 }}>· {monthGrid.eligibleRoomsCount} rooms</span>
                             </div>
                             {/* Arrow */}
                             <div style={{ width: 0, height: 0, margin: '0 auto', borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid rgba(15,20,45,0.72)' }} />
@@ -1765,7 +1861,7 @@ export default function TimelinePage() {
 
       {/* Day view grid */}
       {viewMode === 'day' && (
-      <main key={ganttKey} ref={mainRef} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
+      <main ref={setGanttRef(true)} className="flex-1 overflow-auto relative select-none" style={{ background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
         {(roomsLoading || bookingsLoading) && (
           <div className="absolute inset-0 bg-[var(--ds-bg-base)]/70 flex items-center justify-center z-50">
             <WifiLoader />
@@ -2318,128 +2414,104 @@ export default function TimelinePage() {
 
       {/* Other user's bar context menu */}
       {otherCtxMenu && (
-        <>
-          <div className="fixed inset-0 z-[990]" onClick={() => setOtherCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setOtherCtxMenu(null) }}>
-            <div
-              className="ctx-pop-in"
-              onClick={e => e.stopPropagation()}
-              style={{
-                position: 'absolute',
-                left: Math.min(otherCtxMenu.x, window.innerWidth - 200),
-                top: Math.min(otherCtxMenu.y, window.innerHeight - 150),
-                minWidth: 188,
-                background: 'var(--ds-glass-bg)',
-                backdropFilter: 'blur(48px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(48px) saturate(180%)',
-                border: '1px solid var(--ds-glass-border)',
-                borderRadius: 14,
-                boxShadow: 'var(--ds-glass-shadow)',
-                padding: 5,
-                transformOrigin: 'top left',
-              }}
-            >
-              {/* Header */}
-              <div className="px-3.5 pt-2.5 pb-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] truncate">{otherCtxMenu.booking.user?.name}</p>
-              </div>
-              <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
-
-              {/* Copy Ext */}
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(otherCtxMenu.booking.user?.ext || '')
-                  setOtherCtxMenu(null)
-                  addInfoToast(`Ext ${otherCtxMenu.booking.user?.ext} copied`, 2500)
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>phone_in_talk</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_copy_ext')}</p>
-                  <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5">{otherCtxMenu.booking.user?.ext}</p>
-                </div>
-              </button>
-
-              {/* Copy Email */}
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(otherCtxMenu.booking.user?.email || '')
-                  setOtherCtxMenu(null)
-                  addInfoToast('Email copied', 2500)
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>mail</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_copy_email')}</p>
-                  <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5 truncate">{otherCtxMenu.booking.user?.email}</p>
-                </div>
-              </button>
-
-              <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
-
-              {/* Export to ICS */}
-              <button
-                onClick={() => { exportToICS(otherCtxMenu.booking); setOtherCtxMenu(null) }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')}{otherCtxMenu.booking.series_id ? ` ${t('ctx_this_entry')}` : ''}</span>
-              </button>
-              {otherCtxMenu.booking.series_id && (
-                <button
-                  onClick={() => { exportSeriesToICS(otherCtxMenu.booking.series_id!); setOtherCtxMenu(null) }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-                >
-                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')} {t('ctx_this_series')}</span>
-                </button>
-              )}
-
-              {/* View Room */}
-              <button
-                onClick={() => {
-                  setDetailRoom(otherCtxMenu.booking.room || null)
-                  setDetailOpen(true)
-                  setOtherCtxMenu(null)
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_view_room_detail')}</span>
-              </button>
-
-              {/* Edit / Cancel / Transfer — receptionist/admin/building_admin only */}
-              {(user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin') && otherCtxMenu.booking.status !== 'cancelled' && (<>
-                <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
-                <button
-                  onClick={() => { openEdit(otherCtxMenu.booking); setOtherCtxMenu(null) }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-                >
-                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>edit</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_edit')}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setTransferBooking(otherCtxMenu.booking)
-                    setOtherCtxMenu(null)
-                  }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-                >
-                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>swap_horiz</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Transfer Booking</span>
-                </button>
-                <button
-                  onClick={() => { setCancelTarget(otherCtxMenu.booking); setOtherCtxMenu(null) }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-red-500/10"
-                >
-                  <span className="material-symbols-outlined text-red-400" style={{ fontSize: 15 }}>cancel</span>
-                  <span className="text-[11px] font-black uppercase text-red-500">{t('btn_cancel_booking')}</span>
-                </button>
-              </>)}
-            </div>
+        <ContextMenuShell x={otherCtxMenu.x} y={otherCtxMenu.y} width={188} onClose={() => setOtherCtxMenu(null)}>
+          {/* Header */}
+          <div className="px-3.5 pt-2.5 pb-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] truncate">{otherCtxMenu.booking.user?.name}</p>
           </div>
-        </>
+          <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
+
+          {/* Copy Ext | Copy Email — compact icon-over-label cells to save vertical space */}
+          <div className="flex gap-1 px-0.5">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(otherCtxMenu.booking.user?.ext || '')
+                setOtherCtxMenu(null)
+                addInfoToast(`Ext ${otherCtxMenu.booking.user?.ext} copied`, 2500)
+              }}
+              className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>phone_in_talk</span>
+              <span className="text-[9px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_ext')}</span>
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(otherCtxMenu.booking.user?.email || '')
+                setOtherCtxMenu(null)
+                addInfoToast('Email copied', 2500)
+              }}
+              className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>mail</span>
+              <span className="text-[9px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_email')}</span>
+            </button>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
+
+          {/* Export to ICS */}
+          <button
+            onClick={() => { exportToICS(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+          >
+            <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
+            <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')}{otherCtxMenu.booking.series_id ? ` ${t('ctx_this_entry')}` : ''}</span>
+          </button>
+          {otherCtxMenu.booking.series_id && (
+            <button
+              onClick={() => { exportSeriesToICS(otherCtxMenu.booking.series_id!); setOtherCtxMenu(null) }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
+              <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')} {t('ctx_this_series')}</span>
+            </button>
+          )}
+
+          {/* View Room */}
+          <button
+            onClick={() => {
+              setDetailRoom(otherCtxMenu.booking.room || null)
+              setDetailOpen(true)
+              setOtherCtxMenu(null)
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+          >
+            <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
+            <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_view_room_detail')}</span>
+          </button>
+
+          {/* Edit / Cancel / Transfer — receptionist/admin/building_admin only */}
+          {(user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin') && otherCtxMenu.booking.status !== 'cancelled' && (<>
+            <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
+            {/* Transfer stays a full-width row; Edit | Cancel are the compact cells pinned at the bottom */}
+            <button
+              onClick={() => {
+                setTransferBooking(otherCtxMenu.booking)
+                setOtherCtxMenu(null)
+              }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>swap_horiz</span>
+              <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Transfer Booking</span>
+            </button>
+            <div className="flex gap-1 px-0.5">
+              <button
+                onClick={() => { openEdit(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-[#adee2b]/25"
+              >
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>edit</span>
+                <span className="text-[9px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_edit')}</span>
+              </button>
+              <button
+                onClick={() => { setCancelTarget(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-red-500/10"
+              >
+                <span className="material-symbols-outlined text-red-400" style={{ fontSize: 18 }}>cancel</span>
+                <span className="text-[9px] font-black uppercase text-red-500 leading-none">{t('ctx_cancel')}</span>
+              </button>
+            </div>
+          </>)}
+        </ContextMenuShell>
       )}
 
       {/* Cell right-click context menu */}

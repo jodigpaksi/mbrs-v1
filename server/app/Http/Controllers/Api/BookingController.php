@@ -153,11 +153,15 @@ class BookingController extends Controller
             ->whereNull('archived_at')
             ->orderBy('start_at');
 
+        // Plain range comparisons on the bare column (not whereDate(), which wraps start_at in a
+        // SQL function and can't use the index on it — forcing a full table scan on every
+        // day/week/month view load, regardless of index or table size).
         if ($request->date_from && $request->date_to) {
-            $query->whereDate('start_at', '>=', $request->date_from)
-                  ->whereDate('start_at', '<=', $request->date_to);
+            $query->where('start_at', '>=', "{$request->date_from} 00:00:00")
+                  ->where('start_at', '<', Carbon::parse($request->date_to)->addDay()->toDateString() . ' 00:00:00');
         } elseif ($request->date) {
-            $query->whereDate('start_at', $request->date);
+            $query->where('start_at', '>=', "{$request->date} 00:00:00")
+                  ->where('start_at', '<', Carbon::parse($request->date)->addDay()->toDateString() . ' 00:00:00');
         }
 
         if ($request->room_id) {

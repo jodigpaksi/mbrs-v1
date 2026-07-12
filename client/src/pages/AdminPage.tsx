@@ -9,8 +9,8 @@ import { createPortal } from 'react-dom'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import { parseLocal } from '../utils/date'
 import ToggleSwitch from '../components/ui/ToggleSwitch'
-import * as XLSX from 'xlsx'
-import ExcelJS from 'exceljs'
+import type { Worksheet as ExcelWorksheet } from 'exceljs'
+import { loadXlsx, loadExcelJs } from '../utils/lazyExport'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type { Building, Room, Location, User, Department } from '../types/index'
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding, exportBuildings, importBuildings } from '../api/buildings'
@@ -2130,6 +2130,7 @@ function ImportExportModal({ users, onImport, onClose }: {
   }
 
   async function doExportExcel() {
+    const XLSX = await loadXlsx()
     const data = await fetchExportData()
     const ws = XLSX.utils.json_to_sheet(data.map(u => ({
       name: u.name, email: u.email, alias: u.alias, password: u.password,
@@ -2161,6 +2162,7 @@ function ImportExportModal({ users, onImport, onClose }: {
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
     if (fmt === 'xlsx') {
+      const ExcelJS = await loadExcelJs()
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Users')
       ws.columns = IMPORT_COLS.map(c => ({ header: c, key: c, width: 22 }))
@@ -2211,7 +2213,7 @@ function ImportExportModal({ users, onImport, onClose }: {
 
     if (ext === 'csv' || ext === 'sql') {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
           const text = e.target!.result as string
           if (ext === 'sql') {
@@ -2228,6 +2230,7 @@ function ImportExportModal({ users, onImport, onClose }: {
             setPreview(parseRows([...fakeHeader, ...dataRows]))
           } else {
             // CSV
+            const XLSX = await loadXlsx()
             const wb = XLSX.read(text, { type: 'string' })
             const ws = wb.Sheets[wb.SheetNames[0]]
             const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
@@ -2239,8 +2242,9 @@ function ImportExportModal({ users, onImport, onClose }: {
     } else {
       // xlsx
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await loadXlsx()
           const wb = XLSX.read(e.target!.result, { type: 'binary' })
           const ws = wb.Sheets[wb.SheetNames[0]]
           const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
@@ -2543,7 +2547,7 @@ function download(filename: string, content: string, type: string) {
 }
 
 // Applies a real Excel dropdown (data validation) restricted to `options` on rows 2-500 of `col`
-function applyDropdown(ws: ExcelJS.Worksheet, col: string, options: string[]) {
+function applyDropdown(ws: ExcelWorksheet, col: string, options: string[]) {
   const letter = ws.getColumn(col).letter
   for (let row = 2; row <= 500; row++) {
     ws.getCell(`${letter}${row}`).dataValidation = {
@@ -2597,6 +2601,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
 
   async function doExportExcel() {
     const data = await fetchExportData()
+    const XLSX = await loadXlsx()
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Buildings')
@@ -2621,6 +2626,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
     if (fmt === 'xlsx') {
+      const ExcelJS = await loadExcelJs()
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Buildings')
       ws.columns = BUILDING_COLS.map(c => ({ header: c, key: c, width: 22 }))
@@ -2660,7 +2666,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
 
     if (ext === 'csv' || ext === 'sql') {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
           const text = e.target!.result as string
           if (ext === 'sql') {
@@ -2671,6 +2677,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
             const dataRows = rowMatches.map(m => m[1].split(',').map(v => v.trim().replace(/^'|'$/g, '').replace(/''/g, "'")))
             setPreview(parseRows([BUILDING_COLS, ...dataRows]))
           } else {
+            const XLSX = await loadXlsx()
             const wb = XLSX.read(text, { type: 'string' })
             const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
             setPreview(parseRows(raw as unknown[][]))
@@ -2680,8 +2687,9 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
       reader.readAsText(file)
     } else {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await loadXlsx()
           const wb = XLSX.read(e.target!.result, { type: 'binary' })
           const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
           setPreview(parseRows(raw as unknown[][]))
@@ -2944,6 +2952,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
 
   async function doExportExcel() {
     const data = await fetchExportData()
+    const XLSX = await loadXlsx()
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Rooms')
@@ -2968,6 +2977,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
     if (fmt === 'xlsx') {
+      const ExcelJS = await loadExcelJs()
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Rooms')
       ws.columns = ROOM_COLS.map(c => ({ header: c, key: c, width: 22 }))
@@ -3012,7 +3022,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
 
     if (ext === 'csv' || ext === 'sql') {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
           const text = e.target!.result as string
           if (ext === 'sql') {
@@ -3023,6 +3033,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
             const dataRows = rowMatches.map(m => m[1].split(',').map(v => v.trim().replace(/^'|'$/g, '').replace(/''/g, "'")))
             setPreview(parseRows([ROOM_COLS, ...dataRows]))
           } else {
+            const XLSX = await loadXlsx()
             const wb = XLSX.read(text, { type: 'string' })
             const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
             setPreview(parseRows(raw as unknown[][]))
@@ -3032,8 +3043,9 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
       reader.readAsText(file)
     } else {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await loadXlsx()
           const wb = XLSX.read(e.target!.result, { type: 'binary' })
           const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
           setPreview(parseRows(raw as unknown[][]))
@@ -4221,7 +4233,7 @@ function ArchiveTab() {
     return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     if (!data?.data?.length) return
     const rows = data.data.map(b => ({
       Date: fmtDate(b.start_at as unknown as string),
@@ -4234,6 +4246,7 @@ function ArchiveTab() {
       Status: b.status,
       'Archived At': b.archived_at ? fmtDate(b.archived_at as unknown as string) : '',
     }))
+    const XLSX = await loadXlsx()
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Archive')

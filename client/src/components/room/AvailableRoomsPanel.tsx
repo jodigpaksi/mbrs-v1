@@ -367,7 +367,12 @@ export default function AvailableRoomsPanel({ open, bookingOpen, onClose, onRoom
           style={{
             maxHeight: filtersCollapsed ? 0 : 1400,
             opacity: filtersCollapsed ? 0 : 1,
-            overflow: 'hidden',
+            // 'hidden' only while collapsed (needed for the max-height slide to clip cleanly) —
+            // once expanded this must be 'visible', otherwise it clips the Start/End time picker
+            // popups (GlassTimePicker isn't portal-based; it's an absolutely-positioned child, so
+            // any ancestor overflow:hidden cuts it off instead of letting it float over the results
+            // list below).
+            overflow: filtersCollapsed ? 'hidden' : 'visible',
             transition: 'max-height 320ms cubic-bezier(0.4,0,0.2,1), opacity 200ms ease',
           }}
         >

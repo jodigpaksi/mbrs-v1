@@ -2,9 +2,7 @@ import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from '
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { loadXlsx, loadPdf } from '../utils/lazyExport'
 import type { Booking, Room } from '../types/index'
 import { getMyBookings, clearCancelledBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
 import { getDirectory } from '../api/users'
@@ -1485,7 +1483,8 @@ export default function SchedulePage() {
 
   interface AllExportCounts { upcoming: number | null; past: number | null; cancelled: number | null }
 
-  function exportAllExcel(rows: Booking[], counts: AllExportCounts) {
+  async function exportAllExcel(rows: Booking[], counts: AllExportCounts) {
+    const XLSX = await loadXlsx()
     const exportedAt = today.toLocaleDateString('en-GB')
     const summaryParts = [
       counts.upcoming != null ? `Upcoming & Today: ${counts.upcoming}` : null,
@@ -1518,7 +1517,8 @@ export default function SchedulePage() {
     XLSX.writeFile(wb, `my-bookings-${user?.name?.replace(' ', '-').toLowerCase()}.xlsx`)
   }
 
-  function exportAllPDF(rows: Booking[], counts: AllExportCounts) {
+  async function exportAllPDF(rows: Booking[], counts: AllExportCounts) {
+    const { jsPDF, autoTable } = await loadPdf()
     const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFontSize(14); doc.text(`My Bookings — ${user?.name}`, 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
@@ -1549,7 +1549,8 @@ export default function SchedulePage() {
 
   interface SpExportCounts { active: number | null; past: number | null; cancelled: number | null }
 
-  function exportSpecialExcel(rows: Booking[], counts: SpExportCounts) {
+  async function exportSpecialExcel(rows: Booking[], counts: SpExportCounts) {
+    const XLSX = await loadXlsx()
     const exportedAt = today.toLocaleDateString('en-GB')
     const summaryParts = [
       counts.active    != null ? `Upcoming & Today: ${counts.active}`  : null,
@@ -1581,7 +1582,8 @@ export default function SchedulePage() {
     XLSX.writeFile(wb, `special-room-bookings-${toDateStr(today)}.xlsx`)
   }
 
-  function exportSpecialPDF(rows: Booking[], counts: SpExportCounts) {
+  async function exportSpecialPDF(rows: Booking[], counts: SpExportCounts) {
+    const { jsPDF, autoTable } = await loadPdf()
     const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFontSize(14); doc.text('Special Room Bookings', 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
@@ -1624,7 +1626,8 @@ export default function SchedulePage() {
     return [...rows].sort((a, b) => a.start_at.localeCompare(b.start_at))
   }
 
-  function exportSeriesExcel(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+  async function exportSeriesExcel(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const XLSX = await loadXlsx()
     const exportedAt = today.toLocaleDateString('en-GB')
     const headers = ['No.', 'Date', 'Day', 'Start Time', 'End Time', 'Duration', 'Room', 'Building', 'Title', 'Description', 'Booked By', 'Booked For', 'Status', 'Type']
     const aoa: (string | number)[][] = [
@@ -1649,7 +1652,8 @@ export default function SchedulePage() {
     XLSX.writeFile(wb, `${fileSlug}.xlsx`)
   }
 
-  function exportSeriesPDF(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+  async function exportSeriesPDF(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const { jsPDF, autoTable } = await loadPdf()
     const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFontSize(14); doc.text(label, 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)

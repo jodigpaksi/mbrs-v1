@@ -6,6 +6,10 @@ import { useAuth } from '../context/AuthContext'
 import { prefetchAfterLogin } from '../api/prefetch'
 import { getBranding, getCachedBranding } from '../api/settings'
 
+// Sandy noise grain overlaid on the warm off-white page background (same fractal-noise recipe
+// used elsewhere, e.g. TimelinePage's acrylic texture).
+const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const { setUser } = useAuth()
@@ -66,8 +70,10 @@ export default function LoginPage() {
   )
 
   return (
-    <div className="min-h-screen bg-[#f7f8f6] flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
+    <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: '#faf9f5' }}>
+      {/* Sand grain texture */}
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: GRAIN, backgroundSize: '160px 160px', opacity: 0.22, mixBlendMode: 'multiply' }} />
+      <div className="w-full max-w-4xl relative">
 
         {/* Card */}
         <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/60 overflow-hidden flex flex-col md:flex-row md:min-h-[640px]">
@@ -87,7 +93,7 @@ export default function LoginPage() {
           >
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#adee2b] mb-2">{branding?.login_headline ?? 'Booking made easy'}</p>
-              <h2 className="text-2xl font-black italic uppercase tracking-tight text-white leading-snug">
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white leading-snug">
                 {branding?.login_subheadline ?? 'Book meeting rooms without the back-and-forth'}
               </h2>
             </div>
@@ -216,7 +222,7 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-[9px] font-black text-slate-300 uppercase tracking-widest italic mt-6">
+        <p className="text-center text-[9px] font-black text-slate-300 uppercase tracking-widest mt-6">
           {appName} · {new Date().getFullYear()}
         </p>
 

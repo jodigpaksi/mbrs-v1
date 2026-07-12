@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 function toMin(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number)
@@ -23,16 +24,58 @@ export default function GlassTimePicker({
   value, onChange, min = '07:00', max = '19:00', step = 30, align = 'left', panelWidth = 188, children,
 }: GlassTimePickerProps) {
   const [open, setOpen] = useState(false)
+  const [popupStyle, setPopupStyle] = useState<CSSProperties>({})
   const ref = useRef<HTMLDivElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const selRef = useRef<HTMLButtonElement>(null)
 
+  // Portal + fixed-position popup (same pattern as GlassDatePicker) — this menu isn't a plain
+  // absolute-positioned child, since any ancestor with overflow:hidden (e.g. a collapsible filter
+  // section's clip wrapper, or a panel's own rounded-corner clip) would otherwise cut it off
+  // instead of letting it float over whatever's below.
+  function calcPopupStyle(): CSSProperties {
+    if (!ref.current) return {}
+    const r = ref.current.getBoundingClientRect()
+    const style: CSSProperties = { position: 'fixed', top: r.bottom + 8, zIndex: 9999, width: panelWidth }
+    if (align === 'right') style.right = window.innerWidth - r.right
+    else style.left = r.left
+    return style
+  }
+
+  function toggle() {
+    if (!open) setPopupStyle(calcPopupStyle())
+    setOpen(o => !o)
+  }
+
   useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (ref.current && !ref.current.contains(t) && popupRef.current && !popupRef.current.contains(t)) setOpen(false)
     }
-    if (open) document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
+    function onReposition() { setPopupStyle(calcPopupStyle()) }
+    if (open) {
+      document.addEventListener('mousedown', onDoc)
+      window.addEventListener('resize', onReposition)
+      window.addEventListener('scroll', onReposition, true)
+    }
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('resize', onReposition)
+      window.removeEventListener('scroll', onReposition, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // Flip above the trigger if the popup would overflow the bottom of the viewport.
+  useLayoutEffect(() => {
+    if (!open || !popupRef.current || !ref.current) return
+    const popupRect = popupRef.current.getBoundingClientRect()
+    const triggerRect = ref.current.getBoundingClientRect()
+    if (popupRect.bottom > window.innerHeight - 8) {
+      setPopupStyle(prev => ({ ...prev, top: Math.max(8, triggerRect.top - popupRect.height - 8) }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   // scroll selected slot into view when opening (within the list only, no page jump)
@@ -50,12 +93,13 @@ export default function GlassTimePicker({
 
   return (
     <div ref={ref} className="relative">
-      <div onClick={() => setOpen(o => !o)}>{children({ open })}</div>
+      <div onClick={toggle}>{children({ open })}</div>
 
-      {open && (
+      {open && createPortal(
         <div
-          className={`absolute top-full mt-2 z-[400] ${align === 'right' ? 'right-0 dropdown-enter-right' : 'left-0 dropdown-enter'} rounded-[1.4rem] p-2`}
-          style={{ width: panelWidth, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}
+          ref={popupRef}
+          className={`${align === 'right' ? 'dropdown-enter-right' : 'dropdown-enter'} rounded-[1.4rem] p-2`}
+          style={{ ...popupStyle, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}
         >
           <div ref={listRef} className="tp-scroll relative max-h-[224px] overflow-y-auto grid grid-cols-2 gap-1 pr-1">
             {slots.map(t => {
@@ -71,7 +115,8 @@ export default function GlassTimePicker({
               )
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -4,7 +4,19 @@
 @import "@fontsource/manrope/600.css";
 @import "@fontsource/manrope/700.css";
 @import "@fontsource/manrope/800.css";
-@import "material-symbols/outlined.css";
+
+/* Material Symbols — SUBSET font (only the ~300 icons this app actually uses). Generated from
+   node_modules/material-symbols/material-symbols-outlined.woff2 (~4 MB, all 3600+ icons) down to
+   ~300 KB via scripts/subset-icons.py. If you add a NEW icon name anywhere, re-run that script or
+   the icon will render as its literal text. Icons render via the `rlig` (required-ligature)
+   feature, which is on by default. */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url("./assets/material-symbols-subset.woff2") format("woff2");
+}
 
 /* Dark mode via .dark class on <html> */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -61,7 +73,22 @@
 }
 
 .material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  /* 24px is the icon-font default from the original material-symbols CSS. It's UNLAYERED here, so
+     it intentionally beats Tailwind's layered text-* utilities — many icons carry a stray text-sm
+     class that was always overridden to 24px; only inline style={{fontSize}} changes an icon's
+     size. Removing this silently shrinks every such icon (nav, datepicker arrow, etc.). */
+  font-size: 24px;
+  font-feature-settings: 'liga';
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
   display: inline-block;
   line-height: 1;
   vertical-align: middle;

@@ -325,7 +325,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
               : <span className="material-symbols-outlined text-lg">sync_alt</span>
             }
           </div>
-          <span className="text-xl font-black tracking-tighter italic uppercase" style={{ color: 'var(--ds-text-1)' }}>
+          <span className="text-xl font-black tracking-tighter uppercase" style={{ color: 'var(--ds-text-1)' }}>
             {appName}
           </span>
           {user?.role === 'guest' && (

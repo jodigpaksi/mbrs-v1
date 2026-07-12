@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect, useRef } from 'react'
+import { type ReactNode, Suspense, useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Navbar from './Navbar'
 import AiAgentFab from '../ai/AiAgentFab'
@@ -6,6 +6,7 @@ import KeyboardShortcutsFab from '../ui/KeyboardShortcutsFab'
 import TodayPanel from '../booking/TodayPanel'
 import AvailableRoomsPanel from '../room/AvailableRoomsPanel'
 import BookingPanel from '../booking/BookingPanel'
+import WifiLoader from '../ui/WifiLoader'
 import { getGeneralSettings } from '../../api/settings'
 import { useSettings } from '../../context/SettingsContext'
 import type { Room } from '../../types'
@@ -80,7 +81,10 @@ function MainLayoutInner({ children }: MainLayoutProps) {
     <div className="flex flex-col h-screen overflow-hidden antialiased" style={{ background: 'var(--ds-bg-base)', color: 'var(--ds-text-1)' }}>
       <Navbar />
       <main className="flex-1 overflow-hidden flex flex-col">
-        {children}
+        {/* Keeps the navbar/FABs mounted while a lazy page chunk is fetched on navigation. */}
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center"><WifiLoader /></div>}>
+          {children}
+        </Suspense>
       </main>
       {generalSettings?.feature_ai_chat !== false && <AiAgentFab />}
       {showKeyboardShortcuts && <KeyboardShortcutsFab stackAboveAiFab={generalSettings?.feature_ai_chat !== false} />}
