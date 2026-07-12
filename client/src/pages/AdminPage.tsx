@@ -9,8 +9,8 @@ import { createPortal } from 'react-dom'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import { parseLocal } from '../utils/date'
 import ToggleSwitch from '../components/ui/ToggleSwitch'
-import * as XLSX from 'xlsx'
-import ExcelJS from 'exceljs'
+import type { Worksheet as ExcelWorksheet } from 'exceljs'
+import { loadXlsx, loadExcelJs } from '../utils/lazyExport'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type { Building, Room, Location, User, Department } from '../types/index'
 import { getBuildings, createBuilding, updateBuilding, deleteBuilding, exportBuildings, importBuildings } from '../api/buildings'
@@ -25,6 +25,7 @@ import { runBackupExport, listBackupExports, getBackupDownloadUrl, deleteAllBack
 import type { UserRole } from '../types/index'
 import UserAvatar from '../components/ui/UserAvatar'
 import GlassTimePicker from '../components/ui/GlassTimePicker'
+import WifiLoader from '../components/ui/WifiLoader'
 import { useAuth } from '../context/AuthContext'
 import { useCancelToast } from '../context/CancelToastContext'
 import KioskTab from '../components/admin/KioskTab'
@@ -2098,7 +2099,7 @@ type ImportRow = {
 
 function ImportExportModal({ users, onImport, onClose }: {
   users: User[]
-  onImport: (rows: ImportRow[]) => Promise<void>
+  onImport: (rows: ImportRow[]) => Promise<{ created: number; errors: string[] }>
   onClose: () => void
 }) {
   const [tab, setTab] = useState<ImportTab>('excel')
@@ -2129,6 +2130,7 @@ function ImportExportModal({ users, onImport, onClose }: {
   }
 
   async function doExportExcel() {
+    const XLSX = await loadXlsx()
     const data = await fetchExportData()
     const ws = XLSX.utils.json_to_sheet(data.map(u => ({
       name: u.name, email: u.email, alias: u.alias, password: u.password,
@@ -2160,6 +2162,7 @@ function ImportExportModal({ users, onImport, onClose }: {
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
     if (fmt === 'xlsx') {
+      const ExcelJS = await loadExcelJs()
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Users')
       ws.columns = IMPORT_COLS.map(c => ({ header: c, key: c, width: 22 }))
@@ -2210,7 +2213,7 @@ function ImportExportModal({ users, onImport, onClose }: {
 
     if (ext === 'csv' || ext === 'sql') {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
           const text = e.target!.result as string
           if (ext === 'sql') {
@@ -2227,6 +2230,7 @@ function ImportExportModal({ users, onImport, onClose }: {
             setPreview(parseRows([...fakeHeader, ...dataRows]))
           } else {
             // CSV
+            const XLSX = await loadXlsx()
             const wb = XLSX.read(text, { type: 'string' })
             const ws = wb.Sheets[wb.SheetNames[0]]
             const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
@@ -2238,8 +2242,9 @@ function ImportExportModal({ users, onImport, onClose }: {
     } else {
       // xlsx
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await loadXlsx()
           const wb = XLSX.read(e.target!.result, { type: 'binary' })
           const ws = wb.Sheets[wb.SheetNames[0]]
           const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
@@ -2542,7 +2547,7 @@ function download(filename: string, content: string, type: string) {
 }
 
 // Applies a real Excel dropdown (data validation) restricted to `options` on rows 2-500 of `col`
-function applyDropdown(ws: ExcelJS.Worksheet, col: string, options: string[]) {
+function applyDropdown(ws: ExcelWorksheet, col: string, options: string[]) {
   const letter = ws.getColumn(col).letter
   for (let row = 2; row <= 500; row++) {
     ws.getCell(`${letter}${row}`).dataValidation = {
@@ -2596,6 +2601,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
 
   async function doExportExcel() {
     const data = await fetchExportData()
+    const XLSX = await loadXlsx()
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Buildings')
@@ -2620,6 +2626,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
     if (fmt === 'xlsx') {
+      const ExcelJS = await loadExcelJs()
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Buildings')
       ws.columns = BUILDING_COLS.map(c => ({ header: c, key: c, width: 22 }))
@@ -2659,7 +2666,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
 
     if (ext === 'csv' || ext === 'sql') {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
           const text = e.target!.result as string
           if (ext === 'sql') {
@@ -2670,6 +2677,7 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
             const dataRows = rowMatches.map(m => m[1].split(',').map(v => v.trim().replace(/^'|'$/g, '').replace(/''/g, "'")))
             setPreview(parseRows([BUILDING_COLS, ...dataRows]))
           } else {
+            const XLSX = await loadXlsx()
             const wb = XLSX.read(text, { type: 'string' })
             const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
             setPreview(parseRows(raw as unknown[][]))
@@ -2679,8 +2687,9 @@ function BuildingImportExportModal({ buildings, onImport, onClose }: {
       reader.readAsText(file)
     } else {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await loadXlsx()
           const wb = XLSX.read(e.target!.result, { type: 'binary' })
           const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
           setPreview(parseRows(raw as unknown[][]))
@@ -2943,6 +2952,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
 
   async function doExportExcel() {
     const data = await fetchExportData()
+    const XLSX = await loadXlsx()
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Rooms')
@@ -2967,6 +2977,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
     if (fmt === 'xlsx') {
+      const ExcelJS = await loadExcelJs()
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Rooms')
       ws.columns = ROOM_COLS.map(c => ({ header: c, key: c, width: 22 }))
@@ -3011,7 +3022,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
 
     if (ext === 'csv' || ext === 'sql') {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
           const text = e.target!.result as string
           if (ext === 'sql') {
@@ -3022,6 +3033,7 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
             const dataRows = rowMatches.map(m => m[1].split(',').map(v => v.trim().replace(/^'|'$/g, '').replace(/''/g, "'")))
             setPreview(parseRows([ROOM_COLS, ...dataRows]))
           } else {
+            const XLSX = await loadXlsx()
             const wb = XLSX.read(text, { type: 'string' })
             const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
             setPreview(parseRows(raw as unknown[][]))
@@ -3031,8 +3043,9 @@ function RoomImportExportModal({ rooms, onImport, onClose }: {
       reader.readAsText(file)
     } else {
       const reader = new FileReader()
-      reader.onload = e => {
+      reader.onload = async e => {
         try {
+          const XLSX = await loadXlsx()
           const wb = XLSX.read(e.target!.result, { type: 'binary' })
           const raw = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 })
           setPreview(parseRows(raw as unknown[][]))
@@ -3586,7 +3599,7 @@ function UsersTab() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-3)]">progress_activity</span>
+          <WifiLoader />
         </div>
       ) : (
         <div className="space-y-4">
@@ -4138,7 +4151,7 @@ function ArchiveTab() {
   const [dateTo, setDateTo]   = useState('')
   const [purgeConfirm, setPurgeConfirm] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
-  const searchDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const queryKey = ['archive', params]
   const { data, isFetching } = useQuery({
@@ -4220,7 +4233,7 @@ function ArchiveTab() {
     return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     if (!data?.data?.length) return
     const rows = data.data.map(b => ({
       Date: fmtDate(b.start_at as unknown as string),
@@ -4233,6 +4246,7 @@ function ArchiveTab() {
       Status: b.status,
       'Archived At': b.archived_at ? fmtDate(b.archived_at as unknown as string) : '',
     }))
+    const XLSX = await loadXlsx()
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Archive')
@@ -4672,6 +4686,8 @@ function SettingsTab() {
   const [workEnd,      setWorkEnd]      = useState(general?.working_hours_end ?? '17:00')
   const [aiChat,       setAiChat]       = useState(general?.feature_ai_chat ?? true)
   const [roomsGrid,    setRoomsGrid]    = useState(general?.rooms_grid_cols ?? 3)
+  const [titleMaxLen,  setTitleMaxLen]  = useState(general?.booking_title_max_length ?? 45)
+  const [descMaxLen,   setDescMaxLen]   = useState(general?.booking_description_max_length ?? 65)
   const [archiveDays,      setArchiveDays]      = useState(general?.archive_after_days ?? 30)
   const [deleteDays,       setDeleteDays]       = useState(general?.archive_delete_after_days ?? 90)
   const [antiGhostEnabled,      setAntiGhostEnabled]      = useState(general?.anti_ghost_enabled ?? false)
@@ -4699,6 +4715,8 @@ function SettingsTab() {
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
       setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
       setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
+      setTitleMaxLen(general.booking_title_max_length ?? 45)
+      setDescMaxLen(general.booking_description_max_length ?? 65)
       setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
       setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
       setAntiGhostModes(new Set((general.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
@@ -4912,6 +4930,7 @@ function SettingsTab() {
         allow_password_change: allowPasswordChange, allow_avatar_upload: allowAvatarUpload,
         restrict_after_hours: restrictAH, working_hours_end: workEnd,
         feature_ai_chat: aiChat, rooms_grid_cols: roomsGrid,
+        booking_title_max_length: titleMaxLen, booking_description_max_length: descMaxLen,
         archive_after_days: archiveDays, archive_delete_after_days: deleteDays,
         anti_ghost_enabled: antiGhostEnabled, anti_ghost_mode: [...antiGhostModes].sort().join(','),
         anti_ghost_window_before: ghostWindowBefore, anti_ghost_window_after: ghostWindowAfter,
@@ -4976,6 +4995,8 @@ function SettingsTab() {
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
       setRestrictAH(general.restrict_after_hours); setWorkEnd(general.working_hours_end)
       setAiChat(general.feature_ai_chat); setRoomsGrid(general.rooms_grid_cols)
+      setTitleMaxLen(general.booking_title_max_length ?? 45)
+      setDescMaxLen(general.booking_description_max_length ?? 65)
       setArchiveDays(general.archive_after_days); setDeleteDays(general.archive_delete_after_days)
       setAntiGhostEnabled(general.anti_ghost_enabled ?? false)
       setAntiGhostModes(new Set((general.anti_ghost_mode ?? 'kiosk').split(',').filter(Boolean)))
@@ -5381,6 +5402,48 @@ function SettingsTab() {
               onChange={e => onMaxDaysChange(Math.max(1, Math.min(365, Number(e.target.value))))}
               className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
             <span className="text-[12px] font-bold text-[var(--ds-text-3)]">days</span>
+          </div>
+        </div>
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Meeting title max length */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>short_text</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Meeting Title Max Length</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Keeps long titles from breaking the UI/exports</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min={10} max={255} value={titleMaxLen}
+              onChange={e => { setTitleMaxLen(Math.max(10, Math.min(255, Number(e.target.value)))); setDirty(true) }}
+              className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+            <span className="text-[12px] font-bold text-[var(--ds-text-3)]">chars</span>
+          </div>
+        </div>
+
+        <div className="border-t border-[var(--ds-border-sub)]" />
+
+        {/* Meeting description max length */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#6366f1' }}>notes</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-black text-[var(--ds-text-1)]">Meeting Description Max Length</p>
+              <p className="text-[11px] text-[var(--ds-text-3)] font-bold uppercase tracking-wider">Keeps long descriptions from breaking the UI/exports</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="number" min={10} max={1000} value={descMaxLen}
+              onChange={e => { setDescMaxLen(Math.max(10, Math.min(1000, Number(e.target.value)))); setDirty(true) }}
+              className="w-16 text-center text-[13px] font-black bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl p-2 focus:ring-2 focus:ring-[#adee2b] focus:outline-none text-[var(--ds-text-1)]" />
+            <span className="text-[12px] font-bold text-[var(--ds-text-3)]">chars</span>
           </div>
         </div>
 
@@ -6964,13 +7027,12 @@ export default function AdminPage() {
     )
   }
 
-  // building_admin gets a reduced, building-scoped menu: Buildings & Rooms, Users (view-only), Activity Log.
-  // Everything else (Overview, Archive, Kiosk, Sensor, Settings, Disputes) is admin-only.
+  // building_admin gets a reduced, building-scoped menu: Buildings & Rooms, Users (view-only).
+  // Everything else (Overview, Archive, Kiosk, Sensor, Settings, Disputes, Activity Log) is admin-only.
   const mainTabs: { key: Tab; label: string; icon: string }[] = isBuildingAdmin
     ? [
         { key: 'buildings', label: 'Buildings', icon: 'domain' },
         { key: 'users',     label: 'Users',     icon: 'group' },
-        { key: 'activity',  label: 'Activity',  icon: 'history' },
       ]
     : [
         { key: 'overview',   label: 'Overview',   icon: 'dashboard' },
@@ -7143,7 +7205,7 @@ export default function AdminPage() {
 
             {overviewLoading ? (
               <div className="flex items-center justify-center py-20">
-                <span className="material-symbols-outlined animate-spin text-[var(--ds-text-4)]" style={{ fontSize: 32 }}>progress_activity</span>
+                <WifiLoader />
               </div>
             ) : overviewData && (<>
               {/* ── Global stats: Unique Visitors + Storage (no building filter) ── */}

@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Room, Building, Booking } from '../types/index'
-import { getRooms, updateRoomStatus, updateRoom, updateRoomSpecial } from '../api/rooms'
+import { getRooms, updateRoomStatus, updateRoomSpecial } from '../api/rooms'
 import { getBuildings } from '../api/buildings'
 import { getBookings } from '../api/bookings'
 import { getGeneralSettings } from '../api/settings'
@@ -13,6 +13,7 @@ import { useSettings } from '../context/SettingsContext'
 import RoomDetailModal from '../components/room/RoomDetailModal'
 import BookingPanel from '../components/booking/BookingPanel'
 import ContactReceptionistModal from '../components/room/ContactReceptionistModal'
+import WifiLoader from '../components/ui/WifiLoader'
 import AfterHoursModal from '../components/booking/AfterHoursModal'
 
 function toLocalDateStr(d: Date) {
@@ -57,7 +58,7 @@ export default function RoomsPage() {
   const { user } = useAuth()
   const { addInfoToast } = useCancelToast()
   const { defaultBuilding } = useSettings()
-  const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist'
+  const isPrivileged = user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin'
   const queryClient = useQueryClient()
 
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
@@ -68,7 +69,7 @@ export default function RoomsPage() {
   }
   const [buildingFilter, setBuildingFilter] = useState<number | null>(defaultBuilding)
   const [floorFilter, setFloorFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'' | 'maintenance'>('')
+  const [statusFilter, setStatusFilter] = useState<'' | 'maintenance' | 'special'>('')
   const [detailRoom, setDetailRoom] = useState<Room | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [vtId, setVtId] = useState<number | null>(null)
@@ -99,7 +100,8 @@ export default function RoomsPage() {
     if (buildingFilter && r.building_id !== buildingFilter) return false
     if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false
     if (floorFilter && r.floor !== floorFilter) return false
-    if (statusFilter && r.status !== statusFilter) return false
+    if (statusFilter === 'maintenance' && r.status !== 'maintenance') return false
+    if (statusFilter === 'special' && !r.requires_contact) return false
     if (quickAvailable && (r.status === 'maintenance' || isOccupiedNow(r))) return false
     if (quickBig && (r.capacity ?? 0) <= 10) return false
     return true
@@ -311,16 +313,7 @@ export default function RoomsPage() {
         className={`cursor-pointer hover:bg-[var(--ds-bg-raised)] transition-colors border-b border-[var(--ds-border-sub)] ${i === total - 1 ? 'border-b-0' : ''}`}
         style={{ animation: `fadeSlideUp 200ms ease ${i * 30}ms both` }}>
         <td className="px-5 py-3.5">
-          <div>
-            <span className="text-[12px] font-black text-[var(--ds-text-1)]">{room.name}</span>
-            {isPrivileged ? (
-              <button onClick={e => toggleSpecialRoom(room, e)} disabled={togglingRoomId === room.id} title={room.requires_contact ? 'Special room (click to unset)' : 'Click to set as special'} className="ml-1.5 inline-flex items-center transition-all disabled:opacity-40">
-                <span className="material-symbols-outlined" style={{ fontSize: 13, color: room.requires_contact ? '#d97706' : '#d1d5db', fontVariationSettings: room.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>
-              </button>
-            ) : room.requires_contact ? (
-              <span className="ml-1.5 inline-flex"><span className="material-symbols-outlined" style={{ fontSize: 13, color: '#d97706', fontVariationSettings: "'FILL' 1" }}>star</span></span>
-            ) : null}
-          </div>
+          <span className="text-[12px] font-black text-[var(--ds-text-1)]">{room.name}</span>
         </td>
         <td className="px-5 py-3.5">
           <span className="px-2.5 py-1 bg-[var(--ds-bg-surface-2)] dark:bg-white/[0.06] dark:ring-1 dark:ring-white/[0.07] text-[var(--ds-text-2)] rounded-lg text-[9px] font-black uppercase">{room.floor}</span>
@@ -344,11 +337,23 @@ export default function RoomsPage() {
           <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{room.facilities?.length ?? 0} items</span>
         </td>
         <td className="px-5 py-3.5">
-          <div className="flex items-center gap-2 justify-end">
+          <div className="flex items-center gap-1.5 justify-end">
+            {isPrivileged ? (
+              <button onClick={e => toggleSpecialRoom(room, e)} disabled={togglingRoomId === room.id}
+                title={room.requires_contact ? 'Special room (click to unset)' : 'Click to set as special'}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all disabled:opacity-40 ${room.requires_contact ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60' : 'bg-[var(--ds-bg-surface-2)] dark:ring-1 dark:ring-white/10 text-[var(--ds-text-3)] dark:text-[var(--ds-text-2)] hover:bg-amber-100 dark:hover:bg-amber-900/30 hover:text-amber-700 dark:hover:text-amber-300'}`}>
+                <span className="material-symbols-outlined" style={{ fontSize: 12, fontVariationSettings: room.requires_contact ? "'FILL' 1" : "'FILL' 0" }}>star</span>Special Room
+              </button>
+            ) : room.requires_contact ? (
+              <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                <span className="material-symbols-outlined" style={{ fontSize: 12, fontVariationSettings: "'FILL' 1" }}>star</span>Special Room
+              </span>
+            ) : null}
             {isPrivileged && (
               <button onClick={e => toggleMaintenance(room, e)} disabled={togglingRoomId === room.id}
-                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${isMaintenance ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60' : 'bg-[var(--ds-bg-surface-2)] dark:ring-1 dark:ring-white/10 text-[var(--ds-text-3)] dark:text-[var(--ds-text-2)] hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-300'}`}>
-                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>
+                title={isMaintenance ? 'End maintenance' : 'Set maintenance'}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all disabled:opacity-40 ${isMaintenance ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60' : 'bg-[var(--ds-bg-surface-2)] dark:ring-1 dark:ring-white/10 text-[var(--ds-text-3)] dark:text-[var(--ds-text-2)] hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-700 dark:hover:text-orange-300'}`}>
+                <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>Maintenance
               </button>
             )}
             {room.requires_contact && !isPrivileged ? (
@@ -450,6 +455,10 @@ export default function RoomsPage() {
                   className={`relative z-10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center gap-1 ${statusFilter === 'maintenance' ? 'text-orange-600 dark:text-orange-300' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
                   <span className="material-symbols-outlined" style={{ fontSize: 12 }}>construction</span>Maint.
                 </button>
+                <button data-active={statusFilter === 'special'} onClick={() => { setStatusFilter(statusFilter === 'special' ? '' : 'special'); setFloorFilter('') }}
+                  className={`relative z-10 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center gap-1 ${statusFilter === 'special' ? 'text-amber-600 dark:text-amber-300' : 'text-[var(--ds-text-3)] hover:text-[var(--ds-text-2)]'}`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 12, fontVariationSettings: statusFilter === 'special' ? "'FILL' 1" : "'FILL' 0" }}>star</span>Special Room
+                </button>
               </div>
             </>
           )}
@@ -521,7 +530,7 @@ export default function RoomsPage() {
 
         {isLoading && (
           <div className="flex items-center justify-center py-24">
-            <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-3)]">progress_activity</span>
+            <WifiLoader />
           </div>
         )}
 

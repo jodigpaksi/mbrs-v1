@@ -242,21 +242,30 @@ class RoomController extends Controller
 
         $userId = auth()->id();
 
-        // Track this user as viewing this slot (upsert, TTL via updated_at)
-        DB::table('room_views')->upsert(
-            [['room_id' => $room->id, 'user_id' => $userId, 'start_at' => $request->start_at, 'end_at' => $request->end_at, 'updated_at' => now()]],
-            ['room_id', 'user_id'],
-            ['start_at', 'end_at', 'updated_at'],
-        );
+        // Best-effort "other viewers" tracking — never let it fail the actual availability check.
+        // The upsert key is (room_id, user_id) only, so a burst of concurrent calls for the same
+        // room+user (e.g. a weekly-repeat series pre-checking many dates via Promise.all) can race
+        // on the same row and deadlock; that must not surface as a false "conflict" to the caller.
+        $otherViewers = 0;
+        try {
+            // Track this user as viewing this slot (upsert, TTL via updated_at)
+            DB::table('room_views')->upsert(
+                [['room_id' => $room->id, 'user_id' => $userId, 'start_at' => $request->start_at, 'end_at' => $request->end_at, 'updated_at' => now()]],
+                ['room_id', 'user_id'],
+                ['start_at', 'end_at', 'updated_at'],
+            );
 
-        // Count other users actively viewing overlapping slot (active = seen within last 60s)
-        $otherViewers = DB::table('room_views')
-            ->where('room_id', $room->id)
-            ->where('user_id', '!=', $userId)
-            ->where('updated_at', '>=', now()->subSeconds(60))
-            ->where('start_at', '<', $request->end_at)
-            ->where('end_at', '>', $request->start_at)
-            ->count();
+            // Count other users actively viewing overlapping slot (active = seen within last 60s)
+            $otherViewers = DB::table('room_views')
+                ->where('room_id', $room->id)
+                ->where('user_id', '!=', $userId)
+                ->where('updated_at', '>=', now()->subSeconds(60))
+                ->where('start_at', '<', $request->end_at)
+                ->where('end_at', '>', $request->start_at)
+                ->count();
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         $query = Booking::where('room_id', $room->id)
             ->where('status', '!=', 'cancelled')

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getKioskConfig, getKioskStatus, verifyKioskPin, confirmPresence } from '../api/kiosk'
 import type { KioskConfig, KioskStatus } from '../types'
+import WifiLoader from '../components/ui/WifiLoader'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -525,7 +526,7 @@ export default function KioskPage() {
 
   if (loading) return (
     <div className="fixed inset-0 flex items-center justify-center" style={{ background: '#0a0e1a' }}>
-      <span className="material-symbols-outlined animate-spin text-white/30" style={{ fontSize: '3.5vmin' }}>progress_activity</span>
+      <WifiLoader text="" />
     </div>
   )
 

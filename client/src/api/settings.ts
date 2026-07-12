@@ -11,6 +11,8 @@ export interface GeneralSettings {
   working_hours_end: string
   feature_ai_chat: boolean
   rooms_grid_cols: number
+  booking_title_max_length: number
+  booking_description_max_length: number
   archive_after_days: number
   archive_delete_after_days: number
   chart_peak_hour_from: number

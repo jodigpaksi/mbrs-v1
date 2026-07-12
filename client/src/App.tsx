@@ -1,17 +1,32 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
-import TimelinePage from './pages/TimelinePage'
-import SchedulePage from './pages/SchedulePage'
-import AdminPage from './pages/AdminPage'
-import ReceptionistPage from './pages/ReceptionistPage'
-import RoomsPage from './pages/RoomsPage'
 import LoginPage from './pages/LoginPage'
-import KioskPage from './pages/KioskPage'
-import PublicBookingPage from './pages/PublicBookingPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import NotificationPanel from './components/layout/NotificationPanel'
 import NotificationToast from './components/layout/NotificationToast'
+import WifiLoader from './components/ui/WifiLoader'
 import { useBookingRealtime } from './hooks/useBookingRealtime'
+
+// Route-level code splitting — each page (and its heavy deps: AdminPage pulls in nivo charts +
+// exceljs + xlsx, SchedulePage pulls in jspdf) becomes its own chunk, loaded only when its route
+// is visited, instead of everything landing in one ~3.5 MB first-paint bundle. LoginPage stays
+// eager since it's the unauthenticated entry point and must render without a chunk fetch.
+const TimelinePage      = lazy(() => import('./pages/TimelinePage'))
+const SchedulePage      = lazy(() => import('./pages/SchedulePage'))
+const AdminPage         = lazy(() => import('./pages/AdminPage'))
+const ReceptionistPage  = lazy(() => import('./pages/ReceptionistPage'))
+const RoomsPage         = lazy(() => import('./pages/RoomsPage'))
+const KioskPage         = lazy(() => import('./pages/KioskPage'))
+const PublicBookingPage = lazy(() => import('./pages/PublicBookingPage'))
+
+function FullPageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--ds-bg-base)' }}>
+      <WifiLoader />
+    </div>
+  )
+}
 
 function App() {
   useBookingRealtime()
@@ -21,8 +36,8 @@ function App() {
     <NotificationToast />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/kiosk/:id" element={<KioskPage />} />
-      <Route path="/booking/:id" element={<PublicBookingPage />} />
+      <Route path="/kiosk/:id" element={<Suspense fallback={<FullPageLoader />}><KioskPage /></Suspense>} />
+      <Route path="/booking/:id" element={<Suspense fallback={<FullPageLoader />}><PublicBookingPage /></Suspense>} />
       <Route
         path="/"
         element={

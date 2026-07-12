@@ -80,11 +80,6 @@ export default function NotificationToast() {
 
   return createPortal(
     <div style={{ position: 'fixed', top: 68, right: 20, zIndex: 99997, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end', pointerEvents: 'none' }}>
-      <style>{`
-        @keyframes nt-in  { from { opacity:0; transform:translateY(-8px) scale(0.96) } to { opacity:1; transform:translateY(0) scale(1) } }
-        @keyframes nt-out { from { opacity:1; transform:translateY(0) scale(1) }        to { opacity:0; transform:translateY(-6px) scale(0.96) } }
-      `}</style>
-
       {/* "+N more" badge + dismiss all */}
       {hidden > 0 && (
         <div style={{ pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -104,6 +99,7 @@ export default function NotificationToast() {
         <div
           key={t.id}
           onClick={() => handleClick(t)}
+          className={t.exiting ? 'toast-pop-out-top' : 'toast-pop-in-top'}
           style={{
             pointerEvents: 'auto',
             width: 300,
@@ -118,7 +114,6 @@ export default function NotificationToast() {
             gap: 10,
             alignItems: 'flex-start',
             cursor: 'pointer',
-            animation: `${t.exiting ? 'nt-out' : 'nt-in'} 0.28s cubic-bezier(0.34,1.04,0.64,1) forwards`,
           }}
         >
           <div style={{ width: 30, height: 30, borderRadius: 10, background: 'rgba(173,238,43,0.14)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

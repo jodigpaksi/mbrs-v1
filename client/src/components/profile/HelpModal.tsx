@@ -25,16 +25,16 @@ function buildSections(start: string, end: string, latestStart: string, lang: st
       label: id ? 'Memulai' : 'Getting Started',
       items: [
         {
-          q: id ? 'Apa itu tampilan Timeline?' : 'What is the Timeline view?',
+          q: id ? 'Apa itu tampilan Jadwal (halaman utama)?' : 'What is the Schedule view?',
           a: id
-            ? 'Timeline (halaman utama) menampilkan semua ruangan dalam grid horizontal untuk hari ini. Setiap baris adalah satu ruangan; setiap blok adalah pemesanan. Klik slot kosong untuk langsung membuat pemesanan dengan ruangan dan waktu yang sudah terisi otomatis.'
-            : 'The Timeline (home page) shows all rooms in a horizontal grid for today. Each row is a room; each block is a booking. Click an empty slot to instantly create a booking with the room and time pre-filled.',
+            ? 'Jadwal (halaman utama) menampilkan semua ruangan dalam grid horizontal untuk hari ini. Setiap baris adalah satu ruangan; setiap blok adalah pemesanan. Klik slot kosong untuk langsung membuat pemesanan dengan ruangan dan waktu yang sudah terisi otomatis.'
+            : 'The Schedule (home page) shows all rooms in a horizontal grid for today. Each row is a room; each block is a booking. Click an empty slot to instantly create a booking with the room and time pre-filled.',
         },
         {
           q: id ? 'Apa itu halaman Pemesanan Saya?' : 'What is the My Bookings page?',
           a: id
-            ? 'Pemesanan Saya menampilkan kalender pemesanan milik kamu sendiri. Ganti tampilan antara Hari, Minggu, dan Bulan menggunakan tombol toggle di atas. Tampilan Hari mendukung drag-and-drop untuk memindahkan atau mengubah durasi pemesanan.'
-            : 'My Bookings shows your own booking calendar. Switch between Day, Week, and Month views using the toggle buttons at the top. Day view supports drag-and-drop to move or resize bookings.',
+            ? 'Pemesanan Saya menampilkan daftar pemesanan milik kamu sendiri, dibagi dalam beberapa tab: Hari Ini, Akan Datang, dan Semua sebagai tab utama, lalu Lewat, Dibatalkan, Tentatif, Series, dan H-Cal (kalender horizontal) sebagai tab tambahan. Setiap pemesanan bisa diekspor ke Excel/PDF/ICS langsung dari sini.'
+            : 'My Bookings lists your own bookings across several tabs: Today, Upcoming, and All as the primary tabs, plus Past, Cancelled, Tentative, Series, and H-Cal (a horizontal calendar strip) as secondary tabs. Each booking can be exported to Excel/PDF/ICS directly from here.',
         },
         {
           q: id ? 'Apa itu halaman Ruangan?' : 'What is the Rooms page?',
@@ -45,8 +45,8 @@ function buildSections(start: string, end: string, latestStart: string, lang: st
         {
           q: id ? 'Bagaimana cara berpindah halaman?' : 'How do I navigate between pages?',
           a: id
-            ? 'Gunakan ikon di navigasi bar atas: ikon grid untuk Timeline, ikon kalender untuk Pemesanan Saya, dan ikon pintu untuk Ruangan. Tab tambahan mungkin muncul sesuai peran kamu.'
-            : 'Use the icons in the top navigation bar: the grid icon for Timeline, the calendar icon for My Bookings, and the door icon for Rooms. Additional tabs may appear based on your role.',
+            ? 'Gunakan ikon di navigasi bar atas: ikon grid untuk Jadwal, ikon kalender untuk Pemesanan Saya, dan ikon pintu untuk Ruangan. Tab tambahan mungkin muncul sesuai peran kamu.'
+            : 'Use the icons in the top navigation bar: the grid icon for Schedule, the calendar icon for My Bookings, and the door icon for Rooms. Additional tabs may appear based on your role.',
         },
       ],
     },
@@ -58,8 +58,8 @@ function buildSections(start: string, end: string, latestStart: string, lang: st
         {
           q: id ? 'Bagaimana cara memesan ruangan?' : 'How do I book a room?',
           a: id
-            ? 'Klik tombol "Pemesanan Baru" di halaman mana pun, atau klik slot kosong di Timeline untuk mengisi ruangan dan waktu secara otomatis. Isi judul, sesuaikan rentang waktu jika perlu, lalu klik Simpan.'
-            : 'Click the "New Booking" button on any page, or click an empty slot on the Timeline to pre-fill the room and time. Enter a title, adjust the time range if needed, then click Save.',
+            ? 'Klik tombol "Booking Baru" di halaman mana pun, atau klik slot kosong di halaman Jadwal untuk mengisi ruangan dan waktu secara otomatis. Isi judul, sesuaikan rentang waktu jika perlu, lalu klik Simpan.'
+            : 'Click the "New Booking" button on any page, or click an empty slot on the Schedule page to pre-fill the room and time. Enter a title, adjust the time range if needed, then click Save.',
         },
         {
           q: id ? 'Apa batas waktu pemesanan?' : 'What are the booking time limits?',
@@ -79,6 +79,12 @@ function buildSections(start: string, end: string, latestStart: string, lang: st
             ? 'Buka halaman Ruangan dan klik ruangan mana pun untuk melihat ketersediaannya hari ini. Kamu juga bisa menggunakan panel Ruangan Tersedia — buka lewat tombol pencarian di navbar, lalu klik "Cari Ruangan Tersedia" di bagian bawah dropdown pencarian.'
             : 'Open the Rooms page and click any room to see its availability today. You can also use the Available Rooms panel — open it via the search bar in the navbar, then click "Search Available Rooms" at the bottom of the search dropdown.',
         },
+        {
+          q: id ? 'Bisakah saya membuat pemesanan berulang (recurring)?' : 'Can I create a recurring booking?',
+          a: id
+            ? 'Ya. Di formulir pemesanan, aktifkan "Ulangi Mingguan" dan pilih jumlah minggu. Sistem akan membuat satu pemesanan per minggu secara otomatis; jika ada slot yang bentrok pada minggu tertentu, tanggal itu akan ditandai sebagai "terlewat" dan bisa dicarikan slot pengganti lewat tab Series di halaman Pemesanan Saya.'
+            : 'Yes. In the booking form, enable "Repeat Weekly" and choose the number of weeks. The system creates one booking per week automatically; if a slot conflicts on a given week, that date is marked as "skipped" and can be rebooked to a replacement slot from the Series tab on the My Bookings page.',
+        },
       ],
     },
     {
@@ -89,8 +95,8 @@ function buildSections(start: string, end: string, latestStart: string, lang: st
         {
           q: id ? 'Bagaimana cara mengubah pemesanan?' : 'How do I edit a booking?',
           a: id
-            ? 'Klik pemesanan di Timeline atau halaman Pemesanan Saya untuk membuka kartu detailnya, lalu klik Edit. Kamu bisa mengubah ruangan, judul, waktu, atau catatan.'
-            : 'Click a booking on the Timeline or My Bookings page to open its detail card, then click Edit. You can change the room, title, time, or notes.',
+            ? 'Klik pemesanan di halaman Jadwal atau Pemesanan Saya untuk membuka kartu detailnya, lalu klik Edit. Kamu bisa mengubah ruangan, judul, waktu, atau catatan.'
+            : 'Click a booking on the Schedule or My Bookings page to open its detail card, then click Edit. You can change the room, title, time, or notes.',
         },
         {
           q: id ? 'Bagaimana cara membatalkan pemesanan?' : 'How do I cancel a booking?',
@@ -101,8 +107,8 @@ function buildSections(start: string, end: string, latestStart: string, lang: st
         {
           q: id ? 'Bagaimana cara drag-and-resize pemesanan?' : 'How do I drag or resize a booking?',
           a: id
-            ? 'Beralih ke tampilan Hari di halaman Pemesanan Saya. Seret bilah pemesanan ke kiri atau kanan untuk memindahkan ke waktu baru. Seret tepi kiri atau kanannya untuk memperpendek atau memperpanjang durasi. Perubahan tersimpan otomatis.'
-            : 'Switch to Day view on the My Bookings page. Drag the booking bar left or right to move it to a new time. Drag its left or right edge to shorten or extend the duration. Changes are saved automatically.',
+            ? 'Di halaman Jadwal (tampilan Hari atau Minggu), seret bilah pemesanan milikmu ke kiri atau kanan untuk memindahkan ke waktu baru. Seret tepi kiri atau kanannya untuk memperpendek atau memperpanjang durasi. Perubahan tersimpan otomatis dan langsung terlihat oleh pengguna lain (realtime).'
+            : 'On the Schedule page (Day or Week view), drag one of your own booking bars left or right to move it to a new time. Drag its left or right edge to shorten or extend the duration. Changes are saved automatically and appear instantly for other users (realtime).',
         },
         {
           q: id ? 'Apa yang terjadi jika terjadi konflik pemesanan?' : 'What happens if there is a booking conflict?',
@@ -175,8 +181,8 @@ function buildSections(start: string, end: string, latestStart: string, lang: st
         {
           q: id ? 'Apa itu konfirmasi kehadiran?' : 'What is attendance confirmation?',
           a: id
-            ? 'Jika admin mengaktifkan mode Anti-Ghost, kamu mungkin perlu mengonfirmasi kehadiranmu di ruangan sebelum atau sesaat setelah pemesanan dimulai — melalui layar Kiosk, sensor, atau tombol konfirmasi web yang ditampilkan di kartu pemesananmu.'
-            : 'If your admin has enabled Anti-Ghost mode, you may need to confirm your presence in the room before or shortly after the booking starts — via the Kiosk screen, a sensor, or the web confirmation button shown on your booking card.',
+            ? 'Jika admin mengaktifkan mode Anti-Ghost, kamu mungkin perlu mengonfirmasi kehadiranmu di ruangan sebelum atau sesaat setelah pemesanan dimulai — melalui layar Kiosk, sensor, tombol konfirmasi web di panel "Hari Ini", atau tautan konfirmasi yang dikirim lewat email. Jika tidak dikonfirmasi dalam jendela waktu yang ditentukan, pemesanan otomatis dibatalkan (auto-release).'
+            : 'If your admin has enabled Anti-Ghost mode, you may need to confirm your presence in the room before or shortly after the booking starts — via the Kiosk screen, a sensor, the web confirmation button in the "Today" panel, or a confirmation link sent by email. If not confirmed within the configured window, the booking is automatically cancelled (auto-released).',
         },
       ],
     },
@@ -371,7 +377,7 @@ export default function HelpModal({ open, onClose }: Props) {
             {/* Footer */}
             <div className="pt-2 pb-1 text-center">
               <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--ds-text-3)' }}>
-                {id ? 'Masih butuh bantuan? Hubungi IT Support di ext. 100' : 'Still need help? Contact IT Support at ext. 100'}
+                {id ? 'Masih butuh bantuan? Hubungi IT Support' : 'Still need help? Contact IT Support'}
               </p>
             </div>
           </div>

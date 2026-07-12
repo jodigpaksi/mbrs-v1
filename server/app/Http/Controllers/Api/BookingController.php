@@ -34,7 +34,7 @@ class BookingController extends Controller
     public function transfer(Request $request, Booking $booking): JsonResponse
     {
         $role = $request->user()->role;
-        if (!in_array($role, ['admin', 'receptionist'])) {
+        if (!in_array($role, ['admin', 'receptionist', 'building_admin'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -153,11 +153,15 @@ class BookingController extends Controller
             ->whereNull('archived_at')
             ->orderBy('start_at');
 
+        // Plain range comparisons on the bare column (not whereDate(), which wraps start_at in a
+        // SQL function and can't use the index on it — forcing a full table scan on every
+        // day/week/month view load, regardless of index or table size).
         if ($request->date_from && $request->date_to) {
-            $query->whereDate('start_at', '>=', $request->date_from)
-                  ->whereDate('start_at', '<=', $request->date_to);
+            $query->where('start_at', '>=', "{$request->date_from} 00:00:00")
+                  ->where('start_at', '<', Carbon::parse($request->date_to)->addDay()->toDateString() . ' 00:00:00');
         } elseif ($request->date) {
-            $query->whereDate('start_at', $request->date);
+            $query->where('start_at', '>=', "{$request->date} 00:00:00")
+                  ->where('start_at', '<', Carbon::parse($request->date)->addDay()->toDateString() . ' 00:00:00');
         }
 
         if ($request->room_id) {
@@ -372,12 +376,15 @@ class BookingController extends Controller
     public function store(Request $request): JsonResponse
     {
         $role = $request->user()->role;
-        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+        $isPrivileged = in_array($role, ['admin', 'receptionist', 'building_admin']);
+        $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
+        $titleMax = (int) ($lenLimits['booking_title_max_length'] ?? 45);
+        $descMax  = (int) ($lenLimits['booking_description_max_length'] ?? 65);
 
         $data = $request->validate([
             'room_id'     => 'required|exists:rooms,id',
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'title'       => "required|string|max:{$titleMax}",
+            'description' => "nullable|string|max:{$descMax}",
             'start_at'    => 'required|date',
             'end_at'      => 'required|date|after:start_at',
             'status'      => 'in:confirmed,tentative',
@@ -386,7 +393,11 @@ class BookingController extends Controller
                 : 'in:internal,external',
             'series_id'             => 'nullable|string|max:36',
             'series_skipped_dates'  => 'nullable|array',
-            'series_skipped_dates.*'=> 'date_format:Y-m-d',
+            // Plain "Y-m-d" for a real conflict/advance-limit skip, or "Y-m-d~D" where D is the
+            // originally-requested day-of-month for an invalid monthly date (e.g. "2026-09-30~31"
+            // — the 31st doesn't exist in September, Y-m-d is a clamped placeholder for storage,
+            // ~31 lets the UI display "31 Sep" instead of the misleading placeholder date).
+            'series_skipped_dates.*'=> 'regex:/^\d{4}-\d{2}-\d{2}(~\d{1,2})?$/',
             'resolves_series_id'    => 'nullable|string|max:36',
             'resolves_skipped_date' => 'nullable|date_format:Y-m-d',
             'booked_for'            => 'nullable|string|max:100',
@@ -458,7 +469,7 @@ class BookingController extends Controller
     public function update(Request $request, Booking $booking): JsonResponse
     {
         $role = $request->user()->role;
-        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+        $isPrivileged = in_array($role, ['admin', 'receptionist', 'building_admin']);
         $isOwner      = $booking->user_id === $request->user()->id;
         $isRecipient  = $booking->booked_for_user_id !== null && $booking->booked_for_user_id === $request->user()->id;
 
@@ -466,10 +477,13 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
+        $titleMax = (int) ($lenLimits['booking_title_max_length'] ?? 45);
+        $descMax  = (int) ($lenLimits['booking_description_max_length'] ?? 65);
         $data = $request->validate([
             'room_id'     => 'sometimes|exists:rooms,id',
-            'title'       => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
+            'title'       => "sometimes|string|max:{$titleMax}",
+            'description' => "nullable|string|max:{$descMax}",
             'start_at'    => 'sometimes|date',
             'end_at'      => 'sometimes|date|after:start_at',
             'status'      => 'sometimes|in:confirmed,tentative,cancelled',
@@ -542,7 +556,7 @@ class BookingController extends Controller
     public function seriesUpdate(Request $request, string $seriesId): JsonResponse
     {
         $role = $request->user()->role;
-        $isPrivileged = in_array($role, ['admin', 'receptionist']);
+        $isPrivileged = in_array($role, ['admin', 'receptionist', 'building_admin']);
 
         $bookings = Booking::where('series_id', $seriesId)
             ->where('status', '!=', 'cancelled')
@@ -557,9 +571,12 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
+        $titleMax = (int) ($lenLimits['booking_title_max_length'] ?? 45);
+        $descMax  = (int) ($lenLimits['booking_description_max_length'] ?? 65);
         $data = $request->validate([
-            'title'       => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
+            'title'       => "sometimes|string|max:{$titleMax}",
+            'description' => "nullable|string|max:{$descMax}",
             'status'      => 'sometimes|in:confirmed,tentative',
             'type'        => $isPrivileged
                 ? 'sometimes|in:internal,external,maintenance,repairment'
@@ -577,7 +594,13 @@ class BookingController extends Controller
 
     public function seriesDestroy(Request $request, string $seriesId): JsonResponse
     {
-        $bookings = Booking::where('series_id', $seriesId)
+        // Include bookings that rebooked a skipped/invalid date from this series (via "Find another
+        // slot") — they never got this series_id (they're standalone, single bookings), but deleting
+        // the whole series should still take them along as one package.
+        $bookings = Booking::where(function ($q) use ($seriesId) {
+                $q->where('series_id', $seriesId)
+                  ->orWhere('resolves_series_id', $seriesId);
+            })
             ->where('status', '!=', 'cancelled')
             ->get();
 

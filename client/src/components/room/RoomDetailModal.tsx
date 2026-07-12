@@ -6,6 +6,7 @@ import { getRoomStats } from '../../api/rooms'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 import { parseLocal } from '../../utils/date'
+import { useSettings } from '../../context/SettingsContext'
 
 interface RoomDetailModalProps {
   room: Room | null
@@ -20,6 +21,7 @@ function fmtTime(iso: string) {
 }
 
 export default function RoomDetailModal({ room, open, onClose, onBook, bookings = [] }: RoomDetailModalProps) {
+  const { t } = useSettings()
   const [photoIdx, setPhotoIdx] = useState(0)
 
   useModalHotkeys(open, room ? () => { onClose(); onBook(room) } : undefined, onClose)
@@ -72,8 +74,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
 
       <div
         className="relative rounded-2xl overflow-hidden shadow-2xl overflow-y-auto transition-transform duration-300"
-        style={{ backgroundColor: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)' }}
-        style={{ width: 980, maxHeight: '92vh', transform: open ? 'scale(1)' : 'scale(0.97)' }}
+        style={{ backgroundColor: 'var(--ds-bg-raised)', border: '1px solid var(--ds-border)', width: 980, maxHeight: '92vh', transform: open ? 'scale(1)' : 'scale(0.97)' }}
       >
         <button
           onClick={onClose}
@@ -132,7 +133,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <div style={{ background: room.status === 'maintenance' ? '#fb923c' : isAvailableNow ? '#adee2b' : '#ef4444', color: room.status === 'maintenance' ? '#fff' : isAvailableNow ? '#000' : '#fff', fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '6px 14px', borderRadius: 99 }}>
-                      {room.status === 'maintenance' ? 'Maintenance' : isAvailableNow ? 'Available' : 'Occupied'}
+                      {room.status === 'maintenance' ? 'Maintenance' : isAvailableNow ? t('room_status_available') : 'Occupied'}
                     </div>
                     {room.requires_contact && <SpecialRoomBadge size="xs" variant="dark" />}
                   </div>
@@ -141,7 +142,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8, marginBottom: 12 }}>
                 <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.88)', display: 'flex', alignItems: 'center', gap: 5, margin: 0 }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#adee2b' }}>groups</span>
-                  {room.capacity} seats
+                  {room.capacity} {t('room_seats')}
                 </p>
                 <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', margin: 0 }}>{room.floor}{room.building?.name ? ` · ${room.building.name}` : ''}</p>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, marginLeft: 'auto' }} />
@@ -152,7 +153,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
 
                 {/* Facilities */}
                 <div style={glassCard}>
-                  <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)', margin: '0 0 7px' }}>Facilities</p>
+                  <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)', margin: '0 0 7px' }}>{t('room_facilities')}</p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     {(room.facilities ?? []).map(f => (
                       <span key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.88)', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', padding: '3px 8px', borderRadius: 99 }}>
@@ -165,7 +166,7 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
                 {/* Peak Hours */}
                 <div style={glassCard}>
                   <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.45)', margin: '0 0 7px' }}>
-                    Peak Hours <span style={{ color: 'rgba(255,255,255,0.25)', fontWeight: 600, textTransform: 'none' }}>(last 30d)</span>
+                    {t('room_peak_hours')} <span style={{ color: 'rgba(255,255,255,0.25)', fontWeight: 600, textTransform: 'none' }}>{t('room_last_30d')}</span>
                   </p>
                   {peakHours.every(v => v === 0) ? (
                     <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: 600, margin: 0 }}>No data yet</p>
@@ -190,25 +191,25 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
           {/* ── Stats ── */}
           <div style={{ gridColumn: '3/4', gridRow: '1/2', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', flex: 1, border: '1px solid var(--ds-border)' }}>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 6px' }}>This Month</p>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 6px' }}>{t('room_this_month')}</p>
               <p style={{ fontSize: 40, fontWeight: 800, color: 'var(--ds-text-1)', lineHeight: 1, margin: 0 }}>{stats?.bookings_this_month ?? '–'}</p>
-              <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--ds-text-3)', textTransform: 'uppercase', margin: '4px 0 0' }}>bookings</p>
+              <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--ds-text-3)', textTransform: 'uppercase', margin: '4px 0 0' }}>{t('room_bookings_lc')}</p>
             </div>
             <div style={{ background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', flex: 1, border: '1px solid var(--ds-border)' }}>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 6px' }}>Utilization</p>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 6px' }}>{t('room_utilization')}</p>
               <p style={{ fontSize: 40, fontWeight: 800, color: 'var(--ds-text-1)', lineHeight: 1, margin: 0 }}>{stats ? `${stats.utilization}%` : '–'}</p>
-              <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--ds-text-3)', textTransform: 'uppercase', margin: '4px 0 0' }}>this month</p>
+              <p style={{ fontSize: 8, fontWeight: 700, color: 'var(--ds-text-3)', textTransform: 'uppercase', margin: '4px 0 0' }}>{t('room_this_month_lc')}</p>
             </div>
           </div>
 
           {/* ── Quick action ── */}
           <div style={{ gridColumn: '3/4', gridRow: '2/3', background: '#adee2b', borderRadius: 20, padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 10 }}>
             <div>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(0,0,0,0.4)', margin: '0 0 6px' }}>Quick Action</p>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(0,0,0,0.4)', margin: '0 0 6px' }}>{t('room_quick_action')}</p>
               <p style={{ fontSize: 13, fontWeight: 800, color: '#000', margin: 0, lineHeight: 1.3 }}>
                 {room.status === 'maintenance' ? 'Room is under maintenance'
                   : room.requires_contact ? 'Special Room — Contact Receptionist / GAA to book'
-                  : isAvailableNow ? 'Ready to book this room?'
+                  : isAvailableNow ? t('room_ready_to_book')
                   : `Occupied until ${nextFreeAt ?? '–'}`}
               </p>
               {!isAvailableNow && nextFreeAt && (
@@ -220,17 +221,17 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
               style={{ width: '100%', padding: 11, background: room.requires_contact ? '#fef3c7' : '#000', color: room.requires_contact ? '#92400e' : '#adee2b', border: room.requires_contact ? '1.5px solid #fbbf24' : 'none', borderRadius: 14, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'Manrope, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
               {room.requires_contact && <span className="material-symbols-outlined" style={{ fontSize: 13 }}>support_agent</span>}
-              {room.requires_contact ? 'Contact Receptionist' : 'Book This Room →'}
+              {room.requires_contact ? 'Contact Receptionist' : t('room_book_this_room')}
             </button>
           </div>
 
           {/* ── Today's Occupancy ── */}
           <div style={{ gridColumn: '1/3', gridRow: '3/4', background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', border: '1px solid var(--ds-border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: 0 }}>Today&rsquo;s Occupancy</p>
+              <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: 0 }}>{t('room_todays_occupancy')}</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', padding: '3px 10px', borderRadius: 99, background: room.status === 'maintenance' ? 'rgba(251,146,60,0.18)' : isAvailableNow ? 'rgba(74,222,128,0.18)' : 'rgba(248,113,113,0.18)', color: room.status === 'maintenance' ? '#fb923c' : isAvailableNow ? '#22c55e' : '#ef4444' }}>
-                  {room.status === 'maintenance' ? 'Under Maintenance' : isAvailableNow ? 'Free Now' : 'Currently Occupied'}
+                  {room.status === 'maintenance' ? 'Under Maintenance' : isAvailableNow ? t('room_free_now') : 'Currently Occupied'}
                 </span>
                 {room.requires_contact && <SpecialRoomBadge size="xs" />}
               </div>
@@ -257,17 +258,17 @@ export default function RoomDetailModal({ room, open, onClose, onBook, bookings 
               <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--ds-text-4)', width: 22 }}>19</span>
             </div>
             {todayBookings.length === 0 && (
-              <p style={{ fontSize: 10, color: 'var(--ds-text-4)', fontWeight: 600, marginTop: 8, marginBottom: 0 }}>No bookings today — room is fully available</p>
+              <p style={{ fontSize: 10, color: 'var(--ds-text-4)', fontWeight: 600, marginTop: 8, marginBottom: 0 }}>{t('room_no_bookings_today')}</p>
             )}
           </div>
 
           {/* ── Notes ── */}
           <div style={{ gridColumn: '3/4', gridRow: '3/4', background: 'var(--ds-bg-surface)', borderRadius: 20, padding: '18px 20px', border: '1px solid var(--ds-border)' }}>
-            <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 10px' }}>Notes</p>
+            <p style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--ds-text-3)', margin: '0 0 10px' }}>{t('room_notes')}</p>
             {room.notes ? (
               <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--ds-text-2)', lineHeight: 1.6, margin: 0 }}>{room.notes}</p>
             ) : (
-              <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--ds-text-4)', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>No notes for this room.</p>
+              <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--ds-text-4)', lineHeight: 1.6, margin: 0, fontStyle: 'italic' }}>{t('room_no_notes')}</p>
             )}
           </div>
 

@@ -205,12 +205,12 @@ export default function TodayPanel() {
                   {b.is_recipient && b.user ? (
                     <div className="flex items-center gap-2 text-[12px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
                       <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15 }}>person_pin</span>
-                      <span className="truncate">By {b.user.name}</span>
+                      <span className="truncate">{t('label_by')} {b.user.name}</span>
                     </div>
                   ) : b.booked_for && (
                     <div className="flex items-center gap-2 text-[12px] font-bold" style={{ color: 'var(--ds-text-3)' }}>
                       <span className="material-symbols-outlined shrink-0" style={{ fontSize: 15 }}>person_pin</span>
-                      <span className="truncate">for {b.booked_for}</span>
+                      <span className="truncate">{t('label_for')} {b.booked_for}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-[13px] font-bold" style={{ color: 'var(--ds-text-2)' }}>

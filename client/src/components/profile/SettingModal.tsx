@@ -6,6 +6,7 @@ import { updateOnDutyStatus } from '../../api/auth'
 import { getBuildings } from '../../api/buildings'
 import type { Building } from '../../types/index'
 import { useModalHotkeys } from '../../hooks/useModalHotkeys'
+import ThemeSwitch from '../ui/ThemeSwitch'
 
 interface Props {
   open: boolean
@@ -169,6 +170,7 @@ export default function SettingModal({ open, onClose }: Props) {
     darkMode,    setDarkMode,
     defaultBuilding, setDefaultBuilding,
     showBarTitle, setShowBarTitle,
+    showKeyboardShortcuts, setShowKeyboardShortcuts,
     t,
   } = useSettings()
 
@@ -201,13 +203,6 @@ export default function SettingModal({ open, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
-      <style>{`
-        @keyframes sm-in {
-          from { opacity: 0; transform: scale(0.95) translateY(10px); }
-          to   { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
-
       {/* Backdrop — pure dim, no blur (lets panel glass show app content) */}
       <div
         className="absolute inset-0"
@@ -217,7 +212,7 @@ export default function SettingModal({ open, onClose }: Props) {
 
       {/* Glass panel */}
       <div
-        className="relative w-[460px] overflow-hidden"
+        className="relative w-[460px] overflow-hidden modal-pop-in"
         style={{
           background: 'rgba(255,255,255,0.82)',
           backdropFilter: 'blur(48px) saturate(200%)',
@@ -225,7 +220,6 @@ export default function SettingModal({ open, onClose }: Props) {
           border: '1px solid rgba(255,255,255,0.90)',
           borderRadius: 24,
           boxShadow: '0 32px 72px rgba(0,0,0,0.16), 0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
-          animation: 'sm-in 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
         }}
         /* dark mode override via CSS class */
         data-dark=""
@@ -366,6 +360,48 @@ export default function SettingModal({ open, onClose }: Props) {
             </button>
           </SettingRow>
 
+          {/* Show keyboard shortcuts FAB */}
+          <SettingRow label={t('settings_show_keyboard_shortcuts')}>
+            <button
+              onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-[14px] transition-all active:scale-[0.99]"
+              style={{ background: 'rgba(0,0,0,0.05)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="size-8 rounded-xl flex items-center justify-center transition-all duration-300"
+                  style={{ background: showKeyboardShortcuts ? '#adee2b' : 'rgba(0,0,0,0.08)' }}
+                >
+                  <span
+                    className="material-symbols-outlined transition-all duration-300"
+                    style={{ fontSize: 17, color: showKeyboardShortcuts ? '#000' : 'var(--ds-text-2)' }}
+                  >
+                    keyboard
+                  </span>
+                </div>
+                <p className="text-[12px] font-black" style={{ color: 'var(--ds-text-1)' }}>
+                  {showKeyboardShortcuts ? 'Button visible' : 'Button hidden'}
+                </p>
+              </div>
+              <div
+                className="relative shrink-0"
+                style={{
+                  width: 42, height: 23, borderRadius: 12,
+                  background: showKeyboardShortcuts ? '#adee2b' : 'rgba(0,0,0,0.18)',
+                  transition: 'background 0.25s ease',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 2.5, width: 18, height: 18,
+                  borderRadius: '50%', background: showKeyboardShortcuts ? '#000' : 'white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                  left: showKeyboardShortcuts ? 21 : 2.5,
+                  transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                }} />
+              </div>
+            </button>
+          </SettingRow>
+
           {/* Language */}
           <SettingRow label={t('settings_language')}>
             <SegmentedPill<LangPref>
@@ -430,9 +466,8 @@ export default function SettingModal({ open, onClose }: Props) {
 
           {/* Dark mode row */}
           <SettingRow label={t('settings_appearance')}>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-[14px] transition-all active:scale-[0.99]"
+            <div
+              className="w-full flex items-center justify-between px-4 py-3 rounded-[14px]"
               style={{ background: 'rgba(0,0,0,0.05)' }}
             >
               <div className="flex items-center gap-3">
@@ -452,32 +487,8 @@ export default function SettingModal({ open, onClose }: Props) {
                 </p>
               </div>
 
-              {/* Toggle */}
-              <div
-                className="relative shrink-0"
-                style={{
-                  width: 42,
-                  height: 23,
-                  borderRadius: 12,
-                  background: darkMode ? '#adee2b' : 'rgba(0,0,0,0.18)',
-                  transition: 'background 0.25s ease',
-                }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 2.5,
-                    width: 18,
-                    height: 18,
-                    borderRadius: '50%',
-                    background: darkMode ? '#000' : 'white',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-                    left: darkMode ? 21 : 2.5,
-                    transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
-                  }}
-                />
-              </div>
-            </button>
+              <ThemeSwitch checked={darkMode} onChange={setDarkMode} />
+            </div>
           </SettingRow>
 
         </div>

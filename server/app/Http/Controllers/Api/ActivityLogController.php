@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
-use App\Models\Booking;
-use App\Models\Room;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,18 +23,6 @@ class ActivityLogController extends Controller
         if ($from = $request->query('from'))        $query->whereDate('created_at', '>=', $from);
         if ($to   = $request->query('to'))          $query->whereDate('created_at', '<=', $to);
         if ($q    = $request->query('q'))           $query->where('description', 'like', "%{$q}%");
-
-        // building_admin only sees log entries tied to a room/booking in a building they manage
-        if ($request->user()->role === 'building_admin') {
-            $buildingIds = $request->user()->managedBuildingIds();
-            $roomIds     = Room::whereIn('building_id', $buildingIds)->pluck('id');
-            $bookingIds  = Booking::whereIn('room_id', $roomIds)->pluck('id');
-            // ActivityLog::record() stores subject_type as a short class_basename (e.g. "Room"), not the FQCN
-            $query->where(function ($q2) use ($roomIds, $bookingIds) {
-                $q2->where(fn ($q3) => $q3->where('subject_type', class_basename(Room::class))->whereIn('subject_id', $roomIds))
-                   ->orWhere(fn ($q3) => $q3->where('subject_type', class_basename(Booking::class))->whereIn('subject_id', $bookingIds));
-            });
-        }
 
         return $query;
     }

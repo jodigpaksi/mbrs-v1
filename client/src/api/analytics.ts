@@ -10,6 +10,7 @@ export interface OverviewStats {
   unique_visitors_today: number
   unique_visitors_week: number
   unique_visitors_month: number
+  unique_visitors_all: number
   storage: {
     db_mb: number
     room_photos_mb: number

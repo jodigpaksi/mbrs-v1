@@ -44,8 +44,8 @@ export async function createBooking(data: {
   resolves_skipped_date?: string
   booked_for?: string
   booked_for_user_id?: number
-}) {
-  const res = await api.post('/bookings', data)
+}, timeoutMs?: number) {
+  const res = await api.post('/bookings', data, { timeout: timeoutMs })
   return res.data
 }
 

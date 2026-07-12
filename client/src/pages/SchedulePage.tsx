@@ -2,11 +2,10 @@ import { useState, useRef, useEffect, useMemo, Fragment, type ReactNode } from '
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { loadXlsx, loadPdf } from '../utils/lazyExport'
 import type { Booking, Room } from '../types/index'
 import { getMyBookings, clearCancelledBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
+import { getDirectory } from '../api/users'
 import { checkAvailability } from '../api/rooms'
 import { getGeneralSettings } from '../api/settings'
 import { useAuth } from '../context/AuthContext'
@@ -17,6 +16,10 @@ import { useBookingHours } from '../hooks/useBookingHours'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import UserHoverCard from '../components/ui/UserHoverCard'
+import ToggleSwitch from '../components/ui/ToggleSwitch'
+import FilterSelectDropdown from '../components/ui/FilterSelectDropdown'
+import WifiLoader from '../components/ui/WifiLoader'
+import ElasticCheckbox from '../components/ui/ElasticCheckbox'
 import { parseLocal } from '../utils/date'
 
 function dur(start: string, end: string) {
@@ -428,6 +431,7 @@ function SeriesGroupRow({
   onExport,
   resolvedSkips,
   index,
+  isPast = false,
 }: {
   group: SeriesGroup
   pendingCancelIds: Set<number>
@@ -437,11 +441,12 @@ function SeriesGroupRow({
   onExport: (group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) => void
   resolvedSkips: Record<string, Booking>
   index: number
+  isPast?: boolean
 }) {
   const { language } = useSettings()
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
-  const closeTimer = useRef<ReturnType<typeof setTimeout>>()
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [showAllSkipped, setShowAllSkipped] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportIncludePast, setExportIncludePast] = useState(false)
@@ -537,8 +542,9 @@ function SeriesGroupRow({
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => onEdit(first)}
-              title="Edit series"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[9px] font-black uppercase hover:bg-black hover:text-[#adee2b] transition-all"
+              disabled={isPast}
+              title={isPast ? "Series has ended — can't edit" : 'Edit series'}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-2)] text-[9px] font-black uppercase hover:bg-black hover:text-[#adee2b] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[var(--ds-bg-surface-2)] disabled:hover:text-[var(--ds-text-2)]"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 12 }}>edit</span>
               Series
@@ -556,10 +562,9 @@ function SeriesGroupRow({
                 <div ref={exportPanelRef} className="fixed z-50 rounded-2xl p-4 w-64 dropdown-enter-right"
                   style={{ top: exportPos.top, right: exportPos.right, background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                   <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export this series</p>
-                  <label className="flex items-center gap-2.5 cursor-pointer mb-4">
-                    <input type="checkbox" checked={exportIncludePast} onChange={e => setExportIncludePast(e.target.checked)} className="accent-black w-4 h-4" />
+                  <ElasticCheckbox checked={exportIncludePast} onChange={setExportIncludePast} color="#000" className="mb-4">
                     <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
-                  </label>
+                  </ElasticCheckbox>
                   <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                     <button
                       onClick={() => { onExport(group, 'excel', exportIncludePast); setExportOpen(false) }}
@@ -644,7 +649,7 @@ function SeriesGroupRow({
       {(open || closing) && (() => {
         const skipped = first.series_skipped_dates
         if (!skipped || skipped.length === 0) return null
-        const unresolvedCount = skipped.filter(d => !resolvedSkips[`${group.series_id}:${d}`]).length
+        const unresolvedCount = skipped.filter(d => !resolvedSkips[`${group.series_id}:${parseSkipDate(d).real}`]).length
         const visibleSkipped = showAllSkipped ? skipped : skipped.slice(0, 2)
         const hiddenCount = skipped.length - visibleSkipped.length
         return (
@@ -661,13 +666,17 @@ function SeriesGroupRow({
                   <span className="text-[11px] font-black uppercase tracking-wider text-red-500">
                     {unresolvedCount > 0 ? `${unresolvedCount} date${unresolvedCount !== 1 ? 's' : ''} skipped — conflict at time of booking` : `${skipped.length} date${skipped.length !== 1 ? 's' : ''} skipped — all rebooked`}
                   </span>
+                  {first.room?.name && (
+                    <span className="text-[11px] font-bold text-red-400/80 dark:text-red-400/70 truncate">· {first.room.name}</span>
+                  )}
                 </div>
                 <div className="divide-y divide-red-200/60 dark:divide-red-500/10">
                   {visibleSkipped.map(d => {
-                    const resolved = resolvedSkips[`${group.series_id}:${d}`]
+                    const { real, invalidDay } = parseSkipDate(d)
+                    const resolved = resolvedSkips[`${group.series_id}:${real}`]
                     return resolved
-                      ? <ResolvedSkipRow key={d} date={d} booking={resolved} pendingCancelIds={pendingCancelIds} onEdit={onEdit} onCancel={onCancel} />
-                      : <SkippedDateRow key={d} date={d} room={first.room} startTime={toHHMM(first.start_at)} endTime={toHHMM(first.end_at)} seriesId={group.series_id} />
+                      ? <ResolvedSkipRow key={d} date={real} invalidDay={invalidDay} booking={resolved} pendingCancelIds={pendingCancelIds} onEdit={onEdit} onCancel={onCancel} />
+                      : <SkippedDateRow key={d} date={real} invalidDay={invalidDay} room={first.room} startTime={toHHMM(first.start_at)} endTime={toHHMM(first.end_at)} seriesId={group.series_id} disabled={isPast} />
                   })}
                 </div>
                 {hiddenCount > 0 && (
@@ -697,7 +706,25 @@ function SeriesGroupRow({
 
 function fmtSkipDate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  const dt = new Date(y, m - 1, d)
+  const datePart = dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  const dayPart = dt.toLocaleDateString('en-GB', { weekday: 'short' })
+  return `${datePart}, ${dayPart}`
+}
+
+// Monthly-repeat invalid dates are stored as "Y-m-d~D" — Y-m-d is a clamped placeholder (last real
+// day of that month, needed so series_skipped_dates/resolves_skipped_date stay real dates), D is the
+// originally-requested day-of-month that doesn't exist (e.g. "2026-09-30~31" — the 31st in Sep).
+// See BookingPanel.tsx's SkippedEntry encoding — this must decode the exact same format.
+function parseSkipDate(raw: string): { real: string; invalidDay?: number } {
+  const [real, day] = raw.split('~')
+  return { real, invalidDay: day ? Number(day) : undefined }
+}
+
+function fmtInvalidSkipDate(real: string, invalidDay: number, language: string) {
+  const [y, m] = real.split('-').map(Number)
+  const monthYear = new Date(y, m - 1, 1).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'short', year: 'numeric' })
+  return `${invalidDay} ${monthYear}`
 }
 
 function MoreTooltip({ label, items }: { label: string; items: string[] }) {
@@ -747,18 +774,20 @@ function MoreTooltip({ label, items }: { label: string; items: string[] }) {
   )
 }
 
-function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
+function SkippedDateRow({ date, invalidDay, room, startTime, endTime, seriesId, disabled = false }: {
   date: string
+  invalidDay?: number
   room?: Room
   startTime: string
   endTime: string
   seriesId: string
+  disabled?: boolean
 }) {
   const { language } = useSettings()
   const { data } = useQuery({
     queryKey: ['skip-conflicts', room?.id, date, startTime, endTime],
     queryFn: () => checkAvailability(room!.id, `${date} ${startTime}:00`, `${date} ${endTime}:00`),
-    enabled: !!room,
+    enabled: !!room && !invalidDay,
     staleTime: 60_000,
   })
   const conflicts = (data?.conflicts ?? []) as Booking[]
@@ -770,13 +799,24 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
     return `${b.title} - ${b.user?.name ?? '—'}${dept ? ` (${dept})` : ''} ${fmtTime(b.start_at, language)}-${fmtTime(b.end_at, language)}`
   }
 
+  // Invalid monthly date (e.g. 31st in Feb) — search from the 1st of that month instead of the
+  // clamped placeholder date, but resolveSkip must still key off the real stored date so it
+  // matches series_skipped_dates / resolves_skipped_date for the "resolved" lookup.
+  const searchDate = invalidDay ? `${date.slice(0, 7)}-01` : date
+
   return (
     <div className="flex items-start justify-between gap-3 px-3 py-2">
       <div className="flex items-start gap-2 min-w-0">
-        <span className="material-symbols-outlined text-red-300 mt-0.5" style={{ fontSize: 12 }}>block</span>
+        <span className="material-symbols-outlined text-red-300 mt-0.5" style={{ fontSize: 12 }}>{invalidDay ? 'event_busy' : 'block'}</span>
         <div className="min-w-0">
-          <span className="text-[13px] font-bold text-red-600 dark:text-red-400 block">{fmtSkipDate(date)}</span>
-          {shown.length > 0 && (
+          <span className="text-[13px] font-bold text-red-600 dark:text-red-400 block">
+            {invalidDay ? fmtInvalidSkipDate(date, invalidDay, language) : fmtSkipDate(date)}
+          </span>
+          {invalidDay ? (
+            <p className="text-[11px] font-semibold text-red-400/90 dark:text-red-400/80">
+              {language === 'id' ? 'Tanggal tidak ada di bulan itu' : "Date doesn't exist that month"}
+            </p>
+          ) : shown.length > 0 && (
             <div className="mt-1 space-y-1">
               {shown.map(c => (
                 <p key={c.id} className="text-[11.5px] font-semibold text-red-400/90 dark:text-red-400/80 truncate max-w-[320px]">{fmtConflict(c)}</p>
@@ -788,11 +828,14 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
       </div>
       <button
         onClick={() => document.dispatchEvent(new CustomEvent('available-rooms-prefill', {
-          detail: { date, startTime, endTime, resolveSkip: { seriesId, date } },
+          detail: { date: searchDate, startTime, endTime, resolveSkip: { seriesId, date } },
         }))}
+        disabled={disabled}
+        title={disabled ? "Series has ended — can't rebook" : undefined}
         className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all
           bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-2)]
-          hover:border-[#adee2b] hover:text-[#adee2b] hover:bg-[#adee2b]/5"
+          hover:border-[#adee2b] hover:text-[#adee2b] hover:bg-[#adee2b]/5
+          disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-[var(--ds-border)] disabled:hover:text-[var(--ds-text-2)] disabled:hover:bg-[var(--ds-bg-surface)]"
       >
         <span className="material-symbols-outlined" style={{ fontSize: 13 }}>search</span>
         Find another slot
@@ -801,8 +844,9 @@ function SkippedDateRow({ date, room, startTime, endTime, seriesId }: {
   )
 }
 
-function ResolvedSkipRow({ date, booking, pendingCancelIds, onEdit, onCancel }: {
+function ResolvedSkipRow({ date, invalidDay, booking, pendingCancelIds, onEdit, onCancel }: {
   date: string
+  invalidDay?: number
   booking: Booking
   pendingCancelIds: Set<number>
   onEdit: (b: Booking) => void
@@ -813,7 +857,11 @@ function ResolvedSkipRow({ date, booking, pendingCancelIds, onEdit, onCancel }: 
     <div className="flex items-center justify-between gap-3 px-3 py-2 bg-green-50 dark:bg-green-500/5">
       <div className="flex items-center gap-2 min-w-0">
         <span className="material-symbols-outlined text-green-500 shrink-0" style={{ fontSize: 13 }}>check_circle</span>
-        <span className="text-[13px] font-bold text-green-700 dark:text-green-400 shrink-0">{fmtSkipDate(date)} — rebooked:</span>
+        <span className="text-[13px] font-bold text-green-700 dark:text-green-400 shrink-0">
+          {invalidDay
+            ? `${fmtInvalidSkipDate(date, invalidDay, language)} (${language === 'id' ? 'Invalid, tanggal tidak ada di bulan itu' : "Invalid, date doesn't exist that month"})`
+            : fmtSkipDate(date)} — rebooked:
+        </span>
         <span className="text-[12px] font-semibold text-green-600 dark:text-green-400/80 truncate">
           {booking.title} · {booking.room?.name}{booking.room?.building?.name ? `, ${booking.room.building.name}` : ''} · {fmtTableDate(booking.start_at, language)} {fmtTime(booking.start_at, language)}–{fmtTime(booking.end_at, language)}
         </span>
@@ -1099,7 +1147,8 @@ export default function SchedulePage() {
     placeholderData: keepPreviousData,
   })
 
-  const isReceptionist = user?.role === 'receptionist'
+  const isReceptionist = user?.role === 'receptionist' || user?.role === 'building_admin'
+  const { data: spDirectory = [] } = useQuery({ queryKey: ['user-directory'], queryFn: getDirectory, staleTime: 60_000, enabled: isReceptionist })
   const { data: specialBookings = [], isLoading: loadingSpecial } = useQuery({
     queryKey: ['special-bookings'],
     queryFn: () => getBookings({ special_rooms: true, date_from: toDateStr(past90), date_to: toDateStr(future90) }),
@@ -1114,6 +1163,14 @@ export default function SchedulePage() {
   const [spSortCol, setSpSortCol]             = useState<string | null>(null)
   const [spSortDir, setSpSortDir]             = useState<'asc' | 'desc'>('asc')
   const spExportRef = useRef<HTMLDivElement>(null)
+  const [spExportUseFilter, setSpExportUseFilter] = useState(false)
+  const [spFilterMonth, setSpFilterMonth]     = useState('')
+  const [spFilterRoom, setSpFilterRoom]       = useState('')
+  const [spFilterBooker, setSpFilterBooker]   = useState('')
+  const [spFilterDept, setSpFilterDept]       = useState('')
+  const [spFilterTitle, setSpFilterTitle]     = useState('')
+  const [spFilterFor, setSpFilterFor]         = useState('')
+  const [spFilterStatus, setSpFilterStatus]   = useState('')
 
   const [allExportOpen, setAllExportOpen]     = useState(false)
   const [allExportGroups, setAllExportGroups] = useState({ upcoming: true, past: true, cancelled: false })
@@ -1174,9 +1231,9 @@ export default function SchedulePage() {
   }, [])
 
   const today = new Date()
-  const minus7 = new Date(today); minus7.setDate(today.getDate() - 7)
   const plus7 = new Date(today); plus7.setDate(today.getDate() + 7)
-  const past30 = new Date(today); past30.setDate(today.getDate() - 30)
+  // Past/Cancelled/Series tabs all share this one retention window now — previously Past used a
+  // hardcoded 30 days and Cancelled a hardcoded 7 days, independent of this admin setting.
   const archiveAfterDays = generalSettings?.archive_after_days ?? 30
   const archiveCutoff = new Date(today); archiveCutoff.setDate(today.getDate() - archiveAfterDays)
   const past90 = new Date(today); past90.setDate(today.getDate() - 90)
@@ -1207,9 +1264,9 @@ export default function SchedulePage() {
   }, [myBookings, allSortKey, allSortDir])
   const pastList: Booking[]      = myBookings.filter((b: Booking) => {
     const ended = parseLocal(b.end_at) < new Date()
-    return b.status !== 'cancelled' && ended && parseLocal(b.start_at) >= past30
+    return b.status !== 'cancelled' && ended && parseLocal(b.start_at) >= archiveCutoff
   }).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
-  const cancelledList: Booking[] = (allMyBookings as Booking[]).filter((b: Booking) => b.status === 'cancelled' && b.cancelled_at && parseLocal(b.cancelled_at) >= minus7).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+  const cancelledList: Booking[] = (allMyBookings as Booking[]).filter((b: Booking) => b.status === 'cancelled' && b.cancelled_at && parseLocal(b.cancelled_at) >= archiveCutoff).sort((a: Booking, b: Booking) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
   const tentativeList: Booking[] = myBookings.filter((b: Booking) => b.status === 'tentative' && parseLocal(b.end_at) >= new Date()).sort((a: Booking, b: Booking) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
 
   const seriesList = useMemo((): SeriesGroup[] => {
@@ -1426,7 +1483,8 @@ export default function SchedulePage() {
 
   interface AllExportCounts { upcoming: number | null; past: number | null; cancelled: number | null }
 
-  function exportAllExcel(rows: Booking[], counts: AllExportCounts) {
+  async function exportAllExcel(rows: Booking[], counts: AllExportCounts) {
+    const XLSX = await loadXlsx()
     const exportedAt = today.toLocaleDateString('en-GB')
     const summaryParts = [
       counts.upcoming != null ? `Upcoming & Today: ${counts.upcoming}` : null,
@@ -1459,8 +1517,9 @@ export default function SchedulePage() {
     XLSX.writeFile(wb, `my-bookings-${user?.name?.replace(' ', '-').toLowerCase()}.xlsx`)
   }
 
-  function exportAllPDF(rows: Booking[], counts: AllExportCounts) {
-    const doc = new jsPDF()
+  async function exportAllPDF(rows: Booking[], counts: AllExportCounts) {
+    const { jsPDF, autoTable } = await loadPdf()
+    const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFontSize(14); doc.text(`My Bookings — ${user?.name}`, 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
     doc.text(`${user?.department ?? ''}   ·   Exported ${today.toLocaleDateString('en-GB')}   ·   Total: ${rows.length}`, 14, 22)
@@ -1473,12 +1532,12 @@ export default function SchedulePage() {
     doc.text(summaryParts, 14, 28)
     autoTable(doc, {
       startY: 34,
-      head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status']],
+      head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status', 'Type']],
       body: rows.map((b: Booking, i: number) => [
         i + 1,
         fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
         `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
-        b.room?.name ?? '', b.title, b.booked_for ?? '', b.status,
+        b.room?.name ?? '', b.title, b.booked_for ?? '', b.status, b.type,
       ]),
       styles: { fontSize: 8, cellPadding: 3 },
       headStyles: { fillColor: [0, 0, 0], textColor: [173, 238, 43], fontStyle: 'bold' },
@@ -1490,7 +1549,8 @@ export default function SchedulePage() {
 
   interface SpExportCounts { active: number | null; past: number | null; cancelled: number | null }
 
-  function exportSpecialExcel(rows: Booking[], counts: SpExportCounts) {
+  async function exportSpecialExcel(rows: Booking[], counts: SpExportCounts) {
+    const XLSX = await loadXlsx()
     const exportedAt = today.toLocaleDateString('en-GB')
     const summaryParts = [
       counts.active    != null ? `Upcoming & Today: ${counts.active}`  : null,
@@ -1522,7 +1582,8 @@ export default function SchedulePage() {
     XLSX.writeFile(wb, `special-room-bookings-${toDateStr(today)}.xlsx`)
   }
 
-  function exportSpecialPDF(rows: Booking[], counts: SpExportCounts) {
+  async function exportSpecialPDF(rows: Booking[], counts: SpExportCounts) {
+    const { jsPDF, autoTable } = await loadPdf()
     const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFontSize(14); doc.text('Special Room Bookings', 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
@@ -1558,9 +1619,17 @@ export default function SchedulePage() {
     return includePast ? bookings : bookings.filter(b => !isActuallyPast(b))
   }
 
-  function exportSeriesExcel(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+  // Export order should always be chronological (soonest first) regardless of how the rows were
+  // assembled — rebooked/skip-resolved bookings get appended after the regular ones before this
+  // runs, so without sorting they'd all land at the bottom instead of interleaved by date.
+  function sortRowsByDate(rows: Booking[]): Booking[] {
+    return [...rows].sort((a, b) => a.start_at.localeCompare(b.start_at))
+  }
+
+  async function exportSeriesExcel(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const XLSX = await loadXlsx()
     const exportedAt = today.toLocaleDateString('en-GB')
-    const headers = ['No.', 'Date', 'Day', 'Start Time', 'End Time', 'Duration', 'Room', 'Building', 'Title', 'Description', 'Booked For', 'Status', 'Type']
+    const headers = ['No.', 'Date', 'Day', 'Start Time', 'End Time', 'Duration', 'Room', 'Building', 'Title', 'Description', 'Booked By', 'Booked For', 'Status', 'Type']
     const aoa: (string | number)[][] = [
       [label],
       [`${includePast ? 'All dates' : 'Upcoming dates only'}   ·   Exported ${exportedAt}   ·   Total: ${rows.length}`],
@@ -1572,30 +1641,31 @@ export default function SchedulePage() {
         fmtTime(b.start_at, language), fmtTime(b.end_at, language),
         dur(b.start_at, b.end_at), b.room?.name ?? '',
         b.room?.building?.code || b.room?.building?.name || '',
-        b.title, b.description ?? '', b.booked_for ?? '',
+        b.title, b.description ?? '', b.user?.name ?? '', b.booked_for ?? '',
         b.status, b.type,
       ]),
     ]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
-    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 10 }, { wch: 12 }]
+    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 10 }, { wch: 12 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Series')
     XLSX.writeFile(wb, `${fileSlug}.xlsx`)
   }
 
-  function exportSeriesPDF(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
-    const doc = new jsPDF()
+  async function exportSeriesPDF(rows: Booking[], label: string, includePast: boolean, fileSlug: string) {
+    const { jsPDF, autoTable } = await loadPdf()
+    const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFontSize(14); doc.text(label, 14, 16)
     doc.setFontSize(9); doc.setTextColor(150)
     doc.text(`${includePast ? 'All dates' : 'Upcoming dates only'}   ·   Exported ${today.toLocaleDateString('en-GB')}   ·   Total: ${rows.length}`, 14, 22)
     autoTable(doc, {
       startY: 30,
-      head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'For', 'Status']],
+      head: [['No.', 'Date', 'Day', 'Time', 'Room', 'Title', 'Booked By', 'For', 'Status']],
       body: rows.map((b: Booking, i: number) => [
         i + 1,
         fmtTableDate(b.start_at, language), fmtTableDay(b.start_at, language),
         `${fmtTime(b.start_at, language)} – ${fmtTime(b.end_at, language)}`,
-        b.room?.name ?? '', b.title, b.booked_for ?? '', b.status,
+        b.room?.name ?? '', b.title, b.user?.name ?? '', b.booked_for ?? '', b.status,
       ]),
       styles: { fontSize: 8, cellPadding: 3 },
       headStyles: { fillColor: [0, 0, 0], textColor: [173, 238, 43], fontStyle: 'bold' },
@@ -1608,7 +1678,7 @@ export default function SchedulePage() {
   function handleExportSeriesRow(group: SeriesGroup, format: 'excel' | 'pdf', includePast: boolean) {
     const first = group.bookings[0]
     const rebooked = seriesExportRows(resolvedSkipsForSeries(group.series_id), includePast)
-    const rows = [...seriesExportRows(group.bookings, includePast), ...rebooked]
+    const rows = sortRowsByDate([...seriesExportRows(group.bookings, includePast), ...rebooked])
     const label = `${first.title} — ${first.room?.name ?? ''}`
     const slug = `series-${first.title.replace(/\s+/g, '-').toLowerCase()}-${toDateStr(parseLocal(first.start_at))}`
     if (format === 'excel') exportSeriesExcel(rows, label, includePast, slug)
@@ -1724,7 +1794,7 @@ export default function SchedulePage() {
               className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]"
             >
               <span className="material-symbols-outlined text-base">add</span>
-              <span className="hidden sm:inline">New Booking</span>
+              <span className="hidden sm:inline">{t('btn_new_booking')}</span>
             </button>
           )}
         </div>
@@ -1757,7 +1827,9 @@ export default function SchedulePage() {
             {visibleSecondaryTabs.map((key, i) => {
               const m = TAB_META[key]
               const tabTipKey = TAB_TOOLTIP_KEY[key]
-              const tabTip = tabTipKey ? t(`tooltip_${tabTipKey}` as Parameters<typeof t>[0]) : undefined
+              const tabTip = (tabTipKey === 'past' || tabTipKey === 'cancelled')
+                ? undefined
+                : tabTipKey ? t(`tooltip_${tabTipKey}` as Parameters<typeof t>[0]) : undefined
               return (
                 <button key={key} ref={el => { tabRefs.current[PRIMARY_TABS.length + i] = el }}
                   onClick={() => setActiveTab(key)}
@@ -1872,7 +1944,7 @@ export default function SchedulePage() {
         <div className="flex-1 overflow-y-auto px-8 py-6 bg-[var(--ds-bg-base)]" style={{ scrollbarWidth: 'thin' }}>
           {(isLoading || loadingAll) && myBookings.length === 0 && allMyBookings.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
+              <WifiLoader />
             </div>
           ) : (activeList.length === 0 && activeTab !== 'hcal' && activeTab !== 'special' && !(activeTab === 'today' && todayPastList.length > 0)) ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--ds-text-4)]">
@@ -1882,8 +1954,8 @@ export default function SchedulePage() {
               <p className="text-sm font-black uppercase">
                 {activeTab === 'today' ? t('empty_today')
                   : activeTab === 'upcoming' ? t('empty_upcoming')
-                  : activeTab === 'past' ? t('empty_past')
-                  : activeTab === 'cancelled' ? t('empty_cancelled')
+                  : activeTab === 'past' ? (language === 'id' ? `Tidak ada booking lewat (${archiveAfterDays} hari terakhir)` : `No past bookings (last ${archiveAfterDays} days)`)
+                  : activeTab === 'cancelled' ? (language === 'id' ? `Tidak ada booking dibatalkan (±${archiveAfterDays} hari)` : `No cancelled bookings (±${archiveAfterDays} days)`)
                   : activeTab === 'tentative' ? t('empty_tentative')
                   : activeTab === 'series' ? t('empty_series')
                   : t('empty_no_bookings_yet')}
@@ -1921,14 +1993,44 @@ export default function SchedulePage() {
                   {(() => {
                     const spNow = new Date()
                     const allSp = specialBookings as Booking[]
-                    const spActive    = allSp.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) >= spNow).sort((a,b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
-                    const spPast      = allSp.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) < spNow).sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
-                    const spCancelled = allSp.filter(b => b.status === 'cancelled').sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+                    const rawActive    = allSp.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) >= spNow).sort((a,b) => parseLocal(a.start_at).getTime() - parseLocal(b.start_at).getTime())
+                    const rawPast      = allSp.filter(b => b.status !== 'cancelled' && parseLocal(b.end_at) < spNow).sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+                    const rawCancelled = allSp.filter(b => b.status === 'cancelled').sort((a,b) => parseLocal(b.start_at).getTime() - parseLocal(a.start_at).getTime())
+
+                    const spMonthKey = (iso: string) => {
+                      const d = parseLocal(iso)
+                      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                    }
+                    const spMonthLabel = (key: string) => {
+                      const [y, m] = key.split('-').map(Number)
+                      return new Date(y, m - 1, 1).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'long', year: 'numeric' })
+                    }
+                    const spMonthOptions = [...new Set(allSp.map(b => spMonthKey(b.start_at)))].sort()
+                    const spRoomOptions = [...new Set(allSp.map(b => b.room?.name).filter((v): v is string => !!v))].sort()
+                    const spBookerOptions = [...new Set(allSp.map(b => b.user?.name).filter((v): v is string => !!v))].sort()
+                    const spDeptOptions = [...new Set(allSp.map(b => b.user?.department_name).filter((v): v is string => !!v))].sort()
+
+                    const spHasFilter = !!(spFilterMonth || spFilterRoom || spFilterBooker || spFilterDept || spFilterTitle || spFilterFor || spFilterStatus)
+                    const spMatchesFilter = (b: Booking) => {
+                      if (spFilterMonth && spMonthKey(b.start_at) !== spFilterMonth) return false
+                      if (spFilterRoom && b.room?.name !== spFilterRoom) return false
+                      if (spFilterBooker && b.user?.name !== spFilterBooker) return false
+                      if (spFilterDept && b.user?.department_name !== spFilterDept) return false
+                      if (spFilterTitle && !(b.title ?? '').toLowerCase().includes(spFilterTitle.toLowerCase())) return false
+                      if (spFilterFor && !(b.booked_for ?? '').toLowerCase().includes(spFilterFor.toLowerCase())) return false
+                      if (spFilterStatus && b.status !== spFilterStatus) return false
+                      return true
+                    }
+
+                    const spActive    = rawActive.filter(spMatchesFilter)
+                    const spPast      = rawPast.filter(spMatchesFilter)
+                    const spCancelled = rawCancelled.filter(spMatchesFilter)
+                    const spFilterKey = [spFilterMonth, spFilterRoom, spFilterBooker, spFilterDept, spFilterTitle, spFilterFor, spFilterStatus].join('|')
 
                     const spExportRows = [
-                      ...(spExportGroups.active ? spActive : []),
-                      ...(spExportGroups.past ? spPast : []),
-                      ...(spExportGroups.cancelled ? spCancelled : []),
+                      ...(spExportGroups.active ? (spExportUseFilter ? spActive : rawActive) : []),
+                      ...(spExportGroups.past ? (spExportUseFilter ? spPast : rawPast) : []),
+                      ...(spExportGroups.cancelled ? (spExportUseFilter ? spCancelled : rawCancelled) : []),
                     ]
 
                     // sort helper — when spSortCol is set, override default; otherwise keep group-native order
@@ -1971,23 +2073,27 @@ export default function SchedulePage() {
                               {spExportOpen && (
                                 <div className="absolute right-0 top-full mt-2 z-50 rounded-2xl p-4 w-72 dropdown-enter-right"
                                   style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
+                                  <div className="flex items-center justify-between gap-3 mb-3.5 pb-3.5 border-b border-[var(--ds-border-sub)]">
+                                    <div>
+                                      <p className="text-[11px] font-black text-[var(--ds-text-1)]">Export with Filter</p>
+                                      <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5">{spHasFilter ? 'Only export rows matching current filter' : 'No filter active right now'}</p>
+                                    </div>
+                                    <ToggleSwitch checked={spExportUseFilter} onChange={() => setSpExportUseFilter(v => !v)} onColor="#f59e0b" />
+                                  </div>
                                   <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Select groups to export</p>
                                   <div className="space-y-2.5 mb-4">
-                                    <label className="flex items-center gap-2.5 cursor-pointer">
-                                      <input type="checkbox" checked={spExportGroups.active} onChange={e => setSpExportGroups(g => ({ ...g, active: e.target.checked }))} className="accent-amber-500 w-4 h-4" />
+                                    <ElasticCheckbox checked={spExportGroups.active} onChange={v => setSpExportGroups(g => ({ ...g, active: v }))} color="#f59e0b">
                                       <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Upcoming &amp; Today</span>
-                                      <span className="text-[11px] font-black text-amber-400">{spActive.length}</span>
-                                    </label>
-                                    <label className="flex items-center gap-2.5 cursor-pointer">
-                                      <input type="checkbox" checked={spExportGroups.past} onChange={e => setSpExportGroups(g => ({ ...g, past: e.target.checked }))} className="accent-slate-400 w-4 h-4" />
+                                      <span className="text-[11px] font-black text-amber-400">{spExportUseFilter ? spActive.length : rawActive.length}</span>
+                                    </ElasticCheckbox>
+                                    <ElasticCheckbox checked={spExportGroups.past} onChange={v => setSpExportGroups(g => ({ ...g, past: v }))} color="#94a3b8">
                                       <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Past</span>
-                                      <span className="text-[11px] font-black text-[var(--ds-text-3)]">{spPast.length}</span>
-                                    </label>
-                                    <label className="flex items-center gap-2.5 cursor-pointer">
-                                      <input type="checkbox" checked={spExportGroups.cancelled} onChange={e => setSpExportGroups(g => ({ ...g, cancelled: e.target.checked }))} className="accent-red-400 w-4 h-4" />
+                                      <span className="text-[11px] font-black text-[var(--ds-text-3)]">{spExportUseFilter ? spPast.length : rawPast.length}</span>
+                                    </ElasticCheckbox>
+                                    <ElasticCheckbox checked={spExportGroups.cancelled} onChange={v => setSpExportGroups(g => ({ ...g, cancelled: v }))} color="#f87171">
                                       <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Cancelled</span>
-                                      <span className="text-[11px] font-black text-red-400">{spCancelled.length}</span>
-                                    </label>
+                                      <span className="text-[11px] font-black text-red-400">{spExportUseFilter ? spCancelled.length : rawCancelled.length}</span>
+                                    </ElasticCheckbox>
                                   </div>
                                   <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                                     <button
@@ -1996,14 +2102,14 @@ export default function SchedulePage() {
                                     >All</button>
                                     <button
                                       disabled={spExportRows.length === 0}
-                                      onClick={() => { exportSpecialExcel(spExportRows, { active: spExportGroups.active ? spActive.length : null, past: spExportGroups.past ? spPast.length : null, cancelled: spExportGroups.cancelled ? spCancelled.length : null }); setSpExportOpen(null) }}
+                                      onClick={() => { exportSpecialExcel(spExportRows, { active: spExportGroups.active ? (spExportUseFilter ? spActive.length : rawActive.length) : null, past: spExportGroups.past ? (spExportUseFilter ? spPast.length : rawPast.length) : null, cancelled: spExportGroups.cancelled ? (spExportUseFilter ? spCancelled.length : rawCancelled.length) : null }); setSpExportOpen(null) }}
                                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] font-black uppercase hover:bg-emerald-500/25 transition-colors border border-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>table_view</span>Excel
                                     </button>
                                     <button
                                       disabled={spExportRows.length === 0}
-                                      onClick={() => { exportSpecialPDF(spExportRows, { active: spExportGroups.active ? spActive.length : null, past: spExportGroups.past ? spPast.length : null, cancelled: spExportGroups.cancelled ? spCancelled.length : null }); setSpExportOpen(null) }}
+                                      onClick={() => { exportSpecialPDF(spExportRows, { active: spExportGroups.active ? (spExportUseFilter ? spActive.length : rawActive.length) : null, past: spExportGroups.past ? (spExportUseFilter ? spPast.length : rawPast.length) : null, cancelled: spExportGroups.cancelled ? (spExportUseFilter ? spCancelled.length : rawCancelled.length) : null }); setSpExportOpen(null) }}
                                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-black uppercase hover:bg-red-500/25 transition-colors border border-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       <span className="material-symbols-outlined" style={{ fontSize: 13 }}>picture_as_pdf</span>PDF
@@ -2015,6 +2121,60 @@ export default function SchedulePage() {
                           </div>
                         </div>
 
+                        {/* Filter row — always visible */}
+                        {allSp.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2.5 mb-5 p-4 rounded-2xl bg-[var(--ds-bg-surface-2)]/60 border border-[var(--ds-border-sub)]">
+                            <FilterSelectDropdown
+                              value={spFilterMonth} onChange={setSpFilterMonth} icon="calendar_month"
+                              placeholder={language === 'id' ? 'Semua Bulan' : 'All Months'}
+                              searchable={false}
+                              options={spMonthOptions.map(m => ({ value: m, label: spMonthLabel(m) }))}
+                            />
+                            <FilterSelectDropdown
+                              value={spFilterRoom} onChange={setSpFilterRoom} icon="meeting_room"
+                              placeholder={language === 'id' ? 'Semua Ruangan' : 'All Rooms'}
+                              searchPlaceholder={language === 'id' ? 'Cari ruangan...' : 'Search rooms...'}
+                              options={spRoomOptions.map(r => ({ value: r, label: r }))}
+                            />
+                            <FilterSelectDropdown
+                              value={spFilterBooker} onChange={setSpFilterBooker} icon="person"
+                              placeholder={language === 'id' ? 'Semua Booker' : 'All Bookers'}
+                              searchPlaceholder={language === 'id' ? 'Cari booker...' : 'Search bookers...'}
+                              options={spBookerOptions.map(b => ({ value: b, label: b }))}
+                            />
+                            <FilterSelectDropdown
+                              value={spFilterDept} onChange={setSpFilterDept} icon="apartment"
+                              placeholder={language === 'id' ? 'Semua Dept' : 'All Depts'}
+                              searchPlaceholder={language === 'id' ? 'Cari dept...' : 'Search depts...'}
+                              options={spDeptOptions.map(d => ({ value: d, label: d }))}
+                            />
+                            <input type="text" value={spFilterTitle} onChange={e => setSpFilterTitle(e.target.value)}
+                              placeholder={language === 'id' ? 'Cari judul...' : 'Search title...'}
+                              className="w-36 px-3.5 py-2.5 rounded-xl text-[11px] font-bold bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
+                            <input type="text" value={spFilterFor} onChange={e => setSpFilterFor(e.target.value)}
+                              placeholder={language === 'id' ? 'Cari "for"...' : 'Search "for"...'}
+                              className="w-36 px-3.5 py-2.5 rounded-xl text-[11px] font-bold bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all" />
+                            <FilterSelectDropdown
+                              value={spFilterStatus} onChange={setSpFilterStatus} icon="label" searchable={false} width={150}
+                              placeholder={language === 'id' ? 'Semua Status' : 'All Status'}
+                              options={[
+                                { value: 'confirmed', label: 'Confirmed' },
+                                { value: 'tentative', label: 'Tentative' },
+                                { value: 'cancelled', label: 'Cancelled' },
+                              ]}
+                            />
+                            {spHasFilter && (
+                              <button
+                                onClick={() => { setSpFilterMonth(''); setSpFilterRoom(''); setSpFilterBooker(''); setSpFilterDept(''); setSpFilterTitle(''); setSpFilterFor(''); setSpFilterStatus('') }}
+                                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[11px] font-black uppercase text-[var(--ds-text-3)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>close</span>
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        )}
+
                         {loadingSpecial && specialBookings.length === 0 && (
                           <div className="flex items-center justify-center py-16">
                             <span className="material-symbols-outlined animate-spin text-3xl text-[var(--ds-text-4)]">progress_activity</span>
@@ -2024,6 +2184,12 @@ export default function SchedulePage() {
                           <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--ds-text-4)]">
                             <span className="material-symbols-outlined text-5xl">star</span>
                             <p className="text-sm font-black uppercase">No special room bookings</p>
+                          </div>
+                        )}
+                        {!loadingSpecial && allSp.length > 0 && spActive.length === 0 && spPast.length === 0 && spCancelled.length === 0 && (
+                          <div className="flex flex-col items-center justify-center py-16 gap-3 text-[var(--ds-text-4)]" style={{ animation: 'tab-section-enter 0.3s ease-out' }}>
+                            <span className="material-symbols-outlined text-5xl">filter_alt_off</span>
+                            <p className="text-sm font-black uppercase">{language === 'id' ? 'Tidak ada hasil untuk filter ini' : 'No results match this filter'}</p>
                           </div>
                         )}
                         {!loadingSpecial && allSp.length > 0 && (() => {
@@ -2072,9 +2238,10 @@ export default function SchedulePage() {
                                       })}
                                     </tr>
                                   </thead>
-                                  <tbody>
+                                  <tbody key={spFilterKey}>
                                     {sorted.map((b: Booking, idx: number) => (
-                                      <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] ${idx % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-surface-2)]/50'} ${isCancelled ? 'hover:bg-red-500/5' : isActive ? 'hover:bg-amber-500/5' : 'hover:bg-[var(--ds-bg-raised)]'} transition-colors`}>
+                                      <tr key={b.id} className={`border-b border-[var(--ds-border-sub)] ${idx % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-surface-2)]/50'} ${isCancelled ? 'hover:bg-red-500/5' : isActive ? 'hover:bg-amber-500/5' : 'hover:bg-[var(--ds-bg-raised)]'} transition-colors`}
+                                        style={{ animation: 'tbl-row-enter 0.22s ease-out backwards', animationDelay: `${Math.min(idx * 28, 320)}ms` }}>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                           <span className="text-[12px] font-bold text-[var(--ds-text-2)]">{fmtTableDate(b.start_at, language)}</span>
                                           <span className="text-[var(--ds-text-4)] ml-1 text-[11px]">{fmtTableDay(b.start_at, language)}</span>
@@ -2090,7 +2257,19 @@ export default function SchedulePage() {
                                         </td>
                                         <td className="px-4 py-3 text-[10px] font-bold text-[var(--ds-text-3)] uppercase">{b.user?.department_name ?? ''}</td>
                                         <td className="px-4 py-3 text-[12px] font-black text-[var(--ds-text-1)] max-w-[160px] truncate">{b.title}</td>
-                                        <td className="px-4 py-3 text-[11px] font-bold text-[var(--ds-text-3)]">{b.booked_for || '—'}</td>
+                                        <td className="px-4 py-3 text-[11px] font-bold text-[var(--ds-text-3)]">
+                                          {b.booked_for ? (
+                                            <UserHoverCard name={b.booked_for} userId={b.booked_for_user_id}>
+                                              <span className="cursor-default hover:text-[var(--ds-text-1)] transition-colors">
+                                                {b.booked_for}
+                                                {(() => {
+                                                  const dept = spDirectory.find(d => d.id === b.booked_for_user_id)?.department
+                                                  return dept ? <span className="text-[var(--ds-text-4)]"> / {dept}</span> : null
+                                                })()}
+                                              </span>
+                                            </UserHoverCard>
+                                          ) : '—'}
+                                        </td>
                                         <td className="px-4 py-3">
                                           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${b.status === 'confirmed' ? 'bg-[#adee2b]/20 text-[#3a6800] dark:text-[#adee2b]' : b.status === 'tentative' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-500/15 text-red-600 dark:text-red-400'}`}>
                                             {b.status}
@@ -2142,7 +2321,7 @@ export default function SchedulePage() {
                           )
 
                           return (
-                            <div className="space-y-8">
+                            <div className="space-y-8" key={spFilterKey} style={{ animation: 'tab-section-enter 0.3s ease-out' }}>
                               {spActive.length > 0 && (
                                 <div>
                                   <SectionHeader label="Upcoming & Today" color="text-amber-500" count={spActive.length} />
@@ -2646,15 +2825,14 @@ export default function SchedulePage() {
                       <div className="absolute right-0 top-full mt-2 z-50 rounded-2xl p-4 w-72 dropdown-enter-right"
                         style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                         <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Export all {displaySeriesList.length} series</p>
-                        <label className="flex items-center gap-2.5 cursor-pointer mb-4">
-                          <input type="checkbox" checked={seriesIncludePastAll} onChange={e => setSeriesIncludePastAll(e.target.checked)} className="accent-black w-4 h-4" />
+                        <ElasticCheckbox checked={seriesIncludePastAll} onChange={setSeriesIncludePastAll} color="#000" className="mb-4">
                           <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Include past dates</span>
-                        </label>
+                        </ElasticCheckbox>
                         <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                           <button
                             onClick={() => {
                               const allRebooked = displaySeriesList.flatMap(g => resolvedSkipsForSeries(g.series_id))
-                              const rows = seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll)
+                              const rows = sortRowsByDate(seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll))
                               exportSeriesExcel(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
                               setSeriesExportOpen(false)
                             }}
@@ -2665,7 +2843,7 @@ export default function SchedulePage() {
                           <button
                             onClick={() => {
                               const allRebooked = displaySeriesList.flatMap(g => resolvedSkipsForSeries(g.series_id))
-                              const rows = seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll)
+                              const rows = sortRowsByDate(seriesExportRows([...displaySeriesList.flatMap(g => g.bookings), ...allRebooked], seriesIncludePastAll))
                               exportSeriesPDF(rows, `All Series — ${user?.name ?? ''}`, seriesIncludePastAll, `all-series-${user?.name?.replace(' ', '-').toLowerCase()}`)
                               setSeriesExportOpen(false)
                             }}
@@ -2700,6 +2878,7 @@ export default function SchedulePage() {
                       onCancelSeries={setSeriesCancelTarget}
                       onExport={handleExportSeriesRow}
                       resolvedSkips={resolvedSkips}
+                      isPast={false}
                     />
                   ))}
                   {pastSeriesList.length > 0 && (
@@ -2726,6 +2905,7 @@ export default function SchedulePage() {
                       onCancelSeries={setSeriesCancelTarget}
                       onExport={handleExportSeriesRow}
                       resolvedSkips={resolvedSkips}
+                      isPast={true}
                     />
                   ))}
                 </table>
@@ -2768,21 +2948,18 @@ export default function SchedulePage() {
                       style={{ background: 'var(--ds-glass-bg)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', border: '1px solid var(--ds-glass-border)', boxShadow: 'var(--ds-glass-shadow)' }}>
                       <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)] mb-3">Select groups to export</p>
                       <div className="space-y-2.5 mb-4">
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                          <input type="checkbox" checked={allExportGroups.upcoming} onChange={e => setAllExportGroups(g => ({ ...g, upcoming: e.target.checked }))} className="accent-black w-4 h-4" />
+                        <ElasticCheckbox checked={allExportGroups.upcoming} onChange={v => setAllExportGroups(g => ({ ...g, upcoming: v }))} color="#000">
                           <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Upcoming &amp; Today</span>
                           <span className="text-[11px] font-black text-[var(--ds-text-1)]">{upcomingInAll.length}</span>
-                        </label>
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                          <input type="checkbox" checked={allExportGroups.past} onChange={e => setAllExportGroups(g => ({ ...g, past: e.target.checked }))} className="accent-slate-400 w-4 h-4" />
+                        </ElasticCheckbox>
+                        <ElasticCheckbox checked={allExportGroups.past} onChange={v => setAllExportGroups(g => ({ ...g, past: v }))} color="#94a3b8">
                           <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Past</span>
                           <span className="text-[11px] font-black text-[var(--ds-text-3)]">{pastInAll.length}</span>
-                        </label>
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                          <input type="checkbox" checked={allExportGroups.cancelled} onChange={e => setAllExportGroups(g => ({ ...g, cancelled: e.target.checked }))} className="accent-red-400 w-4 h-4" />
-                          <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Cancelled <span className="text-[9px] font-bold text-[var(--ds-text-4)] normal-case">last 7 days</span></span>
+                        </ElasticCheckbox>
+                        <ElasticCheckbox checked={allExportGroups.cancelled} onChange={v => setAllExportGroups(g => ({ ...g, cancelled: v }))} color="#f87171">
+                          <span className="text-[12px] font-bold text-[var(--ds-text-2)] flex-1">Cancelled <span className="text-[9px] font-bold text-[var(--ds-text-4)] normal-case">last {archiveAfterDays} days</span></span>
                           <span className="text-[11px] font-black text-red-400">{cancelledList.length}</span>
-                        </label>
+                        </ElasticCheckbox>
                       </div>
                       <div className="pt-3 border-t border-[var(--ds-border-sub)] flex items-center gap-1.5">
                         <button
@@ -2810,7 +2987,7 @@ export default function SchedulePage() {
               </div>
               <div className="bg-[var(--ds-bg-surface)] rounded-2xl border border-[var(--ds-border)] overflow-hidden">
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left">
+                <table className="w-full min-w-[880px] text-left">
                   <thead>
                     <tr className="bg-slate-900 border-b border-slate-700">
                       {([
@@ -2820,6 +2997,7 @@ export default function SchedulePage() {
                         { label: 'Room', key: 'room' },
                         { label: 'Title', key: 'title' },
                         { label: 'Description', key: null },
+                        { label: 'For', key: null },
                         { label: 'Status', key: 'status' },
                         { label: 'Type', key: 'type' },
                         { label: '', key: null },
@@ -2852,7 +3030,7 @@ export default function SchedulePage() {
                         <Fragment key={b.id}>
                           {isFirstPast && (
                             <tr className="bg-[var(--ds-bg-surface-2)]">
-                              <td colSpan={9} className="px-4 py-2">
+                              <td colSpan={10} className="px-4 py-2">
                                 <div className="flex items-center gap-3">
                                   <span className="material-symbols-outlined text-[var(--ds-text-3)]" style={{ fontSize: 14 }}>history</span>
                                   <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Past Bookings</span>
@@ -2888,6 +3066,15 @@ export default function SchedulePage() {
                               ? <span className="text-xs text-[var(--ds-text-3)] truncate block max-w-[180px] cursor-default">{b.description}</span>
                               : <span className="text-[var(--ds-text-4)] text-xs">&mdash;</span>
                             }
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {b.booked_for ? (
+                              <UserHoverCard name={b.booked_for} userId={b.booked_for_user_id}>
+                                <span className="text-xs font-bold text-[var(--ds-text-2)] cursor-default hover:text-[var(--ds-text-1)] transition-colors">{b.booked_for}</span>
+                              </UserHoverCard>
+                            ) : (
+                              <span className="text-[var(--ds-text-4)] text-xs">&mdash;</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-col gap-1 items-start">
@@ -2950,7 +3137,7 @@ export default function SchedulePage() {
               {isSecondary && activeTab === 'cancelled' && (
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">
-                    Cancelled bookings within &plusmn;7 days
+                    Cancelled bookings within &plusmn;{archiveAfterDays} days
                   </p>
                   {cancelledList.length > 0 && (
                     <button
@@ -3122,9 +3309,6 @@ export default function SchedulePage() {
       `}</style>
 
       {/* Cancel confirm modal */}
-      {(cancelTarget || clearConfirm || !!seriesCancelTarget) && (
-        <style>{`@keyframes sp-modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
-      )}
       {cancelTarget && (
         <div
           className="fixed inset-0 z-[1000] flex items-center justify-center"
@@ -3132,6 +3316,7 @@ export default function SchedulePage() {
           onClick={() => setCancelTarget(null)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 380,
@@ -3142,7 +3327,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-6">
@@ -3201,6 +3385,7 @@ export default function SchedulePage() {
           onClick={() => setTentativeTarget(null)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 400,
@@ -3211,7 +3396,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-5">
@@ -3289,6 +3473,7 @@ export default function SchedulePage() {
           onClick={() => setSeriesCancelTarget(null)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 400,
@@ -3299,7 +3484,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-5">
@@ -3353,6 +3537,7 @@ export default function SchedulePage() {
           onClick={() => setClearConfirm(false)}
         >
           <div
+            className="modal-pop-in"
             onClick={e => e.stopPropagation()}
             style={{
               width: 380,
@@ -3363,7 +3548,6 @@ export default function SchedulePage() {
               borderRadius: 22,
               boxShadow: 'var(--ds-glass-shadow)',
               padding: 28,
-              animation: 'sp-modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}
           >
             <div className="flex items-center gap-3.5 mb-5">

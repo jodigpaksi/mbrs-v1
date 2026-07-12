@@ -65,10 +65,11 @@ export default function UserProfileModal({ open, onClose }: Props) {
   }
 
   async function handleRemoveAvatar() {
+    if (!user) return
     setRemoving(true); setError(null)
     try {
       await removeAvatar()
-      setUser({ ...user, avatar: undefined })
+      setUser({ ...user, avatar: '' })
     } catch { setError('Remove failed.') }
     finally { setRemoving(false) }
   }
@@ -101,18 +102,11 @@ export default function UserProfileModal({ open, onClose }: Props) {
 
   return createPortal(
     <div className="fixed inset-0 z-[300] flex items-center justify-center">
-      <style>{`
-        @keyframes prof-in {
-          from { opacity: 0; transform: scale(0.96) translateY(8px) }
-          to   { opacity: 1; transform: scale(1) translateY(0) }
-        }
-      `}</style>
-
       {/* Backdrop */}
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.32)' }} onClick={onClose} />
 
       {/* Glass panel */}
-      <div className="relative w-[520px] overflow-hidden"
+      <div className="relative w-[520px] overflow-hidden modal-pop-in"
         style={{
           background: 'var(--ds-glass-bg)',
           backdropFilter: 'blur(48px) saturate(200%)',
@@ -120,7 +114,6 @@ export default function UserProfileModal({ open, onClose }: Props) {
           border: '1px solid var(--ds-glass-border)',
           borderRadius: 28,
           boxShadow: 'var(--ds-glass-shadow)',
-          animation: 'prof-in 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
         }}>
 
         {/* Header */}

@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useQueryClient, useQueries, useMutation } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type { Booking, Building, Room } from '../types/index'
 import { getRooms } from '../api/rooms'
 import { getBookings, updateBooking as updateBookingApi, cancelBooking, cancelSeries, transferBooking as transferBookingApi } from '../api/bookings'
@@ -17,6 +17,7 @@ import ContactReceptionistModal from '../components/room/ContactReceptionistModa
 import AfterHoursModal from '../components/booking/AfterHoursModal'
 import GlassDatePicker from '../components/ui/GlassDatePicker'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
+import WifiLoader from '../components/ui/WifiLoader'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
 import { getDepartments } from '../api/departments'
@@ -87,9 +88,335 @@ type CellDrag = { roomId: number; room: Room; date: Date; startSlot: number; end
 type BarDrag  = { booking: Booking; origStartSlot: number; origSpan: number; offsetSlot: number; deltaSlot: number; origClientX: number; deltaPixels: number }
 type BarResize = { booking: Booking; edge: 'left' | 'right'; origStartSlot: number; origSpan: number; deltaSlot: number; origClientX: number; deltaPixels: number }
 
+// Pure — no closure over component state — hoisted to module scope so WeekDateRow (below) can
+// call them directly without needing a fresh function-prop every render (which would defeat memo).
+function bookingToSlots(b: Booking) {
+  const start = new Date(b.start_at.replace('Z', ''))
+  const end   = new Date(b.end_at.replace('Z', ''))
+  const startSlot = (start.getHours() - HOUR_START) * 2 + (start.getMinutes() >= 30 ? 1 : 0)
+  const endSlot   = (end.getHours() - HOUR_START) * 2 + (end.getMinutes() > 0 ? Math.ceil(end.getMinutes() / 30) : 0)
+  return { startSlot, span: endSlot - startSlot }
+}
+
+// Rounded-rectangle outline path starting/ending at top-center, going clockwise — used to
+// "draw" the recent-booking border animation around a bar of the given pixel size.
+function roundedRectPathFromTopCenter(w: number, h: number, r: number): string {
+  const x0 = 1, y0 = 1, x1 = w - 1, y1 = h - 1
+  return `M ${w / 2} ${y0} L ${x1 - r} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y0 + r} L ${x1} ${y1 - r} A ${r} ${r} 0 0 1 ${x1 - r} ${y1} L ${x0 + r} ${y1} A ${r} ${r} 0 0 1 ${x0} ${y1 - r} L ${x0} ${y0 + r} A ${r} ${r} 0 0 1 ${x0 + r} ${y0} L ${w / 2} ${y0}`
+}
+
+function slotToTimeStr(slot: number): string {
+  const totalMins = HOUR_START * 60 + slot * 30
+  const h = Math.floor(totalMins / 60)
+  const m = totalMins % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function bookingMatchesSearch(b: Booking, q: string): boolean {
+  const s = q.toLowerCase()
+  const fmt = (iso: string) => {
+    const d = new Date(iso.replace('Z', ''))
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  }
+  return [
+    b.title, b.description, b.user?.name, b.user?.department_name,
+    b.user?.email, b.user?.ext, b.type, b.status,
+    fmt(b.start_at), fmt(b.end_at),
+  ].some(v => v && v.toLowerCase().includes(s))
+}
+
+// Memoized per-date row for the "Selected Room" week grid. Extracted so a drag/resize/move
+// (which bumps a `dragTick` counter on every animation frame) only re-renders the ONE row that
+// actually contains the dragged booking, instead of re-reconciling all 7 date rows × N slot
+// cells each frame — this was the main cause of Week view feeling laggy during drag interactions.
+// Custom comparator (not React.memo's default shallow-equal) because `dayBookings` is a freshly
+// filtered array every parent render even when its contents haven't changed.
+interface WeekDateRowProps {
+  d: Date
+  dayIdx: number
+  room: Room
+  dayBookings: Booking[]
+  isTd: boolean
+  isWeekend: boolean
+  search: string
+  showBarTitle: boolean
+  currentUserId: number | undefined
+  nowSlot: number
+  slots: number
+  cellDragActive: boolean
+  cellDragMinSlot: number
+  cellDragMaxSlot: number
+  dragBookingId: number | null
+  dragEdge: 'left' | 'right' | 'move' | null
+  dragOrigStartSlot: number
+  dragOrigSpan: number
+  dragDeltaSlot: number
+  dragDeltaPixels: number
+  cellDragRef: React.MutableRefObject<CellDrag | null>
+  barDragRef: React.MutableRefObject<BarDrag | null>
+  barResizeRef: React.MutableRefObject<BarResize | null>
+  getSlotFromClientX: (clientX: number) => number
+  setDragTick: React.Dispatch<React.SetStateAction<number>>
+  setHoverSlot: (s: number | null) => void
+  setCellCtxMenu: (v: { room: Room | null; slot: number; date: Date; x: number; y: number } | null) => void
+  setCtxMenu: (v: { booking: Booking; x: number; y: number } | null) => void
+  setOtherCtxMenu: (v: { booking: Booking; x: number; y: number } | null) => void
+  showTooltip: (e: React.MouseEvent, booking: Booking) => void
+  hideTooltip: () => void
+}
+
+function weekDateRowPropsEqual(prev: WeekDateRowProps, next: WeekDateRowProps): boolean {
+  if (
+    prev.dayIdx !== next.dayIdx || prev.d.getTime() !== next.d.getTime() || prev.room.id !== next.room.id ||
+    prev.isTd !== next.isTd || prev.isWeekend !== next.isWeekend || prev.search !== next.search ||
+    prev.showBarTitle !== next.showBarTitle || prev.currentUserId !== next.currentUserId ||
+    prev.nowSlot !== next.nowSlot || prev.slots !== next.slots ||
+    prev.cellDragActive !== next.cellDragActive || prev.cellDragMinSlot !== next.cellDragMinSlot || prev.cellDragMaxSlot !== next.cellDragMaxSlot ||
+    prev.dragBookingId !== next.dragBookingId || prev.dragEdge !== next.dragEdge ||
+    prev.dragOrigStartSlot !== next.dragOrigStartSlot || prev.dragOrigSpan !== next.dragOrigSpan ||
+    prev.dragDeltaSlot !== next.dragDeltaSlot || prev.dragDeltaPixels !== next.dragDeltaPixels
+  ) return false
+  if (prev.dayBookings.length !== next.dayBookings.length) return false
+  for (let i = 0; i < prev.dayBookings.length; i++) {
+    const a = prev.dayBookings[i], b = next.dayBookings[i]
+    if (a.id !== b.id || a.start_at !== b.start_at || a.end_at !== b.end_at || a.status !== b.status || a.title !== b.title) return false
+  }
+  return true
+}
+
+const WeekDateRow = memo(function WeekDateRow(props: WeekDateRowProps) {
+  const {
+    d, room, dayBookings, isTd, isWeekend, search, showBarTitle, currentUserId, nowSlot, slots,
+    cellDragActive, cellDragMinSlot, cellDragMaxSlot,
+    dragBookingId, dragEdge, dragOrigStartSlot, dragOrigSpan, dragDeltaSlot, dragDeltaPixels,
+    cellDragRef, barDragRef, barResizeRef, getSlotFromClientX, setDragTick, setHoverSlot,
+    setCellCtxMenu, setCtxMenu, setOtherCtxMenu, showTooltip, hideTooltip,
+  } = props
+  const { language } = useSettings()
+
+  return (
+    <div className={`flex group/row relative border-b border-[var(--ds-border-sub)] ${isWeekend ? 'hover:bg-[var(--ds-bg-surface-2)]' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
+      {/* Date label — sticky */}
+      <div
+        className={`shrink-0 flex flex-col items-center justify-center px-3 border-r-2 sticky left-0 z-20 ${isTd ? 'bg-[color-mix(in_srgb,var(--ds-bg-surface),#adee2b_15%)]' : 'bg-[var(--ds-bg-surface)]'} border-[var(--ds-border)]`}
+        style={{ width: ROOM_W, height: CELL_H }}
+      >
+        <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
+          {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' })}
+        </span>
+        <span className={`text-[13px] font-black ${isTd ? 'text-lime-600 dark:text-lime-400' : 'text-[var(--ds-text-1)]'}`}>
+          {d.getDate()} {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'short' })}
+        </span>
+      </div>
+
+      {/* Slots */}
+      <div className="flex-1 relative" style={{ height: CELL_H }} onMouseLeave={() => setHoverSlot(null)}>
+        <div className="flex h-full absolute inset-0">
+          {Array.from({ length: slots }, (_, s) => {
+            const isCellSel = cellDragActive && s >= cellDragMinSlot && s <= cellDragMaxSlot
+            return (
+              <div key={s}
+                className={`shrink-0 border-r border-[var(--ds-border-sub)] transition-colors cursor-cell
+                  ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#adee2b]/5'}
+                  ${(s + 1) % 2 === 0 ? 'border-r-[var(--ds-border)]' : ''}`}
+                style={{ width: SLOT_W, height: CELL_H }}
+                onMouseEnter={() => setHoverSlot(s)}
+                onMouseDown={e => {
+                  if (e.button !== 0) return
+                  e.preventDefault()
+                  const s2 = getSlotFromClientX(e.clientX)
+                  cellDragRef.current = { roomId: room.id, room, date: d, startSlot: s2, endSlot: s2 }
+                  setDragTick(t => t + 1)
+                }}
+                onContextMenu={e => {
+                  if (e.ctrlKey) return
+                  e.preventDefault()
+                  const slot = getSlotFromClientX(e.clientX)
+                  setCellCtxMenu({ room, slot, date: d, x: e.clientX, y: e.clientY })
+                }}
+              />
+            )
+          })}
+        </div>
+
+        {/* Booking bars */}
+        {dayBookings.map((b: Booking) => {
+          const isMe = b.user_id === currentUserId
+          const matchesSearch = !search || bookingMatchesSearch(b, search)
+          const isDragging = dragBookingId === b.id
+
+          let { startSlot, span } = bookingToSlots(b)
+          let fracPx = 0, resizeFracW = 0, resizeFracX = 0
+
+          if (isDragging && dragEdge === 'move') {
+            startSlot = Math.max(0, Math.min(slots - dragOrigSpan, dragOrigStartSlot + dragDeltaSlot))
+            span = dragOrigSpan
+            fracPx = dragDeltaPixels - dragDeltaSlot * SLOT_W
+          } else if (isDragging && dragEdge === 'right') {
+            span = Math.max(1, dragOrigSpan + dragDeltaSlot)
+            resizeFracW = dragDeltaPixels - dragDeltaSlot * SLOT_W
+          } else if (isDragging && dragEdge === 'left') {
+            const origStart = dragOrigStartSlot
+            const delta = Math.max(-(slots - origStart - dragOrigSpan), Math.min(dragOrigSpan - 1, dragDeltaSlot))
+            startSlot = Math.max(0, origStart - delta)
+            span = Math.max(1, dragOrigSpan + delta)
+            const f = Math.max(0, -dragDeltaPixels - dragDeltaSlot * SLOT_W)
+            resizeFracW = f
+            resizeFracX = -f
+          }
+
+          const left = startSlot * SLOT_W + fracPx + resizeFracX
+          const width = span * SLOT_W + resizeFracW
+
+          let startS = startSlot, endS = startSlot + span
+          if (isDragging && dragEdge === 'move') {
+            startS = Math.max(0, dragOrigStartSlot + dragDeltaSlot)
+            endS = startS + dragOrigSpan
+          } else if (isDragging && dragEdge === 'right') {
+            startS = dragOrigStartSlot
+            endS = Math.max(dragOrigStartSlot + 1, dragOrigStartSlot + dragOrigSpan + dragDeltaSlot)
+          } else if (isDragging && dragEdge === 'left') {
+            const dd = Math.max(-(slots - dragOrigStartSlot - dragOrigSpan), Math.min(dragOrigSpan - 1, dragDeltaSlot))
+            startS = Math.max(0, dragOrigStartSlot - dd)
+            endS = dragOrigStartSlot + dragOrigSpan + dd
+          }
+
+          return (
+            <div key={b.id} className="absolute top-0 z-10"
+              style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined }}
+              onContextMenu={e => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (isMe) setCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+                else setOtherCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
+              }}>
+              <BookingBar
+                booking={b}
+                onMouseEnter={showTooltip}
+                onMouseLeave={hideTooltip}
+                isMe={isMe}
+                isDragging={isDragging}
+                showTitle={showBarTitle}
+                onBarMouseDown={isMe ? (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  hideTooltip()
+                  const { startSlot: ss, span: sp } = bookingToSlots(b)
+                  const mouseSlot = getSlotFromClientX(e.clientX)
+                  barDragRef.current = {
+                    booking: b,
+                    origStartSlot: ss,
+                    origSpan: sp,
+                    offsetSlot: mouseSlot - ss,
+                    deltaSlot: 0,
+                    origClientX: e.clientX,
+                    deltaPixels: 0,
+                  }
+                  setDragTick(t => t + 1)
+                } : undefined}
+                onResizeMouseDown={isMe ? (e, edge) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  hideTooltip()
+                  const { startSlot: ss, span: sp } = bookingToSlots(b)
+                  barResizeRef.current = {
+                    booking: b, edge,
+                    origStartSlot: ss,
+                    origSpan: sp,
+                    deltaSlot: 0,
+                    origClientX: e.clientX,
+                    deltaPixels: 0,
+                  }
+                  setDragTick(t => t + 1)
+                } : undefined}
+              />
+              {isDragging && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                  <div style={{ background: 'rgba(8,12,28,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 99, padding: '2px 10px', whiteSpace: 'nowrap' }}>
+                    <span className="text-white text-[9px] font-black">
+                      {slotToTimeStr(Math.max(0, startS))} &ndash; {slotToTimeStr(Math.min(slots, endS))}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Now line */}
+        {isTd && nowSlot > 0 && nowSlot < slots && (
+          <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-15" style={{ left: nowSlot * SLOT_W }} />
+        )}
+
+        {/* Cell drag selection overlay */}
+        {cellDragActive && (
+          <div
+            className="absolute top-2 bottom-2 bg-[#adee2b]/40 border-2 border-[#adee2b] rounded-xl pointer-events-none z-10 transition-none"
+            style={{ left: cellDragMinSlot * SLOT_W + 2, width: (cellDragMaxSlot - cellDragMinSlot + 1) * SLOT_W - 4 }}
+          >
+            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-black text-black/70 whitespace-nowrap">
+              {slotToTimeStr(cellDragMinSlot)} &ndash; {slotToTimeStr(cellDragMaxSlot + 1)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}, weekDateRowPropsEqual)
+
+// Glass context-menu shell that measures itself and flips up/left when the click point is too near
+// the viewport edge — so a menu opened low on screen opens UPWARD instead of being clipped by (or
+// hidden behind) the footer. Rendered invisibly for one frame while measuring to avoid a jump.
+function ContextMenuShell({ x, y, width = 200, onClose, children }: {
+  x: number; y: number; width?: number; onClose: () => void; children: React.ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const M = 12 // keep this clear of every viewport edge (incl. the bottom footer strip)
+    let left = x
+    let top = y
+    if (left + rect.width > window.innerWidth - M) left = Math.max(M, x - rect.width)
+    if (top + rect.height > window.innerHeight - M) {
+      // Doesn't fit below the cursor — anchor the menu's BOTTOM at the cursor (open upward).
+      top = Math.max(M, y - rect.height)
+    }
+    setPos({ left, top })
+  }, [x, y])
+  return (
+    <div className="fixed inset-0 z-[990]" onClick={onClose} onContextMenu={e => { e.preventDefault(); onClose() }}>
+      <div
+        ref={ref}
+        className="ctx-pop-in"
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'absolute',
+          left: pos?.left ?? x,
+          top: pos?.top ?? y,
+          minWidth: width,
+          background: 'var(--ds-glass-bg)',
+          backdropFilter: 'blur(48px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(48px) saturate(180%)',
+          border: '1px solid var(--ds-glass-border)',
+          borderRadius: 14,
+          boxShadow: 'var(--ds-glass-shadow)',
+          padding: 5,
+          transformOrigin: 'top left',
+          visibility: pos ? 'visible' : 'hidden',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function TimelinePage() {
   const { user } = useAuth()
-  const { defaultView, startDay, defaultBuilding, showBarTitle, t } = useSettings()
+  const { defaultView, startDay, defaultBuilding, showBarTitle, language, t } = useSettings()
   const { saturday: wkSat, sunday: wkSun } = useWeekendSettings()
   const queryClient = useQueryClient()
   const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
@@ -100,12 +427,44 @@ export default function TimelinePage() {
     return h ? parseInt(h) : null
   })
   const highlightRef = useRef<HTMLDivElement | null>(null)
+  // "Your recent booking" — separate from highlightId (which is for notification/search-click
+  // navigation, uses the URL and always shows the full 4x pulse). Marks whichever booking this
+  // user most recently created OR edited. Persisted to localStorage (keyed per-user, not tied to
+  // the account server-side) so it survives page/menu/day navigation and even logout+login on
+  // the same device — the border-draw + badge CSS animations naturally replay every time the
+  // matching bar's DOM node remounts, since we never auto-clear this state on a timer.
+  const [justCreatedId, setJustCreatedId] = useState<number | null>(null)
+  const lastActionKey = user ? `mrbs_last_action_booking_${user.id}` : null
+  useEffect(() => {
+    if (!lastActionKey) return
+    const saved = localStorage.getItem(lastActionKey)
+    if (saved) setJustCreatedId(parseInt(saved))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastActionKey])
+  function markLastAction(id?: number) {
+    if (!id || !lastActionKey) return
+    localStorage.setItem(lastActionKey, String(id))
+    setJustCreatedId(id)
+  }
+  // Dismissing only hides it for the current view — deliberately NOT cleared from localStorage/
+  // justCreatedId, so navigating away and back still replays it (this is just a "stop bothering
+  // me right now" for this one look, not "forget this ever happened").
+  const [dismissedRecentIds, setDismissedRecentIds] = useState<Set<number>>(new Set())
+  function dismissRecentBadge(id: number) {
+    setDismissedRecentIds(prev => new Set(prev).add(id))
+  }
   const [currentDate, setCurrentDate] = useState(() => {
     const d = searchParams.get('date')
     if (d) { const [y, m, day] = d.split('-').map(Number); return new Date(y, m - 1, day) }
     return new Date()
   })
   const [location, setLocation] = useState<Building | null>(null)
+  // Let the global Navbar search know which building is currently selected here, so its
+  // Room results can be scoped to it too — CustomEvent (not shared state/context) to match
+  // this codebase's existing cross-component convention (see CLAUDE.md).
+  useEffect(() => {
+    document.dispatchEvent(new CustomEvent('building-filter-changed', { detail: location?.id ?? null }))
+  }, [location])
   const [deptFilter, setDeptFilter] = useState('')
   const [deptSearch, setDeptSearch] = useState('')
   const [search, setSearch] = useState('')
@@ -125,19 +484,30 @@ export default function TimelinePage() {
   const [roomHover, setRoomHover] = useState<{ room: Room; x: number; y: number } | null>(null)
   const roomHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [roomHoverPhotoIdx, setRoomHoverPhotoIdx] = useState(0)
-  const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [toastCountdown, setToastCountdown] = useState<number | null>(null)
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cancelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Stacked toasts — each cancel/series-cancel/info message gets its own entry (keyed by id) so
+  // multiple can be in flight at once (e.g. cancelling several bookings in quick succession),
+  // instead of one overwriting another. `countdown === null` means a plain auto-dismissing info
+  // toast; otherwise it's an undoable cancel with its own timer tracked in toastTimers.
+  interface TlToast { id: string; msg: string; countdown: number | null; kind: 'cancel' | 'series-cancel' | 'info' }
+  const [toasts, setToasts] = useState<TlToast[]>([])
+  const toastTimers = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; interval?: ReturnType<typeof setInterval> }>>(new Map())
+  function addInfoToast(msg: string, duration = 3500) {
+    const id = `info-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setToasts(prev => [...prev, { id, msg, countdown: null, kind: 'info' }])
+    const timer = setTimeout(() => removeToast(id), duration)
+    toastTimers.current.set(id, { timer })
+  }
+  function removeToast(id: string) {
+    const t = toastTimers.current.get(id)
+    if (t) { clearTimeout(t.timer); if (t.interval) clearInterval(t.interval); toastTimers.current.delete(id) }
+    setToasts(prev => prev.filter(x => x.id !== id))
+  }
   const [ctxMenu, setCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [otherCtxMenu, setOtherCtxMenu] = useState<{ booking: Booking; x: number; y: number } | null>(null)
   const [cellCtxMenu, setCellCtxMenu] = useState<{ room: Room | null; slot: number; date: Date; x: number; y: number } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
   const [transferBooking, setTransferBooking] = useState<Booking | null>(null)
   const [seriesCancelTarget, setSeriesCancelTarget] = useState<Booking | null>(null)
-  const [pendingSeriesId, setPendingSeriesId] = useState<{ seriesId: string; title: string; count: number } | null>(null)
-  const seriesCancelTimerRef = useRef<{ timer: ReturnType<typeof setTimeout>; interval: ReturnType<typeof setInterval> } | null>(null)
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>(() => defaultView)
   const [ganttKey, setGanttKey] = useState(0)
   const [ganttAnim, setGanttAnim] = useState<'left' | 'right' | 'up' | 'fade' | 'none'>('none')
@@ -161,7 +531,7 @@ export default function TimelinePage() {
   const cellDragRef = useRef<CellDrag | null>(null)
   const barDragRef  = useRef<BarDrag | null>(null)
   const barResizeRef = useRef<BarResize | null>(null)
-  const [dragTick, setDragTick] = useState(0)
+  const [, setDragTick] = useState(0)
   const [hoverSlot, setHoverSlot] = useState<number | null>(null)
   const mainRef = useRef<HTMLElement>(null)
 
@@ -199,13 +569,6 @@ export default function TimelinePage() {
   const slots = (HOUR_END - HOUR_START) * 2
 
   // Slot ↔ time conversions (captured fresh each time via closure)
-  function slotToTimeStr(slot: number): string {
-    const totalMins = HOUR_START * 60 + slot * 30
-    const h = Math.floor(totalMins / 60)
-    const m = totalMins % 60
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-  }
-
   function slotToDateTimeStr(date: Date, slot: number): string {
     const y  = date.getFullYear()
     const mo = String(date.getMonth() + 1).padStart(2, '0')
@@ -328,51 +691,29 @@ export default function TimelinePage() {
         }
       }
 
-      function slotOverlaps(ns: number, ne: number, roomId: number, excludeId: number, all: Booking[]) {
-        return all.some(o => {
-          if (o.id === excludeId || o.room_id !== roomId || o.status === 'cancelled') return false
-          const s = new Date(o.start_at.replace('Z', ''))
-          const e = new Date(o.end_at.replace('Z', ''))
-          const os = (s.getHours() - HOUR_START) * 2 + (s.getMinutes() >= 30 ? 1 : 0)
-          const oe = (e.getHours() - HOUR_START) * 2 + (e.getMinutes() > 0 ? Math.ceil(e.getMinutes() / 30) : 0)
-          return ns < oe && ne > os
-        })
-      }
-
       const bd = barDragRef.current
       const br = barResizeRef.current
       // Move/resize apply to the booking's own date (may differ from currentDate in the
       // per-room week grid, where each row is a different date sharing one time header).
       const activeDate = bd ? new Date(bd.booking.start_at.replace('Z', '')) : br ? new Date(br.booking.start_at.replace('Z', '')) : currentDate
       const dStr = toLocalDateStr(activeDate)
-      const needsCheck = (bd && bd.deltaSlot !== 0) || (br && br.deltaSlot !== 0)
-      const allBkgs: Booking[] = needsCheck
-        ? await queryClient.fetchQuery({ queryKey: ['bookings', dStr], queryFn: () => getBookings({ date: dStr }), staleTime: 0 })
-        : (queryClient.getQueryData(['bookings', dStr]) as Booking[]) ?? []
+      // Conflict checking is done server-side (BookingController::update() returns 422 on overlap)
+      // — no client-side pre-check fetchQuery here, since that was a second full round-trip before
+      // the actual save on every move/resize, which is the dominant cost under TiDB cross-region latency.
 
       if (bd && bd.deltaSlot !== 0) {
         const newStart = bd.origStartSlot + bd.deltaSlot
         const newEnd   = newStart + bd.origSpan
-        if (slotOverlaps(newStart, newEnd, bd.booking.room_id, bd.booking.id, allBkgs)) {
-          setToastMsg('Slot occupied — move cancelled')
-          if (toastTimer.current) clearTimeout(toastTimer.current)
-          toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-        } else {
-          try {
-            await updateBookingApi(bd.booking.id, {
-              start_at: slotToDateTimeStr(activeDate, newStart),
-              end_at:   slotToDateTimeStr(activeDate, newEnd),
-            })
-            queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
-            setToastMsg('Booking moved successfully')
-            if (toastTimer.current) clearTimeout(toastTimer.current)
-            toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
-          } catch (err: unknown) {
-            const status = (err as { response?: { status?: number } })?.response?.status
-            setToastMsg(status === 422 ? 'Slot occupied — move cancelled' : 'Failed to move booking')
-            if (toastTimer.current) clearTimeout(toastTimer.current)
-            toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-          }
+        try {
+          await updateBookingApi(bd.booking.id, {
+            start_at: slotToDateTimeStr(activeDate, newStart),
+            end_at:   slotToDateTimeStr(activeDate, newEnd),
+          })
+          queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
+          addInfoToast('Booking moved successfully', 3500)
+        } catch (err: unknown) {
+          const status = (err as { response?: { status?: number } })?.response?.status
+          addInfoToast(status === 422 ? 'Slot occupied — move cancelled' : 'Failed to move booking', 3000)
         }
       }
       if (bd) { barDragRef.current = null; setDragTick(t => t + 1) }
@@ -383,26 +724,16 @@ export default function TimelinePage() {
         if (br.edge === 'right') newEnd   += br.deltaSlot
         else                     newStart -= br.deltaSlot
         if (newEnd > newStart && newStart >= 0 && newEnd <= slots) {
-          if (slotOverlaps(newStart, newEnd, br.booking.room_id, br.booking.id, allBkgs)) {
-            setToastMsg('Slot occupied — resize cancelled')
-            if (toastTimer.current) clearTimeout(toastTimer.current)
-            toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-          } else {
-            try {
-              await updateBookingApi(br.booking.id, {
-                start_at: slotToDateTimeStr(activeDate, newStart),
-                end_at:   slotToDateTimeStr(activeDate, newEnd),
-              })
-              queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
-              setToastMsg('Booking resized successfully')
-              if (toastTimer.current) clearTimeout(toastTimer.current)
-              toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
-            } catch (err: unknown) {
-              const status = (err as { response?: { status?: number } })?.response?.status
-              setToastMsg(status === 422 ? 'Slot occupied — resize cancelled' : 'Failed to resize booking')
-              if (toastTimer.current) clearTimeout(toastTimer.current)
-              toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
-            }
+          try {
+            await updateBookingApi(br.booking.id, {
+              start_at: slotToDateTimeStr(activeDate, newStart),
+              end_at:   slotToDateTimeStr(activeDate, newEnd),
+            })
+            queryClient.invalidateQueries({ queryKey: ['bookings', dStr] })
+            addInfoToast('Booking resized successfully', 3500)
+          } catch (err: unknown) {
+            const status = (err as { response?: { status?: number } })?.response?.status
+            addInfoToast(status === 422 ? 'Slot occupied — resize cancelled' : 'Failed to resize booking', 3000)
           }
         }
       }
@@ -462,13 +793,18 @@ export default function TimelinePage() {
       { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
       { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
       { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
-    ], { duration: 4000, easing: 'ease-in-out' })
+      { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
+      { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
+      { outline: '2px solid #adee2b',     boxShadow: '0 0 0 8px rgba(173,238,43,0.5)' },
+      { outline: '2px solid transparent', boxShadow: '0 0 0 0 rgba(173,238,43,0)' },
+    ], { duration: 8000, easing: 'ease-in-out' })
     const t = setTimeout(() => {
       setHighlightId(null)
       setSearchParams(p => { p.delete('highlight'); p.delete('date'); return p }, { replace: true })
-    }, 4100)
+    }, 8100)
     return () => clearTimeout(t)
   }, [highlightId, highlightRef.current])
+
 
   const { data: rooms = [], isLoading: roomsLoading } = useQuery({ queryKey: ['rooms'], queryFn: getRooms })
   const { data: departments = [] } = useQuery<Department[]>({
@@ -477,10 +813,14 @@ export default function TimelinePage() {
     staleTime: 5 * 60_000,
   })
 
+  // staleTime is generous (not the old 3s) because Reverb already invalidates ['bookings'] /
+  // ['bookings-month'] on every real BookingChanged event (see useBookingRealtime) — a short
+  // staleTime here just meant switching day/week/month re-fetched from the server on almost every
+  // click instead of reusing what's already correct in cache.
   const { data: bookings = [], isLoading: bookingsLoading } = useQuery({
     queryKey: ['bookings', dateStr],
     queryFn: () => getBookings({ date: dateStr }),
-    staleTime: 3_000,
+    staleTime: 60_000,
   })
 
   // Week view
@@ -498,15 +838,22 @@ export default function TimelinePage() {
     })
   }, [currentDate, startDay])
 
-  const weekResults = useQueries({
-    queries: weekDates.map(d => ({
-      queryKey: ['bookings', toLocalDateStr(d)],
-      queryFn: () => getBookings({ date: toLocalDateStr(d) }),
-      enabled: viewMode === 'week',
-      staleTime: 10_000,
-    }))
+  // One range request for the whole week instead of 7 separate day requests — on the dev server
+  // (php artisan serve is single-threaded) those 7 "parallel" fetches were actually queued and
+  // processed one at a time, each paying full Laravel bootstrap cost. A single request pays that
+  // cost once; the per-day split happens client-side below.
+  const weekFrom = toLocalDateStr(weekDates[0])
+  const weekTo   = toLocalDateStr(weekDates[6])
+  const { data: weekBookings = [], isLoading: weekLoading } = useQuery({
+    queryKey: ['bookings', weekFrom, weekTo],
+    queryFn: () => getBookings({ date_from: weekFrom, date_to: weekTo }),
+    enabled: viewMode === 'week',
+    staleTime: 60_000,
   })
-  const weekData: Booking[][] = weekResults.map(r => (r.data as Booking[]) ?? [])
+  const weekData: Booking[][] = useMemo(() => weekDates.map(d => {
+    const ds = toLocalDateStr(d)
+    return (weekBookings as Booking[]).filter(b => toLocalDateStr(new Date(b.start_at.replace('Z', ''))) === ds)
+  }), [weekDates, weekBookings])
 
   // Month view data
   const monthFrom = toLocalDateStr(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1))
@@ -515,23 +862,82 @@ export default function TimelinePage() {
     queryKey: ['bookings-month', monthFrom, monthTo],
     queryFn: () => getBookings({ date_from: monthFrom, date_to: monthTo }),
     enabled: viewMode === 'month',
-    staleTime: 3_000,
+    staleTime: 60_000,
   })
+
+  // Month-view grid — was previously computed inline in the render body on every render (hover,
+  // drag, toast, anything), redoing an O(cells × rooms + cells × bookings) pass each time. Now it
+  // only recomputes when the data it actually depends on changes.
+  const monthGrid = useMemo(() => {
+    const year  = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay  = new Date(year, month + 1, 0)
+    const startOffset = startDay === 'sun' ? firstDay.getDay() : (firstDay.getDay() + 6) % 7
+    const gridStart = new Date(firstDay)
+    gridStart.setDate(1 - startOffset)
+    const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7
+    const todayStr = toLocalDateStr(new Date())
+
+    const bkgs = (monthBookings as Booking[]).filter(b => !location || b.room?.building_id === location.id)
+    const eligibleRooms = (rooms as Room[]).filter(r => !r.requires_contact && (!location || r.building_id === location.id))
+    const totalCapacityMins = eligibleRooms.length * (HOUR_END - HOUR_START) * 60
+    const eligibleRoomIds = new Set(eligibleRooms.map(r => r.id))
+    const maintenanceRoomIds = new Set(eligibleRooms.filter(r => r.status === 'maintenance').map(r => r.id))
+
+    const cells = Array.from({ length: totalCells }, (_, i) => {
+      const cellDate = new Date(gridStart)
+      cellDate.setDate(gridStart.getDate() + i)
+      const isCurrentMonth = cellDate.getMonth() === month
+      const cellStr = toLocalDateStr(cellDate)
+      const isTodayCell = cellStr === todayStr
+      const isPast = cellStr < todayStr
+      const cellDow = cellDate.getDay()
+      const isCellWeekend = (cellDow === 6 && wkSat) || (cellDow === 0 && wkSun)
+
+      const dayBkgs = bkgs.filter(b => {
+        const s = new Date(b.start_at.replace('Z', ''))
+        return toLocalDateStr(s) === cellStr && b.status !== 'cancelled'
+      })
+      const myBkgs = dayBkgs.filter(b => b.user_id === user?.id)
+      const otherBkgs = dayBkgs.filter(b => b.user_id !== user?.id)
+      const visibleBkgs = dayBkgs.slice(0, 6)
+      const overflow = dayBkgs.length - 6
+
+      let usagePct = 0
+      if (isCurrentMonth && !isPast && totalCapacityMins > 0) {
+        let totalBookedMins = 0
+        eligibleRooms.forEach(r => {
+          if (maintenanceRoomIds.has(r.id)) totalBookedMins += (HOUR_END - HOUR_START) * 60
+        })
+        dayBkgs.forEach(b => {
+          if (!eligibleRoomIds.has(b.room_id) || maintenanceRoomIds.has(b.room_id)) return
+          const s = new Date(b.start_at.replace('Z', ''))
+          const e = new Date(b.end_at.replace('Z', ''))
+          const sMins = Math.max(s.getHours() * 60 + s.getMinutes(), HOUR_START * 60)
+          const eMins = Math.min(e.getHours() * 60 + e.getMinutes(), HOUR_END * 60)
+          totalBookedMins += Math.max(0, eMins - sMins)
+        })
+        usagePct = Math.min(100, Math.round(totalBookedMins / totalCapacityMins * 100))
+      }
+      const usageColor = usagePct >= 80 ? '#ef4444' : usagePct >= 50 ? '#f59e0b' : '#adee2b'
+      const showUsage = isCurrentMonth && !isPast && totalCapacityMins > 0
+
+      return {
+        cellDate, isCurrentMonth, isTodayCell, cellStr, isPast, isCellWeekend,
+        dayBkgs, myBkgs, otherBkgs, visibleBkgs, overflow, usagePct, usageColor, showUsage,
+      }
+    })
+
+    return { cells, eligibleRoomsCount: eligibleRooms.length }
+  }, [currentDate, startDay, monthBookings, location, rooms, wkSat, wkSun, user?.id])
 
   const today = new Date()
   const isToday = currentDate.toDateString() === today.toDateString()
   const nowSlot = ((today.getHours() - HOUR_START) * 60 + today.getMinutes()) / 30
 
   function fmtDate(d: Date) {
-    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()
-  }
-
-  function bookingToSlots(b: Booking) {
-    const start = new Date(b.start_at.replace('Z', ''))
-    const end   = new Date(b.end_at.replace('Z', ''))
-    const startSlot = (start.getHours() - HOUR_START) * 2 + (start.getMinutes() >= 30 ? 1 : 0)
-    const endSlot   = (end.getHours() - HOUR_START) * 2 + (end.getMinutes() > 0 ? Math.ceil(end.getMinutes() / 30) : 0)
-    return { startSlot, span: endSlot - startSlot }
+    return d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()
   }
 
   function isRoomOccupied(room: Room): boolean {
@@ -549,23 +955,10 @@ export default function TimelinePage() {
     .filter(n => n.toLowerCase().includes(deptSearch.toLowerCase()))
 
   const allVisibleBookings: Booking[] = viewMode === 'week'
-    ? weekResults.flatMap(r => (r.data || []) as Booking[])
+    ? weekBookings as Booking[]
     : viewMode === 'month'
     ? monthBookings as Booking[]
     : bookings as Booking[]
-
-  function bookingMatchesSearch(b: Booking, q: string): boolean {
-    const s = q.toLowerCase()
-    const fmt = (iso: string) => {
-      const d = new Date(iso.replace('Z', ''))
-      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-    }
-    return [
-      b.title, b.description, b.user?.name, b.user?.department_name,
-      b.user?.email, b.user?.ext, b.type, b.status,
-      fmt(b.start_at), fmt(b.end_at),
-    ].some(v => v && v.toLowerCase().includes(s))
-  }
 
   const filteredRooms = (rooms as Room[]).filter((r: Room) => {
     if (location && r.building_id !== location.id) return false
@@ -587,6 +980,9 @@ export default function TimelinePage() {
   }
 
   const showTooltip = useCallback((e: React.MouseEvent, booking: Booking) => {
+    // Never show the hover tooltip while a drag/move/resize is in progress — it would
+    // otherwise cover the bar being manipulated.
+    if (cellDragRef.current || barDragRef.current || barResizeRef.current) return
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current)
     setTooltip({ booking, pos: { x: e.clientX, y: e.clientY }, visible: true })
   }, [])
@@ -597,7 +993,7 @@ export default function TimelinePage() {
 
   const canBookDirectly = (room: Room) => {
     if (!room.requires_contact) return true
-    return user?.role === 'admin' || user?.role === 'receptionist' || user?.department === 'GAA'
+    return user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin' || user?.department === 'GAA'
   }
 
   function openBookingForRoom(room: Room) {
@@ -619,9 +1015,7 @@ export default function TimelinePage() {
     onSuccess: (_, toUserId) => {
       const person = directory.find(d => d.id === toUserId)
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      setToastMsg(`Booking transferred to ${person?.name ?? 'new user'}`)
-      if (toastTimer.current) clearTimeout(toastTimer.current)
-      toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
+      addInfoToast(`Booking transferred to ${person?.name ?? 'new user'}`, 2500)
       setTransferBooking(null)
       setTransferSearch('')
     },
@@ -638,31 +1032,22 @@ export default function TimelinePage() {
     const booking = cancelTarget
     setCancelTarget(null)
 
+    const id = `cancel-${booking.id}-${Date.now()}`
     let count = 5
-    setToastMsg(`"${booking.title}" cancelled`)
-    setToastCountdown(count)
-    if (cancelIntervalRef.current) clearInterval(cancelIntervalRef.current)
-    if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current)
+    setToasts(prev => [...prev, { id, msg: `"${booking.title}" cancelled`, countdown: count, kind: 'cancel' }])
 
-    cancelIntervalRef.current = setInterval(() => {
+    const interval = setInterval(() => {
       count -= 1
-      setToastCountdown(count)
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, countdown: count } : t))
     }, 1000)
 
-    cancelTimerRef.current = setTimeout(async () => {
-      clearInterval(cancelIntervalRef.current!)
-      setToastCountdown(null)
-      setToastMsg(null)
+    const timer = setTimeout(async () => {
+      toastTimers.current.delete(id)
+      setToasts(prev => prev.filter(t => t.id !== id))
       await cancelBooking(booking.id)
       queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
     }, 5000)
-  }
-
-  function undoCancel() {
-    if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current)
-    if (cancelIntervalRef.current) clearInterval(cancelIntervalRef.current)
-    setToastMsg(null)
-    setToastCountdown(null)
+    toastTimers.current.set(id, { timer, interval })
   }
 
   function confirmSeriesCancel(target: Booking) {
@@ -671,49 +1056,64 @@ export default function TimelinePage() {
     const allBookings = queryClient.getQueryData<Booking[]>(['bookings', dateStr]) ?? []
     const seriesBookings = allBookings.filter(b => b.series_id === target.series_id && b.status !== 'cancelled')
     const count = seriesBookings.length || 1
-    setPendingSeriesId({ seriesId: target.series_id, title: target.title, count })
-    if (seriesCancelTimerRef.current) {
-      clearTimeout(seriesCancelTimerRef.current.timer)
-      clearInterval(seriesCancelTimerRef.current.interval)
-    }
+
+    const id = `series-${target.series_id}-${Date.now()}`
     let c = 5
-    setToastMsg(`"${target.title}" series (${count} bookings) will be cancelled`)
-    setToastCountdown(c)
+    setToasts(prev => [...prev, { id, msg: `"${target.title}" series (${count} bookings) will be cancelled`, countdown: c, kind: 'series-cancel' }])
+
     const interval = setInterval(() => {
       c -= 1
-      setToastCountdown(c)
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, countdown: c } : t))
     }, 1000)
     const timer = setTimeout(async () => {
-      clearInterval(interval)
-      seriesCancelTimerRef.current = null
-      setPendingSeriesId(null)
-      setToastMsg(null)
-      setToastCountdown(null)
+      toastTimers.current.delete(id)
+      setToasts(prev => prev.filter(t => t.id !== id))
       await cancelSeries(target.series_id!)
       queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
     }, 5000)
-    seriesCancelTimerRef.current = { timer, interval }
+    toastTimers.current.set(id, { timer, interval })
   }
 
-  function undoSeriesCancel() {
-    if (seriesCancelTimerRef.current) {
-      clearTimeout(seriesCancelTimerRef.current.timer)
-      clearInterval(seriesCancelTimerRef.current.interval)
-      seriesCancelTimerRef.current = null
-    }
-    setPendingSeriesId(null)
-    setToastMsg(null)
-    setToastCountdown(null)
+  function undoToast(id: string) {
+    removeToast(id)
   }
 
   const VIEW_ORDER = { day: 0, week: 1, month: 2 } as const
-  const ganttAnimCSS: Record<string, string> = {
-    left:  'gantt-enter-left 0.2s cubic-bezier(0.4,0,0.2,1) both',
-    right: 'gantt-enter-right 0.2s cubic-bezier(0.4,0,0.2,1) both',
-    up:    'gantt-enter-up 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
-    fade:  'gantt-enter-fade 0.18s ease both',
-    none:  '',
+
+  // Gantt view-switch animation — played via the Web Animations API directly on whichever <main>
+  // is currently mounted, instead of the old `key={ganttKey}` approach (which forced React to
+  // unmount+remount the entire grid — expensive for Month's ~40 cells / Week's 7 full columns —
+  // just to get a fresh element for the CSS `animation` property to attach to). Same visual
+  // result, without the destructive remount: the element stays mounted, we just replay its
+  // transform/opacity from the "entering" state to settled.
+  const GANTT_KEYFRAMES: Record<'left' | 'right' | 'up' | 'fade' | 'none', Keyframe[]> = {
+    left:  [{ opacity: 0, transform: 'translateX(28px)' },                    { opacity: 1, transform: 'translateX(0)' }],
+    right: [{ opacity: 0, transform: 'translateX(-28px)' },                   { opacity: 1, transform: 'translateX(0)' }],
+    up:    [{ opacity: 0, transform: 'translateY(16px) scale(0.99)' },        { opacity: 1, transform: 'translateY(0) scale(1)' }],
+    fade:  [{ opacity: 0 },                                                  { opacity: 1 }],
+    none:  [],
   }
+  const GANTT_TIMING: Record<'left' | 'right' | 'up' | 'fade' | 'none', KeyframeAnimationOptions> = {
+    left:  { duration: 200, easing: 'cubic-bezier(0.4,0,0.2,1)' },
+    right: { duration: 200, easing: 'cubic-bezier(0.4,0,0.2,1)' },
+    up:    { duration: 220, easing: 'cubic-bezier(0.34,1.04,0.64,1)' },
+    fade:  { duration: 180, easing: 'ease' },
+    none:  { duration: 0 },
+  }
+  const ganttAnimRef = useRef<HTMLElement | null>(null)
+  // Attaches to whichever <main> is currently rendered (day/week/month are mutually exclusive
+  // branches); `useMain` also feeds the same element into the pre-existing `mainRef` (scroll
+  // tracking) for the day/week views that need it.
+  const setGanttRef = useCallback((useMain: boolean) => (el: HTMLElement | null) => {
+    ganttAnimRef.current = el
+    if (useMain) (mainRef as React.MutableRefObject<HTMLElement | null>).current = el
+  }, [])
+  useLayoutEffect(() => {
+    const el = ganttAnimRef.current
+    if (!el || ganttAnim === 'none') return
+    el.animate(GANTT_KEYFRAMES[ganttAnim], GANTT_TIMING[ganttAnim])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ganttKey])
 
   function switchViewMode(mode: 'day' | 'week' | 'month') {
     if (mode === viewMode) return
@@ -777,10 +1177,6 @@ export default function TimelinePage() {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <style>{`
-        @keyframes gantt-enter-left{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
-        @keyframes gantt-enter-right{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
-        @keyframes gantt-enter-up{from{opacity:0;transform:translateY(16px) scale(0.99)}to{opacity:1;transform:translateY(0) scale(1)}}
-        @keyframes gantt-enter-fade{from{opacity:0}to{opacity:1}}
         @keyframes date-popup-fade{from{opacity:0}to{opacity:1}}
       `}</style>
 
@@ -799,10 +1195,10 @@ export default function TimelinePage() {
             {/* Acrylic noise texture */}
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: ACRYLIC_GRAIN, backgroundSize: '180px 180px', opacity: 0.05, mixBlendMode: 'overlay' }} />
             <p className="relative text-white font-black uppercase leading-tight" style={{ fontSize: 'clamp(28px,4vw,52px)', letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>
-              {currentDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+              {currentDate.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { day: 'numeric', month: 'long' })}
             </p>
             <p className="relative text-white/80 font-bold uppercase tracking-[0.15em] mt-1.5" style={{ fontSize: 'clamp(11px,1.4vw,14px)', textShadow: '0 1px 8px rgba(0,0,0,0.5)' }}>
-              {currentDate.toLocaleDateString('en-GB', { weekday: 'long' })} &middot; {currentDate.getFullYear()}
+              {currentDate.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long' })} &middot; {currentDate.getFullYear()}
             </p>
           </div>
         </div>,
@@ -815,8 +1211,8 @@ export default function TimelinePage() {
         {/* Date nav */}
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade') }}
-            className="px-5 py-2.5 bg-black text-[#adee2b] rounded-xl text-[11px] font-black uppercase tracking-wider hover:opacity-80 transition-opacity">
-            Today
+            className="px-5 py-2.5 bg-black text-[#adee2b] rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-slate-800 hover:scale-[1.04] hover:shadow-lg active:scale-95 transition-all">
+            {t('label_today')}
           </button>
           {(() => {
             const fmtShort = (d: Date) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(2)}`
@@ -829,11 +1225,11 @@ export default function TimelinePage() {
                 footer={(close) => (
                   <>
                     <button onClick={() => { const t = new Date(); switchDate(t, toLocalDateStr(t) > dateStr ? 'left' : toLocalDateStr(t) < dateStr ? 'right' : 'fade'); close() }}
-                      className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase">Today</button>
+                      className="flex-1 py-2.5 bg-black text-[#adee2b] rounded-xl text-[9px] font-black uppercase hover:bg-slate-800 hover:scale-[1.03] active:scale-95 transition-all">{t('label_today')}</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()-7); switchDate(d, 'right'); close() }}
-                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">- 1 Week</button>
+                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">{t('label_minus_1_week')}</button>
                     <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate()+7); switchDate(d, 'left'); close() }}
-                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">+ 1 Week</button>
+                      className="flex-1 py-2.5 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] rounded-xl text-[9px] font-black uppercase hover:bg-[var(--ds-bg-surface)]">{t('label_plus_1_week')}</button>
                   </>
                 )}
               >
@@ -1059,7 +1455,7 @@ export default function TimelinePage() {
           {user?.role !== 'guest' && (
             <button onClick={openNewBooking}
               className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg shadow-lime-300/30 transition-all duration-200 bg-[#adee2b] text-black hover:bg-black hover:text-[#adee2b]">
-              <span className="material-symbols-outlined text-base">add</span> New Booking
+              <span className="material-symbols-outlined text-base">add</span> {t('btn_new_booking')}
             </button>
           )}
         </div>
@@ -1067,10 +1463,10 @@ export default function TimelinePage() {
 
       {/* Week view */}
       {viewMode === 'week' && (
-        <main key={ganttKey} ref={weekSelectedRoom ? mainRef : undefined} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: weekSelectedRoom ? 'var(--ds-bg-surface)' : 'var(--ds-bg-base)', scrollbarWidth: 'thin' }}>
+        <main ref={setGanttRef(!!weekSelectedRoom)} className="flex-1 overflow-auto relative select-none" style={{ background: weekSelectedRoom ? 'var(--ds-bg-surface)' : 'var(--ds-bg-base)', scrollbarWidth: 'thin' }}>
           {roomsLoading && (
             <div className="absolute inset-0 bg-[var(--ds-bg-base)]/80 flex items-center justify-center z-50">
-              <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
+              <WifiLoader />
             </div>
           )}
           {weekSelectedRoom ? (() => {
@@ -1108,7 +1504,9 @@ export default function TimelinePage() {
                   })()}
                 </div>
 
-                {/* Date rows — mirrors Day view's room rows exactly, one row per date instead of per room */}
+                {/* Date rows — mirrors Day view's room rows exactly, one row per date instead of per room.
+                    Extracted into memoized WeekDateRow (see module scope above) so drag/resize/move only
+                    re-renders the one row actually involved, not all 7 date rows on every animation frame. */}
                 {weekDates.map((d, dayIdx) => {
                   const isTd = d.toDateString() === today.toDateString()
                   const dow = d.getDay()
@@ -1117,177 +1515,28 @@ export default function TimelinePage() {
                   const isCellDragRow = cellDragRef.current?.roomId === room.id && cellDragRef.current?.date.toDateString() === d.toDateString()
                   const cellDragMinSlot = isCellDragRow && cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
                   const cellDragMaxSlot = isCellDragRow && cellDragRef.current ? Math.max(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
+                  const bd = barDragRef.current
+                  const br = barResizeRef.current
+                  const activeDragBookingId = bd?.booking.id ?? br?.booking.id ?? null
+                  const rowHasDraggedBooking = activeDragBookingId !== null && dayBookings.some(b => b.id === activeDragBookingId)
                   return (
-                    <div key={dayIdx} className={`flex group/row relative border-b border-[var(--ds-border-sub)] ${isWeekend ? 'hover:bg-[var(--ds-bg-surface-2)]' : 'hover:bg-[var(--ds-bg-raised)]'}`}>
-                      {/* Date label — sticky */}
-                      <div
-                        className={`shrink-0 flex flex-col items-center justify-center px-3 border-r-2 sticky left-0 z-20 ${isTd ? 'bg-[#adee2b]/10' : 'bg-[var(--ds-bg-surface)]'} border-[var(--ds-border)]`}
-                        style={{ width: ROOM_W, height: CELL_H }}
-                      >
-                        <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>
-                          {d.toLocaleDateString('en-GB', { weekday: 'short' })}
-                        </span>
-                        <span className={`text-[13px] font-black ${isTd ? 'text-lime-600 dark:text-lime-400' : 'text-[var(--ds-text-1)]'}`}>
-                          {d.getDate()} {d.toLocaleDateString('en-GB', { month: 'short' })}
-                        </span>
-                      </div>
-
-                      {/* Slots */}
-                      <div className="flex-1 relative" style={{ height: CELL_H }} onMouseLeave={() => setHoverSlot(null)}>
-                        <div className="flex h-full absolute inset-0">
-                          {Array.from({ length: slots }, (_, s) => {
-                            const isCellSel = isCellDragRow && s >= cellDragMinSlot && s <= cellDragMaxSlot
-                            return (
-                              <div key={s}
-                                className={`shrink-0 border-r border-[var(--ds-border-sub)] transition-colors cursor-cell
-                                  ${isCellSel ? 'bg-[#adee2b]/30' : 'hover:bg-[#adee2b]/5'}
-                                  ${(s + 1) % 2 === 0 ? 'border-r-[var(--ds-border)]' : ''}`}
-                                style={{ width: SLOT_W, height: CELL_H }}
-                                onMouseEnter={() => setHoverSlot(s)}
-                                onMouseDown={e => {
-                                  if (e.button !== 0) return
-                                  e.preventDefault()
-                                  const s2 = getSlotFromClientX(e.clientX)
-                                  cellDragRef.current = { roomId: room.id, room, date: d, startSlot: s2, endSlot: s2 }
-                                  setDragTick(t => t + 1)
-                                }}
-                                onContextMenu={e => {
-                                  if (e.ctrlKey) return
-                                  e.preventDefault()
-                                  const slot = getSlotFromClientX(e.clientX)
-                                  setCellCtxMenu({ room, slot, date: d, x: e.clientX, y: e.clientY })
-                                }}
-                              />
-                            )
-                          })}
-                        </div>
-
-                        {/* Booking bars */}
-                        {dayBookings.map((b: Booking) => {
-                          const isMe = b.user_id === user?.id
-                          const matchesSearch = !search || bookingMatchesSearch(b, search)
-                          const bd = barDragRef.current
-                          const br = barResizeRef.current
-                          const isDragging = bd?.booking.id === b.id || br?.booking.id === b.id
-
-                          let { startSlot, span } = bookingToSlots(b)
-                          let fracPx = 0, resizeFracW = 0, resizeFracX = 0
-
-                          if (bd?.booking.id === b.id) {
-                            startSlot = Math.max(0, Math.min(slots - bd.origSpan, bd.origStartSlot + bd.deltaSlot))
-                            span = bd.origSpan
-                            fracPx = bd.deltaPixels - bd.deltaSlot * SLOT_W
-                          } else if (br?.booking.id === b.id) {
-                            if (br.edge === 'right') {
-                              span = Math.max(1, br.origSpan + br.deltaSlot)
-                              resizeFracW = br.deltaPixels - br.deltaSlot * SLOT_W
-                            } else {
-                              const origStart = br.origStartSlot
-                              const delta = Math.max(-(slots - origStart - br.origSpan), Math.min(br.origSpan - 1, br.deltaSlot))
-                              startSlot = Math.max(0, origStart - delta)
-                              span = Math.max(1, br.origSpan + delta)
-                              const f = Math.max(0, -br.deltaPixels - br.deltaSlot * SLOT_W)
-                              resizeFracW = f
-                              resizeFracX = -f
-                            }
-                          }
-
-                          const left = startSlot * SLOT_W + fracPx + resizeFracX
-                          const width = span * SLOT_W + resizeFracW
-
-                          let startS = startSlot, endS = startSlot + span
-                          if (bd?.booking.id === b.id) {
-                            startS = Math.max(0, bd.origStartSlot + bd.deltaSlot)
-                            endS = startS + bd.origSpan
-                          } else if (br?.booking.id === b.id) {
-                            if (br.edge === 'right') {
-                              startS = br.origStartSlot
-                              endS = Math.max(br.origStartSlot + 1, br.origStartSlot + br.origSpan + br.deltaSlot)
-                            } else {
-                              const dd = Math.max(-(slots - br.origStartSlot - br.origSpan), Math.min(br.origSpan - 1, br.deltaSlot))
-                              startS = Math.max(0, br.origStartSlot - dd)
-                              endS = br.origStartSlot + br.origSpan + dd
-                            }
-                          }
-
-                          return (
-                            <div key={b.id} className="absolute top-0 z-10"
-                              style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined }}
-                              onContextMenu={e => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                if (isMe) setCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
-                                else setOtherCtxMenu({ booking: b, x: e.clientX, y: e.clientY })
-                              }}>
-                              <BookingBar
-                                booking={b}
-                                onMouseEnter={showTooltip}
-                                onMouseLeave={hideTooltip}
-                                isMe={isMe}
-                                isDragging={isDragging}
-                                showTitle={showBarTitle}
-                                onBarMouseDown={isMe ? (e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  const { startSlot: ss, span: sp } = bookingToSlots(b)
-                                  const mouseSlot = getSlotFromClientX(e.clientX)
-                                  barDragRef.current = {
-                                    booking: b,
-                                    origStartSlot: ss,
-                                    origSpan: sp,
-                                    offsetSlot: mouseSlot - ss,
-                                    deltaSlot: 0,
-                                    origClientX: e.clientX,
-                                    deltaPixels: 0,
-                                  }
-                                  setDragTick(t => t + 1)
-                                } : undefined}
-                                onResizeMouseDown={isMe ? (e, edge) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  const { startSlot: ss, span: sp } = bookingToSlots(b)
-                                  barResizeRef.current = {
-                                    booking: b, edge,
-                                    origStartSlot: ss,
-                                    origSpan: sp,
-                                    deltaSlot: 0,
-                                    origClientX: e.clientX,
-                                    deltaPixels: 0,
-                                  }
-                                  setDragTick(t => t + 1)
-                                } : undefined}
-                              />
-                              {isDragging && (
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
-                                  <div style={{ background: 'rgba(8,12,28,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 99, padding: '2px 10px', whiteSpace: 'nowrap' }}>
-                                    <span className="text-white text-[9px] font-black">
-                                      {slotToTimeStr(Math.max(0, startS))} &ndash; {slotToTimeStr(Math.min(slots, endS))}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-
-                        {/* Now line */}
-                        {isTd && nowSlot > 0 && nowSlot < slots && (
-                          <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-25" style={{ left: nowSlot * SLOT_W }} />
-                        )}
-
-                        {/* Cell drag selection overlay */}
-                        {isCellDragRow && cellDragRef.current && (
-                          <div
-                            className="absolute top-2 bottom-2 bg-[#adee2b]/40 border-2 border-[#adee2b] rounded-xl pointer-events-none z-10 transition-none"
-                            style={{ left: cellDragMinSlot * SLOT_W + 2, width: (cellDragMaxSlot - cellDragMinSlot + 1) * SLOT_W - 4 }}
-                          >
-                            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-black text-black/70 whitespace-nowrap">
-                              {slotToTimeStr(cellDragMinSlot)} &ndash; {slotToTimeStr(cellDragMaxSlot + 1)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <WeekDateRow
+                      key={dayIdx}
+                      d={d} dayIdx={dayIdx} room={room} dayBookings={dayBookings}
+                      isTd={isTd} isWeekend={isWeekend} search={search} showBarTitle={showBarTitle}
+                      currentUserId={user?.id} nowSlot={nowSlot} slots={slots}
+                      cellDragActive={!!isCellDragRow} cellDragMinSlot={cellDragMinSlot} cellDragMaxSlot={cellDragMaxSlot}
+                      dragBookingId={rowHasDraggedBooking ? activeDragBookingId : null}
+                      dragEdge={!rowHasDraggedBooking ? null : bd ? 'move' : (br?.edge ?? null)}
+                      dragOrigStartSlot={!rowHasDraggedBooking ? 0 : (bd?.origStartSlot ?? br?.origStartSlot ?? 0)}
+                      dragOrigSpan={!rowHasDraggedBooking ? 0 : (bd?.origSpan ?? br?.origSpan ?? 0)}
+                      dragDeltaSlot={!rowHasDraggedBooking ? 0 : (bd?.deltaSlot ?? br?.deltaSlot ?? 0)}
+                      dragDeltaPixels={!rowHasDraggedBooking ? 0 : (bd?.deltaPixels ?? br?.deltaPixels ?? 0)}
+                      cellDragRef={cellDragRef} barDragRef={barDragRef} barResizeRef={barResizeRef}
+                      getSlotFromClientX={getSlotFromClientX} setDragTick={setDragTick} setHoverSlot={setHoverSlot}
+                      setCellCtxMenu={setCellCtxMenu} setCtxMenu={setCtxMenu} setOtherCtxMenu={setOtherCtxMenu}
+                      showTooltip={showTooltip} hideTooltip={hideTooltip}
+                    />
                   )
                 })}
               </div>
@@ -1303,7 +1552,7 @@ export default function TimelinePage() {
               {weekDates.map((d, i) => {
                 const isTd = d.toDateString() === today.toDateString()
                 const showMonth = i === 0 || d.getMonth() !== weekDates[i - 1].getMonth()
-                const isColLoading = weekResults[i]?.isLoading
+                const isColLoading = weekLoading
                 const visibleRoomIds = new Set(filteredRooms.map((r: Room) => r.id))
                 const hasMyBooking = (weekData[i] ?? []).some((b: Booking) =>
                   b.user_id === user?.id && b.status !== 'cancelled' && visibleRoomIds.has(b.room_id)
@@ -1323,7 +1572,7 @@ export default function TimelinePage() {
                     onClick={() => { setCurrentDate(d); switchViewMode('day') }}
                   >
                     <span className={`text-[9px] font-black uppercase tracking-wider ${isTd ? 'text-lime-600 dark:text-lime-400' : isWeekend ? 'text-red-400 group-hover/wh:text-red-500' : 'text-[var(--ds-text-3)] group-hover/wh:text-[var(--ds-text-2)]'}`}>
-                      {d.toLocaleDateString('en-GB', { weekday: 'short' })}
+                      {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { weekday: 'short' })}
                     </span>
                     <div className={`mt-0.5 flex items-center justify-center rounded-full text-[15px] font-black transition-colors`}
                       style={{ width: 30, height: 30, background: isTd ? '#000' : 'transparent', color: isTd ? '#adee2b' : isWeekend ? '#ef4444' : 'var(--ds-text-1)' }}>
@@ -1331,7 +1580,7 @@ export default function TimelinePage() {
                     </div>
                     {showMonth && !isColLoading && (
                       <span className="text-[8px] font-bold text-[var(--ds-text-4)] mt-0.5">
-                        {d.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase()}
+                        {d.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'short' }).toUpperCase()}
                       </span>
                     )}
                     {isColLoading && (
@@ -1459,36 +1708,16 @@ export default function TimelinePage() {
 
       {/* Month view */}
       {viewMode === 'month' && (() => {
-        const year  = currentDate.getFullYear()
-        const month = currentDate.getMonth()
-        const firstDay = new Date(year, month, 1)
-        const lastDay  = new Date(year, month + 1, 0)
-        // startDay setting: 'mon' = Monday first (offset +6 mod 7), 'sun' = Sunday first (raw .getDay())
-        const startOffset = startDay === 'sun'
-          ? firstDay.getDay()
-          : (firstDay.getDay() + 6) % 7
-        const gridStart = new Date(firstDay)
-        gridStart.setDate(1 - startOffset)
-        const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7
-        const cells = Array.from({ length: totalCells }, (_, i) => {
-          const d = new Date(gridStart)
-          d.setDate(gridStart.getDate() + i)
-          return d
-        })
-        const bkgs = (monthBookings as Booking[]).filter(b => !location || b.room?.building_id === location.id)
         const DOW_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         const DOW_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const DOW = startDay === 'sun' ? DOW_SUN : DOW_MON
-        const todayDateStr = toLocalDateStr(today)
-        const regularRooms = (rooms as Room[]).filter(r => r.status !== 'maintenance' && (!location || r.building_id === location.id))
-        const totalCapacityMins = regularRooms.length * (HOUR_END - HOUR_START) * 60
-        const regularRoomIds = new Set(regularRooms.map(r => r.id))
+        const DOW_LABEL_ID: Record<string, string> = { Mon: 'Sen', Tue: 'Sel', Wed: 'Rab', Thu: 'Kam', Fri: 'Jum', Sat: 'Sab', Sun: 'Min' }
         return (
-          <main key={ganttKey} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] p-6" style={{ animation: ganttAnimCSS[ganttAnim] }}>
+          <main ref={setGanttRef(false)} className="flex-1 overflow-auto bg-[var(--ds-bg-base)] p-6">
             {/* Month header */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[28px] font-black text-[var(--ds-text-1)] uppercase tracking-tight leading-none">
-                {currentDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase()}
+                {currentDate.toLocaleDateString(language === 'id' ? 'id-ID' : 'en-GB', { month: 'long', year: 'numeric' }).toUpperCase()}
               </h2>
               <div className="flex items-center gap-1">
                 <button
@@ -1511,46 +1740,18 @@ export default function TimelinePage() {
               {DOW.map(d => {
                 const isWkHeader = (d === 'Sat' && wkSat) || (d === 'Sun' && wkSun)
                 return (
-                  <div key={d} className={`text-center py-2 text-[11px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{d}</div>
+                  <div key={d} className={`text-center py-2 text-[11px] font-black uppercase tracking-widest ${isWkHeader ? 'text-red-400' : 'text-[var(--ds-text-3)]'}`}>{language === 'id' ? DOW_LABEL_ID[d] : d}</div>
                 )
               })}
             </div>
 
             {/* Calendar grid */}
             <div className="grid grid-cols-7 border-l border-t border-[var(--ds-border-sub)]">
-              {cells.map((cellDate, idx) => {
-                const isCurrentMonth = cellDate.getMonth() === month
-                const isTodayCell = cellDate.toDateString() === today.toDateString()
-                const cellStr = toLocalDateStr(cellDate)
-                const dayBkgs = bkgs.filter(b => {
-                  const s = new Date(b.start_at.replace('Z', ''))
-                  return toLocalDateStr(s) === cellStr && b.status !== 'cancelled'
-                })
-                const myBkgs = dayBkgs.filter(b => b.user_id === user?.id)
-                const otherBkgs = dayBkgs.filter(b => b.user_id !== user?.id)
-                const visibleBkgs = dayBkgs.slice(0, 6)
-                const overflow = dayBkgs.length - 6
-                const cellDow = cellDate.getDay()
-                const isCellWeekend = (cellDow === 6 && wkSat) || (cellDow === 0 && wkSun)
-                const isPast = cellStr < todayDateStr
-
-                // Usage % — only for today + future cells in current month
-                let usagePct = 0
-                if (isCurrentMonth && !isPast && totalCapacityMins > 0) {
-                  let totalBookedMins = 0
-                  dayBkgs.forEach(b => {
-                    if (!regularRoomIds.has(b.room_id)) return
-                    const s = new Date(b.start_at.replace('Z', ''))
-                    const e = new Date(b.end_at.replace('Z', ''))
-                    const sMins = Math.max(s.getHours() * 60 + s.getMinutes(), HOUR_START * 60)
-                    const eMins = Math.min(e.getHours() * 60 + e.getMinutes(), HOUR_END * 60)
-                    totalBookedMins += Math.max(0, eMins - sMins)
-                  })
-                  usagePct = Math.min(100, Math.round(totalBookedMins / totalCapacityMins * 100))
-                }
-
-                const usageColor = usagePct >= 80 ? '#ef4444' : usagePct >= 50 ? '#f59e0b' : '#adee2b'
-                const showUsage = isCurrentMonth && !isPast && totalCapacityMins > 0
+              {monthGrid.cells.map((cell, idx) => {
+                const {
+                  cellDate, isCurrentMonth, isTodayCell, isCellWeekend,
+                  myBkgs, otherBkgs, visibleBkgs, overflow, usagePct, usageColor, showUsage,
+                } = cell
 
                 return (
                   <div
@@ -1626,16 +1827,16 @@ export default function TimelinePage() {
                               WebkitBackdropFilter: 'blur(28px) saturate(180%)',
                               border: '1px solid rgba(255,255,255,0.10)',
                               borderRadius: 10,
-                              padding: '6px 10px',
+                              padding: '8px 13px',
                               boxShadow: '0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.08)',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: 6,
+                              gap: 7,
                             }}>
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: usageColor, display: 'inline-block', flexShrink: 0 }} />
-                              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: 700 }}>Room usage</span>
-                              <span style={{ color: usageColor, fontSize: 12, fontWeight: 900 }}>{usagePct}%</span>
-                              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, fontWeight: 600 }}>· {regularRooms.length} rooms</span>
+                              <span style={{ width: 9, height: 9, borderRadius: '50%', background: usageColor, display: 'inline-block', flexShrink: 0 }} />
+                              <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 700 }}>Room usage</span>
+                              <span style={{ color: usageColor, fontSize: 15, fontWeight: 900 }}>{usagePct}%</span>
+                              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600 }}>· {monthGrid.eligibleRoomsCount} rooms</span>
                             </div>
                             {/* Arrow */}
                             <div style={{ width: 0, height: 0, margin: '0 auto', borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid rgba(15,20,45,0.72)' }} />
@@ -1660,10 +1861,10 @@ export default function TimelinePage() {
 
       {/* Day view grid */}
       {viewMode === 'day' && (
-      <main key={ganttKey} ref={mainRef} className="flex-1 overflow-auto relative select-none" style={{ animation: ganttAnimCSS[ganttAnim], background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
+      <main ref={setGanttRef(true)} className="flex-1 overflow-auto relative select-none" style={{ background: 'var(--ds-bg-surface)', scrollbarWidth: 'thin' }}>
         {(roomsLoading || bookingsLoading) && (
           <div className="absolute inset-0 bg-[var(--ds-bg-base)]/70 flex items-center justify-center z-50">
-            <span className="material-symbols-outlined animate-spin text-4xl text-[var(--ds-text-4)]">progress_activity</span>
+            <WifiLoader />
           </div>
         )}
         <div style={{ width: ROOM_W + slots * SLOT_W, minWidth: '100%' }}>
@@ -1709,9 +1910,10 @@ export default function TimelinePage() {
           )}
 
           {/* Room rows */}
-          {filteredRooms.map((room: Room) => {
+          {filteredRooms.map((room: Room, roomIdx: number) => {
             const roomBookings = getBookingsForRoom(room.id)
             const isMaintRoom = room.status === 'maintenance'
+            const isFirstRoomRow = roomIdx === 0
 
             const isCellDragRow = cellDragRef.current?.roomId === room.id
             const cellDragMinSlot = cellDragRef.current ? Math.min(cellDragRef.current.startSlot, cellDragRef.current.endSlot) : -1
@@ -1794,6 +1996,7 @@ export default function TimelinePage() {
                     const bd = barDragRef.current
                     const br = barResizeRef.current
                     const isDragging = bd?.booking.id === b.id || br?.booking.id === b.id
+                    const showRecentBadge = b.id === justCreatedId && !dismissedRecentIds.has(b.id)
 
                     let { startSlot, span } = bookingToSlots(b)
                     let fracPx = 0, resizeFracW = 0, resizeFracX = 0
@@ -1838,7 +2041,7 @@ export default function TimelinePage() {
                     return (
                       <div key={b.id} className="absolute top-0 z-10"
                         ref={b.id === highlightId ? highlightRef : undefined}
-                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined, borderRadius: b.id === highlightId ? 8 : undefined }}
+                        style={{ left, width, height: CELL_H, opacity: search && !matchesSearch ? 0.18 : 1, transition: isDragging ? 'none' : 'left 0.12s cubic-bezier(0.4,0,0.2,1), width 0.12s cubic-bezier(0.4,0,0.2,1), opacity 0.2s', willChange: isDragging ? 'left,width' : undefined, borderRadius: (b.id === highlightId || showRecentBadge) ? 8 : undefined }}
                         onContextMenu={e => {
                           e.preventDefault()
                           e.stopPropagation()
@@ -1855,6 +2058,7 @@ export default function TimelinePage() {
                           onBarMouseDown={isMe ? (e) => {
                             e.preventDefault()
                             e.stopPropagation()
+                            hideTooltip()
                             const { startSlot: ss, span: sp } = bookingToSlots(b)
                             const mouseSlot = getSlotFromClientX(e.clientX)
                             barDragRef.current = {
@@ -1871,6 +2075,7 @@ export default function TimelinePage() {
                           onResizeMouseDown={isMe ? (e, edge) => {
                             e.preventDefault()
                             e.stopPropagation()
+                            hideTooltip()
                             const { startSlot: ss, span: sp } = bookingToSlots(b)
                             barResizeRef.current = {
                               booking: b, edge,
@@ -1883,6 +2088,61 @@ export default function TimelinePage() {
                             setDragTick(t => t + 1)
                           } : undefined}
                         />
+                        {showRecentBadge && (
+                          <svg width={width} height={CELL_H} className="absolute top-0 left-0 pointer-events-none z-40" style={{ overflow: 'visible' }}>
+                            <path
+                              d={roundedRectPathFromTopCenter(width, CELL_H, 8)}
+                              fill="none"
+                              stroke="#adee2b"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              pathLength={100}
+                              className="recent-border-draw"
+                            />
+                          </svg>
+                        )}
+                        {showRecentBadge && (
+                          <div className="recent-badge-in absolute left-1/2 -translate-x-1/2 z-40 whitespace-nowrap"
+                            style={isFirstRoomRow ? { top: '100%', marginTop: 10 } : { bottom: '100%', marginBottom: 10 }}>
+                            <div
+                              onClick={e => { e.stopPropagation(); dismissRecentBadge(b.id) }}
+                              title={t('recent_booking_dismiss')}
+                              style={{
+                                position: 'relative',
+                                background: 'rgba(15,20,45,0.68)',
+                                backdropFilter: 'blur(24px) saturate(180%)',
+                                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                                border: '1px solid rgba(173,238,43,0.4)',
+                                borderRadius: 14,
+                                padding: '7px 16px',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 7,
+                                cursor: 'pointer',
+                                pointerEvents: 'auto',
+                              }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#adee2b' }}>check_circle</span>
+                              <span style={{ color: 'white', fontSize: 12, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('recent_booking_label')}</span>
+                              {/* Thin connector line between the tooltip's edge (facing the bar) and the
+                                  bar itself — flips to the tooltip's top edge when the tooltip itself is
+                                  flipped below the bar (first room row, so it doesn't render under the
+                                  sticky time header). */}
+                              <div style={{
+                                position: 'absolute',
+                                width: 3,
+                                height: 8,
+                                ...(isFirstRoomRow ? { bottom: '100%' } : { top: '100%' }),
+                                left: '50%',
+                                marginLeft: -1.5,
+                                background: 'rgba(15,20,45,0.68)',
+                                backdropFilter: 'blur(24px) saturate(180%)',
+                                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                                borderRadius: 1.5,
+                              }} />
+                            </div>
+                          </div>
+                        )}
                         {isDragging && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
                             <div style={{
@@ -1905,7 +2165,7 @@ export default function TimelinePage() {
 
                   {/* Now line */}
                   {isToday && nowSlot > 0 && nowSlot < slots && (
-                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-25"
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none z-15"
                       style={{ left: nowSlot * SLOT_W }} />
                   )}
 
@@ -1935,12 +2195,12 @@ export default function TimelinePage() {
       <footer className="bg-[var(--ds-bg-surface)] border-t border-[var(--ds-border-sub)] px-8 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-5">
           {[
-            { label: 'My Booking', style: { backgroundColor: '#72ddf7' } },
-            { label: 'My Tentative', style: { backgroundColor: '#b0e8f8', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
-            { label: 'Confirmed', style: { backgroundColor: '#adee2b' } },
-            { label: 'Tentative', style: { backgroundColor: '#d1d5db', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
-            { label: 'Maintenance', style: { backgroundColor: '#fb923c' } },
-            { label: 'For/From Others', style: { backgroundColor: 'transparent', border: '2px solid #2563eb' } },
+            { label: t('legend_my_booking'), style: { backgroundColor: '#72ddf7' } },
+            { label: t('legend_my_tentative'), style: { backgroundColor: '#b0e8f8', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
+            { label: t('tt_confirmed'), style: { backgroundColor: '#adee2b' } },
+            { label: t('tt_tentative'), style: { backgroundColor: '#d1d5db', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)' } },
+            { label: t('legend_maintenance'), style: { backgroundColor: '#fb923c' } },
+            { label: t('legend_for_from_others'), style: { backgroundColor: 'transparent', border: '2px solid #2563eb' } },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1.5">
               <div className="size-2.5 rounded-md" style={l.style} />
@@ -1949,11 +2209,11 @@ export default function TimelinePage() {
           ))}
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-0.5 bg-red-500" />
-            <span className="text-[8px] font-bold text-[var(--ds-text-3)] uppercase">Now</span>
+            <span className="text-[8px] font-bold text-[var(--ds-text-3)] uppercase">{t('legend_now')}</span>
           </div>
           <div className="flex items-center gap-1.5 border-l border-[var(--ds-border-sub)] pl-4">
             <span className="material-symbols-outlined text-[var(--ds-text-4)]" style={{ fontSize: 12 }}>drag_pan</span>
-            <span className="text-[8px] font-bold text-[var(--ds-text-4)] uppercase">Drag bar to move &middot; drag edge to resize &middot; drag cell to create</span>
+            <span className="text-[8px] font-bold text-[var(--ds-text-4)] uppercase">{t('legend_drag_hint')}</span>
           </div>
         </div>
         <p className="text-[8px] font-black text-[var(--ds-text-4)] uppercase tracking-widest italic">{appName} &middot; 2026</p>
@@ -2013,14 +2273,13 @@ export default function TimelinePage() {
       {/* Room hover mini-card */}
       {roomHover && (
         <>
-          <style>{`@keyframes room-hover-in{from{opacity:0;transform:scale(0.94) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed z-[997]"
             style={{ left: Math.min(roomHover.x + 20, window.innerWidth - 308), top: Math.min(roomHover.y - 10, window.innerHeight - 420) }}
             onMouseEnter={() => { if (roomHoverTimer.current) clearTimeout(roomHoverTimer.current) }}
             onMouseLeave={() => { roomHoverTimer.current = setTimeout(() => setRoomHover(null), 250) }}
           >
-            <div style={{
+            <div className="hover-card-pop-in" style={{
               background: 'var(--ds-glass-bg)',
               backdropFilter: 'blur(48px) saturate(200%)',
               WebkitBackdropFilter: 'blur(48px) saturate(200%)',
@@ -2029,7 +2288,6 @@ export default function TimelinePage() {
               width: 288,
               overflow: 'hidden',
               boxShadow: 'var(--ds-glass-shadow)',
-              animation: 'room-hover-in 0.18s cubic-bezier(0.4,0,0.2,1)',
             }}>
               {/* Photo slideshow */}
               {roomHover.room.photos?.length > 0 ? (
@@ -2109,12 +2367,11 @@ export default function TimelinePage() {
         prefillEnd={prefillEnd}
         prefillDate={toLocalDateStr(currentDate)}
         buildingId={editBooking ? (editBooking.room?.building_id ?? null) : (location?.id ?? null)}
-        onSubmit={() => {
+        onSubmit={(createdId) => {
           setBookingPanelOpen(false)
           queryClient.invalidateQueries({ queryKey: ['bookings', dateStr] })
-          setToastMsg('Booking saved successfully')
-          if (toastTimer.current) clearTimeout(toastTimer.current)
-          toastTimer.current = setTimeout(() => setToastMsg(null), 3500)
+          addInfoToast('Booking saved successfully', 3500)
+          markLastAction(createdId)
         }}
         onCancel={(b) => { setBookingPanelOpen(false); setCancelTarget(b) }}
         onAfterHoursOpen={(data) => {
@@ -2157,127 +2414,112 @@ export default function TimelinePage() {
 
       {/* Other user's bar context menu */}
       {otherCtxMenu && (
-        <>
-          <style>{`@keyframes ctx-in{from{opacity:0;transform:scale(0.92) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
-          <div className="fixed inset-0 z-[990]" onClick={() => setOtherCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setOtherCtxMenu(null) }}>
-            <div
-              onClick={e => e.stopPropagation()}
-              style={{
-                position: 'absolute',
-                left: Math.min(otherCtxMenu.x, window.innerWidth - 200),
-                top: Math.min(otherCtxMenu.y, window.innerHeight - 150),
-                minWidth: 188,
-                background: 'var(--ds-glass-bg)',
-                backdropFilter: 'blur(48px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(48px) saturate(180%)',
-                border: '1px solid var(--ds-glass-border)',
-                borderRadius: 14,
-                boxShadow: 'var(--ds-glass-shadow)',
-                padding: 5,
-                animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
-                transformOrigin: 'top left',
-              }}
-            >
-              {/* Header */}
-              <div className="px-3.5 pt-2.5 pb-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] truncate">{otherCtxMenu.booking.user?.name}</p>
-              </div>
-              <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
-
-              {/* Copy Ext */}
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(otherCtxMenu.booking.user?.ext || '')
-                  setOtherCtxMenu(null)
-                  setToastMsg(`Ext ${otherCtxMenu.booking.user?.ext} copied`)
-                  if (toastTimer.current) clearTimeout(toastTimer.current)
-                  toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>phone_in_talk</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">Copy Ext</p>
-                  <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5">{otherCtxMenu.booking.user?.ext}</p>
-                </div>
-              </button>
-
-              {/* Copy Email */}
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(otherCtxMenu.booking.user?.email || '')
-                  setOtherCtxMenu(null)
-                  setToastMsg('Email copied')
-                  if (toastTimer.current) clearTimeout(toastTimer.current)
-                  toastTimer.current = setTimeout(() => setToastMsg(null), 2500)
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>mail</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black uppercase text-[var(--ds-text-1)] leading-none">Copy Email</p>
-                  <p className="text-[9px] font-bold text-[var(--ds-text-3)] mt-0.5 truncate">{otherCtxMenu.booking.user?.email}</p>
-                </div>
-              </button>
-
-              <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
-
-              {/* Export to ICS */}
-              <button
-                onClick={() => { exportToICS(otherCtxMenu.booking); setOtherCtxMenu(null) }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar{otherCtxMenu.booking.series_id ? ' (This Entry)' : ''}</span>
-              </button>
-              {otherCtxMenu.booking.series_id && (
-                <button
-                  onClick={() => { exportSeriesToICS(otherCtxMenu.booking.series_id!); setOtherCtxMenu(null) }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-                >
-                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar (Series)</span>
-                </button>
-              )}
-
-              {/* View Room */}
-              <button
-                onClick={() => {
-                  setDetailRoom(otherCtxMenu.booking.room || null)
-                  setDetailOpen(true)
-                  setOtherCtxMenu(null)
-                }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-              >
-                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room Detail</span>
-              </button>
-
-              {/* Transfer Booking — receptionist/admin only */}
-              {(user?.role === 'admin' || user?.role === 'receptionist') && otherCtxMenu.booking.status !== 'cancelled' && (<>
-                <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
-                <button
-                  onClick={() => {
-                    setTransferBooking(otherCtxMenu.booking)
-                    setOtherCtxMenu(null)
-                  }}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
-                >
-                  <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>swap_horiz</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Transfer Booking</span>
-                </button>
-              </>)}
-            </div>
+        <ContextMenuShell x={otherCtxMenu.x} y={otherCtxMenu.y} width={188} onClose={() => setOtherCtxMenu(null)}>
+          {/* Header */}
+          <div className="px-3.5 pt-2.5 pb-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--ds-text-3)] truncate">{otherCtxMenu.booking.user?.name}</p>
           </div>
-        </>
+          <div style={{ height: 1, background: 'var(--ds-border)', marginBottom: 4 }} />
+
+          {/* Copy Ext | Copy Email — compact icon-over-label cells to save vertical space */}
+          <div className="flex gap-1 px-0.5">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(otherCtxMenu.booking.user?.ext || '')
+                setOtherCtxMenu(null)
+                addInfoToast(`Ext ${otherCtxMenu.booking.user?.ext} copied`, 2500)
+              }}
+              className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>phone_in_talk</span>
+              <span className="text-[9px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_ext')}</span>
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(otherCtxMenu.booking.user?.email || '')
+                setOtherCtxMenu(null)
+                addInfoToast('Email copied', 2500)
+              }}
+              className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>mail</span>
+              <span className="text-[9px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_email')}</span>
+            </button>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
+
+          {/* Export to ICS */}
+          <button
+            onClick={() => { exportToICS(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+          >
+            <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
+            <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')}{otherCtxMenu.booking.series_id ? ` ${t('ctx_this_entry')}` : ''}</span>
+          </button>
+          {otherCtxMenu.booking.series_id && (
+            <button
+              onClick={() => { exportSeriesToICS(otherCtxMenu.booking.series_id!); setOtherCtxMenu(null) }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
+              <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')} {t('ctx_this_series')}</span>
+            </button>
+          )}
+
+          {/* View Room */}
+          <button
+            onClick={() => {
+              setDetailRoom(otherCtxMenu.booking.room || null)
+              setDetailOpen(true)
+              setOtherCtxMenu(null)
+            }}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+          >
+            <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
+            <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_view_room_detail')}</span>
+          </button>
+
+          {/* Edit / Cancel / Transfer — receptionist/admin/building_admin only */}
+          {(user?.role === 'admin' || user?.role === 'receptionist' || user?.role === 'building_admin') && otherCtxMenu.booking.status !== 'cancelled' && (<>
+            <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
+            {/* Transfer stays a full-width row; Edit | Cancel are the compact cells pinned at the bottom */}
+            <button
+              onClick={() => {
+                setTransferBooking(otherCtxMenu.booking)
+                setOtherCtxMenu(null)
+              }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
+            >
+              <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>swap_horiz</span>
+              <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Transfer Booking</span>
+            </button>
+            <div className="flex gap-1 px-0.5">
+              <button
+                onClick={() => { openEdit(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-[#adee2b]/25"
+              >
+                <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 18 }}>edit</span>
+                <span className="text-[9px] font-black uppercase text-[var(--ds-text-1)] leading-none">{t('ctx_edit')}</span>
+              </button>
+              <button
+                onClick={() => { setCancelTarget(otherCtxMenu.booking); setOtherCtxMenu(null) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-[9px] transition-colors hover:bg-red-500/10"
+              >
+                <span className="material-symbols-outlined text-red-400" style={{ fontSize: 18 }}>cancel</span>
+                <span className="text-[9px] font-black uppercase text-red-500 leading-none">{t('ctx_cancel')}</span>
+              </button>
+            </div>
+          </>)}
+        </ContextMenuShell>
       )}
 
       {/* Cell right-click context menu */}
       {cellCtxMenu && (
         <>
-          <style>{`@keyframes ctx-in{from{opacity:0;transform:scale(0.92) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div className="fixed inset-0 z-[990]" onClick={() => setCellCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setCellCtxMenu(null) }}>
             <div
+              className="ctx-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 position: 'absolute',
@@ -2291,7 +2533,6 @@ export default function TimelinePage() {
                 borderRadius: 14,
                 boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
-                animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
               }}
             >
@@ -2324,7 +2565,7 @@ export default function TimelinePage() {
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>add_circle</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">New Booking</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('btn_new_booking')}</span>
                 </button>
               )}
 
@@ -2335,7 +2576,7 @@ export default function TimelinePage() {
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>open_in_new</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">View Room</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_view_room')}</span>
                 </button>
               )}
             </div>
@@ -2346,9 +2587,9 @@ export default function TimelinePage() {
       {/* Right-click context menu */}
       {ctxMenu && (
         <>
-          <style>{`@keyframes ctx-in{from{opacity:0;transform:scale(0.92) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div className="fixed inset-0 z-[990]" onClick={() => setCtxMenu(null)} onContextMenu={e => { e.preventDefault(); setCtxMenu(null) }}>
             <div
+              className="ctx-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 position: 'absolute',
@@ -2362,7 +2603,6 @@ export default function TimelinePage() {
                 borderRadius: 14,
                 boxShadow: 'var(--ds-glass-shadow)',
                 padding: 5,
-                animation: 'ctx-in 0.15s cubic-bezier(0.4,0,0.2,1)',
                 transformOrigin: 'top left',
               }}
             >
@@ -2378,7 +2618,7 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>edit</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Edit</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_edit')}</span>
               </button>
 
               {/* Export to ICS */}
@@ -2387,7 +2627,7 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
               >
                 <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event</span>
-                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar{ctxMenu.booking.series_id ? ' (This Entry)' : ''}</span>
+                <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')}{ctxMenu.booking.series_id ? ` ${t('ctx_this_entry')}` : ''}</span>
               </button>
               {ctxMenu.booking.series_id && (
                 <button
@@ -2395,7 +2635,7 @@ export default function TimelinePage() {
                   className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-[#adee2b]/25"
                 >
                   <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>event_repeat</span>
-                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Export to Calendar (Series)</span>
+                  <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">{t('ctx_export_calendar')} {t('ctx_this_series')}</span>
                 </button>
               )}
 
@@ -2405,7 +2645,7 @@ export default function TimelinePage() {
                 className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] text-left transition-colors hover:bg-red-500/10"
               >
                 <span className="material-symbols-outlined text-red-400" style={{ fontSize: 15 }}>cancel</span>
-                <span className="text-[11px] font-black uppercase text-red-500">Cancel Booking</span>
+                <span className="text-[11px] font-black uppercase text-red-500">{t('btn_cancel_booking')}</span>
               </button>
             </div>
           </div>
@@ -2415,13 +2655,13 @@ export default function TimelinePage() {
       {/* Cancel confirm modal */}
       {cancelTarget && (
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => setCancelTarget(null)}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 380,
@@ -2432,7 +2672,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               {/* Header */}
@@ -2484,13 +2723,13 @@ export default function TimelinePage() {
       {/* Transfer Booking modal */}
       {transferBooking && createPortal(
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => { setTransferBooking(null); setTransferSearch('') }}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 400,
@@ -2504,7 +2743,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               {/* Header */}
@@ -2577,13 +2815,13 @@ export default function TimelinePage() {
       {/* Cancel Series confirm modal */}
       {seriesCancelTarget && (
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => setSeriesCancelTarget(null)}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 400,
@@ -2594,7 +2832,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               <div className="flex items-center gap-3.5 mb-6">
@@ -2640,62 +2877,61 @@ export default function TimelinePage() {
         </>
       )}
 
-      {/* Toast */}
-      <div
-        className="fixed z-[9999] transition-all duration-300"
-        style={{ bottom: 28, right: 96, transform: toastMsg ? 'translateY(0)' : 'translateY(80px)', opacity: toastMsg ? 1 : 0, pointerEvents: toastMsg ? 'auto' : 'none' }}
-      >
-        <div style={{
-          background: 'rgba(15,20,45,0.55)',
-          backdropFilter: 'blur(48px) saturate(200%)',
-          WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-          border: '1px solid rgba(255,255,255,0.14)',
-          borderRadius: '1.5rem',
-          padding: '16px 20px',
-          boxShadow: '0 24px 56px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          minWidth: 320,
-        }}>
-          <span
-            className="material-symbols-outlined shrink-0"
-            style={{ fontSize: 24, color: toastCountdown !== null ? '#f87171' : '#adee2b' }}
-          >
-            {toastCountdown !== null ? (pendingSeriesId ? 'repeat' : 'cancel') : 'check_circle'}
-          </span>
-          <span className="text-white text-[13px] font-black flex-1">{toastMsg}</span>
-          {toastCountdown !== null && (
-            <>
-              <span style={{ fontSize: 13, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 26, textAlign: 'right' }}>
-                {toastCountdown}s
-              </span>
-              <button
-                onClick={pendingSeriesId ? undoSeriesCancel : undoCancel}
-                style={{
-                  background: '#adee2b', color: '#000', border: 'none',
-                  borderRadius: 10, padding: '6px 14px',
-                  fontSize: 11, fontWeight: 900, textTransform: 'uppercase',
-                  cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0,
-                }}
-              >
-                Undo
-              </button>
-            </>
-          )}
-        </div>
+      {/* Toasts — stacked, one per cancel/series-cancel/info action in flight */}
+      <div className="fixed z-[9999] flex flex-col gap-2.5" style={{ bottom: 28, right: 96 }}>
+        {toasts.map(t => (
+          <div key={t.id} className="toast-pop-in-bottom" style={{
+            background: 'rgba(15,20,45,0.55)',
+            backdropFilter: 'blur(48px) saturate(200%)',
+            WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+            border: '1px solid rgba(255,255,255,0.14)',
+            borderRadius: '1.5rem',
+            padding: '16px 20px',
+            boxShadow: '0 24px 56px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            minWidth: 320,
+          }}>
+            <span
+              className="material-symbols-outlined shrink-0"
+              style={{ fontSize: 24, color: t.countdown !== null ? '#f87171' : '#adee2b' }}
+            >
+              {t.countdown !== null ? (t.kind === 'series-cancel' ? 'repeat' : 'cancel') : 'check_circle'}
+            </span>
+            <span className="text-white text-[13px] font-black flex-1">{t.msg}</span>
+            {t.countdown !== null && (
+              <>
+                <span style={{ fontSize: 13, fontWeight: 900, color: 'rgba(255,255,255,0.45)', minWidth: 26, textAlign: 'right' }}>
+                  {t.countdown}s
+                </span>
+                <button
+                  onClick={() => undoToast(t.id)}
+                  style={{
+                    background: '#adee2b', color: '#000', border: 'none',
+                    borderRadius: 10, padding: '6px 14px',
+                    fontSize: 11, fontWeight: 900, textTransform: 'uppercase',
+                    cursor: 'pointer', letterSpacing: '0.05em', flexShrink: 0,
+                  }}
+                >
+                  Undo
+                </button>
+              </>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Past date/time booking blocked modal */}
       {pastDateModalOpen && (
         <>
-          <style>{`@keyframes modal-in{from{opacity:0;transform:scale(0.93) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
             onClick={() => setPastDateModalOpen(false)}
           >
             <div
+              className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
                 width: 360,
@@ -2706,7 +2942,6 @@ export default function TimelinePage() {
                 borderRadius: 22,
                 boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
                 padding: 28,
-                animation: 'modal-in 0.18s cubic-bezier(0.4,0,0.2,1)',
               }}
             >
               <div className="flex items-center gap-3.5 mb-5">

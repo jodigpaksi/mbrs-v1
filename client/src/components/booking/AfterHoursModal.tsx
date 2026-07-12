@@ -85,10 +85,6 @@ export default function AfterHoursModal({ open, onClose, workingHoursEnd, buildi
   return createPortal(
     <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
       <style>{`
-        @keyframes ah-in {
-          from { opacity: 0; transform: scale(0.96) translateY(8px) }
-          to   { opacity: 1; transform: scale(1) translateY(0) }
-        }
         .dark [data-ah-dark] {
           background: rgba(18,21,35,0.88) !important;
           border-color: rgba(255,255,255,0.07) !important;
@@ -102,7 +98,7 @@ export default function AfterHoursModal({ open, onClose, workingHoursEnd, buildi
 
       {/* Glass panel */}
       <div
-        className="relative w-full max-w-[440px] overflow-hidden"
+        className="relative w-full max-w-[440px] overflow-hidden modal-pop-in"
         data-ah-dark=""
         style={{
           background: 'rgba(255,255,255,0.82)',
@@ -111,7 +107,6 @@ export default function AfterHoursModal({ open, onClose, workingHoursEnd, buildi
           border: '1px solid rgba(255,255,255,0.90)',
           borderRadius: 28,
           boxShadow: '0 32px 72px rgba(0,0,0,0.16), 0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
-          animation: 'ah-in 0.22s cubic-bezier(0.34,1.04,0.64,1) both',
         }}
       >
         {/* Header */}
