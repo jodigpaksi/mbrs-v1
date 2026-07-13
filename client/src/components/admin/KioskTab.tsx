@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createPortal } from 'react-dom'
 import { getKioskConfigs, createKioskConfig, updateKioskConfig, deleteKioskConfig } from '../../api/kiosk'
 import { getRooms } from '../../api/rooms'
+import { getGeneralSettings } from '../../api/settings'
 import { useModalHotkeys } from '../../hooks/useModalHotkeys'
 import type { KioskConfig, KioskTheme, KioskLayout } from '../../types'
 
@@ -291,6 +292,9 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
   const [saving,   setSaving]   = useState(false)
   const [err,      setErr]      = useState('')
 
+  const { data: generalSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 60_000 })
+  const antiGhostEnabled = generalSettings?.anti_ghost_enabled ?? false
+
   const selectedRoomName = roomId === '' ? 'Meeting Room' : (rooms.find(r => r.id === roomId)?.name ?? 'Meeting Room')
 
   function applyThemePreset(p: KioskTheme) { setTheme(p) }
@@ -454,6 +458,19 @@ function EditModal({ initial, rooms, onSave, onClose }: EditModalProps) {
                     <span className="absolute top-0.5 rounded-full transition-all" style={{ width: 16, height: 16, background: layout[k] ? '#1a3a00' : 'var(--ds-text-3)', left: layout[k] ? 18 : 2 }} />
                   </button>
                   <p className="text-[11px] font-black text-[var(--ds-text-2)]">{lbl}</p>
+                  {k === 'show_confirm_btn' && (
+                    <span
+                      className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0"
+                      style={antiGhostEnabled
+                        ? { background: 'rgba(34,197,94,0.14)', color: '#16a34a' }
+                        : { background: 'rgba(148,163,184,0.16)', color: 'var(--ds-text-3)' }}
+                      title={antiGhostEnabled
+                        ? 'Anti-Ghost is enabled — this button will actually confirm presence and prevent auto-cancellation.'
+                        : 'Anti-Ghost is disabled in Settings — this button will show but has no effect.'}
+                    >
+                      Anti-Ghost {antiGhostEnabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  )}
                 </div>
               ))}
               {layout.show_bookings && (

@@ -3560,6 +3560,83 @@ function pageWindow(page: number, totalPages: number, size = 5): number[] {
   return Array.from({ length: end - start + 1 }, (_, i) => start + i)
 }
 
+type UserSortKey = 'name' | 'email' | 'department' | 'ext' | 'default_building' | 'special_access' | 'buildings' | 'created_at' | 'updated_at'
+
+// Dark glass "shared tooltip" (see feedback_ui_style_patterns memory) — same recipe as the
+// building-picker tooltip in TimelinePage: rgba(15,15,15,0.87) + blur(64px) saturate(2).
+function InfoTooltip({ text, width = 220 }: { text: string; width?: number }) {
+  const [visible, setVisible] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const ref = useRef<HTMLButtonElement>(null)
+
+  function handleEnter() {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) {
+      const spaceRight = window.innerWidth - r.left
+      const left = spaceRight >= width + 12 ? r.left : Math.max(12, r.right - width)
+      setPos({ top: r.bottom + 8, left })
+    }
+    setVisible(true)
+  }
+
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        onMouseEnter={handleEnter}
+        onMouseLeave={() => setVisible(false)}
+        onClick={e => e.stopPropagation()}
+        className="size-4 flex items-center justify-center rounded-full shrink-0 normal-case transition-colors"
+        style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-3)' }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>info</span>
+      </button>
+
+      {visible && createPortal(
+        <div
+          className="fixed z-[400] pointer-events-none"
+          style={{ top: pos.top, left: pos.left, width }}
+        >
+          <div className="rounded-2xl px-3.5 py-2.5"
+            style={{ background: 'rgba(15,15,15,0.87)', backdropFilter: 'blur(64px) saturate(2)', WebkitBackdropFilter: 'blur(64px) saturate(2)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
+            <p className="text-[11px] text-white/70 font-medium normal-case leading-relaxed">{text}</p>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+function SortableTh({ label, sortKey, sort, onSort, className = '', info }: {
+  label: string
+  sortKey: UserSortKey
+  sort: { key: UserSortKey; dir: 'asc' | 'desc' }
+  onSort: (key: UserSortKey) => void
+  className?: string
+  info?: string
+}) {
+  const active = sort.key === sortKey
+  return (
+    <th className={`px-5 py-3 text-[10px] font-black uppercase tracking-wider ${className}`}>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onSort(sortKey)}
+          className={`flex items-center gap-1 transition-colors hover:text-[var(--ds-text-1)] ${active ? 'text-[var(--ds-text-1)]' : 'text-[var(--ds-text-3)]'}`}
+        >
+          {label}
+          <span className="material-symbols-outlined" style={{ fontSize: 13, opacity: active ? 1 : 0.35 }}>
+            {active ? (sort.dir === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'}
+          </span>
+        </button>
+        {info && <InfoTooltip text={info} />}
+      </div>
+    </th>
+  )
+}
+
 function UserPaginationBar({ page, totalPages, perPage, onPage, onPerPage, total, showPerPage }: {
   page: number; totalPages: number; perPage: string
   onPage: (p: number) => void; onPerPage: (p: string) => void
@@ -3780,11 +3857,43 @@ function UsersTab() {
     (users as User[]).filter(u => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || u.alias?.toLowerCase().includes(search.toLowerCase()) || u.department?.toLowerCase().includes(search.toLowerCase()))
   , [users, search])
 
+  // ── Column sorting — shared across every role table (user/admin/building_admin/receptionist) ──
+  const [sortKey, setSortKey] = useState<UserSortKey>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  function onSort(key: UserSortKey) {
+    if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('asc') }
+  }
+  const compareUsers = useCallback((a: User, b: User): number => {
+    switch (sortKey) {
+      case 'name': return a.name.localeCompare(b.name)
+      case 'email': return a.email.localeCompare(b.email)
+      case 'department': return (a.department || '').localeCompare(b.department || '')
+      case 'ext': return (a.ext || '').localeCompare(b.ext || '')
+      case 'default_building': {
+        const an = a.default_building_id != null ? (buildings as Building[]).find(x => x.id === a.default_building_id)?.name ?? '' : ''
+        const bn = b.default_building_id != null ? (buildings as Building[]).find(x => x.id === b.default_building_id)?.name ?? '' : ''
+        return an.localeCompare(bn)
+      }
+      case 'special_access': return Number(a.can_book_special) - Number(b.can_book_special)
+      case 'buildings': {
+        const an = (a.admin_buildings ?? []).map(x => x.name).sort().join(',')
+        const bn = (b.admin_buildings ?? []).map(x => x.name).sort().join(',')
+        return an.localeCompare(bn)
+      }
+      case 'created_at': return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+      case 'updated_at': return new Date(a.updated_at || 0).getTime() - new Date(b.updated_at || 0).getTime()
+      default: return 0
+    }
+  }, [sortKey, buildings])
+
   const grouped = useMemo(() => {
     const g: Partial<Record<UserRole, User[]>> = {}
     filtered.forEach(u => { if (!g[u.role]) g[u.role] = []; g[u.role]!.push(u) })
+    const dir = sortDir === 'asc' ? 1 : -1
+    Object.values(g).forEach(arr => arr!.sort((a, b) => compareUsers(a, b) * dir))
     return g
-  }, [filtered])
+  }, [filtered, sortDir, compareUsers])
 
   // ── "User (Reguler)" subpage — the role='user' table lives on its own drill-down view ──
   const [regularView, setRegularView] = useState(false)
@@ -3798,7 +3907,7 @@ function UsersTab() {
   const regularPageClamped = Math.min(regularPage, regularTotalPages)
   const regularPageRows = regularUsers.slice((regularPageClamped - 1) * regularPerPageN, regularPageClamped * regularPerPageN)
 
-  useEffect(() => { setRegularPage(1) }, [search, regularPerPage])
+  useEffect(() => { setRegularPage(1) }, [search, regularPerPage, sortKey, sortDir])
   useEffect(() => { setSelectedIds(new Set()) }, [search, regularView])
 
   return (
@@ -3910,14 +4019,15 @@ function UsersTab() {
                         <tr className="border-b border-[var(--ds-border-sub)]">
                           {!isReadOnly && <th className="px-4 py-3 w-8"></th>}
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-10">No.</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Email</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Department</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-20">Ext</th>
-                          {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Default Building</th>}
-                          {role === 'user' && <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Special Access</th>}
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Created</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Edited</th>
+                          <SortableTh label="Name" sortKey="name" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          <SortableTh label="Email" sortKey="email" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          <SortableTh label="Department" sortKey="department" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          <SortableTh label="Ext" sortKey="ext" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} className="w-20" />
+                          {role === 'user' && <SortableTh label="Default Building" sortKey="default_building" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />}
+                          {role === 'user' && <SortableTh label="Special Access" sortKey="special_access" sort={{ key: sortKey, dir: sortDir }} onSort={onSort}
+                            info="Grants this user permission to book Special rooms — rooms that normally require contacting the Receptionist or GAA team." />}
+                          <SortableTh label="Date Created" sortKey="created_at" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} className="whitespace-nowrap" />
+                          <SortableTh label="Date Edited" sortKey="updated_at" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} className="whitespace-nowrap" />
                           <th className="px-2 py-3 w-10"></th>
                           <th className="px-2 py-3 w-10"></th>
                         </tr>
@@ -4043,11 +4153,11 @@ function UsersTab() {
                       </colgroup>
                       <thead>
                         <tr className="border-b border-[var(--ds-border-sub)]">
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Name</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Department</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Buildings</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Created</th>
-                          <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider whitespace-nowrap">Date Edited</th>
+                          <SortableTh label="Name" sortKey="name" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          <SortableTh label="Department" sortKey="department" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          <SortableTh label="Buildings" sortKey="buildings" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          <SortableTh label="Date Created" sortKey="created_at" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} className="whitespace-nowrap" />
+                          <SortableTh label="Date Edited" sortKey="updated_at" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} className="whitespace-nowrap" />
                           <th className="px-2 py-3"></th>
                           <th className="px-2 py-3"></th>
                         </tr>
@@ -7318,7 +7428,7 @@ export default function AdminPage() {
   }, [antiGhostActive, tab])
 
   // Overview
-  const [overviewPeriod, setOverviewPeriod]   = useState<7 | 30>(7)
+  const [overviewPeriod, setOverviewPeriod]   = useState<7 | 30 | 'all'>(7)
   const [totalBookingsPeriod, setTotalBookingsPeriod] = useState<'month' | 'all'>('all')
   const [confirmedPeriod, setConfirmedPeriod]         = useState<'month' | 'all'>('all')
   const [statusPeriod, setStatusPeriod]       = useState<SectionPeriod>('month')
@@ -7812,14 +7922,14 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between mb-5">
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--ds-text-3)]">Booking Trend</p>
-                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">Last {overviewPeriod === 7 ? '7 days' : '30 days'}</p>
+                      <p className="text-[11px] font-black text-[var(--ds-text-2)] mt-0.5">{overviewPeriod === 'all' ? 'All time' : `Last ${overviewPeriod} days`}</p>
                     </div>
                     <div className="flex gap-0.5 p-0.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
-                      {([7, 30] as const).map(p => (
+                      {([7, 30, 'all'] as const).map(p => (
                         <button key={p} onClick={() => setOverviewPeriod(p)}
                           className="text-[8px] font-black px-2.5 py-1 rounded-[9px] transition-all uppercase tracking-wide"
                           style={{ background: overviewPeriod === p ? 'var(--ds-bg-surface)' : 'transparent', color: overviewPeriod === p ? 'var(--ds-text-1)' : 'var(--ds-text-4)', boxShadow: overviewPeriod === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
-                          {p === 7 ? '7 Days' : '30 Days'}
+                          {p === 7 ? '7 Days' : p === 30 ? '30 Days' : 'All Time'}
                         </button>
                       ))}
                     </div>
