@@ -17,11 +17,11 @@ import type { AppNotification, Booking } from '../../types'
 import { parseLocal } from '../../utils/date'
 
 function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  const diff = Math.floor((Date.now() - parseLocal(iso).getTime()) / 1000)
   if (diff < 60) return 'just now'
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  return parseLocal(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
 export default function NotificationPanel() {

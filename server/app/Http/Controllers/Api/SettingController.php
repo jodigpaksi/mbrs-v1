@@ -636,7 +636,7 @@ class SettingController extends Controller
         $cancelled = 0;
 
         $futurePending = Booking::where('status', '!=', 'cancelled')
-            ->where('end_at', '>', now())
+            ->where('end_at', '>', Setting::localNow())
             ->get();
 
         foreach ($futurePending as $booking) {
@@ -648,7 +648,7 @@ class SettingController extends Controller
             $endTime   = $bEnd->format('H:i');
 
             if ($startTime >= $newEnd || $endTime <= $newStart) {
-                $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+                $booking->update(['status' => 'cancelled', 'cancelled_at' => Setting::localNow()]);
                 $cancelled++;
             } elseif ($endTime > $newEnd || $startTime < $newStart) {
                 $newStartAt = $startTime < $newStart

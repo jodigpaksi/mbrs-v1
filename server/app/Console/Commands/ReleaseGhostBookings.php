@@ -17,13 +17,6 @@ class ReleaseGhostBookings extends Command
     protected $signature   = 'bookings:release-ghosts';
     protected $description = 'Auto-cancel bookings that missed the kiosk presence-confirmation window';
 
-    private static function businessTz(): string { return \App\Models\Setting::businessTz(); }
-
-    private function localNow(): Carbon
-    {
-        return Carbon::parse(Carbon::now(self::businessTz())->format('Y-m-d H:i:s'));
-    }
-
     public function handle(): void
     {
         $settings = Setting::getMany(['anti_ghost_enabled', 'anti_ghost_window_after', 'ghost_cancel_email_enabled']);
@@ -33,7 +26,7 @@ class ReleaseGhostBookings extends Command
         // Default enabled (missing key = never configured yet, not explicitly disabled).
         $emailEnabled = ($settings['ghost_cancel_email_enabled'] ?? null) !== 'false';
 
-        $now      = $this->localNow();
+        $now      = Setting::localNow();
         $cutoff   = $now->copy()->subMinutes($windowAfter);
         $today    = $now->toDateString();
 

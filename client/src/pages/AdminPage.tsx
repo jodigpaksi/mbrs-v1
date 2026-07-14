@@ -7,7 +7,7 @@ import type { SectionPeriod } from '../api/analytics'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
-import { parseLocal } from '../utils/date'
+import { parseLocal, toMin } from '../utils/date'
 import ToggleSwitch from '../components/ui/ToggleSwitch'
 import type { Worksheet as ExcelWorksheet } from 'exceljs'
 import { loadXlsx, loadExcelJs } from '../utils/lazyExport'
@@ -4721,10 +4721,10 @@ function ArchiveTab() {
   })
 
   function fmtDate(iso: string) {
-    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    return parseLocal(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   }
   function fmtTime(iso: string) {
-    return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    return parseLocal(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   }
 
   async function exportExcel() {
@@ -5053,7 +5053,6 @@ function SettingsTab() {
   const [localEnd,   setLocalEnd]   = useState(hours?.end   ?? '19:00')
   const [saved, setSaved] = useState<{ trimmed: number; cancelled: number } | null>(null)
   useEffect(() => { if (hours) { setLocalStart(hours.start); setLocalEnd(hours.end) } }, [hours?.start, hours?.end])
-  function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
   const isValid = toMin(localEnd) - toMin(localStart) >= 30
   const { mutate: saveHours, isPending: hoursPending, isError: hoursError } = useMutation({
     mutationFn: () => updateBookingHours(localStart, localEnd),

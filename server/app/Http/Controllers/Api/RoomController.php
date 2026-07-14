@@ -7,7 +7,6 @@ use App\Models\ActivityLog;
 use App\Models\Booking;
 use App\Models\Building;
 use App\Models\Room;
-use App\Models\RoomView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -188,7 +187,7 @@ class RoomController extends Controller
 
     public function stats(Room $room): JsonResponse
     {
-        $now = now();
+        $now = \App\Models\Setting::localNow();
         $monthStart = $now->copy()->startOfMonth();
         $monthEnd   = $now->copy()->endOfMonth();
         $thirtyAgo  = $now->copy()->subDays(30);

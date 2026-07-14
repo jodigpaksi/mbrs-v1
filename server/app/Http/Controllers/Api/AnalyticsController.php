@@ -98,7 +98,7 @@ class AnalyticsController extends Controller
 
         $trend = $byBuilding(Booking::query())
             ->selectRaw('DATE(start_at) as date, COUNT(*) as count')
-            ->when($period !== 'all', fn ($q) => $q->where('start_at', '>=', now()->subDays($period)))
+            ->when($period !== 'all', fn ($q) => $q->where('start_at', '>=', now($tz)->subDays($period)))
             ->groupByRaw('DATE(start_at)')
             ->orderBy('date')
             ->get()

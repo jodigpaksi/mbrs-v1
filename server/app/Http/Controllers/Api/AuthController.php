@@ -33,7 +33,7 @@ class AuthController extends Controller
         $user->load('department');
         $token = $user->createToken('auth-token')->plainTextToken;
 
-        if (in_array($user->role, ['admin', 'superadmin'])) {
+        if ($user->role === 'admin') {
             ActivityLog::record('user.login', "Admin {$user->name} signed in", $user);
         }
 
@@ -64,7 +64,7 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (in_array($user->role, ['admin', 'superadmin'])) {
+        if ($user->role === 'admin') {
             ActivityLog::record('user.logout', "Admin {$user->name} signed out", $user);
         }
         $user->currentAccessToken()->delete();
@@ -147,7 +147,7 @@ class AuthController extends Controller
     public function updateAvatar(Request $request): JsonResponse
     {
         $user = $request->user();
-        if ($user->role !== 'superadmin') {
+        if ($user->role !== 'admin') {
             $allowed = \App\Models\Setting::where('key', 'allow_avatar_upload')->value('value') ?? 'true';
             if ($allowed === 'false') {
                 return response()->json(['message' => 'Avatar upload is disabled by the administrator.'], 403);

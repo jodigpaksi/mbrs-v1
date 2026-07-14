@@ -16,6 +16,7 @@ import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 import ToggleSwitch from '../ui/ToggleSwitch'
 import ElasticCheckbox from '../ui/ElasticCheckbox'
+import { toMin, fromMin } from '../../utils/date'
 
 type ICSData = { title: string; description?: string; startAt: string; endAt: string; location?: string; id?: number }
 
@@ -91,9 +92,7 @@ async function runBatched<T, R>(items: T[], fn: (item: T) => Promise<R>, batchSi
   return results
 }
 
-function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
 function daysInMonth(year: number, month0: number) { return new Date(year, month0 + 1, 0).getDate() }
-function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
 
 const DOW_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 // JS getDay() returns 0=Sun,1=Mon,...,6=Sat; our array index in DOW_KEYS: mon=0,...,sun=6

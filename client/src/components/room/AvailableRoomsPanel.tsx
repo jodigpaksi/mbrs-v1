@@ -9,10 +9,7 @@ import { useAuth } from '../../context/AuthContext'
 import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import type { AvailableSlot, Building, Room } from '../../types'
-
-/* ── helpers ── */
-function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
-function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
+import { toMin, fromMin } from '../../utils/date'
 
 function todayISO() {
   const d = new Date()

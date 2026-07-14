@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Booking;
 use App\Models\Building;
+use App\Models\Department;
 use App\Models\Room;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -15,22 +16,29 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(SettingsSeeder::class);
 
+        // ── Departments ──────────────────────────────────────────────────────
+        // User::$fillable takes department_id (FK), not a raw department string —
+        // create/lookup the Department rows first so the users below resolve correctly.
+        $deptGaa = Department::firstOrCreate(['code' => 'GAA'], ['name' => 'GAA']);
+        $deptHrd = Department::firstOrCreate(['code' => 'HRD'], ['name' => 'HRD']);
+        $deptMtc = Department::firstOrCreate(['code' => 'MTC'], ['name' => 'MTC']);
+
         // ── Users ────────────────────────────────────────────────────────────
         $admin = User::create([
             'name' => 'Anita Wijaya', 'email' => 'anita@corp.com',
-            'password' => Hash::make('password'), 'department' => 'GAA',
+            'password' => Hash::make('password'), 'department_id' => $deptGaa->id,
             'role' => 'admin', 'ext' => '102', 'avatar' => 'Anita',
         ]);
 
         $user1 = User::create([
             'name' => 'Jessica Miller', 'email' => 'jessica@corp.com',
-            'password' => Hash::make('password'), 'department' => 'HRD',
+            'password' => Hash::make('password'), 'department_id' => $deptHrd->id,
             'role' => 'user', 'ext' => '801', 'avatar' => 'Aria',
         ]);
 
         $user2 = User::create([
             'name' => 'Fixer Team', 'email' => 'mtc@corp.com',
-            'password' => Hash::make('password'), 'department' => 'MTC',
+            'password' => Hash::make('password'), 'department_id' => $deptMtc->id,
             'role' => 'user', 'ext' => '000', 'avatar' => 'Felix',
         ]);
 

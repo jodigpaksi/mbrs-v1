@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { loadXlsx, loadPdf } from '../utils/lazyExport'
+import { toMin } from '../utils/date'
 import type { Booking, Room } from '../types/index'
 import { getMyBookings, clearCancelledBookings, clearPastBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
 import { getDirectory } from '../api/users'
@@ -1025,8 +1026,6 @@ function SlideWrapper({ exiting, children }: { exiting: boolean; children: React
   return <div ref={wrapRef}>{children}</div>
 }
 
-function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
-
 export default function SchedulePage() {
   const { user } = useAuth()
   const { t, language, defaultBuilding } = useSettings()
@@ -1469,20 +1468,28 @@ export default function SchedulePage() {
 
   async function doClearCancelled() {
     setClearConfirm(false)
-    await clearCancelledBookings()
+    const { deleted, skipped } = await clearCancelledBookings()
     queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
     queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
     queryClient.invalidateQueries({ queryKey: ['bookings'] })
-    addInfoToast('Cancelled bookings cleared')
+    addInfoToast(
+      skipped > 0
+        ? `Cleared ${deleted} booking${deleted !== 1 ? 's' : ''} — ${skipped} skipped (booked for another user, still visible to them)`
+        : 'Cancelled bookings cleared'
+    )
   }
 
   async function doClearPast() {
     setClearPastConfirm(false)
-    await clearPastBookings()
+    const { deleted, skipped } = await clearPastBookings()
     queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
     queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
     queryClient.invalidateQueries({ queryKey: ['bookings'] })
-    addInfoToast('Past bookings cleared')
+    addInfoToast(
+      skipped > 0
+        ? `Cleared ${deleted} booking${deleted !== 1 ? 's' : ''} — ${skipped} skipped (booked for another user, still visible to them)`
+        : 'Past bookings cleared'
+    )
   }
 
   const upcomingInAll = allList.filter((b: Booking) => !isActuallyPast(b))
@@ -3606,7 +3613,7 @@ export default function SchedulePage() {
             <div className="rounded-2xl p-4 mb-6"
               style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)' }}>
               <p className="text-xs font-bold text-red-500 leading-relaxed">
-                This permanently deletes all your cancelled bookings from history. This cannot be undone.
+                This permanently deletes your cancelled bookings from history. Bookings made for another user are skipped, since they'd still see it in their own history. This cannot be undone.
               </p>
             </div>
             <div className="flex gap-3">
@@ -3662,7 +3669,7 @@ export default function SchedulePage() {
             <div className="rounded-2xl p-4 mb-6"
               style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)' }}>
               <p className="text-xs font-bold text-red-500 leading-relaxed">
-                This permanently deletes all your past bookings from history. This cannot be undone.
+                This permanently deletes your past bookings from history. Bookings made for another user are skipped, since they'd still see it in their own history. This cannot be undone.
               </p>
             </div>
             <div className="flex gap-3">

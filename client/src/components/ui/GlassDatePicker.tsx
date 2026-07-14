@@ -69,6 +69,7 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
   const [view, setView] = useState<'days' | 'months'>('days')
   const [cursor, setCursor] = useState(() => parseISO(value) ?? new Date())
   const [typedText, setTypedText] = useState('')
+  const [typedError, setTypedError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
   const [popupStyle, setPopupStyle] = useState<CSSProperties>({})
@@ -106,19 +107,23 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
       const sel = parseISO(value)
       setCursor(sel ?? new Date())
       setTypedText(sel ? `${String(sel.getDate()).padStart(2, '0')}/${String(sel.getMonth() + 1).padStart(2, '0')}/${sel.getFullYear()}` : '')
+      setTypedError(null)
       setView('days')
       setPopupStyle(calcPopupStyle())
     }
     setOpen(o => !o)
   }
 
-  function commitTyped(raw: string) {
+  function commitTyped(raw: string): boolean {
+    if (!raw.trim()) { setTypedError(null); return true }
     const iso = parseTypedDate(raw)
-    if (!iso) return
+    if (!iso) { setTypedError(isId ? 'Format tanggal tidak valid' : 'Invalid date format'); return false }
     const d = parseISO(iso)
-    if (!d || beforeMin(d)) return
+    if (!d || beforeMin(d)) { setTypedError(isId ? 'Tanggal di luar rentang yang diizinkan' : 'Date is out of the allowed range'); return false }
+    setTypedError(null)
     onChange(iso)
     setCursor(d)
+    return true
   }
 
   useEffect(() => {
@@ -247,15 +252,20 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
 
           {/* typed date input */}
           {view === 'days' && (
-            <input
-              type="text"
-              placeholder="DD/MM/YYYY"
-              value={typedText}
-              onChange={e => setTypedText(e.target.value)}
-              onBlur={e => commitTyped(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { commitTyped((e.target as HTMLInputElement).value); setOpen(false) } }}
-              className={`w-full mb-2 px-2.5 ${compact ? 'py-1 text-[10px]' : 'py-1.5 text-[11px]'} rounded-lg font-bold tracking-wide text-center bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-1)] placeholder:text-[var(--ds-text-4)] focus:outline-none focus:border-[#adee2b] transition-colors`}
-            />
+            <div className="mb-2">
+              <input
+                type="text"
+                placeholder="DD/MM/YYYY"
+                value={typedText}
+                onChange={e => { setTypedText(e.target.value); if (typedError) setTypedError(null) }}
+                onBlur={e => commitTyped(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { if (commitTyped((e.target as HTMLInputElement).value)) setOpen(false) } }}
+                className={`w-full px-2.5 ${compact ? 'py-1 text-[10px]' : 'py-1.5 text-[11px]'} rounded-lg font-bold tracking-wide text-center bg-[var(--ds-bg-surface)] border text-[var(--ds-text-1)] placeholder:text-[var(--ds-text-4)] focus:outline-none transition-colors ${typedError ? 'border-red-400 focus:border-red-500' : 'border-[var(--ds-border)] focus:border-[#adee2b]'}`}
+              />
+              {typedError && (
+                <p className="text-[9.5px] font-bold text-red-500 mt-1 px-1">{typedError}</p>
+              )}
+            </div>
           )}
 
           {/* body */}

@@ -86,12 +86,14 @@ export async function transferBooking(id: number, bookedForUserId: number) {
   return res.data
 }
 
-export async function clearCancelledBookings() {
+export interface ClearBookingsResult { message: string; deleted: number; skipped: number }
+
+export async function clearCancelledBookings(): Promise<ClearBookingsResult> {
   const res = await api.delete('/bookings/clear-cancelled')
   return res.data
 }
 
-export async function clearPastBookings() {
+export async function clearPastBookings(): Promise<ClearBookingsResult> {
   const res = await api.delete('/bookings/clear-past')
   return res.data
 }

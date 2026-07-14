@@ -4,9 +4,7 @@ import { useBookingHours } from '../../hooks/useBookingHours'
 import { useSettings } from '../../context/SettingsContext'
 import { getGeneralSettings } from '../../api/settings'
 import { useModalHotkeys } from '../../hooks/useModalHotkeys'
-
-function fromMin(min: number) { return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}` }
-function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
+import { toMin, fromMin } from '../../utils/date'
 
 interface Props {
   open: boolean

@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Mail\BookingReminder;
 use App\Models\Booking;
 use App\Models\Setting;
-use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 
@@ -14,25 +13,19 @@ class SendBookingReminders extends Command
     protected $signature   = 'bookings:send-reminders';
     protected $description = 'Send email reminders for bookings starting soon';
 
-    private static function businessTz(): string { return Setting::businessTz(); }
-
-    private function localNow(): Carbon
-    {
-        return Carbon::parse(Carbon::now(self::businessTz())->format('Y-m-d H:i:s'));
-    }
-
     public function handle(): void
     {
+        $settings = Setting::getMany(['reminder_enabled', 'reminder_minutes']);
+
         // Default enabled (missing key = never configured yet, not explicitly disabled) so
         // reminders keep working for existing installs after this setting was introduced.
-        if (Setting::where('key', 'reminder_enabled')->value('value') === 'false') {
+        if (($settings['reminder_enabled'] ?? null) === 'false') {
             return;
         }
 
-        $reminderMinutes = (int) (Setting::where('key', 'reminder_minutes')->value('value')
-            ?? env('BOOKING_REMINDER_MINUTES', 10));
+        $reminderMinutes = (int) ($settings['reminder_minutes'] ?? env('BOOKING_REMINDER_MINUTES', 10));
 
-        $now      = $this->localNow();
+        $now      = Setting::localNow();
         $windowEnd = $now->copy()->addMinutes($reminderMinutes);
 
         $bookings = Booking::whereIn('status', ['confirmed', 'tentative'])

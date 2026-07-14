@@ -11,20 +11,6 @@ use Illuminate\Http\Request;
 
 class KioskController extends Controller
 {
-    /**
-     * Bookings are stored as naive local wall-clock times (the browser's local
-     * time at booking). app.timezone is UTC, so Carbon::now() is offset from the
-     * stored wall-clock and a currently-running booking looks "upcoming".
-     * This returns "now" as the business-local wall-clock, reinterpreted in the
-     * default tz so it lines up with the stored start_at/end_at values.
-     */
-    private static function businessTz(): string { return \App\Models\Setting::businessTz(); }
-
-    private function localNow(): Carbon
-    {
-        return Carbon::parse(Carbon::now(self::businessTz())->format('Y-m-d H:i:s'));
-    }
-
     /** Resolve a kiosk by its custom slug or numeric id (URL accepts either). */
     private function findKiosk(string $id, array|string $with = []): KioskConfig
     {
@@ -77,10 +63,10 @@ class KioskController extends Controller
 
         $room = $kiosk->room;
         if (! $room) {
-            return response()->json(['room' => null, 'current' => null, 'upcoming' => [], 'server_time' => now()->toIso8601String()]);
+            return response()->json(['room' => null, 'current' => null, 'upcoming' => [], 'server_time' => \App\Models\Setting::localNow()->toIso8601String()]);
         }
 
-        $now        = $this->localNow();
+        $now        = \App\Models\Setting::localNow();
         $todayStart = $now->copy()->startOfDay();
         $todayEnd   = $now->copy()->endOfDay();
 
@@ -140,7 +126,7 @@ class KioskController extends Controller
             return response()->json(['error' => 'Booking does not match this kiosk room'], 422);
         }
 
-        $now = $this->localNow();
+        $now = \App\Models\Setting::localNow();
         if (Carbon::parse($booking->start_at) > $now || Carbon::parse($booking->end_at) <= $now) {
             return response()->json(['error' => 'Booking is not currently active'], 422);
         }

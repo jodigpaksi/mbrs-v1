@@ -21,7 +21,12 @@ class BackupController extends Controller
 {
     public static function getSettings(): array
     {
-        $get = fn(string $key, string $default) => Setting::where('key', $key)->value('value') ?? $default;
+        $m = Setting::getMany([
+            'backup_enabled', 'backup_frequency', 'backup_time', 'backup_day_of_week',
+            'backup_day_of_month', 'backup_formats', 'backup_include_archive',
+            'backup_include_log', 'backup_include_data',
+        ]);
+        $get = fn(string $key, string $default) => $m[$key] ?? $default;
         return [
             'backup_enabled'         =>        $get('backup_enabled', 'false') === 'true',
             'backup_frequency'       =>        $get('backup_frequency', 'weekly'),

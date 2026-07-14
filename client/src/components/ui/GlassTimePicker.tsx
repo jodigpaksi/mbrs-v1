@@ -1,13 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-
-function toMin(hhmm: string): number {
-  const [h, m] = hhmm.split(':').map(Number)
-  return h * 60 + m
-}
-function fromMin(min: number): string {
-  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
-}
+import { toMin, fromMin } from '../../utils/date'
 
 interface GlassTimePickerProps {
   value: string                                       // 'HH:mm'
