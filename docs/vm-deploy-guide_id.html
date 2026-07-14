@@ -314,21 +314,75 @@
 
     <section class="phase" id="p3">
       <div class="phase-head"><span class="num">3</span><h2>Instal stack-nya, di dalam VM</h2><span class="phase-tag">Guest OS</span></div>
-      <p class="lead">Semua yang ada di tabel requirement README. Download tiap installer lewat browser di dalam VM.</p>
+      <p class="lead">Semua yang ada di tabel requirement README. Download tiap installer lewat browser <em>di dalam VM</em> (bukan di host lalu di-copy) — lebih gampang kalau installer-nya juga ke-cache di dalam guest, jaga-jaga kalau nanti butuh reinstall.</p>
+
       <div class="step">
         <div class="stitle">1 — XAMPP (PHP 8.2+, Apache, MySQL)</div>
-        <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Download dari apachefriends.org — pilih versi yang PHP bawaannya <strong>8.2.x</strong>, harus persis sama requirement <code>composer.json</code> yaitu <code>^8.2</code>. PHP bawaan yang lebih baru/lama itu penyebab paling umum bug membingungkan pas pindah mesin.</p>
-        <pre>php -v
-<span class="c"># pastikan yang keluar 8.2.x setelah XAMPP terinstal dan php.exe-nya masuk PATH</span></pre>
+        <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Buka <code>apachefriends.org/download.html</code>. Halaman utama cuma nawarin versi PHP terbaru — kalau itu bukan <strong>8.2.x</strong>, klik link <strong>"other versions"</strong> di bawah tombol download dan cari XAMPP yang bawaannya PHP 8.2.x. Ini harus persis sama requirement <code>composer.json</code> yaitu <code>^8.2</code> — PHP bawaan yang lebih baru/lama itu penyebab paling umum bug membingungkan pas pindah mesin.</p>
+        <ul class="check" style="margin-bottom:8px;">
+          <li>Jalankan installer-nya. Kalau Windows Defender / antivirus nge-warn "unknown publisher", itu normal untuk installer XAMPP — pilih "Run anyway".</li>
+          <li>Di layar pemilihan komponen, cukup centang <strong>Apache</strong>, <strong>MySQL</strong>, <strong>PHP</strong>, dan <strong>phpMyAdmin</strong> — FileZilla/Mercury Mail/Tomcat nggak kepakai, bisa di-uncheck biar instalasi lebih cepat.</li>
+          <li>Install ke lokasi default <code>C:\xampp</code> — path lain bisa dipakai tapi semua contoh command di panduan ini asumsi default.</li>
+          <li>Kalau muncul warning soal UAC/folder <code>Program Files</code>, klik lanjut — XAMPP memang lebih rewel kalau diinstal di luar root <code>C:\</code>.</li>
+        </ul>
+        <div class="step" style="margin-bottom:0;">
+          <div class="stitle" style="font-size:13.5px;">Nyalain servicenya &amp; cek dulu dari XAMPP Control Panel</div>
+          <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Buka <strong>XAMPP Control Panel</strong> dari Start Menu, klik <strong>Start</strong> di baris Apache dan MySQL — dua-duanya harus jadi hijau. Kalau Apache gagal start (port 80 bentrok), nggak masalah untuk latihan ini karena nanti dipindah ke port 8000/8001 di Fase 7 — abaikan dulu, fokus MySQL-nya harus hijau karena dibutuhkan buat migrate database.</p>
+        </div>
+        <div class="step" style="margin-bottom:0;">
+          <div class="stitle" style="font-size:13.5px;">Tambahin PHP ke PATH manual</div>
+          <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Installer XAMPP <strong>tidak otomatis</strong> nambahin <code>php.exe</code> ke PATH Windows — beda dari Node/Git yang biasanya otomatis. Harus manual: <strong>Search Windows → "Edit the system environment variables" → Environment Variables → System variables → Path → Edit → New</strong>, tambahin <code>C:\xampp\php</code>, lalu OK di semua dialog.</p>
+        </div>
+        <pre><span class="c"># tutup semua jendela terminal yang lagi kebuka, buka yang baru (PATH baru
+# nggak kepakai di terminal yang udah lebih dulu kebuka), lalu:</span>
+php -v
+<span class="c"># pastikan yang keluar 8.2.x</span></pre>
+        <div class="callout info">
+          <span class="lbl">Sekalian</span>
+          <p>Buka <code>http://localhost/phpmyadmin</code> (setelah Apache/MySQL hijau) dan buat database kosong sekarang, misalnya <code>mbrs_db</code> — biar Fase 5 (<code>php artisan migrate</code>) tinggal isi tabel ke database yang udah ada.</p>
+        </div>
       </div>
+
       <div class="step">
         <div class="stitle">2 — Composer</div>
-        <pre>composer -V</pre>
+        <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Buka <code>getcomposer.org/download</code>, download <strong>Composer-Setup.exe</strong> (installer Windows, bukan versi manual/command-line di halaman yang sama).</p>
+        <ul class="check" style="margin-bottom:8px;">
+          <li>Installer bakal otomatis nyari <code>php.exe</code> — pastikan yang kedeteksi adalah <code>C:\xampp\php\php.exe</code> (kalau ada lebih dari satu PHP di mesin, pilih yang ini secara manual di step itu).</li>
+          <li>Biarin opsi proxy kosong kecuali kantor/jaringan kamu emang pakai proxy.</li>
+          <li>Lanjut sampai selesai dengan pengaturan default.</li>
+        </ul>
+        <pre><span class="c"># buka terminal baru lagi setelah instalasi selesai:</span>
+composer -V</pre>
       </div>
+
       <div class="step">
-        <div class="stitle">3 — Node.js 20.x LTS + Git for Windows</div>
-        <pre>node -v   <span class="c"># harus v20.x</span>
+        <div class="stitle">3 — Node.js 20.x LTS</div>
+        <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Buka <code>nodejs.org</code> — di halaman utama biasanya ada dua tombol download, pilih yang berlabel <strong>LTS</strong> (bukan "Current"), pastikan versinya baris <strong>20.x</strong> sesuai README (kalau LTS yang lagi aktif sudah naik ke versi lain, buka <code>nodejs.org/en/download</code> dan pilih 20.x dari dropdown versi).</p>
+        <ul class="check" style="margin-bottom:8px;">
+          <li>Jalankan <strong>.msi</strong>-nya, next-next dengan default — installer ini otomatis nambahin <code>node</code> dan <code>npm</code> ke PATH.</li>
+          <li>Di langkah "Tools for Native Modules", centang boks itu boleh di-skip (uncheck) — project ini nggak butuh native module yang perlu dikompilasi.</li>
+        </ul>
+        <pre><span class="c"># terminal baru lagi:</span>
+node -v   <span class="c"># harus v20.x</span>
+npm -v</pre>
+      </div>
+
+      <div class="step">
+        <div class="stitle">4 — Git for Windows</div>
+        <p style="margin:0 0 8px;color:var(--ink-dim);font-size:13.5px;">Buka <code>git-scm.com/download/win</code>, download installer 64-bit-nya.</p>
+        <ul class="check" style="margin-bottom:8px;">
+          <li>Di layar "Adjusting your PATH environment", pastikan opsi yang kepilih adalah <strong>"Git from the command line and also from 3rd-party software"</strong> (opsi default/recommended) — bukan yang "Git Bash only".</li>
+          <li>Di layar "Choosing the default editor", boleh dibiarin default (Vim) atau pilih Notepad kalau belum kenal Vim — nggak ngaruh ke langkah manapun di panduan ini.</li>
+          <li>Layar "line ending conversions": biarin default <strong>"Checkout Windows-style, commit Unix-style line endings"</strong>.</li>
+          <li>Sisanya next-next default sampai selesai.</li>
+        </ul>
+        <pre><span class="c"># terminal baru lagi:</span>
 git --version</pre>
+      </div>
+
+      <div class="callout warn">
+        <span class="lbl">Gotcha — kena berkali-kali kalau kelewat</span>
+        <p>Empat installer di atas semuanya cuma nulis ke PATH Windows saat itu juga — jendela terminal/PowerShell yang <em>udah kebuka duluan</em> tetap pakai PATH lama sampai ditutup dan dibuka ulang. Kalau abis instal composer/node/git terus command-nya masih "not recognized", coba tutup terminal dan buka yang baru dulu sebelum curiga instalasi gagal.</p>
       </div>
       <div class="callout warn">
         <span class="lbl">Gotcha</span>

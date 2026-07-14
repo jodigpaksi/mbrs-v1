@@ -68,7 +68,7 @@ export interface AnalyticsFilters {
 export type SectionPeriod = 'month' | 'all'
 
 export async function getAnalyticsOverview(
-  period: 7 | 30 = 7,
+  period: 7 | 30 | 'all' = 7,
   statusPeriod: SectionPeriod = 'month',
   roomsPeriod: SectionPeriod = 'month',
   hoursPeriod: SectionPeriod = 'month',

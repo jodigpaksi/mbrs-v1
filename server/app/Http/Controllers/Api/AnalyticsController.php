@@ -25,8 +25,9 @@ class AnalyticsController extends Controller
 {
     public function overview(Request $request): JsonResponse
     {
-        $period = (int) ($request->query('period', 7));
-        if (!in_array($period, [7, 30])) $period = 7;
+        $periodRaw = $request->query('period', 7);
+        $period = $periodRaw === 'all' ? 'all' : (int) $periodRaw;
+        if ($period !== 'all' && !in_array($period, [7, 30])) $period = 7;
 
         $statusPeriod = $request->query('status_period', 'month');
         $roomsPeriod  = $request->query('rooms_period',  'month');
@@ -86,7 +87,7 @@ class AnalyticsController extends Controller
 
         $trend = $byBuilding(Booking::query())
             ->selectRaw('DATE(start_at) as date, COUNT(*) as count')
-            ->where('start_at', '>=', now()->subDays($period))
+            ->when($period !== 'all', fn ($q) => $q->where('start_at', '>=', now()->subDays($period)))
             ->groupByRaw('DATE(start_at)')
             ->orderBy('date')
             ->get()

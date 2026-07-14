@@ -17,6 +17,8 @@ import ContactReceptionistModal from '../components/room/ContactReceptionistModa
 import AfterHoursModal from '../components/booking/AfterHoursModal'
 import GlassDatePicker from '../components/ui/GlassDatePicker'
 import { SpecialRoomBadge } from '../components/ui/SpecialRoomBadge'
+import FilterSelectDropdown from '../components/ui/FilterSelectDropdown'
+import UserAvatar from '../components/ui/UserAvatar'
 import WifiLoader from '../components/ui/WifiLoader'
 import { useWeekendSettings } from '../hooks/useWeekendSettings'
 import { useModalHotkeys } from '../hooks/useModalHotkeys'
@@ -517,7 +519,7 @@ export default function TimelinePage() {
 
   // Enter → confirm, Escape → dismiss, one modal at a time.
   useModalHotkeys(!!cancelTarget, confirmCancel, () => setCancelTarget(null))
-  useModalHotkeys(!!transferBooking, undefined, () => { setTransferBooking(null); setTransferSearch('') })
+  useModalHotkeys(!!transferBooking, undefined, () => closeTransferModal())
   useModalHotkeys(!!seriesCancelTarget, () => confirmSeriesCancel(seriesCancelTarget!), () => setSeriesCancelTarget(null))
   useModalHotkeys(pastDateModalOpen, () => setPastDateModalOpen(false), () => setPastDateModalOpen(false))
 
@@ -1009,23 +1011,37 @@ export default function TimelinePage() {
   }
 
   const [transferSearch, setTransferSearch] = useState('')
+  const [transferDeptFilter, setTransferDeptFilter] = useState('')
+  const [transferSortDir, setTransferSortDir] = useState<'asc' | 'desc'>('asc')
   const { data: directory = [] } = useQuery({ queryKey: ['user-directory'], queryFn: getDirectory, staleTime: 60_000, enabled: !!transferBooking })
+  function closeTransferModal() {
+    setTransferBooking(null)
+    setTransferSearch('')
+    setTransferDeptFilter('')
+    setTransferSortDir('asc')
+  }
   const { mutate: doTransfer, isPending: transferring } = useMutation({
     mutationFn: (toUserId: number) => transferBookingApi(transferBooking!.id, toUserId),
     onSuccess: (_, toUserId) => {
       const person = directory.find(d => d.id === toUserId)
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
       addInfoToast(`Booking transferred to ${person?.name ?? 'new user'}`, 2500)
-      setTransferBooking(null)
-      setTransferSearch('')
+      closeTransferModal()
     },
   })
-  const filteredDirectory = transferSearch.trim()
-    ? directory.filter(d =>
-        d.name.toLowerCase().includes(transferSearch.toLowerCase()) ||
-        d.email.toLowerCase().includes(transferSearch.toLowerCase())
-      ).slice(0, 30)
-    : directory.slice(0, 30)
+  const filteredDirectory = useMemo(() => {
+    const q = transferSearch.trim().toLowerCase()
+    const list = directory.filter(d => {
+      const matchesSearch = !q
+        || d.name.toLowerCase().includes(q)
+        || d.email.toLowerCase().includes(q)
+        || (d.department || '').toLowerCase().includes(q)
+      const matchesDept = !transferDeptFilter || d.department === transferDeptFilter
+      return matchesSearch && matchesDept
+    })
+    list.sort((a, b) => transferSortDir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name))
+    return q || transferDeptFilter ? list : list.slice(0, 30)
+  }, [directory, transferSearch, transferDeptFilter, transferSortDir])
 
   function confirmCancel() {
     if (!cancelTarget) return
@@ -2494,6 +2510,7 @@ export default function TimelinePage() {
               <span className="material-symbols-outlined text-[var(--ds-text-2)]" style={{ fontSize: 15 }}>swap_horiz</span>
               <span className="text-[11px] font-black uppercase text-[var(--ds-text-1)]">Transfer Booking</span>
             </button>
+            <div style={{ height: 1, background: 'var(--ds-border)', margin: '4px 0' }} />
             <div className="flex gap-1 px-0.5">
               <button
                 onClick={() => { openEdit(otherCtxMenu.booking); setOtherCtxMenu(null) }}
@@ -2726,22 +2743,23 @@ export default function TimelinePage() {
           <div
             className="fixed inset-0 z-[1000] flex items-center justify-center"
             style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
-            onClick={() => { setTransferBooking(null); setTransferSearch('') }}
+            onClick={closeTransferModal}
           >
             <div
               className="modal-pop-in"
               onClick={e => e.stopPropagation()}
               style={{
-                width: 400,
+                width: 440,
+                height: 660,
                 maxHeight: '80vh',
                 display: 'flex',
                 flexDirection: 'column',
-                background: 'rgba(255,255,255,0.82)',
+                background: 'var(--ds-glass-bg)',
                 backdropFilter: 'blur(48px) saturate(200%)',
                 WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-                border: '1px solid rgba(255,255,255,0.95)',
+                border: '1px solid var(--ds-glass-border)',
                 borderRadius: 22,
-                boxShadow: '0 24px 64px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)',
+                boxShadow: 'var(--ds-glass-shadow)',
                 padding: 28,
               }}
             >
@@ -2751,44 +2769,69 @@ export default function TimelinePage() {
                   <span className="material-symbols-outlined text-xl" style={{ color: '#4d7c00' }}>swap_horiz</span>
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base font-black text-slate-900">Transfer Booking</h3>
-                  <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{transferBooking.title} &middot; {transferBooking.room?.name}</p>
+                  <h3 className="text-lg font-black text-[var(--ds-text-1)]">Transfer Booking</h3>
+                  <p className="text-sm text-[var(--ds-text-3)] font-medium mt-0.5 truncate">{transferBooking.title} &middot; {transferBooking.room?.name}</p>
                 </div>
               </div>
 
               {/* Search */}
-              <div className="relative mb-3 shrink-0">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" style={{ fontSize: 16 }}>search</span>
+              <div className="relative mb-2.5 shrink-0">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 18 }}>search</span>
                 <input
                   autoFocus
                   value={transferSearch}
                   onChange={e => setTransferSearch(e.target.value)}
-                  placeholder="Search name or email..."
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[12px] font-medium focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
-                  style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)', color: '#1e293b' }}
+                  placeholder="Search name, email, or dept..."
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl text-[13px] font-medium bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] transition-all"
                 />
               </div>
 
+              {/* Filter (dept) + Sort direction toggle */}
+              <div className="flex items-center gap-2 mb-3 shrink-0">
+                <FilterSelectDropdown
+                  value={transferDeptFilter}
+                  onChange={setTransferDeptFilter}
+                  icon="apartment"
+                  accentColor="#adee2b"
+                  placeholder="All Depts"
+                  searchPlaceholder="Search dept..."
+                  options={departments.map(d => ({ value: d.name, label: d.name }))}
+                  width={140}
+                />
+                <button
+                  type="button"
+                  onClick={() => setTransferSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+                  title={transferSortDir === 'asc' ? 'Sorted A → Z' : 'Sorted Z → A'}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-bg-surface)] text-[var(--ds-text-2)] hover:text-[var(--ds-text-1)] transition-colors shrink-0"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                    {transferSortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                  </span>
+                  <span className="text-[11px] font-black uppercase">{transferSortDir === 'asc' ? 'A–Z' : 'Z–A'}</span>
+                </button>
+              </div>
+
               {/* Directory list */}
-              <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1" style={{ minHeight: 120 }}>
+              <div className="ds-scroll-thick overflow-y-auto flex-1 -mx-1 px-1 space-y-1" style={{ minHeight: 120 }}>
                 {filteredDirectory.length === 0 && (
-                  <p className="text-center text-xs font-bold text-slate-400 py-8">No matching users</p>
+                  <p className="text-center text-sm font-bold text-[var(--ds-text-3)] py-8">No matching users</p>
                 )}
-                {filteredDirectory.map(person => {
+                {filteredDirectory.map((person, i) => {
                   const isCurrent = person.id === transferBooking.booked_for_user_id
                   return (
                     <button
                       key={person.id}
                       disabled={isCurrent || transferring}
                       onClick={() => doTransfer(person.id)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors disabled:opacity-40"
-                      style={{ background: isCurrent ? 'rgba(173,238,43,0.12)' : 'transparent' }}
-                      onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = 'rgba(0,0,0,0.05)' }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors disabled:opacity-40 row-stagger-in"
+                      style={{ background: isCurrent ? 'rgba(173,238,43,0.12)' : 'transparent', animationDelay: `${Math.min(i, 20) * 20}ms` }}
+                      onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--ds-bg-raised)' }}
                       onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}
                     >
+                      <UserAvatar name={person.name} avatar={person.avatar} size={32} style={{ flexShrink: 0 }} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-black text-slate-800 truncate">{person.name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 truncate">{person.department || person.email}</p>
+                        <p className="text-[13px] font-black text-[var(--ds-text-1)] truncate">{person.name}</p>
+                        <p className="text-[11px] font-bold text-[var(--ds-text-3)] truncate">{person.department || person.email}</p>
                       </div>
                       {isCurrent && <span className="text-[9px] font-black uppercase text-[#4d7c00] shrink-0">Current</span>}
                     </button>
@@ -2798,11 +2841,8 @@ export default function TimelinePage() {
 
               {/* Cancel */}
               <button
-                onClick={() => { setTransferBooking(null); setTransferSearch('') }}
-                className="mt-4 w-full py-3 rounded-2xl text-[11px] font-black uppercase transition-colors shrink-0"
-                style={{ background: 'rgba(0,0,0,0.06)', color: '#475569' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.10)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.06)')}
+                onClick={closeTransferModal}
+                className="mt-4 w-full py-3 rounded-2xl text-[12px] font-black uppercase transition-colors shrink-0 bg-[var(--ds-bg-raised)] text-[var(--ds-text-2)] hover:text-[var(--ds-text-1)]"
               >
                 Cancel
               </button>
