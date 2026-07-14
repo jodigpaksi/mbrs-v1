@@ -5086,6 +5086,7 @@ function SettingsTab() {
   const [loginPhotoPosY, setLoginPhotoPosY] = useState(general?.login_photo_pos_y ?? 50)
   const [loginHeadline,    setLoginHeadline]    = useState(general?.login_headline ?? 'Booking made easy')
   const [loginSubheadline, setLoginSubheadline] = useState(general?.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
+  const [loginFooterText,  setLoginFooterText]  = useState(general?.login_footer_text ?? '')
 
   // Microsoft 365 integration (Tenant/Client ID + Client Secret, used later for Teams/Email/Outlook Calendar) — draft, applied via the global Apply button
   const { data: m365 } = useQuery({ queryKey: ['settings-m365'], queryFn: getM365Settings })
@@ -5204,6 +5205,7 @@ function SettingsTab() {
       setLoginPhotoPosY(general.login_photo_pos_y ?? 50)
       setLoginHeadline(general.login_headline ?? 'Booking made easy')
       setLoginSubheadline(general.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
+      setLoginFooterText(general.login_footer_text ?? '')
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
       setAllowPasswordChange(general.allow_password_change ?? true)
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
@@ -5285,6 +5287,7 @@ function SettingsTab() {
   }
   function onLoginHeadlineChange(v: string) { setLoginHeadline(v); setDirty(true) }
   function onLoginSubheadlineChange(v: string) { setLoginSubheadline(v); setDirty(true) }
+  function onLoginFooterTextChange(v: string) { setLoginFooterText(v); setDirty(true) }
   function toggleAllowBookFor()        { setAllowBookFor(v => !v);       setDirty(true) }
   function toggleAllowPasswordChange() { setAllowPasswordChange(v => !v); setDirty(true) }
   function toggleAllowAvatarUpload()   { setAllowAvatarUpload(v => !v);   setDirty(true) }
@@ -5420,6 +5423,7 @@ function SettingsTab() {
         app_name: appName, app_full_name: appFullName,
         login_photo_pos_x: loginPhotoPosX, login_photo_pos_y: loginPhotoPosY,
         login_headline: loginHeadline, login_subheadline: loginSubheadline,
+        login_footer_text: loginFooterText,
         max_advance_days: maxDays, allow_book_for_others: allowBookFor,
         allow_password_change: allowPasswordChange, allow_avatar_upload: allowAvatarUpload,
         restrict_after_hours: restrictAH, working_hours_end: workEnd,
@@ -5484,6 +5488,7 @@ function SettingsTab() {
       setLoginPhotoPosY(general.login_photo_pos_y ?? 50)
       setLoginHeadline(general.login_headline ?? 'Booking made easy')
       setLoginSubheadline(general.login_subheadline ?? 'Book meeting rooms without the back-and-forth')
+      setLoginFooterText(general.login_footer_text ?? '')
       setMaxDays(general.max_advance_days); setAllowBookFor(general.allow_book_for_others)
       setAllowPasswordChange(general.allow_password_change ?? true)
       setAllowAvatarUpload(general.allow_avatar_upload ?? true)
@@ -5728,6 +5733,18 @@ function SettingsTab() {
                   rows={2}
                   className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b] resize-none"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">Footer text</label>
+                <input
+                  type="text"
+                  value={loginFooterText}
+                  onChange={e => onLoginFooterTextChange(e.target.value)}
+                  maxLength={150}
+                  placeholder={`${appName || 'RoomSync Pro'} · ${new Date().getFullYear()}`}
+                  className="w-full bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-semibold text-[var(--ds-text-1)] focus:outline-none focus:ring-2 focus:ring-[#adee2b]"
+                />
+                <p className="text-[10.5px] text-[var(--ds-text-4)] px-1">Shown at the bottom of the login screen and the Timeline page. Leave blank to use "{appName || 'RoomSync Pro'} · {new Date().getFullYear()}".</p>
               </div>
             </div>
           </div>
@@ -7719,17 +7736,25 @@ export default function AdminPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    {([
-                      { label: 'Today', val: overviewData.stats.unique_visitors_today },
-                      { label: 'This Week', val: overviewData.stats.unique_visitors_week },
-                      { label: 'This Month', val: overviewData.stats.unique_visitors_month },
-                      { label: 'All Time', val: overviewData.stats.unique_visitors_all ?? 0 },
-                    ] as const).map(item => (
-                      <div key={item.label} className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
-                        <span className="text-[11px] font-bold text-[var(--ds-text-3)]">{item.label}</span>
-                        <span className="text-[15px] font-black text-[var(--ds-text-1)] tabular-nums">{item.val.toLocaleString()}</span>
-                      </div>
-                    ))}
+                    {(() => {
+                      const fmtShortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                      const st = overviewData.stats
+                      const items = [
+                        { label: 'Today', val: st.unique_visitors_today, range: fmtShortDate(st.unique_visitors_today_date) },
+                        { label: 'This Week', val: st.unique_visitors_week, range: `${fmtShortDate(st.unique_visitors_week_start)} – ${fmtShortDate(st.unique_visitors_week_end)}` },
+                        { label: 'This Month', val: st.unique_visitors_month, range: `${fmtShortDate(st.unique_visitors_month_start)} – ${fmtShortDate(st.unique_visitors_month_end)}` },
+                        { label: 'All Time', val: st.unique_visitors_all ?? 0, range: st.unique_visitors_all_since ? `Since ${fmtShortDate(st.unique_visitors_all_since)}` : 'No activity recorded yet' },
+                      ] as const
+                      return items.map(item => (
+                        <div key={item.label} className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: 'var(--ds-bg-raised)' }}>
+                          <span className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--ds-text-3)]">
+                            {item.label}
+                            <InfoTooltip text={item.range} width={180} />
+                          </span>
+                          <span className="text-[15px] font-black text-[var(--ds-text-1)] tabular-nums">{item.val.toLocaleString()}</span>
+                        </div>
+                      ))
+                    })()}
                   </div>
                 </div>
 
@@ -7743,10 +7768,13 @@ export default function AdminPage() {
                   const isCrit = usedPct >= 90
                   const totalBarColor = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#adee2b'
                   const bars = [
-                    { label: 'Database',    mb: s.db_mb,           color: '#6366f1' },
-                    { label: 'Room Photos', mb: s.room_photos_mb,  color: '#3b82f6' },
-                    { label: 'Avatars',     mb: s.avatars_mb,      color: '#a855f7' },
-                    { label: 'Activity Log', mb: s.logs_mb ?? 0,  color: '#f59e0b' },
+                    { label: 'Database',      mb: s.db_mb,             color: '#6366f1' },
+                    { label: 'Room Photos',   mb: s.room_photos_mb,    color: '#3b82f6' },
+                    { label: 'Avatars',       mb: s.avatars_mb,        color: '#a855f7' },
+                    { label: 'App Logo',      mb: s.logo_mb ?? 0,      color: '#14b8a6' },
+                    { label: 'Login Photo',   mb: s.login_photo_mb ?? 0, color: '#ec4899' },
+                    { label: 'Other Uploads', mb: s.other_uploads_mb ?? 0, color: '#94a3b8' },
+                    { label: 'Activity Log',  mb: s.logs_mb ?? 0,      color: '#f59e0b' },
                   ]
                   return (
                     <div className="rounded-2xl border border-[var(--ds-border-sub)] p-5"

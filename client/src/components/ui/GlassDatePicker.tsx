@@ -28,6 +28,26 @@ function dayFloor(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
+// Parse typed date string → YYYY-MM-DD, accepts: DD/MM/YYYY, DD/MM/YY, DD/MM, YYYY-MM-DD
+function parseTypedDate(raw: string): string | null {
+  const s = raw.trim().replace(/[.\-]/g, '/')
+  const parts = s.split('/')
+  if (parts.length >= 2) {
+    const d = parseInt(parts[0]), m = parseInt(parts[1])
+    const yearRaw = parts[2] ?? ''
+    const y = yearRaw.length === 2 ? 2000 + parseInt(yearRaw)
+            : yearRaw.length >= 4  ? parseInt(yearRaw)
+            : new Date().getFullYear()
+    if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 2020 && y <= 2099) {
+      const dt = new Date(y, m - 1, d)
+      if (dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d) {
+        return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      }
+    }
+  }
+  return null
+}
+
 interface GlassDatePickerProps {
   value: string                                       // 'yyyy-MM-dd'
   onChange: (iso: string) => void
@@ -48,6 +68,7 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'days' | 'months'>('days')
   const [cursor, setCursor] = useState(() => parseISO(value) ?? new Date())
+  const [typedText, setTypedText] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
   const [popupStyle, setPopupStyle] = useState<CSSProperties>({})
@@ -82,11 +103,22 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
 
   function toggle() {
     if (!open) {
-      setCursor(parseISO(value) ?? new Date())
+      const sel = parseISO(value)
+      setCursor(sel ?? new Date())
+      setTypedText(sel ? `${String(sel.getDate()).padStart(2, '0')}/${String(sel.getMonth() + 1).padStart(2, '0')}/${sel.getFullYear()}` : '')
       setView('days')
       setPopupStyle(calcPopupStyle())
     }
     setOpen(o => !o)
+  }
+
+  function commitTyped(raw: string) {
+    const iso = parseTypedDate(raw)
+    if (!iso) return
+    const d = parseISO(iso)
+    if (!d || beforeMin(d)) return
+    onChange(iso)
+    setCursor(d)
   }
 
   useEffect(() => {
@@ -212,6 +244,19 @@ export default function GlassDatePicker({ value, onChange, min, align = 'left', 
               <span className="material-symbols-outlined" style={{ fontSize: compact ? 14 : 18 }}>chevron_right</span>
             </button>
           </div>
+
+          {/* typed date input */}
+          {view === 'days' && (
+            <input
+              type="text"
+              placeholder="DD/MM/YYYY"
+              value={typedText}
+              onChange={e => setTypedText(e.target.value)}
+              onBlur={e => commitTyped(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { commitTyped((e.target as HTMLInputElement).value); setOpen(false) } }}
+              className={`w-full mb-2 px-2.5 ${compact ? 'py-1 text-[10px]' : 'py-1.5 text-[11px]'} rounded-lg font-bold tracking-wide text-center bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] text-[var(--ds-text-1)] placeholder:text-[var(--ds-text-4)] focus:outline-none focus:border-[#adee2b] transition-colors`}
+            />
+          )}
 
           {/* body */}
           {view === 'days' && (

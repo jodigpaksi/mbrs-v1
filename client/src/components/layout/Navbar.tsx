@@ -23,6 +23,11 @@ const NAV_PATHS = [
   { path: '/rooms',    key: 'nav_rooms',        icon: 'meeting_room' },
 ] as const
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Administrator', building_admin: 'Building Admin',
+  receptionist: 'Receptionist', user: 'User', guest: 'Guest',
+}
+
 interface NavbarProps {
   onSearch?: (q: string) => void
   onTodayClick?: () => void
@@ -615,7 +620,7 @@ export default function Navbar({ onSearch, onTodayClick }: NavbarProps) {
             >
               <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--ds-border-sub)' }}>
                 <p className="text-[12px] font-black" style={{ color: 'var(--ds-text-1)' }}>{user?.name}</p>
-                <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>{user?.role}{user?.department ? ` · ${user.department}` : ''}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--ds-text-3)' }}>{user?.role ? (ROLE_LABEL[user.role] ?? user.role) : ''}{user?.department ? ` · ${user.department}` : ''}</p>
               </div>
 
               <div className="py-1.5">

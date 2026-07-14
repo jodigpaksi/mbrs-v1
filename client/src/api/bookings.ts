@@ -90,3 +90,8 @@ export async function clearCancelledBookings() {
   const res = await api.delete('/bookings/clear-cancelled')
   return res.data
 }
+
+export async function clearPastBookings() {
+  const res = await api.delete('/bookings/clear-past')
+  return res.data
+}

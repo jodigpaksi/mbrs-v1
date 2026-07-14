@@ -641,4 +641,18 @@ class BookingController extends Controller
 
         return response()->json(['message' => 'Cleared successfully']);
     }
+
+    public function clearPast(Request $request): JsonResponse
+    {
+        $now = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
+
+        Booking::where('user_id', $request->user()->id)
+            ->where('status', '!=', 'cancelled')
+            ->where('end_at', '<', $now)
+            ->delete();
+
+        $this->broadcastChange('cleared');
+
+        return response()->json(['message' => 'Cleared successfully']);
+    }
 }

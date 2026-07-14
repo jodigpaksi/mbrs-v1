@@ -423,6 +423,7 @@ export default function TimelinePage() {
   const queryClient = useQueryClient()
   const { data: appSettings } = useQuery({ queryKey: ['settings-general'], queryFn: getGeneralSettings, staleTime: 5 * 60 * 1000 })
   const appName = appSettings?.app_name ?? (appSettings ? 'RoomSync Pro' : getCachedBranding().app_name)
+  const footerText = appSettings?.login_footer_text || `${appName} · ${new Date().getFullYear()}`
   const [searchParams, setSearchParams] = useSearchParams()
   const [highlightId, setHighlightId] = useState<number | null>(() => {
     const h = searchParams.get('highlight')
@@ -702,6 +703,30 @@ export default function TimelinePage() {
       // Conflict checking is done server-side (BookingController::update() returns 422 on overlap)
       // — no client-side pre-check fetchQuery here, since that was a second full round-trip before
       // the actual save on every move/resize, which is the dominant cost under TiDB cross-region latency.
+
+      function isPastSlot(slot: number) {
+        const activeDateStr = toLocalDateStr(activeDate)
+        const todayStr = toLocalDateStr(new Date())
+        const now = new Date()
+        const slotStartMins = HOUR_START * 60 + slot * 30
+        return activeDateStr < todayStr || (activeDateStr === todayStr && slotStartMins < now.getHours() * 60 + now.getMinutes() - PAST_BOOKING_TOLERANCE_MIN)
+      }
+
+      if (bd && bd.deltaSlot !== 0 && isPastSlot(bd.origStartSlot + bd.deltaSlot)) {
+        barDragRef.current = null
+        setDragTick(t => t + 1)
+        setPastDateModalOpen(true)
+        return
+      }
+      if (br && br.deltaSlot !== 0) {
+        const previewStart = br.edge === 'right' ? br.origStartSlot : br.origStartSlot - br.deltaSlot
+        if (isPastSlot(previewStart)) {
+          barResizeRef.current = null
+          setDragTick(t => t + 1)
+          setPastDateModalOpen(true)
+          return
+        }
+      }
 
       if (bd && bd.deltaSlot !== 0) {
         const newStart = bd.origStartSlot + bd.deltaSlot
@@ -1251,7 +1276,7 @@ export default function TimelinePage() {
               >
                 {({ open }) => (
                   <button
-                    className="flex items-center gap-1.5 border border-[var(--ds-border)] rounded-xl px-2.5 py-1.5 hover:border-[#adee2b] hover:bg-[#adee2b]/10 transition-all group" style={{ width: 190 }}>
+                    className="h-[38px] flex items-center gap-1.5 border border-[var(--ds-border)] rounded-xl px-2.5 hover:border-[#adee2b] hover:bg-[#adee2b]/10 transition-all group" style={{ width: 190 }}>
                     <span className="material-symbols-outlined text-sm text-[var(--ds-text-3)] group-hover:text-[var(--ds-text-1)] shrink-0">calendar_today</span>
                     <span className="text-[11px] font-black text-[var(--ds-text-1)] uppercase flex-1 text-left truncate">
                       {weekLabel ?? fmtDate(currentDate)}
@@ -1263,10 +1288,10 @@ export default function TimelinePage() {
             )
           })()}
           <div className="flex items-center">
-            <button onClick={() => navDate(false)} className="px-1.5 py-1.5 text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-l-xl border border-[var(--ds-border)] transition-colors">
+            <button onClick={() => navDate(false)} className="h-[38px] px-1.5 flex items-center justify-center text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-l-xl border border-[var(--ds-border)] transition-colors">
               <span className="material-symbols-outlined text-sm">chevron_left</span>
             </button>
-            <button onClick={() => navDate(true)} className="px-1.5 py-1.5 text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-r-xl border border-[var(--ds-border)] border-l-0 transition-colors">
+            <button onClick={() => navDate(true)} className="h-[38px] px-1.5 flex items-center justify-center text-[var(--ds-text-3)] hover:bg-[var(--ds-bg-raised)] rounded-r-xl border border-[var(--ds-border)] border-l-0 transition-colors">
               <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>
           </div>
@@ -1285,22 +1310,20 @@ export default function TimelinePage() {
         </div>
 
         {/* Location + Selected Room (week view) */}
-        <div className="flex justify-center items-center gap-3">
-        <div ref={locationRef} className="flex justify-center relative">
+        <div className="flex justify-center items-center gap-3 min-w-0">
+        <div ref={locationRef} className="flex justify-center relative min-w-0">
           <button onClick={() => setLocationOpen(!locationOpen)}
-            className="flex items-center min-w-[240px] bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
-            <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base mr-2">apartment</span>
-            <span className="text-[10px] font-black uppercase text-[var(--ds-text-1)] flex-1 text-left flex items-center gap-1">
+            className="flex items-center w-[150px] sm:w-[190px] lg:w-[240px] min-w-0 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
+            <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base mr-2 shrink-0">apartment</span>
+            <span className="text-[10px] font-black uppercase text-[var(--ds-text-1)] flex-1 text-left truncate">
               {location ? (
                 <>
                   {location.code || location.name}
-                  {location.address && (
-                    <> - <span className="material-symbols-outlined" style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}>location_on</span>{location.address}</>
-                  )}
+                  {location.address && <> - {location.address}</>}
                 </>
               ) : 'Select Building'}
             </span>
-            <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
+            <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base ml-2 shrink-0 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
           </button>
           {locationOpen && (
             <div className="dropdown-enter absolute top-full mt-2 w-[260px] rounded-2xl z-[200] p-1.5"
@@ -1351,14 +1374,14 @@ export default function TimelinePage() {
 
         {/* Selected Room — week view only, per-room timeline (Time columns / Date rows) */}
         {viewMode === 'week' && (
-          <div ref={weekRoomRef} className="flex justify-center relative">
+          <div ref={weekRoomRef} className="flex justify-center relative min-w-0">
             <button onClick={() => setWeekRoomOpen(o => !o)}
-              className="flex items-center min-w-[200px] bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
-              <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base mr-2">meeting_room</span>
+              className="flex items-center w-[130px] sm:w-[160px] lg:w-[200px] min-w-0 bg-[var(--ds-bg-raised)] border border-[var(--ds-border)] rounded-xl px-4 py-2.5 hover:border-[#adee2b] transition-all group">
+              <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base mr-2 shrink-0">meeting_room</span>
               <span className="text-[10px] font-black uppercase text-[var(--ds-text-1)] flex-1 text-left truncate">
                 {weekSelectedRoom ? weekSelectedRoom.name : 'All Rooms'}
               </span>
-              <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base ml-2 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
+              <span className="material-symbols-outlined text-[var(--ds-text-3)] text-base ml-2 shrink-0 group-hover:rotate-180 transition-transform duration-200">expand_more</span>
             </button>
             {weekRoomOpen && (
               <div className="dropdown-enter absolute top-full mt-2 w-[240px] rounded-2xl z-[200] p-1.5 max-h-80 overflow-y-auto"
@@ -2232,7 +2255,7 @@ export default function TimelinePage() {
             <span className="text-[8px] font-bold text-[var(--ds-text-4)] uppercase">{t('legend_drag_hint')}</span>
           </div>
         </div>
-        <p className="text-[8px] font-black text-[var(--ds-text-4)] uppercase tracking-widest italic">{appName} &middot; 2026</p>
+        <p className="text-[8px] font-black text-[var(--ds-text-4)] uppercase tracking-widest italic">{footerText}</p>
       </footer>
 
       {/* Booking Tooltip */}

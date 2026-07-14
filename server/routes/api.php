@@ -119,6 +119,7 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
     Route::get('/bookings/my', [BookingController::class, 'myBookings']);
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::delete('/bookings/clear-cancelled', [BookingController::class, 'clearCancelled']);
+    Route::delete('/bookings/clear-past', [BookingController::class, 'clearPast']);
     Route::patch('/bookings/series/{seriesId}', [BookingController::class, 'seriesUpdate']);
     Route::delete('/bookings/series/{seriesId}', [BookingController::class, 'seriesDestroy']);
     Route::get('/bookings/{booking}', [BookingController::class, 'show']);

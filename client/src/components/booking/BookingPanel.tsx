@@ -15,6 +15,7 @@ import GlassDatePicker from '../ui/GlassDatePicker'
 import GlassTimePicker from '../ui/GlassTimePicker'
 import { SpecialRoomBadge } from '../ui/SpecialRoomBadge'
 import ToggleSwitch from '../ui/ToggleSwitch'
+import ElasticCheckbox from '../ui/ElasticCheckbox'
 
 type ICSData = { title: string; description?: string; startAt: string; endAt: string; location?: string; id?: number }
 
@@ -137,6 +138,8 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
   const [date, setDate] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
+  const [allDay, setAllDay] = useState(false)
+  const [preAllDayTimes, setPreAllDayTimes] = useState<{ start: string; end: string } | null>(null)
   const [status, setStatus] = useState<'confirmed' | 'tentative'>('confirmed')
   const [type, setType] = useState<'internal' | 'external' | 'maintenance' | 'repairment'>(() => defaultType)
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none')
@@ -550,6 +553,19 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
       setUntilDateText('')
     }
   }, [repeatEndDate])
+
+  function toggleAllDay(checked: boolean) {
+    setAllDay(checked)
+    if (checked) {
+      setPreAllDayTimes({ start: startTime, end: endTime })
+      setStartTime(bsStr)
+      setEndTime(restrictAfterHours ? workingHoursEnd : beStr)
+    } else if (preAllDayTimes) {
+      setStartTime(preAllDayTimes.start)
+      setEndTime(preAllDayTimes.end)
+      setPreAllDayTimes(null)
+    }
+  }
 
   function getDuration() {
     const id = language === 'id'
@@ -1407,7 +1423,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <GlassTimePicker value={startTime} onChange={setStartTime} min={bsStr} max={fromMin(bookingEndMin - 30)}>
                     {() => (
                       <button type="button"
-                        className="w-full flex items-center gap-1.5 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-2.5 py-2 hover:border-[#adee2b] transition-all"
+                        className="w-full h-[34px] flex items-center gap-1.5 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-2.5 hover:border-[#adee2b] transition-all"
                         style={glowActive ? { animation: 'field-glow-pulse 1.4s ease-in-out forwards' } : undefined}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
                         <span className={startTime ? 'text-[var(--ds-text-1)] tabular-nums' : 'text-[var(--ds-text-3)]'}>{startTime || '—'}</span>
@@ -1426,13 +1442,21 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                   <GlassTimePicker value={endTime} onChange={setEndTime} min={fromMin(bookingStartMin + 30)} max={beStr} align="right">
                     {() => (
                       <button type="button"
-                        className="w-full flex items-center gap-1.5 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-2.5 py-2 hover:border-[#adee2b] transition-all"
+                        className="w-full h-[34px] flex items-center gap-1.5 bg-[var(--ds-bg-surface)] border border-[var(--ds-border)] rounded-xl text-xs font-bold px-2.5 hover:border-[#adee2b] transition-all"
                         style={glowActive ? { animation: 'field-glow-pulse 1.4s ease-in-out forwards' } : undefined}>
                         <span className="material-symbols-outlined text-[var(--ds-text-3)] shrink-0" style={{ fontSize: 14 }}>schedule</span>
                         <span className={endTime ? 'text-[var(--ds-text-1)] tabular-nums' : 'text-[var(--ds-text-3)]'}>{endTime || '—'}</span>
                       </button>
                     )}
                   </GlassTimePicker>
+                </div>
+
+                {/* All day checkbox — one-shot prefill of start/end from booking-hours / after-hours-restriction rules */}
+                <div className="shrink-0 space-y-1">
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_all_day')}</label>
+                  <div className="h-[34px] flex items-center justify-center px-3">
+                    <ElasticCheckbox checked={allDay} onChange={toggleAllDay} />
+                  </div>
                 </div>
 
                 {/* Duration badge — same label+field structure for alignment */}
@@ -1443,7 +1467,7 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
                       <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider px-1">{t('panel_duration')}</label>
                       <div
                         key={dur}
-                        className="px-3 py-2 rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center dark:bg-[#adee2b]/15 dark:text-[#adee2b]"
+                        className="h-[34px] px-3 flex items-center justify-center rounded-xl text-[15px] font-black leading-none whitespace-nowrap tabular-nums text-center dark:bg-[#adee2b]/15 dark:text-[#adee2b]"
                         style={{
                           backgroundColor: '#d9faa0',
                           color: '#2d5a00',

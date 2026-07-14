@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { loadXlsx, loadPdf } from '../utils/lazyExport'
 import type { Booking, Room } from '../types/index'
-import { getMyBookings, clearCancelledBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
+import { getMyBookings, clearCancelledBookings, clearPastBookings, getBookings, updateBooking, submitDispute } from '../api/bookings'
 import { getDirectory } from '../api/users'
 import { checkAvailability } from '../api/rooms'
 import { getGeneralSettings } from '../api/settings'
@@ -21,6 +21,11 @@ import FilterSelectDropdown from '../components/ui/FilterSelectDropdown'
 import WifiLoader from '../components/ui/WifiLoader'
 import ElasticCheckbox from '../components/ui/ElasticCheckbox'
 import { parseLocal } from '../utils/date'
+
+const ROLE_LABEL: Record<string, string> = {
+  admin: 'Administrator', building_admin: 'Building Admin',
+  receptionist: 'Receptionist', user: 'User', guest: 'Guest',
+}
 
 function dur(start: string, end: string) {
   const diff = (parseLocal(end).getTime() - parseLocal(start).getTime()) / 60000
@@ -114,6 +119,7 @@ function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exiti
   const isPending = pendingCancelIds.has(b.id)
   const isExiting = exitingCancelIds.has(b.id)
   const canEdit = !isPast && !isCancelled
+  const canCancel = !isCancelled
   const tStyle = typeStyle[b.type] || typeStyle.internal
 
   const cardBg = isCancelled ? 'bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40'
@@ -137,7 +143,7 @@ function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exiti
   return (
     <div
       onClick={() => { if (canEdit) { if (isTentative && onTentativeAction) onTentativeAction(b); else onEdit(b) } }}
-      className={`rounded-2xl px-5 pt-5 group relative overflow-hidden ${canEdit ? 'pb-12' : 'pb-5'} ${isTentative ? 't-hatch' : ''} ${cardBg} ${canEdit ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
+      className={`rounded-2xl px-5 pt-5 group relative overflow-hidden ${canCancel ? 'pb-12' : 'pb-5'} ${isTentative ? 't-hatch' : ''} ${cardBg} ${canEdit ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
       style={{
         ...baseCardStyle,
         animation: animate ? `card-in 0.25s cubic-bezier(0.4,0,0.2,1) ${index * 45}ms both` : undefined,
@@ -219,12 +225,14 @@ function BookingCard({ b, index = 0, animate, activeTab, pendingCancelIds, exiti
           <p className={`text-[11px] font-bold mt-0.5 ${td}`}>{dur(b.start_at, b.end_at)}</p>
         </div>
       </div>
-      {canEdit && (
+      {canCancel && (
         <>
-          <span className={`absolute bottom-3.5 left-5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isConf ? 'text-black/35' : 'text-[var(--ds-text-4)]'}`}>
-            <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{isTentative ? 'tune' : 'edit'}</span>
-            {isTentative ? 'Click to manage' : 'Click to edit'}
-          </span>
+          {canEdit && (
+            <span className={`absolute bottom-3.5 left-5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isConf ? 'text-black/35' : 'text-[var(--ds-text-4)]'}`}>
+              <span className="material-symbols-outlined" style={{ fontSize: 12 }}>{isTentative ? 'tune' : 'edit'}</span>
+              {isTentative ? 'Click to manage' : 'Click to edit'}
+            </span>
+          )}
           <button
             onClick={e => { e.stopPropagation(); onCancel(b) }}
             disabled={isPending}
@@ -330,6 +338,7 @@ function BookingListItem({ b, index = 0, animate, activeTab, pendingCancelIds, e
   const isPending = pendingCancelIds.has(b.id)
   const isExiting = exitingCancelIds.has(b.id)
   const canEdit = !isPast && !isCancelled
+  const canCancel = !isCancelled
   const tStyle = typeStyle[b.type] || typeStyle.internal
 
   const rowBg = isCancelled ? 'bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900/40'
@@ -407,6 +416,13 @@ function BookingListItem({ b, index = 0, animate, activeTab, pendingCancelIds, e
             className={`size-7 flex items-center justify-center rounded-lg transition-all ${isConf ? 'bg-black/10 text-black/60 hover:bg-black hover:text-[#adee2b]' : 'bg-[var(--ds-bg-surface-2)] text-[var(--ds-text-3)] hover:bg-black hover:text-[#adee2b]'}`}>
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{isTentative ? 'tune' : 'edit'}</span>
           </button>
+          <button onClick={() => onCancel(b)}
+            className="size-7 flex items-center justify-center rounded-lg bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] hover:bg-red-500/15 hover:text-red-500 transition-all">
+            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>cancel</span>
+          </button>
+        </div>
+      ) : canCancel ? (
+        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           <button onClick={() => onCancel(b)}
             className="size-7 flex items-center justify-center rounded-lg bg-[var(--ds-bg-raised)] text-[var(--ds-text-3)] hover:bg-red-500/15 hover:text-red-500 transition-all">
             <span className="material-symbols-outlined" style={{ fontSize: 13 }}>cancel</span>
@@ -1026,6 +1042,7 @@ export default function SchedulePage() {
   const [panelPrefillDate, setPanelPrefillDate] = useState<string | undefined>(undefined)
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
   const [clearConfirm, setClearConfirm] = useState(false)
+  const [clearPastConfirm, setClearPastConfirm] = useState(false)
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
   const [viewAnimKey, setViewAnimKey] = useState(0)
   // Entrance animation only plays on user navigation (tab/view/filter change),
@@ -1056,6 +1073,7 @@ export default function SchedulePage() {
   useModalHotkeys(!!tentativeTarget, undefined, () => setTentativeTarget(null))
   useModalHotkeys(!!seriesCancelTarget, doConfirmSeriesCancel, () => setSeriesCancelTarget(null))
   useModalHotkeys(clearConfirm, doClearCancelled, () => setClearConfirm(false))
+  useModalHotkeys(clearPastConfirm, doClearPast, () => setClearPastConfirm(false))
 
   const [hCalDate, setHCalDate] = useState<string>(() => toDateKey(new Date()))
   const [hCalMonth, setHCalMonth] = useState<{ yr: number; mo: number }>(() => {
@@ -1458,6 +1476,15 @@ export default function SchedulePage() {
     addInfoToast('Cancelled bookings cleared')
   }
 
+  async function doClearPast() {
+    setClearPastConfirm(false)
+    await clearPastBookings()
+    queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
+    queryClient.invalidateQueries({ queryKey: ['all-my-bookings', user?.id] })
+    queryClient.invalidateQueries({ queryKey: ['bookings'] })
+    addInfoToast('Past bookings cleared')
+  }
+
   const upcomingInAll = allList.filter((b: Booking) => !isActuallyPast(b))
   const pastInAll     = allList.filter((b: Booking) => isActuallyPast(b))
   const pastPreview   = pastInAll.slice(0, 5)
@@ -1784,8 +1811,8 @@ export default function SchedulePage() {
         <div className="flex items-start justify-between mb-5">
           <div>
             <h2 className="text-3xl font-black tracking-tighter uppercase leading-none" style={{ color: 'var(--ds-text-1)' }}>{user?.name}</h2>
-            <p className="text-sm font-bold mt-1.5 capitalize" style={{ color: 'var(--ds-text-3)' }}>
-              {user?.role}{user?.department ? <> &middot; {user.department}</> : ''}{user?.ext ? <> &middot; Ext. {user.ext}</> : ''}
+            <p className="text-sm font-bold mt-1.5" style={{ color: 'var(--ds-text-3)' }}>
+              {user?.role ? (ROLE_LABEL[user.role] ?? user.role) : ''}{user?.department ? <> &middot; {user.department}</> : ''}{user?.ext ? <> &middot; Ext. {user.ext}</> : ''}
             </p>
           </div>
           {user?.role !== 'guest' && (
@@ -3150,6 +3177,22 @@ export default function SchedulePage() {
                   )}
                 </div>
               )}
+              {activeTab === 'past' && (
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--ds-text-3)]">
+                    Past bookings within last {archiveAfterDays} days
+                  </p>
+                  {pastList.length > 0 && (
+                    <button
+                      onClick={() => setClearPastConfirm(true)}
+                      className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-red-400 hover:text-red-600 transition-colors px-3.5 py-2 rounded-xl border border-red-500/20 hover:border-red-500/30 hover:bg-red-500/10"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete_sweep</span>
+                      Clear All
+                    </button>
+                  )}
+                </div>
+              )}
               {activeTab === 'today' && activeList.length === 0 && todayPastList.length > 0 && (
                 <div className="flex flex-col items-center justify-center py-12 gap-2 text-[var(--ds-text-4)]">
                   <span className="material-symbols-outlined text-4xl">wb_sunny</span>
@@ -3578,6 +3621,62 @@ export default function SchedulePage() {
               </button>
               <button
                 onClick={doClearCancelled}
+                className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {clearPastConfirm && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}
+          onClick={() => setClearPastConfirm(false)}
+        >
+          <div
+            className="modal-pop-in"
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: 380,
+              background: 'var(--ds-glass-bg)',
+              backdropFilter: 'blur(48px) saturate(200%)',
+              WebkitBackdropFilter: 'blur(48px) saturate(200%)',
+              border: '1px solid var(--ds-glass-border)',
+              borderRadius: 22,
+              boxShadow: 'var(--ds-glass-shadow)',
+              padding: 28,
+            }}
+          >
+            <div className="flex items-center gap-3.5 mb-5">
+              <div className="size-11 rounded-2xl flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(239,68,68,0.1)' }}>
+                <span className="material-symbols-outlined text-red-500 text-xl">delete_sweep</span>
+              </div>
+              <div>
+                <h3 className="text-base font-black text-[var(--ds-text-1)]">Clear Past Bookings?</h3>
+                <p className="text-xs text-[var(--ds-text-3)] font-medium mt-0.5">All {pastList.length} past booking{pastList.length !== 1 ? 's' : ''} will be permanently removed.</p>
+              </div>
+            </div>
+            <div className="rounded-2xl p-4 mb-6"
+              style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)' }}>
+              <p className="text-xs font-bold text-red-500 leading-relaxed">
+                This permanently deletes all your past bookings from history. This cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setClearPastConfirm(false)}
+                className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase transition-colors"
+                style={{ background: 'var(--ds-bg-raised)', color: 'var(--ds-text-2)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--ds-border)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--ds-bg-raised)')}
+              >
+                Keep
+              </button>
+              <button
+                onClick={doClearPast}
                 className="flex-1 py-3 rounded-2xl text-[11px] font-black uppercase bg-red-500 text-white hover:bg-red-600 transition-colors"
               >
                 Clear All
