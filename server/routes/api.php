@@ -211,6 +211,7 @@ Route::middleware(['auth:sanctum', 'guest.readonly'])->group(function () {
             return response()->json(
                 $rows->map(fn ($u) => [
                     'name'                => $u->name,
+                    'nik'                 => $u->nik ?? '',
                     'email'               => $u->email,
                     'alias'               => $u->alias ?? '',
                     'password'            => $u->password,

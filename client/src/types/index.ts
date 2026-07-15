@@ -12,6 +12,7 @@ export interface Department {
 export interface User {
   id: number
   name: string
+  nik?: string | null
   email: string
   alias?: string | null
   department: string       // name string, returned from backend for display (auth context)

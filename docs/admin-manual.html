@@ -418,6 +418,7 @@ Content-Type: application/json
       <div class="kicker">Records</div>
       <h2>Users <span class="pill pill-admin">admin write · building_admin read-only</span></h2>
       <p class="desc">Create, edit, and delete accounts; assign role, default building, and (for receptionists/building admins) the set of buildings they manage. Search and Import/Export are built in. A <code>building_admin</code> can view this tab but every write action is disabled for them.</p>
+      <p class="desc">Every non-<code>admin</code> account also has an optional <code>NIK</code> field (Indonesian national ID number) — shown and editable only here on the Users tab, not on any other page. It must be unique when set, and is automatically cleared if the account is promoted to Super Admin.</p>
     </section>
 
     <!-- ACTIVITY -->
@@ -441,7 +442,7 @@ Content-Type: application/json
       <h2>Import / Export</h2>
       <p class="desc">Users, Buildings, and Rooms each support the same three input formats: Excel (<code>.xlsx</code>/<code>.xls</code>), CSV, and a single SQL <code>INSERT INTO</code> statement (multi-statement SQL files aren't supported).</p>
       <h3>Users</h3>
-      <p class="desc">Requires <code>name</code>, <code>email</code>, <code>password</code> — duplicate emails are rejected. An invalid <code>role</code> silently falls back to <code>user</code>; <code>guest</code> can't be imported. <code>department</code> is auto-created if new. <code>default_building</code> / <code>assigned_buildings</code> must match an existing building name exactly (comma-separated for multiple) — these are <b>not</b> auto-created, so a typo fails the row. Passwords may be plain text or an already-hashed value from a prior export.</p>
+      <p class="desc">Requires <code>name</code>, <code>email</code>, <code>password</code> — duplicate emails are rejected. An invalid <code>role</code> silently falls back to <code>user</code>; <code>guest</code> can't be imported. <code>nik</code> is optional but must be unique if given, and is dropped silently for rows with <code>role</code> = <code>admin</code>. <code>department</code> is auto-created if new. <code>default_building</code> / <code>assigned_buildings</code> must match an existing building name exactly (comma-separated for multiple) — these are <b>not</b> auto-created, so a typo fails the row. Passwords may be plain text or an already-hashed value from a prior export.</p>
       <h3>Buildings</h3>
       <p class="desc">Only <code>name</code> is required. <code>location</code> auto-creates if new. <code>is_active</code> defaults to yes unless explicitly set to no/false/0.</p>
       <h3>Rooms</h3>

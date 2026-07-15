@@ -184,12 +184,13 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
   buildings: Building[]
   locations: Location[]
   departments: Department[]
-  onSave: (data: { name: string; email: string; alias: string; password: string; department_id: number | null; role: UserRole; ext: string; building_ids: number[]; default_building_id: number | null }) => Promise<void>
+  onSave: (data: { name: string; email: string; alias: string; nik: string | null; password: string; department_id: number | null; role: UserRole; ext: string; building_ids: number[]; default_building_id: number | null }) => Promise<void>
   onClose: () => void
 }) {
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
   const [alias, setAlias]       = useState('')
+  const [nik, setNik]           = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm]   = useState('')
   const [showPw, setShowPw]     = useState(false)
@@ -224,11 +225,11 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
     if (role === 'building_admin' && bldIds.length === 0) { setErr('Assign at least one building for Building Admin'); return }
     setSaving(true); setErr('')
     try {
-      await onSave({ name: name.trim(), email: email.trim(), alias: alias.trim(), password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds, default_building_id: defaultBldId })
+      await onSave({ name: name.trim(), email: email.trim(), alias: alias.trim(), nik: role !== 'admin' && nik.trim() ? nik.trim() : null, password, department_id: deptId, role, ext: ext.trim(), building_ids: bldIds, default_building_id: defaultBldId })
       onClose()
     } catch (e: unknown) {
-      const errs = (e as { response?: { data?: { errors?: { name?: string[]; email?: string[]; alias?: string[] } } } })?.response?.data?.errors
-      const msg = errs?.name?.[0] ?? errs?.email?.[0] ?? errs?.alias?.[0]
+      const errs = (e as { response?: { data?: { errors?: { name?: string[]; email?: string[]; alias?: string[]; nik?: string[] } } } })?.response?.data?.errors
+      const msg = errs?.name?.[0] ?? errs?.email?.[0] ?? errs?.alias?.[0] ?? errs?.nik?.[0]
       setErr(msg ?? 'Failed to create user.')
     } finally { setSaving(false) }
   }
@@ -313,6 +314,21 @@ function AddUserModal({ buildings, locations, departments, onSave, onClose }: {
                   className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)]`} />
               </div>
             </div>
+
+            {/* NIK — not applicable for Super Admin */}
+            {role !== 'admin' && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">NIK</label>
+                  <span className="text-[9px] text-[var(--ds-text-3)]">Optional</span>
+                </div>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ds-text-3)]" style={{ fontSize: 16 }}>badge</span>
+                  <input value={nik} onChange={e => setNik(e.target.value)} placeholder="e.g. 3201xxxxxxxxxxxx"
+                    className={`${inputBase} focus:ring-[#adee2b] border-[var(--ds-border)]`} />
+                </div>
+              </div>
+            )}
 
             {/* Dept + Ext */}
             <div className="grid grid-cols-2 gap-3">

@@ -202,6 +202,7 @@ function UsersTab() {
   const [editName, setEditName]               = useState('')
   const [editEmail, setEditEmail]             = useState('')
   const [editAlias, setEditAlias]             = useState('')
+  const [editNik, setEditNik]                 = useState('')
   const [editDeptId, setEditDeptId]           = useState<number | null>(null)
   const [editExt, setEditExt]                 = useState('')
   const [editPw, setEditPw]                   = useState('')
@@ -218,6 +219,7 @@ function UsersTab() {
     setEditName(u.name)
     setEditEmail(u.email)
     setEditAlias(u.alias ?? '')
+    setEditNik(u.nik ?? '')
     setEditDeptId(u.department_id ?? null)
     setEditExt(u.ext ?? '')
     setEditPw('')
@@ -237,6 +239,7 @@ function UsersTab() {
         name: editName.trim(),
         email: editEmail.trim(),
         alias: editAlias.trim() || null,
+        nik: roleValue !== 'admin' ? (editNik.trim() || null) : null,
         department_id: editDeptId,
         ext: editExt.trim() || undefined,
         ...(editPw ? { password: editPw } : {}),
@@ -248,8 +251,8 @@ function UsersTab() {
       qc.invalidateQueries({ queryKey: ['users'] })
       setEditUser(null)
     } catch (e: unknown) {
-      const resp = (e as { response?: { data?: { message?: string; errors?: { name?: string[]; email?: string[]; alias?: string[] } } } })?.response?.data
-      setEditErr(resp?.errors?.name?.[0] ?? resp?.errors?.email?.[0] ?? resp?.errors?.alias?.[0] ?? resp?.message ?? 'Failed to save changes.')
+      const resp = (e as { response?: { data?: { message?: string; errors?: { name?: string[]; email?: string[]; alias?: string[]; nik?: string[] } } } })?.response?.data
+      setEditErr(resp?.errors?.name?.[0] ?? resp?.errors?.email?.[0] ?? resp?.errors?.alias?.[0] ?? resp?.errors?.nik?.[0] ?? resp?.message ?? 'Failed to save changes.')
     } finally { setSaving(false) }
   }
 
@@ -501,6 +504,7 @@ function UsersTab() {
                           <th className="px-5 py-3 text-[10px] font-black uppercase text-[var(--ds-text-3)] tracking-wider w-10">No.</th>
                           <SortableTh label="Name" sortKey="name" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
                           <SortableTh label="Email" sortKey="email" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">NIK</th>
                           <SortableTh label="Department" sortKey="department" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
                           <SortableTh label="Ext" sortKey="ext" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} className="w-20" />
                           {role === 'user' && <SortableTh label="Default Building" sortKey="default_building" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />}
@@ -532,6 +536,7 @@ function UsersTab() {
                               <div>{u.email}</div>
                               {u.alias && <div className="text-[10px] text-[var(--ds-text-4)]">@{u.alias}</div>}
                             </td>
+                            <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium">{u.nik || '—'}</td>
                             <td className="px-5 py-3.5">
                               {u.department ? (
                                 <span className="flex items-center gap-1.5">
@@ -623,9 +628,10 @@ function UsersTab() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left table-fixed">
                       <colgroup>
-                        <col className="w-[26%]" />
-                        <col className="w-[16%]" />
-                        <col className="w-[28%]" />
+                        <col className={role === 'admin' ? 'w-[26%]' : 'w-[22%]'} />
+                        {role !== 'admin' && <col className="w-[14%]" />}
+                        <col className={role === 'admin' ? 'w-[16%]' : 'w-[14%]'} />
+                        <col className={role === 'admin' ? 'w-[28%]' : 'w-[22%]'} />
                         <col className="w-[12%]" />
                         <col className="w-[12%]" />
                         <col className="w-10" />
@@ -634,6 +640,7 @@ function UsersTab() {
                       <thead>
                         <tr className="border-b border-[var(--ds-border-sub)]">
                           <SortableTh label="Name" sortKey="name" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
+                          {role !== 'admin' && <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ds-text-3)]">NIK</th>}
                           <SortableTh label="Department" sortKey="department" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
                           <SortableTh label="Buildings" sortKey="buildings" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} />
                           <SortableTh label="Date Created" sortKey="created_at" sort={{ key: sortKey, dir: sortDir }} onSort={onSort} className="whitespace-nowrap" />
@@ -654,6 +661,7 @@ function UsersTab() {
                                 </div>
                               </div>
                             </td>
+                            {role !== 'admin' && <td className="px-5 py-3.5 text-[12px] text-[var(--ds-text-3)] font-medium truncate">{u.nik || '—'}</td>}
                             <td className="px-5 py-3.5">
                               {u.department ? (
                                 <span className="flex items-center gap-1.5 min-w-0">
@@ -969,6 +977,13 @@ function UsersTab() {
                 <input value={editAlias} onChange={e => setEditAlias(e.target.value.toLowerCase())} placeholder="e.g. budi.santoso"
                   className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
               </div>
+              {roleValue !== 'admin' && (
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">NIK <span className="normal-case font-medium">(optional)</span></label>
+                  <input value={editNik} onChange={e => setEditNik(e.target.value)} placeholder="e.g. 3201xxxxxxxxxxxx"
+                    className="w-full border border-[var(--ds-border)] rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#adee2b] bg-[var(--ds-bg-surface)] text-[var(--ds-text-1)]" />
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-[var(--ds-text-3)] tracking-wider">Department</label>
                 <select value={editDeptId ?? ''} onChange={e => setEditDeptId(e.target.value ? Number(e.target.value) : null)}

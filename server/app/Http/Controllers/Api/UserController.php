@@ -27,6 +27,7 @@ class UserController extends Controller
             ->map(fn ($u) => [
                 'id'                   => $u->id,
                 'name'                 => $u->name,
+                'nik'                  => $u->nik,
                 'email'                => $u->email,
                 'alias'                => $u->alias,
                 'department'           => $u->department?->name ?? '',
@@ -88,9 +89,10 @@ class UserController extends Controller
             }
         }
 
-        // Clear building assignments only when promoted to Super Admin (unrestricted access)
+        // Clear building assignments + NIK only when promoted to Super Admin (unrestricted access, NIK not applicable)
         if ($data['role'] === 'admin') {
             $user->adminBuildings()->detach();
+            $data['nik'] = null;
         }
 
         $oldRole = $user->role;
@@ -134,9 +136,11 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         if ($request->alias === '') $request->merge(['alias' => null]);
+        if ($request->nik === '') $request->merge(['nik' => null]);
 
         $data = $request->validate([
             'name'          => 'sometimes|string|max:255|unique:users,name,' . $user->id,
+            'nik'           => 'sometimes|nullable|string|max:50|unique:users,nik,' . $user->id,
             'email'         => 'sometimes|email|unique:users,email,' . $user->id,
             'alias'         => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9._-]+$/|unique:users,alias,' . $user->id,
             'department_id' => 'sometimes|nullable|exists:departments,id',
@@ -145,6 +149,7 @@ class UserController extends Controller
             'avatar'        => 'sometimes|nullable|string|max:1000',
         ], [
             'name.unique' => 'A user with that name already exists.',
+            'nik.unique'  => 'A user with that NIK already exists.',
         ]);
 
         if (array_key_exists('password', $data) && $data['password'] === null) {
@@ -154,6 +159,10 @@ class UserController extends Controller
             $data['alias'] = $data['alias'] !== null ? trim($data['alias']) : null;
             if ($data['alias'] === '') $data['alias'] = null;
         }
+        if (array_key_exists('nik', $data)) {
+            $data['nik'] = $data['nik'] !== null ? trim($data['nik']) : null;
+            if ($data['nik'] === '' || $user->role === 'admin') $data['nik'] = null;
+        }
 
         $user->update($data);
         return $user->load('adminBuildings.location', 'department');
@@ -162,9 +171,11 @@ class UserController extends Controller
     public function store(Request $request)
     {
         if ($request->alias === '') $request->merge(['alias' => null]);
+        if ($request->nik === '') $request->merge(['nik' => null]);
 
         $data = $request->validate([
             'name'          => 'required|string|max:255|unique:users,name',
+            'nik'           => 'nullable|string|max:50|unique:users,nik',
             'email'         => 'required|email|unique:users,email',
             'alias'         => 'nullable|string|max:100|regex:/^[a-zA-Z0-9._-]+$/|unique:users,alias',
             'password'      => 'required|string|min:8',
@@ -173,13 +184,16 @@ class UserController extends Controller
             'ext'           => 'nullable|string|max:20',
         ], [
             'name.unique' => 'A user with that name already exists.',
+            'nik.unique'  => 'A user with that NIK already exists.',
         ]);
 
         $data['alias'] = $this->resolveAlias($data['alias'] ?? null, $data['email']);
+        $role = $data['role'] ?? 'user';
 
         $user = User::create([
             ...$data,
-            'role' => $data['role'] ?? 'user',
+            'role' => $role,
+            'nik'  => $role === 'admin' ? null : ($data['nik'] ?? null),
         ]);
 
         \App\Models\ActivityLog::record(
@@ -231,9 +245,15 @@ class UserController extends Controller
                 $errors[] = "Row {$rowNum}: email \"{$row['email']}\" already exists.";
                 continue;
             }
+            $nik = trim($row['nik'] ?? '');
+            if ($nik !== '' && User::where('nik', $nik)->exists()) {
+                $errors[] = "Row {$rowNum}: NIK \"{$nik}\" already exists.";
+                continue;
+            }
             try {
                 $role = in_array($row['role'] ?? '', ['user', 'admin', 'receptionist', 'building_admin'])
                     ? $row['role'] : 'user';
+                $nik = $role === 'admin' || $nik === '' ? null : $nik;
 
                 // Resolve department string → id (create if new; attach location if given)
                 $deptId = null;
@@ -286,6 +306,7 @@ class UserController extends Controller
                 if ($alreadyHashed) {
                     $userId = DB::table('users')->insertGetId([
                         'name'                => trim($row['name']),
+                        'nik'                 => $nik,
                         'email'               => $email,
                         'alias'               => $alias,
                         'password'            => $pw,
@@ -299,6 +320,7 @@ class UserController extends Controller
                 } else {
                     $userId = User::create([
                         'name'                => trim($row['name']),
+                        'nik'                 => $nik,
                         'email'               => $email,
                         'alias'               => $alias,
                         'password'            => $pw,

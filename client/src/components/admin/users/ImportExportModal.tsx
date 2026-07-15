@@ -9,12 +9,12 @@ import { ROLE_META } from './roleMeta'
 
 type ImportTab = 'excel' | 'csv' | 'sql'
 
-const IMPORT_COLS = ['name', 'email', 'alias', 'password', 'department', 'department_location', 'role', 'ext', 'default_building', 'assigned_buildings']
+const IMPORT_COLS = ['name', 'nik', 'email', 'alias', 'password', 'department', 'department_location', 'role', 'ext', 'default_building', 'assigned_buildings']
 const EXPORT_COLS = [...IMPORT_COLS, 'created_at', 'updated_at']
 const ROLE_OPTIONS = ['user', 'admin', 'receptionist', 'building_admin']
 
 type ImportRow = {
-  name: string; email: string; alias?: string; password: string
+  name: string; nik?: string; email: string; alias?: string; password: string
   department?: string; department_location?: string; role?: string; ext?: string
   default_building?: string; assigned_buildings?: string
 }
@@ -58,7 +58,7 @@ function ImportExportModal({ users, onImport, onClose }: {
     const XLSX = await loadXlsx()
     const data = await fetchExportData()
     const ws = XLSX.utils.json_to_sheet(data.map(u => ({
-      name: u.name, email: u.email, alias: u.alias, password: u.password,
+      name: u.name, nik: u.nik, email: u.email, alias: u.alias, password: u.password,
       department: u.department, department_location: u.department_location,
       role: u.role, ext: u.ext,
       default_building: u.default_building, assigned_buildings: u.assigned_buildings,
@@ -72,19 +72,19 @@ function ImportExportModal({ users, onImport, onClose }: {
   async function doExportSQL() {
     const data = await fetchExportData()
     const rows = data.map(u => {
-      const vals = [u.name, u.email, u.alias, u.password, u.department, u.department_location, u.role, u.ext, u.default_building, u.assigned_buildings, u.created_at, u.updated_at]
+      const vals = [u.name, u.nik, u.email, u.alias, u.password, u.department, u.department_location, u.role, u.ext, u.default_building, u.assigned_buildings, u.created_at, u.updated_at]
         .map(v => `'${String(v ?? '').replace(/'/g, "''")}'`).join(', ')
       return `  (${vals})`
     }).join(',\n')
-    const sql = `-- MRBS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings, created_at, updated_at) VALUES\n${rows};`
+    const sql = `-- MRBS Users Export (${new Date().toISOString().slice(0, 10)})\n-- Passwords exported as bcrypt hash — recognized automatically on re-import.\nINSERT INTO users (name, nik, email, alias, password, department, department_location, role, ext, default_building, assigned_buildings, created_at, updated_at) VALUES\n${rows};`
     download('users_export.sql', sql, 'text/plain')
   }
 
   // ── Import: download template ───────────────────────────────────────────────
   const TEMPLATE_EXAMPLE: Record<string, string>[] = [
-    { name: 'Budi Santoso', email: 'budi@company.com', alias: 'budi', password: 'password123', department: 'IT', department_location: 'Jakarta', role: 'user', ext: '1001', default_building: 'Tower A', assigned_buildings: '' },
-    { name: 'Siti Rahayu', email: 'siti@company.com', alias: 'siti.rahayu', password: 'password123', department: 'HR', department_location: 'Jakarta', role: 'receptionist', ext: '', default_building: '', assigned_buildings: 'Tower A, Tower B' },
-    { name: 'Andi Wijaya', email: 'andi.wijaya@company.com', alias: '', password: 'password123', department: 'Finance', department_location: 'Jakarta', role: 'user', ext: '', default_building: '', assigned_buildings: '' },
+    { name: 'Budi Santoso', nik: '3201010101010001', email: 'budi@company.com', alias: 'budi', password: 'password123', department: 'IT', department_location: 'Jakarta', role: 'user', ext: '1001', default_building: 'Tower A', assigned_buildings: '' },
+    { name: 'Siti Rahayu', nik: '', email: 'siti@company.com', alias: 'siti.rahayu', password: 'password123', department: 'HR', department_location: 'Jakarta', role: 'receptionist', ext: '', default_building: '', assigned_buildings: 'Tower A, Tower B' },
+    { name: 'Andi Wibowo', nik: '', email: 'andi.wibowo@company.com', alias: '', password: 'password123', department: 'Finance', department_location: 'Jakarta', role: 'user', ext: '', default_building: '', assigned_buildings: '' },
   ]
 
   async function downloadTemplate(fmt: 'xlsx' | 'csv') {
@@ -125,6 +125,7 @@ function ImportExportModal({ users, onImport, onClose }: {
         const get = (col: string) => idx(col) >= 0 ? String(r[idx(col)] ?? '').trim() : ''
         return {
           name:                String(r[nameI] ?? '').trim(),
+          nik:                 get('nik'),
           email:               String(r[emailI] ?? '').trim(),
           alias:               get('alias'),
           password:            String(r[pwI] ?? '').trim(),
@@ -307,18 +308,18 @@ function ImportExportModal({ users, onImport, onClose }: {
                         </thead>
                         <tbody>
                           <tr className="bg-[var(--ds-bg-surface)]">
-                            {['Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''].map((v, i) => (
+                            {['Budi Santoso', '3201010101010001', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''].map((v, i) => (
                               <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)]">{v}</td>
                             ))}
                           </tr>
                           <tr className="bg-[var(--ds-bg-raised)]">
-                            {['Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', '', '', 'Tower A, Tower B'].map((v, i) => (
+                            {['Siti Rahayu', '', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', '', '', 'Tower A, Tower B'].map((v, i) => (
                               <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(empty)'}</td>
                             ))}
                           </tr>
                           <tr className="bg-[var(--ds-bg-surface)]">
-                            {['Andi Wijaya', 'andi.wijaya@co.com', '', 'pass1234', 'Finance', 'Jakarta', 'user', '', '', ''].map((v, i) => (
-                              <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(auto → andi.wijaya)'}</td>
+                            {['Andi Wibowo', '', 'andi.wibowo@co.com', '', 'pass1234', 'Finance', 'Jakarta', 'user', '', '', ''].map((v, i) => (
+                              <td key={i} className="px-3 py-1.5 border border-[var(--ds-border-sub)] text-[var(--ds-text-2)] italic">{v || '(auto → andi.wibowo)'}</td>
                             ))}
                           </tr>
                         </tbody>
@@ -326,11 +327,12 @@ function ImportExportModal({ users, onImport, onClose }: {
                     </div>
                     <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                       <li>First row must be a header — column names can be anything, <em>column order determines mapping</em></li>
-                      <li>Required: <span className="font-mono">name</span> (Col A), <span className="font-mono">email</span> (Col B), <span className="font-mono">password</span> (Col D). All other columns are optional</li>
-                      <li>Alias (Col C): login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix (see row 3 example above)</li>
+                      <li>Required: <span className="font-mono">name</span> (Col A), <span className="font-mono">email</span> (Col C), <span className="font-mono">password</span> (Col E). All other columns are optional</li>
+                      <li>NIK (Col B): Indonesian national ID number, optional, must be unique if given. Not applicable for <span className="font-mono">admin</span> role — ignored if the row's role is admin</li>
+                      <li>Alias (Col D): login username, e.g. <span className="font-mono">andi.wibowo@company.com</span> → <span className="font-mono">andi.wibowo</span>. Leave blank to auto-generate from the email prefix (see row 3 example above)</li>
                       <li>Role: <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">user</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">admin</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">receptionist</span> · <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">building_admin</span> (default: <span className="font-mono">user</span>) — the downloaded template has a dropdown on this column</li>
-                      <li>Department location (Col F) is only used when the department name is new (creates it with that location)</li>
-                      <li>Default/assigned building (Col I–J) must match an existing building name exactly; separate multiple assigned buildings with commas</li>
+                      <li>Department location (Col G) is only used when the department name is new (creates it with that location)</li>
+                      <li>Default/assigned building (Col J–K) must match an existing building name exactly; separate multiple assigned buildings with commas</li>
                       <li>Password is hashed automatically on the server</li>
                     </ul>
                     <button onClick={() => downloadTemplate('xlsx')}
@@ -344,15 +346,16 @@ function ImportExportModal({ users, onImport, onClose }: {
                   <>
                     <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[11px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
                       <p className="text-[var(--ds-text-3)]">{IMPORT_COLS.join(',')}</p>
-                      <p>Budi Santoso,budi@co.com,budi,pass1234,IT,Jakarta,user,1001,Tower A,</p>
-                      <p>Siti Rahayu,siti@co.com,siti.rahayu,pass1234,HR,Jakarta,receptionist,,,&quot;Tower A, Tower B&quot;</p>
-                      <p>Andi Wijaya,andi.wijaya@co.com,,pass1234,Finance,Jakarta,user,,,</p>
+                      <p>Budi Santoso,3201010101010001,budi@co.com,budi,pass1234,IT,Jakarta,user,1001,Tower A,</p>
+                      <p>Siti Rahayu,,siti@co.com,siti.rahayu,pass1234,HR,Jakarta,receptionist,,,&quot;Tower A, Tower B&quot;</p>
+                      <p>Andi Wibowo,,andi.wibowo@co.com,,pass1234,Finance,Jakarta,user,,,</p>
                     </div>
                     <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                       <li>Separator: comma <span className="font-mono bg-[var(--ds-bg-raised)] px-1 rounded">,</span> — wrap values containing commas (e.g. multiple assigned buildings) in double quotes</li>
                       <li>First row = header (column names used for mapping, order doesn't matter)</li>
                       <li>Columns <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required — all others are optional</li>
-                      <li>Alias: login username, e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>. Leave blank to auto-generate from the email prefix (see row 3 example above)</li>
+                      <li>NIK: Indonesian national ID number, optional, must be unique if given. Not applicable for <span className="font-mono">admin</span> role — ignored if the row's role is admin</li>
+                      <li>Alias: login username, e.g. <span className="font-mono">andi.wibowo@company.com</span> → <span className="font-mono">andi.wibowo</span>. Leave blank to auto-generate from the email prefix (see row 3 example above)</li>
                       <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
                       <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas inside quotes</li>
                       <li>Encoding: UTF-8</li>
@@ -369,15 +372,16 @@ function ImportExportModal({ users, onImport, onClose }: {
                     <div className="bg-[var(--ds-bg-surface)] rounded-xl border border-[var(--ds-border)] p-3 font-mono text-[11px] text-[var(--ds-text-2)] space-y-0.5 overflow-x-auto whitespace-nowrap">
                       <p className="text-[var(--ds-text-3)]">-- Column order required: {IMPORT_COLS.join(', ')}</p>
                       <p>INSERT INTO users ({IMPORT_COLS.join(', ')}) VALUES</p>
-                      <p className="pl-2">('Budi Santoso', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''),</p>
-                      <p className="pl-2">('Siti Rahayu', 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', NULL, NULL, 'Tower A, Tower B'),</p>
-                      <p className="pl-2">('Andi Wijaya', 'andi.wijaya@co.com', NULL, 'pass1234', 'Finance', 'Jakarta', 'user', NULL, NULL, NULL);</p>
+                      <p className="pl-2">('Budi Santoso', '3201010101010001', 'budi@co.com', 'budi', 'pass1234', 'IT', 'Jakarta', 'user', '1001', 'Tower A', ''),</p>
+                      <p className="pl-2">('Siti Rahayu', NULL, 'siti@co.com', 'siti.rahayu', 'pass1234', 'HR', 'Jakarta', 'receptionist', NULL, NULL, 'Tower A, Tower B'),</p>
+                      <p className="pl-2">('Andi Wibowo', NULL, 'andi.wibowo@co.com', NULL, 'pass1234', 'Finance', 'Jakarta', 'user', NULL, NULL, NULL);</p>
                     </div>
                     <ul className="space-y-1 text-[var(--ds-text-2)] list-disc pl-4">
                       <li>Only one <span className="font-mono">INSERT INTO ... VALUES (...)</span> block is processed</li>
                       <li>Column order in VALUES must be: <span className="font-mono">{IMPORT_COLS.join(', ')}</span></li>
                       <li>Use <span className="font-mono">NULL</span> or empty string <span className="font-mono">''</span> for optional fields — only <span className="font-mono">name</span>, <span className="font-mono">email</span>, <span className="font-mono">password</span> are required</li>
-                      <li>Alias: login username. Leave <span className="font-mono">NULL</span>/empty to auto-generate from the email prefix (e.g. <span className="font-mono">jodi.ginandra@gmail.com</span> → <span className="font-mono">jodi.ginandra</span>, see row 3 example above)</li>
+                      <li>NIK: Indonesian national ID number, optional, must be unique if given. Not applicable for <span className="font-mono">admin</span> role — ignored if the row's role is admin</li>
+                      <li>Alias: login username. Leave <span className="font-mono">NULL</span>/empty to auto-generate from the email prefix (e.g. <span className="font-mono">andi.wibowo@company.com</span> → <span className="font-mono">andi.wibowo</span>, see row 3 example above)</li>
                       <li>Role must be one of <span className="font-mono">user</span>, <span className="font-mono">admin</span>, <span className="font-mono">receptionist</span>, <span className="font-mono">building_admin</span> (default: <span className="font-mono">user</span>)</li>
                       <li>Default/assigned building must match an existing building name exactly; separate multiple assigned buildings with commas</li>
                       <li>Password can be plain text (auto-hashed) or a bcrypt hash from an export (recognized automatically)</li>
@@ -445,6 +449,7 @@ function ImportExportModal({ users, onImport, onClose }: {
                     {preview.slice(0, 8).map((row, i) => (
                       <tr key={i} className={i % 2 === 0 ? 'bg-[var(--ds-bg-surface)]' : 'bg-[var(--ds-bg-raised)]'}>
                         <td className="px-3 py-1.5 font-bold text-[var(--ds-text-1)]">{row.name}</td>
+                        <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.nik || '—'}</td>
                         <td className="px-3 py-1.5 text-[var(--ds-text-2)]">{row.email}</td>
                         <td className="px-3 py-1.5 text-[var(--ds-text-3)]">{row.alias || '—'}</td>
                         <td className="px-3 py-1.5 text-[var(--ds-text-3)] font-mono">{'•'.repeat(Math.min(row.password?.length ?? 0, 8))}</td>

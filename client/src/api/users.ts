@@ -7,7 +7,7 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function createUser(data: {
-  name: string; email: string; password: string; alias?: string | null
+  name: string; email: string; password: string; alias?: string | null; nik?: string | null
   department_id?: number | null; role?: UserRole; ext?: string
 }): Promise<User> {
   const res = await api.post('/users', data)
@@ -15,7 +15,7 @@ export async function createUser(data: {
 }
 
 export async function importUsers(rows: {
-  name: string; email: string; password: string; alias?: string
+  name: string; email: string; password: string; alias?: string; nik?: string
   department?: string; role?: string; ext?: string
 }[]): Promise<{ created: number; errors: string[] }> {
   const res = await api.post('/users/import', { users: rows })
@@ -23,7 +23,7 @@ export async function importUsers(rows: {
 }
 
 export async function updateUser(id: number, data: {
-  name?: string; email?: string; alias?: string | null; department_id?: number | null; ext?: string; password?: string; avatar?: string | null
+  name?: string; email?: string; alias?: string | null; nik?: string | null; department_id?: number | null; ext?: string; password?: string; avatar?: string | null
 }): Promise<User> {
   const res = await api.patch(`/users/${id}`, data)
   return res.data
@@ -50,7 +50,7 @@ export async function getDirectory(): Promise<{ id: number; name: string; email:
   return res.data
 }
 
-export async function exportUsers(): Promise<{ name: string; email: string; alias: string; password: string; department: string; department_location: string; role: string; ext: string; default_building: string; assigned_buildings: string; created_at?: string; updated_at?: string }[]> {
+export async function exportUsers(): Promise<{ name: string; nik: string; email: string; alias: string; password: string; department: string; department_location: string; role: string; ext: string; default_building: string; assigned_buildings: string; created_at?: string; updated_at?: string }[]> {
   const res = await api.get('/users/export')
   return res.data
 }
