@@ -71,6 +71,8 @@ export async function updateBooking(id: number, data: Partial<{
   end_at: string
   status: string
   type: string
+  booked_for: string | null
+  booked_for_user_id: number | null
 }>) {
   const res = await api.patch(`/bookings/${id}`, data)
   return res.data

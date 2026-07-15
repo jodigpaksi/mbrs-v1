@@ -765,7 +765,16 @@ export default function BookingPanel({ open, onClose, initialRoom, editBooking, 
     const startAt = `${date} ${startTime}:00`
     const endAt = `${date} ${endTime}:00`
     if (isEdit && editBooking) {
-      await updateBooking(editBooking.id, { ...base, start_at: startAt, end_at: endAt })
+      // Unlike create, an edit must be able to explicitly clear "booking for" — sending
+      // `undefined` here would omit the key entirely and leave the old value untouched
+      // server-side (PATCH validation is `sometimes`), so send `null` when cleared.
+      await updateBooking(editBooking.id, {
+        ...base,
+        booked_for: bookFor.trim() || null,
+        booked_for_user_id: bookForUserId ?? null,
+        start_at: startAt,
+        end_at: endAt,
+      })
       onSubmit?.(editBooking.id)
     } else {
       const created = await createBooking({

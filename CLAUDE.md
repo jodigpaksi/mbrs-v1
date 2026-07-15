@@ -10,11 +10,11 @@ MRBS v1 (RoomSync Pro) — internal meeting room booking system. Laravel 12 API 
 
 All backend commands run from `server/`, all frontend commands from `client/`.
 
-**Dev (all services at once, from `server/`):**
+**Dev (backend services at once, from `server/`):**
 ```
 composer run dev
 ```
-Runs `php artisan serve` + `queue:listen` + `pail` (log viewer) + `npm run dev` concurrently. Reverb (`php artisan reverb:start`) is **not** included in this script and must be started separately in its own terminal for realtime sync to work.
+Runs `php artisan serve` + `queue:listen` + `pail` (log viewer) concurrently. This does **not** start the frontend — `npm run dev` must be run separately from `client/` (there's a leftover `server/package.json`/`vite` from the default Laravel skeleton, unused since this app has no Blade views; don't let `composer run dev` try to invoke it, `server/node_modules` was never installed and it will error). Reverb (`php artisan reverb:start`) is also **not** included in this script and must be started separately in its own terminal for realtime sync to work.
 
 **Backend:**
 ```
@@ -38,6 +38,8 @@ npm run lint        # eslint .
 No frontend test runner is configured (no Jest/Vitest). Type-check with `npx tsc --noEmit -p .` after edits; this is the primary correctness gate for TypeScript changes.
 
 **Windows/XAMPP note:** this is normally developed inside XAMPP's `htdocs`. `php`/`composer`/`node` must resolve to versions matching `composer.json`'s `^8.2` / README's Node 20.x — mismatches between the XAMPP-bundled PHP and system PHP are a common source of confusing bugs.
+
+**LAN exposure (this machine only, not portable via repo clone):** on this dev PC, `C:\XAMPP\apache\conf\extra\httpd-vhosts.conf` has vhosts that serve the API from Apache on `:8000` (DocumentRoot `server/public`, replacing `php artisan serve`) and a production `client/dist` build on `:8002` (`FallbackResource /index.html` for the SPA), so other devices on the LAN can reach the app via this PC's IP. That vhost config lives outside the repo and is not checked in — a fresh clone/machine has no LAN exposure until someone sets it up the same way. `client/.env`'s `VITE_API_URL`/`VITE_REVERB_HOST` point at this PC's LAN IP as a result; if API calls stop working after a network change, check those first.
 
 ## Architecture
 

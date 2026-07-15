@@ -552,11 +552,30 @@ class BookingController extends Controller
             $data['cancelled_at'] = \App\Models\Setting::localNow();
         }
 
+        $previousBookedForUserId = $booking->booked_for_user_id;
+
         $booking->update($data);
 
         if ($becomingCancelled) {
             $this->notifyCancelRecipient($booking, $request);
             $this->logCancellation($booking);
+        }
+
+        // Editing a booking to (re)assign it to someone new doesn't go through transfer()
+        // (that endpoint is privileged-only) — mirror store()'s notification here so the
+        // recipient actually finds out, whether newly assigned or reassigned via a plain edit.
+        if (array_key_exists('booked_for_user_id', $data)
+            && $data['booked_for_user_id']
+            && $data['booked_for_user_id'] !== $previousBookedForUserId
+            && $data['booked_for_user_id'] !== $request->user()->id) {
+            $room = $booking->room ?? $booking->load('room')->room;
+            Notification::create([
+                'user_id'    => $data['booked_for_user_id'],
+                'booking_id' => $booking->id,
+                'type'       => 'booked_for',
+                'message'    => $request->user()->name . ' booked ' . ($room?->name ?? 'a room') . ' for you on '
+                                . Carbon::parse($booking->start_at)->format('d M, H:i'),
+            ]);
         }
 
         $this->broadcastChange('updated', $booking);
