@@ -17,10 +17,10 @@ class ArchiveController extends Controller
 
     public static function getSettings(): array
     {
-        $get = fn(string $key, string $default) => Setting::where('key', $key)->value('value') ?? $default;
+        $m = Setting::getMany(['archive_after_days', 'archive_delete_after_days']);
         return [
-            'archive_after_days'        => (int)  $get('archive_after_days', '30'),
-            'archive_delete_after_days' => (int)  $get('archive_delete_after_days', '90'),
+            'archive_after_days'        => (int) ($m['archive_after_days'] ?? 30),
+            'archive_delete_after_days' => (int) ($m['archive_delete_after_days'] ?? 90),
         ];
     }
 
@@ -97,12 +97,13 @@ class ArchiveController extends Controller
     public function run(): JsonResponse
     {
         $settings      = self::getSettings();
-        $archiveCutoff = Carbon::now()->subDays($settings['archive_after_days'])->startOfDay();
-        $deleteCutoff  = Carbon::now()->subDays($settings['archive_delete_after_days'])->startOfDay();
+        $now           = Setting::localNow();
+        $archiveCutoff = $now->copy()->subDays($settings['archive_after_days'])->startOfDay();
+        $deleteCutoff  = $now->copy()->subDays($settings['archive_delete_after_days'])->startOfDay();
 
         $purged   = Booking::whereNotNull('archived_at')->where('archived_at', '<', $deleteCutoff)->delete();
         $archived = Booking::whereNull('archived_at')->where('end_at', '<', $archiveCutoff)
-            ->update(['archived_at' => Carbon::now()]);
+            ->update(['archived_at' => $now]);
 
         return response()->json(['archived' => $archived, 'purged' => $purged]);
     }

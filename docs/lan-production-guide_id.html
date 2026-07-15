@@ -1,0 +1,503 @@
+<title>Panduan Production LAN — RoomSync Pro</title>
+<style>
+  :root {
+    --ink: #1b2430;
+    --ink-dim: #4b5563;
+    --paper: #f6f4ef;
+    --panel: #ffffff;
+    --line: #ddd6c6;
+    --accent: #2f5f8a;
+    --accent-soft: #e4ecf3;
+    --warn: #a85a1c;
+    --warn-soft: #f8ead9;
+    --ok: #2b6a4d;
+    --ok-soft: #e2efe7;
+    --code-bg: #10161d;
+    --code-ink: #d7e2ea;
+    --code-comment: #6b7a86;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e7e4da;
+      --ink-dim: #a3aab3;
+      --paper: #14181d;
+      --panel: #1b2129;
+      --line: #2c333c;
+      --accent: #7fb0dd;
+      --accent-soft: #223140;
+      --warn: #e0a45f;
+      --warn-soft: #3a2c1a;
+      --ok: #7fd1ac;
+      --ok-soft: #1c2f26;
+      --code-bg: #0b0f14;
+      --code-ink: #d7e2ea;
+      --code-comment: #7a8894;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.6;
+  }
+  h1, h2, h3 { font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif; text-wrap: balance; }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 48px;
+  }
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+  }
+
+  .masthead {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 28px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .masthead .kicker {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .masthead h1 {
+    font-size: clamp(28px, 4vw, 38px);
+    font-weight: 600;
+    margin: 4px 0 0;
+    letter-spacing: -0.01em;
+  }
+  .masthead .sub {
+    color: var(--ink-dim);
+    font-size: 14px;
+    max-width: 46ch;
+    margin-top: 6px;
+  }
+  .masthead .meta {
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .masthead .meta strong { color: var(--ink); display: block; font-size: 13px; }
+
+  nav.rail {
+    position: sticky;
+    top: 32px;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  nav.rail a {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13.5px;
+  }
+  nav.rail a:hover { background: var(--accent-soft); color: var(--ink); }
+  nav.rail a .n {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 12px;
+    width: 1.4em;
+    flex-shrink: 0;
+  }
+  nav.rail .rail-note {
+    margin-top: 18px;
+    padding: 12px 12px;
+    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.55;
+  }
+
+  main { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+  section.phase {
+    scroll-margin-top: 24px;
+    padding: 30px 0 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  section.phase:last-of-type { border-bottom: none; }
+
+  .phase-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; flex-wrap: wrap; }
+  .phase-head .num {
+    font-family: ui-serif, Georgia, serif;
+    font-size: 34px;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .phase-head h2 { font-size: 21px; font-weight: 600; margin: 0; }
+  .phase-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px 9px;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .phase p.lead { color: var(--ink-dim); margin: 6px 0 18px; max-width: 62ch; }
+
+  .step { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .step:last-child { margin-bottom: 0; }
+  .step .stitle { font-weight: 600; font-size: 14.5px; }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  pre .c { color: var(--code-comment); }
+
+  .callout {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    border-left: 3px solid;
+  }
+  .callout.warn { background: var(--warn-soft); border-color: var(--warn); }
+  .callout.ok   { background: var(--ok-soft);   border-color: var(--ok); }
+  .callout.info { background: var(--accent-soft); border-color: var(--accent); }
+  .callout .lbl {
+    font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
+    flex-shrink: 0; padding-top: 2px;
+  }
+  .callout.warn .lbl { color: var(--warn); }
+  .callout.ok .lbl { color: var(--ok); }
+  .callout.info .lbl { color: var(--accent); }
+  .callout p { margin: 0; color: var(--ink); }
+  .callout code { background: transparent; }
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    background: var(--accent-soft);
+    padding: 0.12em 0.4em;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  table th, table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  table th { color: var(--ink-dim); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .twrap { overflow-x: auto; }
+
+  ul.check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  ul.check li { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+  ul.check li::before { content: "—"; color: var(--accent); flex-shrink: 0; }
+
+  footer.done {
+    margin-top: 8px;
+    padding: 22px 24px;
+    border-radius: 14px;
+    background: var(--ok-soft);
+    border: 1px solid var(--ok);
+  }
+  footer.done h3 { margin: 0 0 8px; font-size: 16px; color: var(--ok); }
+  footer.done p { margin: 0; color: var(--ink); font-size: 14px; }
+</style>
+
+<div class="shell">
+
+  <div class="masthead">
+    <div>
+      <div class="kicker">Panduan Production / LAN</div>
+      <h1>RoomSync Pro, dibuka ke jaringan lewat XAMPP Apache</h1>
+      <p class="sub">Supaya laptop/HP lain di jaringan WiFi/LAN yang sama bisa akses aplikasi via IP PC ini — tanpa VM, tanpa hosting terpisah.</p>
+    </div>
+    <div class="meta">
+      <strong>C:\XAMPP\htdocs\mbrs-v1</strong>
+      branch main · Production LAN
+    </div>
+  </div>
+
+  <nav class="rail">
+    <a href="#p0"><span class="n">0</span> Ringkasan &amp; prasyarat</a>
+    <a href="#p1"><span class="n">1</span> Cek IP LAN PC ini</a>
+    <a href="#p2"><span class="n">2</span> Build client jadi static</a>
+    <a href="#p3"><span class="n">3</span> Tambah vhost Apache</a>
+    <a href="#p4"><span class="n">4</span> Sesuaikan .env &amp; CORS</a>
+    <a href="#p5"><span class="n">5</span> Restart Apache</a>
+    <a href="#p6"><span class="n">6</span> Buka Windows Firewall</a>
+    <a href="#p7"><span class="n">7</span> Reverb &amp; queue worker</a>
+    <a href="#p8"><span class="n">8</span> Verifikasi dari device lain</a>
+    <a href="#p9"><span class="n">9</span> Balik ke mode dev</a>
+    <a href="#p10"><span class="n">10</span> Kalau ada yang error</a>
+    <div class="rail-note">Beda dari <code>local-deploy-guide_id.html</code> — di sana cuma buat mesin sendiri (<code>localhost</code>). Panduan ini buat dibuka ke device lain via IP, masih di PC yang sama, pakai Apache-nya XAMPP sebagai pengganti <code>artisan serve</code> permanen.</div>
+  </nav>
+
+  <main>
+
+    <section class="phase" id="p0">
+      <div class="phase-head"><span class="num">0</span><h2>Ringkasan &amp; prasyarat</h2><span class="phase-tag">Baca dulu</span></div>
+      <p class="lead">Ada 3 komponen yang jalan terpisah, dan cuma 1 yang butuh dibangun ulang tiap ada perubahan kode.</p>
+      <div class="twrap">
+        <table>
+          <tr><th>Komponen</th><th>Sebelum (dev)</th><th>Sesudah (LAN)</th></tr>
+          <tr><td>API Laravel</td><td><code>php artisan serve</code> (localhost saja)</td><td>Apache vhost port <strong>8000</strong>, DocumentRoot <code>server/public</code></td></tr>
+          <tr><td>Client React</td><td>Vite dev server <code>:5173</code> (localhost saja)</td><td>Apache vhost port <strong>8002</strong>, serve <code>client/dist</code> hasil build</td></tr>
+          <tr><td>Reverb (realtime)</td><td><code>php artisan reverb:start</code></td><td>sama persis — sudah <code>bind 0.0.0.0</code> secara default, tidak perlu Apache</td></tr>
+        </table>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Prasyarat</span>
+        <p>Device lain (HP/laptop) harus terhubung ke <strong>WiFi/jaringan yang sama persis</strong> dengan PC ini. IP jenis <code>192.168.x.x</code> tidak bisa diakses dari luar jaringan lokal (internet) tanpa setup tambahan seperti port forwarding — di luar cakupan panduan ini.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p1">
+      <div class="phase-head"><span class="num">1</span><h2>Cek IP LAN PC ini</h2><span class="phase-tag">PowerShell</span></div>
+      <div class="step">
+        <pre>ipconfig | Select-String "IPv4"</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Kalau muncul lebih dari satu baris, pilih yang cocok sama adapter WiFi/Ethernet fisik. Contoh di panduan ini pakai <code>192.168.8.19</code> — <strong>ganti semua kemunculan IP itu</strong> dengan IP milikmu sendiri.</p>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Gotcha</span>
+        <p>Adapter virtual (VirtualBox, VPN, Hyper-V) sering ikut muncul juga, misalnya <code>192.168.56.1</code> — itu <strong>bukan</strong> IP yang bisa diakses device lain di jaringan rumah/kantor. Kalau ragu IP mana yang benar, cek juga lewat <code>ipconfig /all</code> dan cocokkan nama adapternya (Wi-Fi / Ethernet vs VirtualBox Host-Only).</p>
+      </div>
+      <div class="callout info">
+        <span class="lbl">IP bisa berubah</span>
+        <p>Kalau router pakai DHCP biasa, IP PC ini bisa berubah tiap reconnect/reboot. Kalau setup ini sering dipakai, aktifkan <strong>DHCP reservation</strong> / IP statis untuk PC ini dari halaman admin router, supaya tidak perlu ulang Fase 4 setiap IP berubah.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p2">
+      <div class="phase-head"><span class="num">2</span><h2>Build client jadi static</h2><span class="phase-tag">client/</span></div>
+      <div class="step">
+        <pre>cd client
+npm run build</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Ini menjalankan <code>tsc -b &amp;&amp; vite build</code>, hasilnya folder <code>client/dist</code> — kumpulan file statis (HTML/JS/CSS) yang nanti di-serve langsung oleh Apache, bukan lagi lewat Vite dev server.</p>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Ingat ini</span>
+        <p><code>client/dist</code> adalah hasil "beku" dari kode saat build dijalankan. Tiap ada perubahan di <code>client/src</code> yang mau kelihatan di versi LAN (<code>:8002</code>), <strong>wajib</strong> <code>npm run build</code> ulang — dev server <code>npm run dev</code> di <code>:5173</code> tidak otomatis sinkron ke <code>dist</code>.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p3">
+      <div class="phase-head"><span class="num">3</span><h2>Tambah vhost Apache</h2><span class="phase-tag">httpd-vhosts.conf</span></div>
+      <p class="lead">Edit <code>C:\XAMPP\apache\conf\extra\httpd-vhosts.conf</code>, tambahkan dua blok ini. Ganti port kalau sudah dipakai project lain (cek dulu blok existing di file yang sama).</p>
+      <div class="step">
+        <div class="stitle">Vhost API Laravel — port 8000</div>
+        <pre>Listen 8000
+&lt;VirtualHost *:8000&gt;
+    DocumentRoot "C:/XAMPP/htdocs/mbrs-v1/server/public"
+    &lt;Directory "C:/XAMPP/htdocs/mbrs-v1/server/public"&gt;
+        AllowOverride All
+        Require all granted
+    &lt;/Directory&gt;
+    ErrorLog "logs/mbrs-v1-api-error.log"
+    CustomLog "logs/mbrs-v1-api-access.log" common
+&lt;/VirtualHost&gt;</pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Vhost client React (static build) — port 8002</div>
+        <pre>Listen 8002
+&lt;VirtualHost *:8002&gt;
+    DocumentRoot "C:/XAMPP/htdocs/mbrs-v1/client/dist"
+    &lt;Directory "C:/XAMPP/htdocs/mbrs-v1/client/dist"&gt;
+        AllowOverride All
+        Require all granted
+        <span class="c"># React Router (BrowserRouter) fallback — path yang bukan file</span>
+        <span class="c"># fisik dilempar balik ke index.html biar client-side routing jalan</span>
+        FallbackResource /index.html
+    &lt;/Directory&gt;
+    ErrorLog "logs/mbrs-v1-client-error.log"
+    CustomLog "logs/mbrs-v1-client-access.log" common
+&lt;/VirtualHost&gt;</pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Test config sebelum restart (wajib!)</div>
+        <pre>C:\xampp\apache\bin\httpd.exe -t</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Harus keluar <code>Syntax OK</code>. Kalau ada typo di vhost dan langsung restart tanpa test dulu, Apache bisa gagal nyala total — termasuk buat project lain yang numpang di XAMPP yang sama.</p>
+      </div>
+      <div class="callout info">
+        <span class="lbl">Kenapa Apache, bukan <code>artisan serve</code></span>
+        <p><code>php artisan serve</code> itu proses manual yang harus kamu jalankan tiap buka terminal, dan defaultnya cuma bind ke <code>localhost</code>. Apache dari XAMPP sudah otomatis nyala terus (lewat XAMPP Control Panel) dan bind ke semua network interface — jadi begitu vhost ditambahkan, API otomatis bisa diakses dari IP LAN tanpa proses tambahan yang perlu diingat-ingat tiap hari.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p4">
+      <div class="phase-head"><span class="num">4</span><h2>Sesuaikan .env &amp; CORS</h2><span class="phase-tag">4 file</span></div>
+      <p class="lead">Semua ini defaultnya hardcode ke <code>localhost</code> — ganti ke IP LAN PC ini (dari Fase 1) di 4 tempat berikut.</p>
+      <div class="step">
+        <div class="stitle"><code>server/.env</code></div>
+        <pre>APP_URL=http://192.168.8.19:8000
+FRONTEND_URL=http://192.168.8.19:8002</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;"><code>FRONTEND_URL</code> dipakai di <code>Booking.php</code> buat bikin link di email (reminder, anti-ghost, dll) — kalau tidak diganti, link di email tetap nunjuk ke <code>localhost</code> dan tidak bisa dibuka dari device lain.</p>
+      </div>
+      <div class="step">
+        <div class="stitle"><code>server/config/cors.php</code></div>
+        <pre>'allowed_origins' => [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://192.168.8.19:8002',
+],</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Tanpa ini, semua request dari client versi LAN akan ditolak browser dengan CORS error, walaupun API-nya sendiri hidup dan bisa diakses langsung.</p>
+      </div>
+      <div class="step">
+        <div class="stitle"><code>client/src/api/axios.ts</code></div>
+        <pre>const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api',
+  ...
+})</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Sebelumnya <code>baseURL</code> hardcode string <code>'http://localhost:8000/api'</code>. Diubah supaya baca dari environment variable, dengan fallback ke localhost kalau env-nya kosong (tetap aman buat dev biasa).</p>
+      </div>
+      <div class="step">
+        <div class="stitle"><code>client/.env</code></div>
+        <pre>VITE_API_URL=http://192.168.8.19:8000/api
+VITE_REVERB_APP_KEY=&lt;samakan dengan REVERB_APP_KEY di server/.env&gt;
+VITE_REVERB_HOST=192.168.8.19
+VITE_REVERB_PORT=8080
+VITE_REVERB_SCHEME=http</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Karena ini file <code>.env</code> yang sama dipakai baik oleh <code>npm run dev</code> maupun <code>npm run build</code>, dan IP LAN tetap bisa diakses dari PC ini sendiri (loopback ke diri sendiri), mengganti nilainya ke IP LAN <strong>tidak merusak</strong> dev mode biasa di <code>:5173</code>.</p>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Jangan lupa</span>
+        <p>Setelah ubah <code>client/.env</code> atau <code>axios.ts</code>, <strong>build ulang</strong> (<code>npm run build</code>) supaya perubahan kepakai di versi <code>:8002</code> — env var Vite di-inline saat build, bukan dibaca ulang saat runtime seperti di backend.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p5">
+      <div class="phase-head"><span class="num">5</span><h2>Restart Apache</h2><span class="phase-tag">Ambil efek vhost baru</span></div>
+      <div class="step">
+        <div class="stitle">Lewat XAMPP Control Panel (cara paling aman)</div>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Klik <strong>Stop</strong> lalu <strong>Start</strong> di baris Apache. Ini cara yang paling konsisten di mesin ini.</p>
+      </div>
+      <div class="step">
+        <div class="stitle">Lewat PowerShell (kalau Control Panel tidak kebuka)</div>
+        <pre><span class="c"># Apache di XAMPP ini TIDAK terdaftar sebagai Windows Service —</span>
+<span class="c"># apache_stop.bat/apache_start.bat kadang macet nunggu "Press any key"</span>
+<span class="c"># kalau dijalankan non-interaktif. Cara paling reliable:</span>
+Get-Process httpd | Stop-Process -Force
+Start-Process "C:\xampp\apache\bin\httpd.exe" -WorkingDirectory "C:\xampp\apache\bin" -WindowStyle Hidden</pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Verifikasi semua port kebuka</div>
+        <pre>Get-NetTCPConnection -LocalPort 80,8000,8002 -State Listen</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Harus muncul ketiga port itu dengan status <code>Listen</code>.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p6">
+      <div class="phase-head"><span class="num">6</span><h2>Buka Windows Firewall</h2><span class="phase-tag">PowerShell as Administrator</span></div>
+      <p class="lead">Tanpa ini, PC sendiri tetap bisa akses (lewat <code>localhost</code>/IP sendiri), tapi device <strong>lain</strong> akan kena timeout — Windows Firewall diam-diam blok koneksi masuk ke port custom dari luar.</p>
+      <div class="step">
+        <pre>New-NetFirewallRule -DisplayName "mbrs-v1 API (8000)" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+New-NetFirewallRule -DisplayName "mbrs-v1 Client (8002)" -Direction Inbound -Protocol TCP -LocalPort 8002 -Action Allow
+New-NetFirewallRule -DisplayName "mbrs-v1 Reverb (8080)" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow</pre>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Harus Administrator</span>
+        <p><code>New-NetFirewallRule</code> gagal dengan pesan <code>Access is denied</code> kalau PowerShell tidak dijalankan sebagai Administrator. Klik kanan PowerShell → <em>Run as Administrator</em> dulu.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p7">
+      <div class="phase-head"><span class="num">7</span><h2>Reverb &amp; queue worker</h2><span class="phase-tag">Proses terpisah, tetap manual</span></div>
+      <p class="lead">Dua proses ini <strong>tidak</strong> ikut lewat Apache — tetap harus dijalankan manual di terminal masing-masing, persis seperti dev biasa.</p>
+      <div class="step">
+        <pre><span class="c"># dari server/, biarkan terminal ini tetap terbuka</span>
+php artisan reverb:start
+
+<span class="c"># kalau butuh email/notifikasi terkirim (queue jobs), terminal lain:</span>
+php artisan queue:listen --tries=1 --timeout=0</pre>
+      </div>
+      <div class="callout ok">
+        <span class="lbl">Sudah otomatis benar</span>
+        <p><code>config/reverb.php</code> defaultnya <code>REVERB_SERVER_HOST=0.0.0.0</code> — jadi Reverb otomatis bisa diakses dari LAN tanpa perlu flag tambahan, cukup pastikan firewall port 8080 (Fase 6) sudah kebuka.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p8">
+      <div class="phase-head"><span class="num">8</span><h2>Verifikasi dari device lain</h2><span class="phase-tag">HP / laptop lain</span></div>
+      <ul class="check">
+        <li>Sambungkan device ke WiFi yang <strong>sama persis</strong> dengan PC ini.</li>
+        <li>Buka <code>http://192.168.8.19:8002</code> di browser device tersebut — harus muncul halaman login.</li>
+        <li>Login, lalu coba buat/lihat booking — kalau ini jalan, berarti koneksi ke API (<code>:8000</code>) dan CORS sudah benar.</li>
+        <li>Buka dua device sekaligus, buat booking di salah satu — device lain harus update otomatis tanpa refresh kalau Reverb (<code>:8080</code>) sudah kebuka dan jalan.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="p9">
+      <div class="phase-head"><span class="num">9</span><h2>Balik ke mode dev sehari-hari</h2><span class="phase-tag">Tidak berubah banyak</span></div>
+      <p class="lead">Setelah setup di atas selesai sekali, workflow dev harian <strong>tidak berubah</strong> — cuma satu proses yang hilang.</p>
+      <div class="step">
+        <div class="stitle">Frontend — tetap seperti biasa</div>
+        <pre><span class="c"># dari client/</span>
+npm run dev</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Buka <code>localhost:5173</code> seperti biasa. API call otomatis kena <code>VITE_API_URL</code> yang sudah nunjuk ke Apache (<code>:8000</code>) — jadi tidak perlu <code>php artisan serve</code> lagi, karena Apache selalu hidup di background.</p>
+      </div>
+      <div class="step">
+        <div class="stitle">Backend — cuma queue &amp; log viewer</div>
+        <pre><span class="c"># dari server/</span>
+composer run dev</pre>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Bug lama yang sudah dibenerin</span>
+        <p>Sebelumnya <code>composer run dev</code> juga mencoba menjalankan <code>npm run dev</code> dari folder <code>server/</code> — tapi <code>server/package.json</code> itu sisa skeleton default Laravel yang tidak pernah dipakai (tidak ada Blade view, <code>server/node_modules</code> tidak pernah di-install), jadi step itu selalu error dan (karena flag <code>--kill-others</code>) bisa ikut mematikan proses queue/pail juga. Sekarang <code>composer run dev</code> cuma menjalankan <code>queue:listen</code> + <code>pail</code>. Frontend <strong>tetap</strong> dijalankan terpisah lewat <code>npm run dev</code> di <code>client/</code>, seperti kebiasaan sebelumnya — tidak ada yang berubah di sana.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p10">
+      <div class="phase-head"><span class="num">10</span><h2>Kalau ada yang error</h2><span class="phase-tag">Troubleshooting singkat</span></div>
+      <div class="twrap">
+        <table>
+          <tr><th>Gejala</th><th>Penyebab yang paling mungkin</th></tr>
+          <tr><td>Device lain timeout total, PC sendiri bisa akses</td><td>Firewall belum dibuka (Fase 6), atau device beda jaringan WiFi</td></tr>
+          <tr><td>Halaman kebuka tapi login gagal, DevTools nunjukin CORS error</td><td>Origin <code>:8002</code> belum ada di <code>allowed_origins</code> pada <code>server/config/cors.php</code></td></tr>
+          <tr><td>Semua berubah tiba-tiba tidak bisa diakses setelah beberapa hari</td><td>IP LAN PC berubah (DHCP) — ulang Fase 1 &amp; 4, atau set DHCP reservation di router</td></tr>
+          <tr><td>Perubahan kode React tidak kelihatan di <code>:8002</code></td><td>Lupa <code>npm run build</code> ulang — <code>:8002</code> serve file statis hasil build terakhir, bukan live dari <code>client/src</code></td></tr>
+          <tr><td>Booking baru tidak auto-muncul di device lain</td><td>Terminal Reverb (<code>php artisan reverb:start</code>) belum jalan, atau port 8080 belum dibuka di firewall</td></tr>
+          <tr><td>Link di email reminder/anti-ghost tidak bisa dibuka dari HP</td><td><code>FRONTEND_URL</code> di <code>server/.env</code> masih <code>localhost</code>, belum diganti IP LAN</td></tr>
+          <tr><td><code>New-NetFirewallRule</code> error "Access is denied"</td><td>PowerShell belum dijalankan sebagai Administrator</td></tr>
+          <tr><td>Apache gagal start, error "Only one usage of each socket address"</td><td>Ada instance <code>httpd.exe</code> lain masih jalan dan pegang port yang sama — <code>Stop-Process -Name httpd -Force</code> dulu baru start ulang</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <footer class="done">
+      <h3>Ciri-ciri "beres"</h3>
+      <p>Firewall sudah dibuka, <code>http://192.168.8.19:8002</code> bisa dibuka &amp; dipakai login-booking dari HP/laptop lain di jaringan yang sama, dan realtime sync antar device jalan tanpa refresh manual. Dev harian tetap <code>npm run dev</code> di <code>client/</code> + <code>composer run dev</code> di <code>server/</code>, seperti sebelumnya.</p>
+    </footer>
+
+  </main>
+</div>

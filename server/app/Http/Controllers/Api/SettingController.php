@@ -59,7 +59,7 @@ class SettingController extends Controller
         'backup_time', 'backup_day_of_week', 'backup_day_of_month', 'backup_formats', 'backup_include_archive',
         'backup_include_log', 'backup_include_data', 'business_timezone', 'app_name', 'app_full_name',
         'app_logo_url', 'login_photo_url', 'login_photo_pos_x', 'login_photo_pos_y', 'login_headline',
-        'login_subheadline',
+        'login_subheadline', 'login_footer_text',
     ];
 
     public function generalSettings(): JsonResponse
@@ -111,12 +111,13 @@ class SettingController extends Controller
             'login_photo_pos_y'          => (int) $get('login_photo_pos_y', '50'),
             'login_headline'             => $get('login_headline', 'Booking made easy'),
             'login_subheadline'          => $get('login_subheadline', 'Book meeting rooms without the back-and-forth'),
+            'login_footer_text'          => $get('login_footer_text', ''),
         ]);
     }
 
     public function branding(): JsonResponse
     {
-        $m = Setting::getMany(['app_name', 'app_full_name', 'app_logo_url', 'login_photo_url', 'login_photo_pos_x', 'login_photo_pos_y', 'login_headline', 'login_subheadline']);
+        $m = Setting::getMany(['app_name', 'app_full_name', 'app_logo_url', 'login_photo_url', 'login_photo_pos_x', 'login_photo_pos_y', 'login_headline', 'login_subheadline', 'login_footer_text']);
         $get = fn(string $key, mixed $default) => $m[$key] ?? $default;
         return response()->json([
             'app_name'           => $get('app_name', 'RoomSync Pro'),
@@ -127,6 +128,7 @@ class SettingController extends Controller
             'login_photo_pos_y'  => (int) $get('login_photo_pos_y', '50'),
             'login_headline'     => $get('login_headline', 'Booking made easy'),
             'login_subheadline'  => $get('login_subheadline', 'Book meeting rooms without the back-and-forth'),
+            'login_footer_text'  => $get('login_footer_text', ''),
         ]);
     }
 
@@ -487,6 +489,7 @@ class SettingController extends Controller
             'login_photo_pos_y'          => 'sometimes|integer|min:0|max:100',
             'login_headline'             => 'sometimes|nullable|string|max:120',
             'login_subheadline'          => 'sometimes|nullable|string|max:200',
+            'login_footer_text'          => 'sometimes|nullable|string|max:150',
         ]);
 
         $oldValues = Setting::getMany(array_keys($data));
@@ -633,7 +636,7 @@ class SettingController extends Controller
         $cancelled = 0;
 
         $futurePending = Booking::where('status', '!=', 'cancelled')
-            ->where('end_at', '>', now())
+            ->where('end_at', '>', Setting::localNow())
             ->get();
 
         foreach ($futurePending as $booking) {
@@ -645,7 +648,7 @@ class SettingController extends Controller
             $endTime   = $bEnd->format('H:i');
 
             if ($startTime >= $newEnd || $endTime <= $newStart) {
-                $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+                $booking->update(['status' => 'cancelled', 'cancelled_at' => Setting::localNow()]);
                 $cancelled++;
             } elseif ($endTime > $newEnd || $startTime < $newStart) {
                 $newStartAt = $startTime < $newStart

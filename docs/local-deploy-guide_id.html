@@ -1,0 +1,412 @@
+<title>Panduan Deploy Localhost — RoomSync Pro</title>
+<style>
+  :root {
+    --ink: #1b2430;
+    --ink-dim: #4b5563;
+    --paper: #f6f4ef;
+    --panel: #ffffff;
+    --line: #ddd6c6;
+    --accent: #2f5f8a;
+    --accent-soft: #e4ecf3;
+    --warn: #a85a1c;
+    --warn-soft: #f8ead9;
+    --ok: #2b6a4d;
+    --ok-soft: #e2efe7;
+    --code-bg: #10161d;
+    --code-ink: #d7e2ea;
+    --code-comment: #6b7a86;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e7e4da;
+      --ink-dim: #a3aab3;
+      --paper: #14181d;
+      --panel: #1b2129;
+      --line: #2c333c;
+      --accent: #7fb0dd;
+      --accent-soft: #223140;
+      --warn: #e0a45f;
+      --warn-soft: #3a2c1a;
+      --ok: #7fd1ac;
+      --ok-soft: #1c2f26;
+      --code-bg: #0b0f14;
+      --code-ink: #d7e2ea;
+      --code-comment: #7a8894;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.6;
+  }
+  h1, h2, h3 { font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif; text-wrap: balance; }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 48px;
+  }
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+  }
+
+  .masthead {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 28px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .masthead .kicker {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .masthead h1 {
+    font-size: clamp(28px, 4vw, 38px);
+    font-weight: 600;
+    margin: 4px 0 0;
+    letter-spacing: -0.01em;
+  }
+  .masthead .sub {
+    color: var(--ink-dim);
+    font-size: 14px;
+    max-width: 46ch;
+    margin-top: 6px;
+  }
+  .masthead .meta {
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .masthead .meta strong { color: var(--ink); display: block; font-size: 13px; }
+
+  nav.rail {
+    position: sticky;
+    top: 32px;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  nav.rail a {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    font-size: 13.5px;
+  }
+  nav.rail a:hover { background: var(--accent-soft); color: var(--ink); }
+  nav.rail a .n {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 12px;
+    width: 1.4em;
+    flex-shrink: 0;
+  }
+  nav.rail .rail-note {
+    margin-top: 18px;
+    padding: 12px 12px;
+    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.55;
+  }
+
+  main { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+  section.phase {
+    scroll-margin-top: 24px;
+    padding: 30px 0 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  section.phase:last-of-type { border-bottom: none; }
+
+  .phase-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; flex-wrap: wrap; }
+  .phase-head .num {
+    font-family: ui-serif, Georgia, serif;
+    font-size: 34px;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .phase-head h2 { font-size: 21px; font-weight: 600; margin: 0; }
+  .phase-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px 9px;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .phase p.lead { color: var(--ink-dim); margin: 6px 0 18px; max-width: 62ch; }
+
+  .step { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .step:last-child { margin-bottom: 0; }
+  .step .stitle { font-weight: 600; font-size: 14.5px; }
+
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  pre .c { color: var(--code-comment); }
+
+  .callout {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    border-left: 3px solid;
+  }
+  .callout.warn { background: var(--warn-soft); border-color: var(--warn); }
+  .callout.ok   { background: var(--ok-soft);   border-color: var(--ok); }
+  .callout.info { background: var(--accent-soft); border-color: var(--accent); }
+  .callout .lbl {
+    font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
+    flex-shrink: 0; padding-top: 2px;
+  }
+  .callout.warn .lbl { color: var(--warn); }
+  .callout.ok .lbl { color: var(--ok); }
+  .callout.info .lbl { color: var(--accent); }
+  .callout p { margin: 0; color: var(--ink); }
+  .callout code { background: transparent; }
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    background: var(--accent-soft);
+    padding: 0.12em 0.4em;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  table th, table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  table th { color: var(--ink-dim); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .twrap { overflow-x: auto; }
+
+  ul.check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  ul.check li { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+  ul.check li::before { content: "—"; color: var(--accent); flex-shrink: 0; }
+
+  footer.done {
+    margin-top: 8px;
+    padding: 22px 24px;
+    border-radius: 14px;
+    background: var(--ok-soft);
+    border: 1px solid var(--ok);
+  }
+  footer.done h3 { margin: 0 0 8px; font-size: 16px; color: var(--ok); }
+  footer.done p { margin: 0; color: var(--ink); font-size: 14px; }
+</style>
+
+<div class="shell">
+
+  <div class="masthead">
+    <div>
+      <div class="kicker">Panduan Development</div>
+      <h1>RoomSync Pro, jalan di localhost lewat XAMPP</h1>
+      <p class="sub">Dari clone kosong sampai bisa login &amp; booking ruangan di mesin sendiri — tanpa VM, tanpa deploy ke server beneran.</p>
+    </div>
+    <div class="meta">
+      <strong>C:\XAMPP\htdocs\mbrs-v1</strong>
+      branch main · Dev lokal
+    </div>
+  </div>
+
+  <nav class="rail">
+    <a href="#p0"><span class="n">0</span> Cek prasyarat</a>
+    <a href="#p1"><span class="n">1</span> Clone project</a>
+    <a href="#p2"><span class="n">2</span> Backend: dependency</a>
+    <a href="#p3"><span class="n">3</span> Backend: environment</a>
+    <a href="#p4"><span class="n">4</span> Migrasi database</a>
+    <a href="#p5"><span class="n">5</span> Frontend: dependency</a>
+    <a href="#p6"><span class="n">6</span> Jalankan semua service</a>
+    <a href="#p7"><span class="n">7</span> Verifikasi</a>
+    <a href="#p8"><span class="n">8</span> Kalau ada yang error</a>
+    <div class="rail-note">Ini beda dari <code>vm-deploy-guide_id.html</code> — di sana simulasi server kantor beneran (VM terpisah, jaringan Bridged). Panduan ini buat kerja sehari-hari di mesin sendiri.</div>
+  </nav>
+
+  <main>
+
+    <section class="phase" id="p0">
+      <div class="phase-head"><span class="num">0</span><h2>Cek prasyarat dulu</h2><span class="phase-tag">Sekali saja</span></div>
+      <p class="lead">Kalau XAMPP di mesin ini sudah pernah dipakai buat project lain, jangan asumsikan versinya cocok — cek satu-satu.</p>
+      <div class="twrap">
+        <table>
+          <tr><th>Komponen</th><th>Minimum</th><th>Cek dengan</th></tr>
+          <tr><td>PHP (bawaan XAMPP)</td><td><strong>8.2.x</strong></td><td><code>php -v</code></td></tr>
+          <tr><td>Composer</td><td>2.x</td><td><code>composer -V</code></td></tr>
+          <tr><td>Node.js</td><td><strong>20.x LTS</strong></td><td><code>node -v</code></td></tr>
+          <tr><td>Git</td><td>berapa saja yang cukup baru</td><td><code>git --version</code></td></tr>
+          <tr><td>MySQL (XAMPP)</td><td>aktif via XAMPP Control Panel — atau pakai SQLite kalau cuma butuh dev cepat</td><td>XAMPP Control Panel → baris MySQL hijau</td></tr>
+        </table>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Gotcha paling sering</span>
+        <p>PHP yang kepakai harus <strong>persis 8.2.x</strong>, sesuai <code>composer.json</code> (<code>^8.2</code>). Kalau <code>php -v</code> nunjukin versi lain — XAMPP terinstal lebih dari satu, atau ada PHP sistem lain duluan di PATH — <code>composer install</code> nanti bisa gagal diam-diam atau jalan tapi error runtime yang membingungkan pas dites. Betulkan urutan PATH atau reinstall XAMPP versi PHP 8.2 dulu sebelum lanjut.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p1">
+      <div class="phase-head"><span class="num">1</span><h2>Clone project ke <code>htdocs</code></h2><span class="phase-tag">Terminal</span></div>
+      <div class="step">
+        <pre>cd C:\XAMPP\htdocs
+git clone https://github.com/jodigpaksi/mbrs-v1.git
+cd mbrs-v1</pre>
+      </div>
+      <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Kalau folder ini sudah ada isinya (lagi baca panduan ini dari clone yang sudah jalan), lewati fase ini dan langsung ke Fase 2 — cukup pastikan <code>git status</code> bersih dulu sebelum <code>composer install</code>/<code>npm install</code> ulang.</p>
+    </section>
+
+    <section class="phase" id="p2">
+      <div class="phase-head"><span class="num">2</span><h2>Install dependency backend</h2><span class="phase-tag">server/</span></div>
+      <div class="step">
+        <pre>cd server
+composer install</pre>
+      </div>
+      <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Untuk dev lokal pakai <code>composer install</code> biasa (bukan <code>--no-dev</code>) — butuh Tinker dan Pail buat testing/debugging sehari-hari.</p>
+    </section>
+
+    <section class="phase" id="p3">
+      <div class="phase-head"><span class="num">3</span><h2>Konfigurasi environment backend</h2><span class="phase-tag">server/.env</span></div>
+      <div class="step">
+        <div class="stitle">Buat file .env dari template, generate app key</div>
+        <pre>copy .env.example .env
+php artisan key:generate</pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Pilih database</div>
+        <div class="twrap">
+          <table>
+            <tr><th>Opsi</th><th>Setting di .env</th><th>Kapan pakai</th></tr>
+            <tr><td>SQLite</td><td><code>DB_CONNECTION=sqlite</code>, kosongkan <code>DB_HOST</code>/<code>DB_DATABASE</code>/dll</td><td>paling cepat buat coba-coba, tidak perlu buka phpMyAdmin</td></tr>
+            <tr><td>MySQL (XAMPP)</td><td><code>DB_CONNECTION=mysql</code> + <code>DB_HOST=127.0.0.1</code>, <code>DB_DATABASE</code>, <code>DB_USERNAME=root</code>, <code>DB_PASSWORD=</code> (kosong, default XAMPP)</td><td>kalau mau kondisi mendekati production, atau perlu buka data lewat phpMyAdmin</td></tr>
+          </table>
+        </div>
+        <p style="margin:6px 0 0;color:var(--ink-dim);font-size:13.5px;">Kalau pilih SQLite, buat dulu file kosongnya sebelum migrate:</p>
+        <pre><span class="c"># dari folder server/</span>
+type nul &gt; database\database.sqlite</pre>
+        <p style="margin:6px 0 0;color:var(--ink-dim);font-size:13.5px;">Kalau pilih MySQL, buat databasenya dulu lewat <code>http://localhost/phpmyadmin</code> — nama bebas, samakan dengan <code>DB_DATABASE</code> di <code>.env</code>.</p>
+      </div>
+      <div class="step">
+        <div class="stitle">Generate kredensial Reverb (WebSocket realtime)</div>
+        <pre>php artisan reverb:install</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Ini otomatis ngisi <code>REVERB_APP_ID</code>, <code>REVERB_APP_KEY</code>, <code>REVERB_APP_SECRET</code> di <code>.env</code>. Pastikan juga baris ini ada/benar:</p>
+        <pre>BROADCAST_CONNECTION=reverb
+REVERB_HOST="localhost"
+REVERB_PORT=8080
+REVERB_SCHEME=http</pre>
+      </div>
+      <div class="callout info">
+        <span class="lbl">Catatan</span>
+        <p><code>server/.env</code> dan <code>client/.env</code> memang tidak pernah ikut ke git (sudah di-<code>.gitignore</code>) — jadi wajar kalau clone baru selalu mulai dari <code>.env.example</code> dan isi ulang sendiri, bukan tanda ada yang salah.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p4">
+      <div class="phase-head"><span class="num">4</span><h2>Migrasi database</h2><span class="phase-tag">server/</span></div>
+      <div class="step">
+        <pre>php artisan migrate</pre>
+      </div>
+      <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Kalau mau langsung ada data contoh (user/ruangan/gedung dummy) buat dicoba-coba, tambahkan <code>--seed</code>. Cek dulu isi <code>database/seeders/</code> kalau ragu seeder mana yang jalan.</p>
+    </section>
+
+    <section class="phase" id="p5">
+      <div class="phase-head"><span class="num">5</span><h2>Install dependency frontend</h2><span class="phase-tag">client/</span></div>
+      <div class="step">
+        <pre>cd ..\client
+npm install
+copy .env.example .env</pre>
+        <p style="margin:0;color:var(--ink-dim);font-size:13.5px;">Edit <code>client/.env</code>, isi <code>VITE_REVERB_APP_KEY</code> supaya <strong>sama persis</strong> dengan <code>REVERB_APP_KEY</code> di <code>server/.env</code> (hasil Fase 3). <code>VITE_REVERB_HOST</code>/<code>PORT</code>/<code>SCHEME</code> biasanya sudah cocok dengan default di <code>.env.example</code>.</p>
+      </div>
+      <div class="callout warn">
+        <span class="lbl">Gotcha</span>
+        <p>Client tidak lewat proxy Vite ke API — <code>axios.ts</code> langsung memanggil <code>http://localhost:8000/api</code>. Kalau nanti API dijalankan di port lain, itu satu-satunya tempat yang perlu disesuaikan, bukan config Vite.</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p6">
+      <div class="phase-head"><span class="num">6</span><h2>Jalankan semua service</h2><span class="phase-tag">2 terminal</span></div>
+      <p class="lead">Reverb <strong>tidak</strong> ikut dalam <code>composer run dev</code> — harus dijalankan terpisah, di terminalnya sendiri, kalau mau fitur realtime (booking auto-muncul tanpa refresh) benar-benar jalan.</p>
+      <div class="step">
+        <div class="stitle">Terminal 1 — server, queue, log viewer, Vite sekaligus</div>
+        <pre><span class="c"># dari folder server/</span>
+composer run dev</pre>
+      </div>
+      <div class="step">
+        <div class="stitle">Terminal 2 — Reverb (proses terpisah, wajib)</div>
+        <pre><span class="c"># dari folder server/, terminal baru</span>
+php artisan reverb:start</pre>
+      </div>
+      <div class="callout info">
+        <span class="lbl">Kenapa dipisah</span>
+        <p><code>composer run dev</code> menjalankan <code>php artisan serve</code> + <code>queue:listen</code> + <code>pail</code> (log viewer) + <code>npm run dev</code> secara bersamaan lewat satu perintah — tapi Reverb sengaja tidak dimasukkan ke script itu, jadi kalau lupa buka terminal kedua, aplikasi tetap jalan normal, cuma update booking baru kerasa setelah refresh manual (tidak realtime).</p>
+      </div>
+    </section>
+
+    <section class="phase" id="p7">
+      <div class="phase-head"><span class="num">7</span><h2>Verifikasi</h2><span class="phase-tag">Browser</span></div>
+      <ul class="check">
+        <li>Buka <code>http://localhost:5173</code> (URL yang ditampilkan Vite) — harus muncul halaman login, bukan error koneksi.</li>
+        <li>Login pakai user hasil <code>migrate --seed</code>, atau buat user baru lewat <code>php artisan tinker</code> kalau belum ada seeder.</li>
+        <li>Buat satu booking, lalu buka tab browser kedua yang juga login — booking harus langsung muncul di tab kedua tanpa refresh. Kalau tidak, cek lagi Terminal 2 (Reverb) masih hidup.</li>
+        <li>API bisa dites langsung lewat <code>http://127.0.0.1:8000/api/...</code> — ini yang dipanggil <code>axios.ts</code> di balik layar.</li>
+      </ul>
+    </section>
+
+    <section class="phase" id="p8">
+      <div class="phase-head"><span class="num">8</span><h2>Kalau ada yang error</h2><span class="phase-tag">Troubleshooting singkat</span></div>
+      <div class="twrap">
+        <table>
+          <tr><th>Gejala</th><th>Penyebab yang paling mungkin</th></tr>
+          <tr><td>Login gagal, DevTools Network nunjukin CORS error</td><td>Origin frontend (mis. <code>localhost:5173</code>) belum ada di <code>allowed_origins</code> pada <code>server/config/cors.php</code></td></tr>
+          <tr><td>Booking baru tidak auto-muncul di client lain</td><td>Terminal Reverb (<code>php artisan reverb:start</code>) belum dijalankan atau sudah mati</td></tr>
+          <tr><td>Foto/logo yang diupload jadi 404</td><td>Symlink storage belum dibuat — jalankan <code>php artisan storage:link</code> dari <code>server/</code></td></tr>
+          <tr><td><code>composer install</code> sukses tapi ada error runtime aneh</td><td>PHP yang dipakai Apache/CLI bukan 8.2.x — cek ulang Fase 0</td></tr>
+          <tr><td>Reminder email / anti-ghost tidak pernah jalan otomatis</td><td>Wajar untuk dev — dua command itu (<code>bookings:send-reminders</code>, <code>bookings:release-ghosts</code>) hanya jalan lewat scheduler (<code>schedule:run</code> tiap menit), yang di lokal biasanya tidak diaktifkan; jalankan manual saat perlu dites: <code>php artisan bookings:send-reminders</code></td></tr>
+        </table>
+      </div>
+    </section>
+
+    <footer class="done">
+      <h3>Ciri-ciri "beres"</h3>
+      <p>Dua terminal jalan (<code>composer run dev</code> + <code>reverb:start</code>), browser di <code>localhost:5173</code> bisa login, dan booking baru muncul realtime di tab lain tanpa refresh. Kalau mau lihat versi yang mensimulasikan mesin server kantor beneran, lanjut ke <code>vm-deploy-guide_id.html</code>.</p>
+    </footer>
+
+  </main>
+</div>

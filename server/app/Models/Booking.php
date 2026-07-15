@@ -32,6 +32,7 @@ class Booking extends Model
         'archived_at',
         'reminder_sent',
         'presence_confirmed_at',
+        'm365_event_id',
     ];
 
     protected function casts(): array

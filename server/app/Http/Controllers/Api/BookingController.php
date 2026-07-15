@@ -31,12 +31,30 @@ class BookingController extends Controller
         ]);
     }
 
+    /**
+     * building_admin's staff-level actions on OTHER people's bookings (transfer,
+     * cancelling/editing someone else's booking, series-wide edits) are scoped to
+     * their assigned buildings — mirrors RoomController::authorizeRoomBuilding().
+     * No-ops for every other role. $buildingId null (room missing) is treated as
+     * unauthorized rather than silently allowed.
+     */
+    private function authorizeBuildingAdminRoom(Request $request, ?int $buildingId): ?JsonResponse
+    {
+        if ($request->user()->role !== 'building_admin') return null;
+        if (!$buildingId || !$request->user()->canManageBuilding($buildingId)) {
+            return response()->json(['message' => 'You do not manage this building.'], 403);
+        }
+        return null;
+    }
+
     public function transfer(Request $request, Booking $booking): JsonResponse
     {
         $role = $request->user()->role;
         if (!in_array($role, ['admin', 'receptionist', 'building_admin'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        $room = $booking->room ?? $booking->load('room')->room;
+        if ($err = $this->authorizeBuildingAdminRoom($request, $room?->building_id)) return $err;
 
         if ($booking->status === 'cancelled') {
             return response()->json(['message' => 'Cannot transfer a cancelled booking.'], 422);
@@ -60,7 +78,6 @@ class BookingController extends Controller
             'booked_for'         => $newUser->name,
         ]);
 
-        $room     = $booking->room ?? $booking->load('room')->room;
         $roomName = $room?->name ?? 'a room';
         $date     = Carbon::parse($booking->start_at)->format('d M, H:i');
         $actor    = $request->user();
@@ -102,7 +119,7 @@ class BookingController extends Controller
 
         // Max advance days
         $maxDays = (int) $get('max_advance_days', '30');
-        $daysAhead = (int) Carbon::now()->startOfDay()->diffInDays(Carbon::parse($data['start_at'])->startOfDay(), false);
+        $daysAhead = (int) \App\Models\Setting::localNow()->startOfDay()->diffInDays(Carbon::parse($data['start_at'])->startOfDay(), false);
         if ($daysAhead > $maxDays) {
             return response()->json(['message' => "Bookings cannot be made more than {$maxDays} days in advance."], 422);
         }
@@ -189,7 +206,7 @@ class BookingController extends Controller
     {
         $userId = $request->user()->id;
 
-        $today = Carbon::now(\App\Models\Setting::businessTz())->toDateString();
+        $today = \App\Models\Setting::localNow()->toDateString();
 
         $bookings = Booking::with(['room.building', 'user.department'])
             ->whereNull('archived_at')
@@ -227,7 +244,7 @@ class BookingController extends Controller
             return response()->json(['error' => 'You are not the presence-confirmation target for this booking'], 403);
         }
 
-        $now = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
+        $now = \App\Models\Setting::localNow();
         if (Carbon::parse($booking->start_at) > $now) {
             return response()->json(['error' => 'Booking has not started yet'], 422);
         }
@@ -245,7 +262,7 @@ class BookingController extends Controller
 
     public function disputeIndex(Request $request): JsonResponse
     {
-        $allowed = ['admin', 'superadmin', 'receptionist', 'building_admin'];
+        $allowed = ['admin', 'receptionist', 'building_admin'];
         if (! in_array($request->user()->role, $allowed)) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
@@ -310,7 +327,7 @@ class BookingController extends Controller
         }
 
         $data = $request->validate(['note' => 'nullable|string|max:500']);
-        $now  = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
+        $now  = \App\Models\Setting::localNow();
 
         $booking->update([
             'dispute_status' => 'pending',
@@ -331,7 +348,7 @@ class BookingController extends Controller
     public function resolveDispute(Request $request, Booking $booking): JsonResponse
     {
         $admin = $request->user();
-        if (! in_array($admin->role, ['admin', 'superadmin', 'receptionist', 'building_admin'])) {
+        if (! in_array($admin->role, ['admin', 'receptionist', 'building_admin'])) {
             return response()->json(['error' => 'Forbidden'], 403);
         }
         if ($booking->dispute_status !== 'pending') {
@@ -342,7 +359,7 @@ class BookingController extends Controller
         }
 
         $data   = $request->validate(['action' => 'required|in:approve,reject']);
-        $now    = Carbon::parse(Carbon::now(\App\Models\Setting::businessTz())->format('Y-m-d H:i:s'));
+        $now    = \App\Models\Setting::localNow();
         $approve = $data['action'] === 'approve';
 
         $updates = [
@@ -477,6 +494,13 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        // Acting as staff on someone else's booking — scope building_admin to their
+        // assigned buildings (owners/recipients editing their own booking are exempt).
+        if (!$isOwner && !$isRecipient) {
+            $currentRoom = $booking->room ?? $booking->load('room')->room;
+            if ($err = $this->authorizeBuildingAdminRoom($request, $currentRoom?->building_id)) return $err;
+        }
+
         $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
         $titleMax = (int) ($lenLimits['booking_title_max_length'] ?? 45);
         $descMax  = (int) ($lenLimits['booking_description_max_length'] ?? 65);
@@ -525,14 +549,33 @@ class BookingController extends Controller
             && $booking->status !== 'cancelled';
 
         if ($becomingCancelled) {
-            $data['cancelled_at'] = now();
+            $data['cancelled_at'] = \App\Models\Setting::localNow();
         }
+
+        $previousBookedForUserId = $booking->booked_for_user_id;
 
         $booking->update($data);
 
         if ($becomingCancelled) {
             $this->notifyCancelRecipient($booking, $request);
             $this->logCancellation($booking);
+        }
+
+        // Editing a booking to (re)assign it to someone new doesn't go through transfer()
+        // (that endpoint is privileged-only) — mirror store()'s notification here so the
+        // recipient actually finds out, whether newly assigned or reassigned via a plain edit.
+        if (array_key_exists('booked_for_user_id', $data)
+            && $data['booked_for_user_id']
+            && $data['booked_for_user_id'] !== $previousBookedForUserId
+            && $data['booked_for_user_id'] !== $request->user()->id) {
+            $room = $booking->room ?? $booking->load('room')->room;
+            Notification::create([
+                'user_id'    => $data['booked_for_user_id'],
+                'booking_id' => $booking->id,
+                'type'       => 'booked_for',
+                'message'    => $request->user()->name . ' booked ' . ($room?->name ?? 'a room') . ' for you on '
+                                . Carbon::parse($booking->start_at)->format('d M, H:i'),
+            ]);
         }
 
         $this->broadcastChange('updated', $booking);
@@ -546,8 +589,12 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
-        $this->notifyCancelRecipient($booking, $request);
+        $booking->update(['status' => 'cancelled', 'cancelled_at' => \App\Models\Setting::localNow()]);
+        // Skip the "X cancelled your booking" notification for bookings that already happened —
+        // it reads as confusing noise when the meeting is already in the past.
+        if (Carbon::parse($booking->end_at)->isFuture()) {
+            $this->notifyCancelRecipient($booking, $request);
+        }
         $this->logCancellation($booking);
         $this->broadcastChange('updated', $booking);
         return response()->json(['message' => 'Booking cancelled']);
@@ -569,6 +616,10 @@ class BookingController extends Controller
         $first = $bookings->first();
         if ($first->user_id !== $request->user()->id && !$isPrivileged) {
             return response()->json(['message' => 'Unauthorized'], 403);
+        }
+        if ($first->user_id !== $request->user()->id) {
+            $room = $first->room ?? $first->load('room')->room;
+            if ($err = $this->authorizeBuildingAdminRoom($request, $room?->building_id)) return $err;
         }
 
         $lenLimits = \App\Models\Setting::getMany(['booking_title_max_length', 'booking_description_max_length']);
@@ -613,7 +664,7 @@ class BookingController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $now = now();
+        $now = \App\Models\Setting::localNow();
         foreach ($bookings as $booking) {
             $booking->update(['status' => 'cancelled', 'cancelled_at' => $now]);
             $this->notifyCancelRecipient($booking, $request);
@@ -631,14 +682,58 @@ class BookingController extends Controller
         return response()->json(['cancelled' => $bookings->count()]);
     }
 
+    // Bookings booked "for" someone else remain visible in that recipient's own My Bookings
+    // list (see myBookings() below) — hard-deleting them here would silently wipe them from
+    // the recipient's history too, so Clear only ever removes bookings that are exclusively ours.
+    private function scopeOwnedNotShared($query, int $userId)
+    {
+        return $query->where(function ($q) use ($userId) {
+            $q->whereNull('booked_for_user_id')->orWhere('booked_for_user_id', $userId);
+        });
+    }
+
     public function clearCancelled(Request $request): JsonResponse
     {
-        Booking::where('user_id', $request->user()->id)
+        $userId = $request->user()->id;
+        $base = fn () => $this->scopeOwnedNotShared(
+            Booking::where('user_id', $userId)->where('status', 'cancelled'),
+            $userId,
+        );
+
+        $skipped = Booking::where('user_id', $userId)
             ->where('status', 'cancelled')
-            ->delete();
+            ->whereNotNull('booked_for_user_id')
+            ->where('booked_for_user_id', '!=', $userId)
+            ->count();
+
+        $deleted = $base()->delete();
 
         $this->broadcastChange('cleared');
 
-        return response()->json(['message' => 'Cleared successfully']);
+        return response()->json(['message' => 'Cleared successfully', 'deleted' => $deleted, 'skipped' => $skipped]);
+    }
+
+    public function clearPast(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+        $now = \App\Models\Setting::localNow();
+
+        $base = fn () => $this->scopeOwnedNotShared(
+            Booking::where('user_id', $userId)->where('status', '!=', 'cancelled')->where('end_at', '<', $now),
+            $userId,
+        );
+
+        $skipped = Booking::where('user_id', $userId)
+            ->where('status', '!=', 'cancelled')
+            ->where('end_at', '<', $now)
+            ->whereNotNull('booked_for_user_id')
+            ->where('booked_for_user_id', '!=', $userId)
+            ->count();
+
+        $deleted = $base()->delete();
+
+        $this->broadcastChange('cleared');
+
+        return response()->json(['message' => 'Cleared successfully', 'deleted' => $deleted, 'skipped' => $skipped]);
     }
 }

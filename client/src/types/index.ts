@@ -12,6 +12,7 @@ export interface Department {
 export interface User {
   id: number
   name: string
+  nik?: string | null
   email: string
   alias?: string | null
   department: string       // name string, returned from backend for display (auth context)
@@ -118,12 +119,6 @@ export interface AppNotification {
 }
 
 
-export interface PantryItem {
-  icon: string
-  label: string
-  quantity: number
-}
-
 export interface KioskTheme {
   mode:    'dark' | 'light'
   accent:  string
@@ -142,12 +137,6 @@ export interface KioskLayout {
   upcoming_count:   number
 }
 
-export interface KioskResolution {
-  preset: 'ipad' | 'ipad-pro-11' | 'ipad-pro-13' | 'surface' | 'fullhd' | 'custom'
-  width:  number
-  height: number
-}
-
 export interface KioskConfig {
   id:         number
   name:       string
@@ -158,7 +147,6 @@ export interface KioskConfig {
   pin?:       string
   theme:      KioskTheme
   layout:     KioskLayout
-  resolution: KioskResolution
   active:     boolean
   created_at: string
   updated_at: string
@@ -179,11 +167,4 @@ export interface KioskStatus {
   free_until:  string | null
   free_from:   string | null
   server_time: string
-}
-
-export interface PantryOrder {
-  id?: number
-  booking_id?: number
-  items: PantryItem[]
-  special_request?: string
 }

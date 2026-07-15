@@ -46,6 +46,7 @@ export interface GeneralSettings {
   login_photo_pos_y: number
   login_headline: string
   login_subheadline: string
+  login_footer_text: string
 }
 
 export interface AppBranding {
@@ -57,6 +58,7 @@ export interface AppBranding {
   login_photo_pos_y: number
   login_headline: string
   login_subheadline: string
+  login_footer_text: string
 }
 
 const BRANDING_CACHE_KEY = 'app_branding_cache'
@@ -69,6 +71,7 @@ const DEFAULT_BRANDING: AppBranding = {
   login_photo_pos_y: 50,
   login_headline: 'Booking made easy',
   login_subheadline: 'Book meeting rooms without the back-and-forth',
+  login_footer_text: '',
 }
 
 export function getCachedBranding(): AppBranding {
@@ -204,6 +207,7 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
     login_photo_pos_y: res.data.login_photo_pos_y,
     login_headline: res.data.login_headline,
     login_subheadline: res.data.login_subheadline,
+    login_footer_text: res.data.login_footer_text,
   })
   return res.data
 }

@@ -71,6 +71,8 @@ export async function updateBooking(id: number, data: Partial<{
   end_at: string
   status: string
   type: string
+  booked_for: string | null
+  booked_for_user_id: number | null
 }>) {
   const res = await api.patch(`/bookings/${id}`, data)
   return res.data
@@ -86,7 +88,14 @@ export async function transferBooking(id: number, bookedForUserId: number) {
   return res.data
 }
 
-export async function clearCancelledBookings() {
+export interface ClearBookingsResult { message: string; deleted: number; skipped: number }
+
+export async function clearCancelledBookings(): Promise<ClearBookingsResult> {
   const res = await api.delete('/bookings/clear-cancelled')
+  return res.data
+}
+
+export async function clearPastBookings(): Promise<ClearBookingsResult> {
+  const res = await api.delete('/bookings/clear-past')
   return res.data
 }

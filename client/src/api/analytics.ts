@@ -13,10 +13,19 @@ export interface OverviewStats {
   unique_visitors_week: number
   unique_visitors_month: number
   unique_visitors_all: number
+  unique_visitors_today_date: string
+  unique_visitors_week_start: string
+  unique_visitors_week_end: string
+  unique_visitors_month_start: string
+  unique_visitors_month_end: string
+  unique_visitors_all_since: string | null
   storage: {
     db_mb: number
     room_photos_mb: number
     avatars_mb: number
+    logo_mb: number
+    login_photo_mb: number
+    other_uploads_mb: number
     uploads_mb: number
     logs_mb: number
   }

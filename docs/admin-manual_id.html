@@ -418,6 +418,7 @@ Content-Type: application/json
       <div class="kicker">Data</div>
       <h2>Users <span class="pill pill-admin">admin bisa tulis · building_admin hanya-lihat</span></h2>
       <p class="desc">Membuat, mengubah, dan menghapus akun; mengatur role, default building, dan (untuk receptionist/building admin) kumpulan gedung yang mereka kelola. Search dan Import/Export sudah tersedia. <code>building_admin</code> bisa melihat tab ini tapi semua aksi tulis dinonaktifkan untuknya.</p>
+      <p class="desc">Setiap akun selain <code>admin</code> juga punya field <code>NIK</code> opsional — hanya ditampilkan dan bisa diedit di tab Users ini, tidak muncul di halaman lain. Harus unik kalau diisi, dan otomatis dikosongkan kalau akunnya dipromosikan jadi Super Admin.</p>
     </section>
 
     <!-- ACTIVITY -->
@@ -441,7 +442,7 @@ Content-Type: application/json
       <h2>Import / Export</h2>
       <p class="desc">Users, Buildings, dan Rooms sama-sama mendukung tiga format input: Excel (<code>.xlsx</code>/<code>.xls</code>), CSV, dan satu statement SQL <code>INSERT INTO</code> (file SQL dengan banyak statement tidak didukung).</p>
       <h3>Users</h3>
-      <p class="desc">Wajib ada <code>name</code>, <code>email</code>, <code>password</code> — email duplikat akan ditolak. <code>role</code> yang tidak valid otomatis jatuh ke <code>user</code>; <code>guest</code> tidak bisa diimpor. <code>department</code> otomatis dibuat kalau belum ada. <code>default_building</code> / <code>assigned_buildings</code> harus cocok persis dengan nama building yang sudah ada (pisahkan koma untuk lebih dari satu) — ini <b>tidak</b> dibuat otomatis, jadi salah ketik akan membuat baris itu gagal. Password boleh teks biasa atau nilai hash yang sudah ada dari hasil export sebelumnya.</p>
+      <p class="desc">Wajib ada <code>name</code>, <code>email</code>, <code>password</code> — email duplikat akan ditolak. <code>role</code> yang tidak valid otomatis jatuh ke <code>user</code>; <code>guest</code> tidak bisa diimpor. <code>nik</code> opsional tapi harus unik kalau diisi, dan otomatis diabaikan untuk baris dengan <code>role</code> = <code>admin</code>. <code>department</code> otomatis dibuat kalau belum ada. <code>default_building</code> / <code>assigned_buildings</code> harus cocok persis dengan nama building yang sudah ada (pisahkan koma untuk lebih dari satu) — ini <b>tidak</b> dibuat otomatis, jadi salah ketik akan membuat baris itu gagal. Password boleh teks biasa atau nilai hash yang sudah ada dari hasil export sebelumnya.</p>
       <h3>Buildings</h3>
       <p class="desc">Hanya <code>name</code> yang wajib. <code>location</code> dibuat otomatis kalau baru. <code>is_active</code> default-nya ya, kecuali diisi eksplisit no/false/0.</p>
       <h3>Rooms</h3>

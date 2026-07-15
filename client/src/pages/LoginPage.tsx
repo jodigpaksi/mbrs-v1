@@ -22,6 +22,7 @@ export default function LoginPage() {
   const { data: branding } = useQuery({ queryKey: ['app-branding'], queryFn: getBranding, staleTime: 5 * 60 * 1000, initialData: getCachedBranding })
   const appName = branding?.app_name ?? 'RoomSync Pro'
   const appFullName = branding?.app_full_name ?? ''
+  const footerText = branding?.login_footer_text || `${appName} · ${new Date().getFullYear()}`
   useEffect(() => { document.title = appName }, [appName])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -223,7 +224,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-[9px] font-black text-slate-300 uppercase tracking-widest mt-6">
-          {appName} · {new Date().getFullYear()}
+          {footerText}
         </p>
 
       </div>

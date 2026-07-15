@@ -60,7 +60,8 @@ class AnalyticsController extends Controller
                 'COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as today,
                  COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as week,
                  COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) as month,
-                 COUNT(DISTINCT user_id) as all_time',
+                 COUNT(DISTINCT user_id) as all_time,
+                 MIN(created_at) as first_seen',
                 [$today . ' 00:00:00', $weekStart, $monthStart]
             )->first();
 
@@ -81,13 +82,23 @@ class AnalyticsController extends Controller
             'unique_visitors_month' => (int) $visitorCounts->month,
             'unique_visitors_all'   => (int) $visitorCounts->all_time,
 
+            // Date ranges backing each bucket above, so the UI can show exactly what period was queried.
+            'unique_visitors_today_date'  => $today,
+            'unique_visitors_week_start'  => now($tz)->startOfWeek()->toDateString(),
+            'unique_visitors_week_end'    => now($tz)->endOfWeek()->toDateString(),
+            'unique_visitors_month_start' => now($tz)->startOfMonth()->toDateString(),
+            'unique_visitors_month_end'   => now($tz)->endOfMonth()->toDateString(),
+            'unique_visitors_all_since'   => $visitorCounts->first_seen
+                ? \Illuminate\Support\Carbon::parse($visitorCounts->first_seen)->toDateString()
+                : null,
+
             // Storage: always global
             'storage' => $this->storageStats(),
         ];
 
         $trend = $byBuilding(Booking::query())
             ->selectRaw('DATE(start_at) as date, COUNT(*) as count')
-            ->when($period !== 'all', fn ($q) => $q->where('start_at', '>=', now()->subDays($period)))
+            ->when($period !== 'all', fn ($q) => $q->where('start_at', '>=', now($tz)->subDays($period)))
             ->groupByRaw('DATE(start_at)')
             ->orderBy('date')
             ->get()
@@ -151,14 +162,23 @@ class AnalyticsController extends Controller
         $disk       = Storage::disk('public');
         $basePath   = $disk->path('');
 
-        $roomMb   = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'room-photos');
-        $avatarMb = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'avatars');
+        $roomMb       = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'room-photos');
+        $avatarMb     = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'avatars');
+        $logoMb       = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'logo');
+        $loginPhotoMb = $this->folderMb($basePath . DIRECTORY_SEPARATOR . 'login-photo');
         $totalUploadsMb = $this->folderMb($basePath);
+
+        // Anything on the public disk not accounted for by the categories above (e.g. future
+        // upload types) — keeps the breakdown exhaustive instead of silently under-counting.
+        $otherMb = max(0, round($totalUploadsMb - $roomMb - $avatarMb - $logoMb - $loginPhotoMb, 2));
 
         return [
             'db_mb'           => $dbMb,
             'room_photos_mb'  => $roomMb,
             'avatars_mb'      => $avatarMb,
+            'logo_mb'         => $logoMb,
+            'login_photo_mb'  => $loginPhotoMb,
+            'other_uploads_mb' => $otherMb,
             'uploads_mb'      => $totalUploadsMb,
             'logs_mb'         => $logsMb,
         ];

@@ -24,7 +24,7 @@ class PublicBookingController extends Controller
         $booking->load(['room.building', 'user', 'bookedForUser']);
         $recipient = $booking->bookedForUser ?? $booking->user;
 
-        $now = Carbon::parse(Carbon::now(Setting::businessTz())->format('Y-m-d H:i:s'));
+        $now = Setting::localNow();
         $started = Carbon::parse($booking->start_at) <= $now;
         $ended   = Carbon::parse($booking->end_at) <= $now;
 
@@ -67,7 +67,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'This booking has already been cancelled.'], 422);
         }
 
-        $now = Carbon::parse(Carbon::now(Setting::businessTz())->format('Y-m-d H:i:s'));
+        $now = Setting::localNow();
         if (Carbon::parse($booking->start_at) > $now) {
             return response()->json(['message' => 'This booking has not started yet.'], 422);
         }
@@ -89,7 +89,7 @@ class PublicBookingController extends Controller
             return response()->json(['message' => 'This booking has already been cancelled.'], 422);
         }
 
-        $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+        $booking->update(['status' => 'cancelled', 'cancelled_at' => Setting::localNow()]);
 
         $this->logCancellation($booking, ' via emailed link');
         $this->broadcastChange('updated', $booking);

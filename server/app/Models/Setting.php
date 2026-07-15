@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class Setting extends Model
@@ -26,5 +27,16 @@ class Setting extends Model
     public static function businessTz(): string
     {
         return static::get('business_timezone') ?? config('app.business_timezone', 'Asia/Jakarta');
+    }
+
+    /**
+     * "Now" as the business-local wall-clock, reinterpreted in the app's default
+     * timezone so it lines up with bookings' naive local start_at/end_at values
+     * (app.timezone is UTC; Carbon::now() alone would be offset from what's stored).
+     * Single shared implementation — do not re-derive this per-controller/command.
+     */
+    public static function localNow(): Carbon
+    {
+        return Carbon::parse(Carbon::now(static::businessTz())->format('Y-m-d H:i:s'));
     }
 }
